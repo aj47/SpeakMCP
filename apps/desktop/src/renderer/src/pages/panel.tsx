@@ -431,6 +431,10 @@ export function Component() {
       mcpModeRef.current = false
       // Track if recording was triggered via UI button click (e.g., tray menu)
       setFromButtonClick(data?.fromButtonClick ?? false)
+      // Hide text input panel if it was showing - voice recording takes precedence
+      setShowTextInput(false)
+      // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
+      tipcClient.clearTextInputState({})
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -562,6 +566,12 @@ export function Component() {
         endConversation()
       }
 
+      // Hide text input panel if it was showing - voice recording takes precedence
+      // This fixes bug #903 where mic button in continue conversation showed text input
+      setShowTextInput(false)
+      // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
+      tipcClient.clearTextInputState({})
+
       setMcpMode(true)
       mcpModeRef.current = true
       // Mode sizing is now applied in main before show; avoid duplicate calls here
@@ -594,7 +604,13 @@ export function Component() {
         mcpSessionIdRef.current = data?.sessionId
         // Track if recording was triggered via UI button click vs keyboard shortcut
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Hide text input panel if it was showing - voice recording takes precedence
+        // This fixes bug #903 where mic button in continue conversation showed text input
+        setShowTextInput(false)
+        // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
+        tipcClient.clearTextInputState({})
         setMcpMode(true)
+        mcpModeRef.current = true
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()

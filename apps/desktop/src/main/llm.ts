@@ -1232,11 +1232,26 @@ Return ONLY JSON per schema.`,
           await Promise.all(pendingSavePromises)
           pendingSavePromises = []
         }
-        await conversationService.compactConversation(
+        const compactResult = await conversationService.compactConversation(
           currentConversationId,
           compaction.summaryContent,
           compaction.compactUpToIndex,
         )
+
+        // Update in-memory conversationHistory to match the compacted on-disk state.
+        // This prevents re-summarizing already-compacted content in subsequent iterations.
+        if (compactResult && compaction.compactUpToIndex > 0 && compaction.compactUpToIndex <= conversationHistory.length) {
+          // Replace the first N messages with a single summary message
+          const summaryMessage = {
+            role: "assistant" as const,
+            content: compaction.summaryContent,
+            timestamp: Date.now(),
+          }
+          const messagesAfterCompaction = conversationHistory.slice(compaction.compactUpToIndex)
+          conversationHistory.length = 0
+          conversationHistory.push(summaryMessage, ...messagesAfterCompaction)
+          logLLM(`[processTranscriptWithAgentMode] Updated in-memory conversationHistory: ${compaction.compactUpToIndex} messages replaced with summary, new length: ${conversationHistory.length}`)
+        }
       } catch (err) {
         logLLM("[processTranscriptWithAgentMode] Failed to persist compaction:", err)
       }

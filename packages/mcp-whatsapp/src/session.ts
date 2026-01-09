@@ -17,7 +17,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys"
 import { Boom } from "@hapi/boom"
 import pino from "pino"
-import * as qrcode from "qrcode-terminal"
+import QRCode from "qrcode"
 import { EventEmitter } from "events"
 import path from "path"
 import fs from "fs"
@@ -266,7 +266,9 @@ export class WhatsAppSession extends EventEmitter {
 
       // Print QR to terminal
       console.log("\n[WhatsApp] Scan this QR code with your WhatsApp app:\n")
-      qrcode.generate(qr, { small: true })
+      QRCode.toString(qr, { type: "terminal", small: true })
+        .then((qrString) => console.log(qrString))
+        .catch((err) => console.error("[WhatsApp] Failed to generate QR code:", err))
 
       this.emit("qr", qr)
       this.emit("connectionUpdate", this.getStatus())

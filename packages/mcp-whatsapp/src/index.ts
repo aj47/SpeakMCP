@@ -128,15 +128,15 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
       let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
 
       // When harness output is enabled, the harness automatically handles typing indicators and message sending
-      // The agent doesn't need to call WhatsApp tools explicitly - just respond normally
-      // Tools are still available for special cases (e.g., sending to different numbers)
+      // The agent doesn't need to call WhatsApp tools explicitly - just respond naturally
+      // WhatsApp send/typing tools are filtered out from available tools when harness is enabled
       let textContent: string
       if (config.harnessOutput) {
         // Simplified prompt - harness handles output automatically
+        // Don't mention WhatsApp tools since they're filtered out when harness is enabled
         textContent = `[WhatsApp message from ${message.fromName || message.from}]: ${messageText}
 
-Note: This is a WhatsApp message. Respond naturally - your response will be automatically sent back.
-For special cases (sending to different numbers, etc.), you can still use WhatsApp tools.`
+Note: This is a WhatsApp message. Respond naturally - your response will be automatically sent back.`
       } else {
         // Legacy prompt - agent must explicitly call WhatsApp tools
         textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
@@ -189,6 +189,7 @@ To send any reply, use whatsapp_send_message with to="${replyTarget}"`
         }),
       })
 
+      console.error(`[MCP-WhatsApp] Callback response received. autoReply=${config.autoReply}, harnessOutput=${config.harnessOutput}, responseOk=${response.ok}`)
       if (response.ok && config.autoReply && !config.harnessOutput) {
         // Parse response - support both OpenAI-style (choices[0].message.content) and simple (content) formats
         const data = (await response.json()) as {
@@ -198,11 +199,14 @@ To send any reply, use whatsapp_send_message with to="${replyTarget}"`
         // Try OpenAI format first, then fall back to simple format
         const replyContent = data.choices?.[0]?.message?.content || data.content
         if (replyContent) {
+          console.error(`[MCP-WhatsApp] autoReply: Sending message to ${replyTarget} (${replyContent.length} chars)`)
           await whatsapp.sendMessage({
             to: replyTarget,
             text: replyContent,
           })
         }
+      } else if (config.harnessOutput) {
+        console.error(`[MCP-WhatsApp] Skipping autoReply - harnessOutput is enabled (harness will send the message)`)
       }
     } catch (error) {
       console.error("[MCP-WhatsApp] Failed to forward message to callback:", error)
@@ -380,6 +384,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
+        console.error(`[MCP-WhatsApp] TOOL whatsapp_send_message: Sending to ${to} (${text.length} chars)`)
         const result = await whatsapp.sendMessage({ to, text })
         if (result.success) {
           return {

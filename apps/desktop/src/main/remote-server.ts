@@ -415,7 +415,12 @@ async function runAgent(options: RunAgentOptions): Promise<{
     hasWhatsAppOrigin = origin === "whatsapp"
   }
 
+  // Debug: Log all harness conditions
+  diagnosticsService.logInfo("remote-server", `[WhatsApp Harness DEBUG] Conditions: isWhatsApp=${isWhatsApp}, whatsappChatId=${whatsappChatId}, hasWhatsAppOrigin=${hasWhatsAppOrigin}, whatsappHarnessOutput=${cfg.whatsappHarnessOutput}`)
+
   const useWhatsAppHarness = isWhatsApp && whatsappChatId && hasWhatsAppOrigin && (cfg.whatsappHarnessOutput ?? true)
+
+  diagnosticsService.logInfo("remote-server", `[WhatsApp Harness DEBUG] useWhatsAppHarness=${useWhatsAppHarness}`)
 
   if (useWhatsAppHarness) {
     diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId} (origin verified)`)
@@ -435,9 +440,18 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
     // Get available tools filtered by profile snapshot if available (for session isolation)
     // This ensures revived sessions use the same tool list they started with
-    const availableTools = profileSnapshot?.mcpServerConfig
+    let availableTools = profileSnapshot?.mcpServerConfig
       ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
       : mcpService.getAvailableTools()
+
+    // When WhatsApp harness is enabled, filter out WhatsApp send/typing tools since the harness
+    // handles replies automatically. This prevents the agent from being encouraged to use these
+    // tools when the response will already be sent by the harness.
+    if (useWhatsAppHarness) {
+      const whatsappReplyTools = ["whatsapp:whatsapp_send_message", "whatsapp:whatsapp_send_typing"]
+      availableTools = availableTools.filter(tool => !whatsappReplyTools.includes(tool.name))
+      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Filtered out ${whatsappReplyTools.length} WhatsApp reply tools from available tools`)
+    }
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
       return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig)
@@ -460,7 +474,10 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
     // If WhatsApp harness output is enabled, automatically send the final response
     if (useWhatsAppHarness && agentResult.content) {
+      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] About to send final response to ${whatsappChatId} (${agentResult.content.length} chars)`)
       await sendWhatsAppMessage(whatsappChatId, agentResult.content)
+    } else if (useWhatsAppHarness && !agentResult.content) {
+      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Skipping send - no content in agent result`)
     }
 
     // Format conversation history for API response (convert MCPToolResult to ToolResult format)

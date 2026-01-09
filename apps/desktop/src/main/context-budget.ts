@@ -177,8 +177,14 @@ export interface ShrinkResult {
   compaction?: {
     /** Summary of the dropped messages */
     summaryContent: string
-    /** Number of messages that were dropped/compacted (from the start of the conversation) */
+    /** Number of messages that were dropped/compacted */
     droppedMessageCount: number
+    /**
+     * Index (exclusive) up to which messages should be replaced with the summary on disk.
+     * This is the index of the first message in the "tail" that is being kept.
+     * Messages from 0 to compactUpToIndex-1 will be replaced with the summary.
+     */
+    compactUpToIndex: number
   }
 }
 
@@ -335,9 +341,14 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
       summaryContent = `[Previous conversation summary: ${droppedMessages.length} messages compacted]\n${droppedContent}`
     }
 
+    // Calculate the correct compaction index: the start of the tail that's being kept
+    // This is the index of the first message in the "last N" that we're preserving
+    const compactUpToIndex = baseLen - effectiveLastN
+
     compaction = {
       summaryContent,
       droppedMessageCount: droppedMessages.length,
+      compactUpToIndex,
     }
     if (isDebugLLM()) logLLM("ContextBudget: compaction generated", { droppedCount: droppedMessages.length })
   }

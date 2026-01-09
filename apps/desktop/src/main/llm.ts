@@ -1212,11 +1212,11 @@ Return ONLY JSON per schema.`,
     // Persist compaction to disk if it occurred
     // This replaces old messages with a summary message in the conversation file
     if (compaction && currentConversationId) {
-      logLLM(`Compaction triggered: ${compaction.droppedMessageCount} messages will be replaced with summary`)
+      logLLM(`Compaction triggered: ${compaction.droppedMessageCount} messages dropped, compacting up to index ${compaction.compactUpToIndex}`)
       conversationService.compactConversation(
         currentConversationId,
         compaction.summaryContent,
-        compaction.droppedMessageCount,
+        compaction.compactUpToIndex,
       ).catch(err => {
         logLLM("[processTranscriptWithAgentMode] Failed to persist compaction:", err)
       })

@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { ResizeHandle } from "@renderer/components/resize-handle"
-import { tipcClient } from "@renderer/lib/tipc-client"
+import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 
 // Minimum height for waveform panel - matches WAVEFORM_MIN_HEIGHT in main/window.ts
-const WAVEFORM_MIN_HEIGHT = 80
+const WAVEFORM_MIN_HEIGHT = 110
 
 interface PanelResizeWrapperProps {
   children: React.ReactNode
@@ -21,6 +21,9 @@ export function PanelResizeWrapper({
   minHeight = WAVEFORM_MIN_HEIGHT,
 }: PanelResizeWrapperProps) {
   const [currentSize, setCurrentSize] = useState({ width: 300, height: 200 })
+  const resizeStartSizeRef = useRef<{ width: number; height: number } | null>(null)
+  const lastResizeCallRef = useRef<number>(0)
+  const RESIZE_THROTTLE_MS = 16 // ~60fps
 
   useEffect(() => {
     // Initialize local size state from current window bounds; do not change size on mount
@@ -37,15 +40,34 @@ export function PanelResizeWrapper({
     init()
   }, [])
 
-  const handleResizeStart = useCallback(() => {
-    // No-op: resize start notification if needed for future features
+  // Listen for size changes from main process (when main programmatically resizes panel)
+  useEffect(() => {
+    const unlisten = rendererHandlers.onPanelSizeChanged.listen((size) => {
+      if (size && typeof size === 'object' && 'width' in size && 'height' in size) {
+        setCurrentSize(size as { width: number; height: number })
+      }
+    })
+    return unlisten
   }, [])
 
-  const handleResize = useCallback(async (delta: { width: number; height: number }) => {
-    if (!enableResize) return
+  const handleResizeStart = useCallback(() => {
+    // Capture current size at the start of resize operation
+    resizeStartSizeRef.current = currentSize
+  }, [currentSize])
 
-    const newWidth = Math.max(minWidth, currentSize.width + delta.width)
-    const newHeight = Math.max(minHeight, currentSize.height + delta.height)
+  const handleResize = useCallback(async (delta: { width: number; height: number }) => {
+    const startSize = resizeStartSizeRef.current
+    if (!startSize || !enableResize) return
+
+    // Throttle IPC calls to ~60fps to avoid race conditions
+    const now = Date.now()
+    if (now - lastResizeCallRef.current < RESIZE_THROTTLE_MS) {
+      return // Skip this frame
+    }
+    lastResizeCallRef.current = now
+
+    const newWidth = Math.max(minWidth, startSize.width + delta.width)
+    const newHeight = Math.max(minHeight, startSize.height + delta.height)
 
     // Update the panel size immediately
     try {
@@ -54,7 +76,7 @@ export function PanelResizeWrapper({
     } catch (error) {
       console.error("Failed to update panel size:", error)
     }
-  }, [enableResize, minWidth, minHeight, currentSize])
+  }, [enableResize, minWidth, minHeight])
 
   const handleResizeEnd = useCallback(async (size: { width: number; height: number }) => {
     if (!enableResize) return

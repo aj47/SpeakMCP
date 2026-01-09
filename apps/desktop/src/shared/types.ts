@@ -456,9 +456,7 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
-  panelNormalModeSize?: { width: number; height: number }
-  panelAgentModeSize?: { width: number; height: number }
-  panelTextInputModeSize?: { width: number; height: number }
+  panelProgressSize?: { width: number; height: number }
 
   // Floating Panel Auto-Show Configuration
   // When false, the floating panel will not automatically appear during agent sessions

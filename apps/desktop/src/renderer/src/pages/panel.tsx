@@ -20,8 +20,9 @@ import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
-const WAVEFORM_MIN_HEIGHT = 80
+const WAVEFORM_MIN_HEIGHT = 110
 const TEXT_INPUT_MIN_HEIGHT = 160
+const PROGRESS_MIN_HEIGHT = 200
 
 const getInitialVisualizerData = () =>
   Array<number>(VISUALIZER_BUFFER_LENGTH).fill(-1000)
@@ -786,7 +787,7 @@ export function Component() {
 	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   // Use appropriate minimum height based on current mode
-  const minHeight = showTextInput ? TEXT_INPUT_MIN_HEIGHT : WAVEFORM_MIN_HEIGHT
+  const minHeight = showTextInput ? TEXT_INPUT_MIN_HEIGHT : (anyVisibleSessions && !recording ? PROGRESS_MIN_HEIGHT : WAVEFORM_MIN_HEIGHT)
 
   return (
     <PanelResizeWrapper

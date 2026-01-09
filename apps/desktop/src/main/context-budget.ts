@@ -302,18 +302,31 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     if (k >= 0) keptSet.add(k)
   }
 
-  // Collect dropped messages (excluding system) for summarization in chronological order.
-  // Include the first user message since it will be replaced by compaction on disk.
-  // We iterate in index order to maintain proper chronology, which is important when
-  // there are existing summary messages from prior compactions.
+  // Calculate compactUpToIndex BEFORE reassigning messages
+  // so we can correctly identify which messages will be compacted on disk.
+  //
+  // IMPORTANT: We need to convert from LLM-array-space to on-disk-conversation-space.
+  // The LLM array has a system message at index 0 that doesn't exist on disk:
+  //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
+  //   - On-disk:   [msg0, msg1, msg2, ...]
+  // So LLM index N corresponds to on-disk index (N - 1) when there's a system message.
+  const systemMessageOffset = systemIdx >= 0 ? 1 : 0
+  const compactUpToIndex = baseLen - effectiveLastN - systemMessageOffset
+
+  // The cutoff index in LLM-array-space: messages from systemMessageOffset to this index (exclusive)
+  // will be compacted on disk.
+  const llmCutoffIndex = compactUpToIndex + systemMessageOffset
+
+  // Collect dropped messages for summarization in chronological order.
+  // ONLY include messages that will actually be replaced by compaction on disk:
+  // - On-disk indices 0 to compactUpToIndex-1 correspond to LLM indices systemMessageOffset to llmCutoffIndex-1
+  // - The first user message should only be included if it falls within this range
+  // NOTE: We must do this BEFORE reassigning `messages` to `ordered`
   const droppedMessages: LLMMessage[] = []
-  for (let i = 0; i < baseLen; i++) {
-    // Include first user message (it's kept in LLM array but compacted on disk)
-    // OR any non-system message that's not in the kept set
-    if (messages[i].role !== "system") {
-      if (i === firstUserIdx || !keptSet.has(i)) {
-        droppedMessages.push(messages[i])
-      }
+  for (let i = systemMessageOffset; i < llmCutoffIndex && i < baseLen; i++) {
+    // Include any non-system message in the compaction range
+    if (messages[i] && messages[i].role !== "system") {
+      droppedMessages.push(messages[i])
     }
   }
 
@@ -328,17 +341,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   messages = ordered
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
-
-  // Generate compaction info if we dropped messages AND there's actually a prefix to compact on disk
-  // Calculate compactUpToIndex first to gate the expensive summarization call
-  //
-  // IMPORTANT: We need to convert from LLM-array-space to on-disk-conversation-space.
-  // The LLM array has a system message at index 0 that doesn't exist on disk:
-  //   - LLM array: [system_prompt, msg0, msg1, msg2, ...]
-  //   - On-disk:   [msg0, msg1, msg2, ...]
-  // So LLM index N corresponds to on-disk index (N - 1) when there's a system message.
-  const systemMessageOffset = systemIdx >= 0 ? 1 : 0
-  const compactUpToIndex = baseLen - effectiveLastN - systemMessageOffset
 
   let compaction: ShrinkResult["compaction"] = undefined
   // Only generate compaction if:

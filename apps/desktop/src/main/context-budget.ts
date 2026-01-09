@@ -83,11 +83,18 @@ const MODEL_REGISTRY: Record<string, ModelSpec> = {
   "gpt-3.5-turbo": { contextWindow: 16_384, maxOutputTokens: 4_096 },
   "gpt-3.5": { contextWindow: 16_384, maxOutputTokens: 4_096 },
   // o-series reasoning models
+  // Note: Include "o-1" and "o-3" patterns because normalizeModelName() inserts
+  // hyphens between letters and digits (e.g., "o1" -> "o-1")
   "o3-mini": { contextWindow: 200_000, maxOutputTokens: 100_000 },
+  "o-3-mini": { contextWindow: 200_000, maxOutputTokens: 100_000 },
   "o3": { contextWindow: 200_000, maxOutputTokens: 100_000 },
+  "o-3": { contextWindow: 200_000, maxOutputTokens: 100_000 },
   "o1-mini": { contextWindow: 128_000, maxOutputTokens: 65_536 },
+  "o-1-mini": { contextWindow: 128_000, maxOutputTokens: 65_536 },
   "o1-preview": { contextWindow: 128_000, maxOutputTokens: 32_768 },
+  "o-1-preview": { contextWindow: 128_000, maxOutputTokens: 32_768 },
   "o1": { contextWindow: 200_000, maxOutputTokens: 100_000 },
+  "o-1": { contextWindow: 200_000, maxOutputTokens: 100_000 },
 
   // -------------------------------------------------------------------------
   // Google Gemini models
@@ -132,7 +139,10 @@ const MODEL_REGISTRY: Record<string, ModelSpec> = {
   "llama-3.1-8b": { contextWindow: 128_000, maxOutputTokens: 4_096 },
   "llama-3-70b": { contextWindow: 8_192, maxOutputTokens: 2_048 },
   "llama-3-8b": { contextWindow: 8_192, maxOutputTokens: 2_048 },
+  // Note: "llama3" becomes "llama-3" after normalization, but we keep both
+  // for inputs that already have the hyphen or come from different sources
   "llama3": { contextWindow: 8_192, maxOutputTokens: 2_048 },
+  "llama-3": { contextWindow: 8_192, maxOutputTokens: 2_048 },
   "llama-70b": { contextWindow: 32_768, maxOutputTokens: 4_096 },
   "llama-8b": { contextWindow: 8_192, maxOutputTokens: 2_048 },
   "llama": { contextWindow: 8_192, maxOutputTokens: 2_048 },
@@ -161,15 +171,25 @@ const MODEL_REGISTRY: Record<string, ModelSpec> = {
   // -------------------------------------------------------------------------
   // Qwen models
   // -------------------------------------------------------------------------
+  // Note: "qwen3" becomes "qwen-3" after normalization (letter-digit hyphen insertion)
   "qwen3-coder": { contextWindow: 262_144, maxOutputTokens: 262_144 },
+  "qwen-3-coder": { contextWindow: 262_144, maxOutputTokens: 262_144 },
   "qwen3-max": { contextWindow: 256_000, maxOutputTokens: 32_768 },
+  "qwen-3-max": { contextWindow: 256_000, maxOutputTokens: 32_768 },
   "qwen3-235b": { contextWindow: 262_144, maxOutputTokens: 4_096 },
+  "qwen-3-235b": { contextWindow: 262_144, maxOutputTokens: 4_096 },
   "qwen3-72b": { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  "qwen-3-72b": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "qwen3-32b": { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  "qwen-3-32b": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "qwen3-8b": { contextWindow: 128_000, maxOutputTokens: 20_000 },
+  "qwen-3-8b": { contextWindow: 128_000, maxOutputTokens: 20_000 },
   "qwen3": { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  "qwen-3": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "qwen2.5": { contextWindow: 128_000, maxOutputTokens: 8_192 },
+  "qwen-2.5": { contextWindow: 128_000, maxOutputTokens: 8_192 },
   "qwen2": { contextWindow: 32_768, maxOutputTokens: 4_096 },
+  "qwen-2": { contextWindow: 32_768, maxOutputTokens: 4_096 },
   "qwen": { contextWindow: 32_768, maxOutputTokens: 4_096 },
   "qwq": { contextWindow: 32_768, maxOutputTokens: 4_096 },
 

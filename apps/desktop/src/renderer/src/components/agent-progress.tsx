@@ -1955,12 +1955,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </Badge>
           )}
         </div>
-        {/* Esc hint - subtle text in the middle, only in overlay variant where Esc actually closes */}
-        {variant === "overlay" && (
-          <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
-            Press Esc to close panel
-          </span>
-        )}
         <div className="flex items-center gap-3">
           {/* Profile name */}
           {profileName && (
@@ -2152,23 +2146,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         isSessionActive={!isComplete}
         className="flex-shrink-0"
       />
-
-      {/* Overlay variant: Esc hint and progress bar in styled footer */}
-      {variant === "overlay" && (
-        <div className="flex items-center justify-between px-3 py-1 bg-muted/10 border-t border-border/20 flex-shrink-0">
-          <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
-          {!isComplete && (
-            <div className="flex-1 ml-3 h-0.5 bg-muted/50 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500 ease-out"
-                style={{
-                  width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
-                }}
-              />
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Default variant: Original slim full-width progress bar */}
       {variant !== "overlay" && !isComplete && (

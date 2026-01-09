@@ -280,6 +280,61 @@ export class ConversationService {
     }
   }
 
+  /**
+   * Compact a conversation by replacing messages up to a certain index with a summary message.
+   * This persists the compaction to disk, reducing the size of the conversation file.
+   *
+   * @param conversationId - The ID of the conversation to compact
+   * @param summaryContent - The summary text that replaces the old messages
+   * @param replaceUpToIndex - Index (exclusive) of messages to replace with summary.
+   *                           Messages from 0 to replaceUpToIndex-1 will be replaced.
+   * @returns The updated conversation, or null if not found
+   */
+  async compactConversation(
+    conversationId: string,
+    summaryContent: string,
+    replaceUpToIndex: number,
+  ): Promise<Conversation | null> {
+    try {
+      const conversation = await this.loadConversation(conversationId)
+      if (!conversation) {
+        logApp(`[conversationService] compactConversation: conversation not found: ${conversationId}`)
+        return null
+      }
+
+      // Validate index
+      if (replaceUpToIndex <= 0 || replaceUpToIndex > conversation.messages.length) {
+        logApp(`[conversationService] compactConversation: invalid replaceUpToIndex: ${replaceUpToIndex}, messages: ${conversation.messages.length}`)
+        return conversation
+      }
+
+      // Create summary message
+      const summaryMessage: ConversationMessage = {
+        id: this.generateMessageId(),
+        role: "assistant",
+        content: summaryContent,
+        timestamp: Date.now(),
+        isSummary: true,
+        summarizedMessageCount: replaceUpToIndex,
+      }
+
+      // Replace old messages with summary + keep messages after the index
+      const messagesAfterSummary = conversation.messages.slice(replaceUpToIndex)
+      conversation.messages = [summaryMessage, ...messagesAfterSummary]
+      conversation.updatedAt = Date.now()
+
+      // Save the compacted conversation
+      await this.saveConversation(conversation)
+      this.updateConversationIndex(conversation)
+
+      logApp(`[conversationService] compactConversation: compacted ${replaceUpToIndex} messages into summary for ${conversationId}`)
+      return conversation
+    } catch (error) {
+      logApp(`[conversationService] compactConversation error:`, error)
+      return null
+    }
+  }
+
   async deleteAllConversations(): Promise<void> {
     if (fs.existsSync(conversationsFolder)) {
       fs.rmSync(conversationsFolder, { recursive: true, force: true })

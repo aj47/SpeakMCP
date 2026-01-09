@@ -1187,7 +1187,7 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
-    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
+    const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens, compaction } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
       relevantTools: toolCapabilities.relevantTools,
@@ -1208,6 +1208,19 @@ Return ONLY JSON per schema.`,
     })
     // Update context info for progress display
     contextInfoRef = { estTokens: estTokensAfter, maxTokens: maxContextTokens }
+
+    // Persist compaction to disk if it occurred
+    // This replaces old messages with a summary message in the conversation file
+    if (compaction && currentConversationId) {
+      logLLM(`Compaction triggered: ${compaction.droppedMessageCount} messages will be replaced with summary`)
+      conversationService.compactConversation(
+        currentConversationId,
+        compaction.summaryContent,
+        compaction.droppedMessageCount,
+      ).catch(err => {
+        logLLM("[processTranscriptWithAgentMode] Failed to persist compaction:", err)
+      })
+    }
 
     // If stop was requested during context shrinking, exit now
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {

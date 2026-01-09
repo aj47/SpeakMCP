@@ -163,7 +163,26 @@ export interface ShrinkOptions {
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
-export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number; maxTokens: number }>{
+export interface ShrinkResult {
+  messages: LLMMessage[]
+  appliedStrategies: string[]
+  estTokensBefore: number
+  estTokensAfter: number
+  maxTokens: number
+  /**
+   * When compaction was performed (drop_middle strategy), this contains the info needed
+   * to persist the compaction to disk. The caller should use this to call
+   * conversationService.compactConversation() to persist the changes.
+   */
+  compaction?: {
+    /** Summary of the dropped messages */
+    summaryContent: string
+    /** Number of messages that were dropped/compacted (from the start of the conversation) */
+    droppedMessageCount: number
+  }
+}
+
+export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkResult> {
   const config = configStore.get()
   const applied: string[] = []
 
@@ -277,6 +296,14 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     if (k >= 0) keptSet.add(k)
   }
 
+  // Collect dropped messages (excluding system) for summarization
+  const droppedMessages: LLMMessage[] = []
+  for (let i = 0; i < baseLen; i++) {
+    if (!keptSet.has(i) && messages[i].role !== "system") {
+      droppedMessages.push(messages[i])
+    }
+  }
+
   const trimmed = messages.filter((_, idx) => keptSet.has(idx))
   // Preserve order: system -> first user -> (chronological tail without duplicates)
   const ordered: LLMMessage[] = []
@@ -289,9 +316,35 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
 
+  // Generate compaction info if we dropped messages
+  let compaction: ShrinkResult["compaction"] = undefined
+  if (droppedMessages.length > 0) {
+    // Create a summary of the dropped conversation
+    const droppedContent = droppedMessages
+      .map((m) => `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`)
+      .join("\n\n")
+
+    // Use LLM to summarize the dropped content (if it's substantial)
+    let summaryContent: string
+    if (droppedContent.length > 500) {
+      summaryContent = await summarizeContent(
+        `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${droppedContent}`,
+        opts.sessionId
+      )
+    } else {
+      summaryContent = `[Previous conversation summary: ${droppedMessages.length} messages compacted]\n${droppedContent}`
+    }
+
+    compaction = {
+      summaryContent,
+      droppedMessageCount: droppedMessages.length,
+    }
+    if (isDebugLLM()) logLLM("ContextBudget: compaction generated", { droppedCount: droppedMessages.length })
+  }
+
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, compaction }
   }
 
   // Tier 3: Minimal system prompt
@@ -311,6 +364,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, compaction }
 }
 

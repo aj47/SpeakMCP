@@ -284,10 +284,24 @@ async function processWithAgentMode(
 
       if (conversation && conversation.messages.length > 0) {
         logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+
+        // Find the last summary message index (if any)
+        // When compaction occurs, messages before the summary are discarded
+        // We only need to load from the summary point forward
+        let startIndex = 0
+        for (let i = conversation.messages.length - 1; i >= 0; i--) {
+          if (conversation.messages[i].isSummary) {
+            startIndex = i
+            logLLM(`[tipc.ts processWithAgentMode] Found summary message at index ${i}, loading from there`)
+            break
+          }
+        }
+
         // Convert conversation messages to the format expected by agent mode
         // Exclude the last message since it's the current user input that will be added
-        const messagesToConvert = conversation.messages.slice(0, -1)
-        logLLM(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (excluding last message)`)
+        // Start from the last summary point (or beginning if no summary)
+        const messagesToConvert = conversation.messages.slice(startIndex, -1)
+        logLLM(`[tipc.ts processWithAgentMode] Converting ${messagesToConvert.length} messages (from index ${startIndex}, excluding last message)`)
         previousConversationHistory = messagesToConvert.map((msg) => ({
           role: msg.role,
           content: msg.content,

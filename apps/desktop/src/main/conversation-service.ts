@@ -376,16 +376,21 @@ export class ConversationService {
       summarizedMessageCount: messagesToSummarize.length,
     }
 
-    // Replace conversation messages with summary + recent messages
-    conversation.messages = [summaryMessage, ...messagesToKeep]
-    conversation.updatedAt = Date.now()
+    // Create a new compacted conversation object (don't mutate the original)
+    // This ensures if save fails, we can return the original unmodified
+    const compactedConversation: Conversation = {
+      ...conversation,
+      messages: [summaryMessage, ...messagesToKeep],
+      updatedAt: Date.now(),
+    }
 
     // Persist the compacted conversation
-    await this.saveConversation(conversation)
-    this.updateConversationIndex(conversation)
+    // If this throws, the original conversation is still intact
+    await this.saveConversation(compactedConversation)
+    this.updateConversationIndex(compactedConversation)
 
-    logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${conversation.messages.length}`)
-    return conversation
+    logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${compactedConversation.messages.length}`)
+    return compactedConversation
   }
 
   async deleteAllConversations(): Promise<void> {

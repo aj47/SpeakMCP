@@ -7,6 +7,13 @@ import {
   ConversationMessage,
   ConversationHistoryItem,
 } from "../shared/types"
+import { summarizeContent } from "./context-budget"
+
+// Threshold for compacting conversations on load
+// When a conversation exceeds this many messages, older ones are summarized
+const COMPACTION_MESSAGE_THRESHOLD = 20
+// Number of recent messages to keep intact after compaction
+const COMPACTION_KEEP_LAST = 10
 
 export class ConversationService {
   private static instance: ConversationService | null = null
@@ -133,6 +140,31 @@ export class ConversationService {
       return conversation
     } catch (error) {
       return null
+    }
+  }
+
+  /**
+   * Load a conversation and compact it if it exceeds the message threshold.
+   * Use this when loading conversations for continued use (e.g., in agent mode).
+   * The compaction is persisted to disk, so subsequent loads will be faster.
+   *
+   * @param conversationId - The ID of the conversation to load
+   * @param sessionId - Optional session ID for cancellation support during summarization
+   * @returns The conversation (possibly compacted), or null if not found
+   */
+  async loadConversationWithCompaction(conversationId: string, sessionId?: string): Promise<Conversation | null> {
+    const conversation = await this.loadConversation(conversationId)
+    if (!conversation) {
+      return null
+    }
+
+    // Compact if needed (this will save to disk if compaction occurs)
+    // Compaction is best-effort: if it fails, return the unmodified conversation
+    try {
+      return await this.compactOnLoad(conversation, sessionId)
+    } catch (error) {
+      logApp(`Failed to compact conversation ${conversationId}: ${error}`)
+      return conversation
     }
   }
 
@@ -278,6 +310,111 @@ export class ConversationService {
     } catch (error) {
       return null
     }
+  }
+
+  /**
+   * Compact a conversation by summarizing older messages.
+   * Called when loading a conversation that exceeds the message threshold.
+   * This is a lazy compaction strategy - we only compact when the conversation
+   * is loaded, not during the agent loop.
+   *
+   * @param conversation - The conversation to compact
+   * @param sessionId - Optional session ID for cancellation support during summarization
+   * @returns The compacted conversation
+   */
+  private async compactOnLoad(conversation: Conversation, sessionId?: string): Promise<Conversation> {
+    const messageCount = conversation.messages.length
+    if (messageCount <= COMPACTION_MESSAGE_THRESHOLD) {
+      return conversation
+    }
+
+    // Calculate how many messages to summarize
+    const messagesToSummarize = conversation.messages.slice(0, messageCount - COMPACTION_KEEP_LAST)
+    const messagesToKeep = conversation.messages.slice(messageCount - COMPACTION_KEEP_LAST)
+
+    if (messagesToSummarize.length === 0) {
+      return conversation
+    }
+
+    logApp(`[conversationService] compactOnLoad: compacting ${messagesToSummarize.length} messages for ${conversation.id}`)
+
+    // Build a summary of the older messages
+    const summaryInput = messagesToSummarize
+      .map((m) => {
+        let text = `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`
+
+        // Include tool calls if present
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          const toolCallsStr = m.toolCalls
+            .map((tc) => {
+              const argsStr = JSON.stringify(tc.arguments).substring(0, 200)
+              return `${tc.name}(${argsStr})`
+            })
+            .join(", ")
+          text += `\nTool calls: ${toolCallsStr}`
+        }
+
+        // Include tool results if present
+        if (m.toolResults && m.toolResults.length > 0) {
+          const toolResultsStr = m.toolResults
+            .map((tr) => {
+              const status = tr.success ? "success" : "error"
+              const content = (tr.error || tr.content || "").substring(0, 200)
+              return `${status}: ${content}`
+            })
+            .join(", ")
+          text += `\nTool results: ${toolResultsStr}`
+        }
+
+        return text
+      })
+      .join("\n\n")
+
+    let summaryContent: string
+    const summarizationPrompt = `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${summaryInput}`
+    try {
+      summaryContent = await summarizeContent(summarizationPrompt, sessionId)
+      // summarizeContent() swallows errors internally and returns the input text on failure.
+      // Detect this by checking if the result equals or contains the full prompt (failure case).
+      // A successful summary should be significantly shorter than the prompt.
+      if (summaryContent === summarizationPrompt || summaryContent.length >= summarizationPrompt.length * 0.9) {
+        logApp(`[conversationService] compactOnLoad: summarization likely failed (output too similar to input), keeping original`)
+        return conversation
+      }
+    } catch (error) {
+      logApp(`[conversationService] compactOnLoad: summarization failed, keeping original:`, error)
+      return conversation
+    }
+
+    // Create summary message
+    const summaryMessage: ConversationMessage = {
+      id: this.generateMessageId(),
+      role: "assistant",
+      content: summaryContent,
+      timestamp: messagesToSummarize[0]?.timestamp || Date.now(),
+      isSummary: true,
+      summarizedMessageCount: messagesToSummarize.length,
+    }
+
+    // Create compacted conversation (don't mutate original)
+    const compactedConversation: Conversation = {
+      ...conversation,
+      messages: [summaryMessage, ...messagesToKeep],
+      updatedAt: Date.now(),
+    }
+
+    // Persist the compacted conversation
+    // Note: saveConversation() already calls updateConversationIndex(), so no need to call it separately
+    // If save fails, return the original conversation (best-effort)
+    try {
+      await this.saveConversation(compactedConversation)
+    } catch (error) {
+      logApp(`[conversationService] compactOnLoad: failed to persist, returning original:`, error)
+      return conversation
+    }
+
+    logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${compactedConversation.messages.length}`)
+    return compactedConversation
   }
 
   async deleteAllConversations(): Promise<void> {

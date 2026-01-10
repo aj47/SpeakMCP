@@ -474,7 +474,15 @@ export interface ShrinkOptions {
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
-export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messages: LLMMessage[]; appliedStrategies: string[]; estTokensBefore: number; estTokensAfter: number; maxTokens: number }>{
+export interface ShrinkResult {
+  messages: LLMMessage[]
+  appliedStrategies: string[]
+  estTokensBefore: number
+  estTokensAfter: number
+  maxTokens: number
+}
+
+export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkResult> {
   const config = configStore.get()
   const applied: string[] = []
 
@@ -561,6 +569,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
 
     const summarized = await summarizeContent(item.content!, opts.sessionId)
     messages[item.i] = { ...messages[item.i], content: summarized }
+
     applied.push("summarize")
     tokens = estimateTokensFromMessages(messages)
     if (tokens <= targetTokens) break
@@ -578,7 +587,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
   const systemIdx = messages.findIndex((m) => m.role === "system")
   const firstUserIdx = messages.findIndex((m, idx) => m.role === "user" && idx !== systemIdx)
 
-  const tail = messages.slice(-effectiveLastN)
   const keptSet = new Set<number>()
   if (systemIdx >= 0) keptSet.add(systemIdx)
   if (firstUserIdx >= 0) keptSet.add(firstUserIdx)
@@ -588,7 +596,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<{ messa
     if (k >= 0) keptSet.add(k)
   }
 
-  const trimmed = messages.filter((_, idx) => keptSet.has(idx))
   // Preserve order: system -> first user -> (chronological tail without duplicates)
   const ordered: LLMMessage[] = []
   if (systemIdx >= 0) ordered.push(messages[systemIdx])

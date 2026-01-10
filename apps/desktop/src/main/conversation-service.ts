@@ -47,6 +47,14 @@ export class ConversationService {
     return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }
 
+  /**
+   * Public method to generate a conversation ID.
+   * Used by remote-server when creating new conversations without a provided ID.
+   */
+  generateConversationIdPublic(): string {
+    return this.generateConversationId()
+  }
+
   private generateMessageId(): string {
     return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   }

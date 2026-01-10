@@ -27,6 +27,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import path from "path"
 import os from "os"
+import fs from "fs"
 import { WhatsAppSession } from "./session.js"
 import type { WhatsAppConfig, WhatsAppMessage } from "./types.js"
 
@@ -67,6 +68,57 @@ const newSessionRequested: Set<string> = new Set()
 // Key: normalized chatId (numeric only), Value: current active conversationId (with timestamp if created via /new)
 // This ensures subsequent messages go to the same conversation after /new
 const activeConversations: Map<string, string> = new Map()
+
+// File path for persisting active conversations
+const ACTIVE_CONVERSATIONS_FILE = path.join(config.authDir, "active-conversations.json")
+
+/**
+ * Load active conversations from disk.
+ * Called on startup to restore conversation state after server restart.
+ */
+function loadActiveConversations(): void {
+  try {
+    if (fs.existsSync(ACTIVE_CONVERSATIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ACTIVE_CONVERSATIONS_FILE, "utf-8"))
+      if (data && typeof data === "object") {
+        for (const [chatId, conversationId] of Object.entries(data)) {
+          if (typeof conversationId === "string") {
+            activeConversations.set(chatId, conversationId)
+          }
+        }
+        console.error(`[MCP-WhatsApp] Loaded ${activeConversations.size} active conversation(s) from disk`)
+      }
+    }
+  } catch (error) {
+    console.error(`[MCP-WhatsApp] Failed to load active conversations:`, error)
+  }
+}
+
+/**
+ * Save active conversations to disk.
+ * Called whenever a new conversation is started via /new.
+ */
+function saveActiveConversations(): void {
+  try {
+    // Ensure directory exists
+    const dir = path.dirname(ACTIVE_CONVERSATIONS_FILE)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
+    const data: Record<string, string> = {}
+    for (const [chatId, conversationId] of activeConversations) {
+      data[chatId] = conversationId
+    }
+    fs.writeFileSync(ACTIVE_CONVERSATIONS_FILE, JSON.stringify(data, null, 2))
+    console.error(`[MCP-WhatsApp] Saved ${activeConversations.size} active conversation(s) to disk`)
+  } catch (error) {
+    console.error(`[MCP-WhatsApp] Failed to save active conversations:`, error)
+  }
+}
+
+// Load active conversations on startup
+loadActiveConversations()
 
 // Message processing queue per chat to ensure serial processing
 // This prevents race conditions when multiple messages arrive for the same conversation
@@ -147,6 +199,7 @@ async function processMessage(message: WhatsAppMessage): Promise<void> {
         conversationId = `whatsapp_${chatId}_${Date.now()}`
         newSessionRequested.delete(chatId)
         activeConversations.set(chatId, conversationId)
+        saveActiveConversations() // Persist new conversation ID to disk
         console.error(`[MCP-WhatsApp] Starting new session for ${chatId}: ${conversationId}`)
       } else if (activeConversations.has(chatId)) {
         // Use existing active conversation ID (preserves timestamped IDs from /new)
@@ -156,6 +209,7 @@ async function processMessage(message: WhatsAppMessage): Promise<void> {
         // First message from this chat - use static ID and store it
         conversationId = `whatsapp_${chatId}`
         activeConversations.set(chatId, conversationId)
+        saveActiveConversations() // Persist new conversation ID to disk
         console.error(`[MCP-WhatsApp] Starting default session for ${chatId}: ${conversationId}`)
       }
 

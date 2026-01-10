@@ -195,18 +195,27 @@ app.whenReady().then(() => {
 
     // Clean up MCP server processes to prevent orphaned node processes
     // This terminates all child processes spawned by StdioClientTransport
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     try {
       await Promise.race([
         mcpService.cleanup(),
-        new Promise<void>((_, reject) =>
-          setTimeout(
+        new Promise<void>((_, reject) => {
+          timeoutId = setTimeout(
             () => reject(new Error("MCP cleanup timeout")),
             CLEANUP_TIMEOUT_MS
           )
-        ),
+          // unref() ensures this timer won't keep the event loop alive
+          // if cleanup finishes quickly
+          timeoutId.unref()
+        }),
       ])
     } catch (error) {
       logApp("Error during MCP service cleanup on quit:", error)
+    } finally {
+      // Clear the timeout to avoid any lingering references
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
     }
 
     // Now actually quit the app

@@ -2969,7 +2969,10 @@ export const router = {
     .input<{ name: string; description: string; instructions: string }>()
     .action(async ({ input }) => {
       const { skillsService } = await import("./skills-service")
-      return skillsService.createSkill(input.name, input.description, input.instructions)
+      const skill = skillsService.createSkill(input.name, input.description, input.instructions)
+      // Auto-enable the new skill for the current profile so it's immediately usable
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return skill
     }),
 
   updateSkill: t.procedure
@@ -2998,7 +3001,10 @@ export const router = {
     .input<{ content: string }>()
     .action(async ({ input }) => {
       const { skillsService } = await import("./skills-service")
-      return skillsService.importSkillFromMarkdown(input.content)
+      const skill = skillsService.importSkillFromMarkdown(input.content)
+      // Auto-enable the imported skill for the current profile so it's immediately usable
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return skill
     }),
 
   exportSkillToMarkdown: t.procedure
@@ -3024,7 +3030,10 @@ export const router = {
       return null
     }
 
-    return skillsService.importSkillFromFile(result.filePaths[0])
+    const skill = skillsService.importSkillFromFile(result.filePaths[0])
+    // Auto-enable the imported skill for the current profile so it's immediately usable
+    profileService.enableSkillForCurrentProfile(skill.id)
+    return skill
   }),
 
   // Import a skill from a folder containing SKILL.md
@@ -3040,7 +3049,10 @@ export const router = {
       return null
     }
 
-    return skillsService.importSkillFromFolder(result.filePaths[0])
+    const skill = skillsService.importSkillFromFolder(result.filePaths[0])
+    // Auto-enable the imported skill for the current profile so it's immediately usable
+    profileService.enableSkillForCurrentProfile(skill.id)
+    return skill
   }),
 
   // Bulk import all skill folders from a parent directory
@@ -3056,7 +3068,12 @@ export const router = {
       return null
     }
 
-    return skillsService.importSkillsFromParentFolder(result.filePaths[0])
+    const importResult = skillsService.importSkillsFromParentFolder(result.filePaths[0])
+    // Auto-enable all imported skills for the current profile so they're immediately usable
+    for (const skill of importResult.imported) {
+      profileService.enableSkillForCurrentProfile(skill.id)
+    }
+    return importResult
   }),
 
   saveSkillFile: t.procedure
@@ -3094,7 +3111,12 @@ export const router = {
 
   scanSkillsFolder: t.procedure.action(async () => {
     const { skillsService } = await import("./skills-service")
-    return skillsService.scanSkillsFolder()
+    const importedSkills = skillsService.scanSkillsFolder()
+    // Auto-enable all newly imported skills for the current profile so they're immediately usable
+    for (const skill of importedSkills) {
+      profileService.enableSkillForCurrentProfile(skill.id)
+    }
+    return importedSkills
   }),
 
   // Import skill(s) from a GitHub repository
@@ -3102,7 +3124,12 @@ export const router = {
     .input<{ repoIdentifier: string }>()
     .action(async ({ input }) => {
       const { skillsService } = await import("./skills-service")
-      return skillsService.importSkillFromGitHub(input.repoIdentifier)
+      const result = skillsService.importSkillFromGitHub(input.repoIdentifier)
+      // Auto-enable all imported skills for the current profile so they're immediately usable
+      for (const skill of result.imported) {
+        profileService.enableSkillForCurrentProfile(skill.id)
+      }
+      return result
     }),
 
   getEnabledSkillsInstructions: t.procedure.action(async () => {

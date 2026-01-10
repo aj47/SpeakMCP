@@ -635,6 +635,29 @@ class ProfileService {
     return profile.skillsConfig?.enabledSkillIds ?? []
   }
 
+  /**
+   * Enable a skill for the current profile (used when installing new skills)
+   * This allows newly installed skills to be immediately usable by the agent
+   */
+  enableSkillForCurrentProfile(skillId: string): Profile | undefined {
+    const currentProfile = this.getCurrentProfile()
+    if (!currentProfile) {
+      return undefined
+    }
+
+    const currentEnabledSkills = currentProfile.skillsConfig?.enabledSkillIds ?? []
+
+    // Already enabled, no need to update
+    if (currentEnabledSkills.includes(skillId)) {
+      return currentProfile
+    }
+
+    return this.updateProfileSkillsConfig(currentProfile.id, {
+      enabledSkillIds: [...currentEnabledSkills, skillId],
+      allSkillsDisabledByDefault: true, // Maintain opt-in behavior
+    })
+  }
+
   exportProfile(id: string): string {
     const profile = this.getProfile(id)
     if (!profile) {

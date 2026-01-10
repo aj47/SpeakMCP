@@ -336,10 +336,16 @@ export class ConversationService {
       .join("\n\n")
 
     let summaryContent: string
+    const summarizationPrompt = `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${summaryInput}`
     try {
-      summaryContent = await summarizeContent(
-        `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${summaryInput}`
-      )
+      summaryContent = await summarizeContent(summarizationPrompt)
+      // summarizeContent() swallows errors internally and returns the input text on failure.
+      // Detect this by checking if the result equals or contains the full prompt (failure case).
+      // A successful summary should be significantly shorter than the prompt.
+      if (summaryContent === summarizationPrompt || summaryContent.length >= summarizationPrompt.length * 0.9) {
+        logApp(`[conversationService] compactOnLoad: summarization likely failed (output too similar to input), keeping original`)
+        return conversation
+      }
     } catch (error) {
       logApp(`[conversationService] compactOnLoad: summarization failed, keeping original:`, error)
       return conversation
@@ -360,8 +366,8 @@ export class ConversationService {
     conversation.updatedAt = Date.now()
 
     // Persist the compacted conversation
+    // Note: saveConversation() already calls updateConversationIndex(), so no need to call it separately
     await this.saveConversation(conversation)
-    this.updateConversationIndex(conversation)
 
     logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${conversation.messages.length}`)
     return conversation

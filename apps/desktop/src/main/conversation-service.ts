@@ -159,7 +159,13 @@ export class ConversationService {
     }
 
     // Compact if needed (this will save to disk if compaction occurs)
-    return this.compactOnLoad(conversation, sessionId)
+    // Compaction is best-effort: if it fails, return the unmodified conversation
+    try {
+      return await this.compactOnLoad(conversation, sessionId)
+    } catch (error) {
+      logApp(`Failed to compact conversation ${conversationId}: ${error}`)
+      return conversation
+    }
   }
 
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
@@ -334,7 +340,34 @@ export class ConversationService {
 
     // Build a summary of the older messages
     const summaryInput = messagesToSummarize
-      .map((m) => `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`)
+      .map((m) => {
+        let text = `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`
+
+        // Include tool calls if present
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          const toolCallsStr = m.toolCalls
+            .map((tc) => {
+              const argsStr = JSON.stringify(tc.arguments).substring(0, 200)
+              return `${tc.name}(${argsStr})`
+            })
+            .join(", ")
+          text += `\nTool calls: ${toolCallsStr}`
+        }
+
+        // Include tool results if present
+        if (m.toolResults && m.toolResults.length > 0) {
+          const toolResultsStr = m.toolResults
+            .map((tr) => {
+              const status = tr.success ? "success" : "error"
+              const content = (tr.error || tr.content || "").substring(0, 200)
+              return `${status}: ${content}`
+            })
+            .join(", ")
+          text += `\nTool results: ${toolResultsStr}`
+        }
+
+        return text
+      })
       .join("\n\n")
 
     let summaryContent: string
@@ -363,16 +396,25 @@ export class ConversationService {
       summarizedMessageCount: messagesToSummarize.length,
     }
 
-    // Replace conversation messages with summary + recent messages
-    conversation.messages = [summaryMessage, ...messagesToKeep]
-    conversation.updatedAt = Date.now()
+    // Create compacted conversation (don't mutate original)
+    const compactedConversation: Conversation = {
+      ...conversation,
+      messages: [summaryMessage, ...messagesToKeep],
+      updatedAt: Date.now(),
+    }
 
     // Persist the compacted conversation
     // Note: saveConversation() already calls updateConversationIndex(), so no need to call it separately
-    await this.saveConversation(conversation)
+    // If save fails, return the original conversation (best-effort)
+    try {
+      await this.saveConversation(compactedConversation)
+    } catch (error) {
+      logApp(`[conversationService] compactOnLoad: failed to persist, returning original:`, error)
+      return conversation
+    }
 
-    logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${conversation.messages.length}`)
-    return conversation
+    logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${compactedConversation.messages.length}`)
+    return compactedConversation
   }
 
   async deleteAllConversations(): Promise<void> {

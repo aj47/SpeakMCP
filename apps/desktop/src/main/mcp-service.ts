@@ -101,6 +101,52 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
 
 const accessAsync = promisify(access)
 
+/**
+ * Internal server constants
+ * Internal servers are managed by SpeakMCP and should always use bundled paths
+ * rather than user-configured paths to prevent stale/incorrect paths from external workspaces
+ */
+export const WHATSAPP_SERVER_NAME = "whatsapp"
+
+/**
+ * Get paths for the internal WhatsApp MCP server
+ * Returns both the script path and node_modules path needed to run the server
+ */
+export function getInternalWhatsAppServerPaths(): { scriptPath: string; nodeModulesPath: string } {
+  if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
+    // Development: use paths relative to the monorepo root
+    const monorepoRoot = path.resolve(app.getAppPath(), "../..")
+    return {
+      scriptPath: path.join(monorepoRoot, "packages/mcp-whatsapp/dist/index.js"),
+      // In pnpm monorepo, dependencies are in root node_modules
+      nodeModulesPath: path.join(monorepoRoot, "node_modules"),
+    }
+  } else {
+    // Production: use paths relative to app resources (bundled in extraResources)
+    const resourcesDir = process.resourcesPath || app.getAppPath()
+    return {
+      scriptPath: path.join(resourcesDir, "mcp-whatsapp/dist/index.js"),
+      // In production, node_modules is bundled alongside the script
+      nodeModulesPath: path.join(resourcesDir, "mcp-whatsapp/node_modules"),
+    }
+  }
+}
+
+/**
+ * Get the path to the internal WhatsApp MCP server (legacy compat)
+ */
+export function getInternalWhatsAppServerPath(): string {
+  return getInternalWhatsAppServerPaths().scriptPath
+}
+
+/**
+ * Check if a server is an internally-managed server
+ * Internal servers have their paths managed by SpeakMCP, not user config
+ */
+export function isInternalServer(serverName: string): boolean {
+  return serverName === WHATSAPP_SERVER_NAME
+}
+
 export interface MCPTool {
   name: string
   description: string
@@ -559,12 +605,32 @@ export class MCPService {
         const resolvedCommand = await this.resolveCommandPath(
           serverConfig.command,
         )
-        const environment = await this.prepareEnvironment(serverName, serverConfig.env)
+        let environment = await this.prepareEnvironment(serverName, serverConfig.env)
+
+        // For internal servers (like WhatsApp), always use the bundled path
+        // This prevents stale paths from external workspaces from being used
+        let args = serverConfig.args || []
+        if (serverName === WHATSAPP_SERVER_NAME) {
+          const { scriptPath, nodeModulesPath } = getInternalWhatsAppServerPaths()
+          args = [scriptPath]
+          // Set NODE_PATH so Node.js can find the dependencies
+          // This is needed because pnpm uses symlinks and the spawned process
+          // runs from a different context than the main Electron process
+          const existingNodePath = environment.NODE_PATH || ""
+          environment = {
+            ...environment,
+            NODE_PATH: existingNodePath ? `${nodeModulesPath}${path.delimiter}${existingNodePath}` : nodeModulesPath,
+          }
+          if (isDebugTools()) {
+            logTools(`[${serverName}] Using internal server path: ${scriptPath}`)
+            logTools(`[${serverName}] NODE_PATH: ${environment.NODE_PATH}`)
+          }
+        }
 
         // Create transport with stderr piped so we can capture logs
         const transport = new StdioClientTransport({
           command: resolvedCommand,
-          args: serverConfig.args || [],
+          args,
           env: environment,
           stderr: "pipe", // Pipe stderr so we can capture it
         })

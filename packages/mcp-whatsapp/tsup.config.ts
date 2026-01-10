@@ -11,4 +11,7 @@ export default defineConfig({
   banner: {
     js: "#!/usr/bin/env node",
   },
+  // Bundle all dependencies to make the server self-contained
+  // This allows the server to run without needing external node_modules
+  noExternal: [/.*/],
 })

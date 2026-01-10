@@ -47,7 +47,7 @@ import {
   processTranscriptWithTools,
   processTranscriptWithAgentMode,
 } from "./llm"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, WHATSAPP_SERVER_NAME, getInternalWhatsAppServerPath } from "./mcp-service"
 import {
   saveCustomPosition,
   updatePanelPosition,
@@ -280,11 +280,14 @@ async function processWithAgentMode(
 
     if (conversationId) {
       logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+      // Use loadConversationWithCompaction to automatically compact old conversations on load
+      // Pass sessionId so that compaction summarization can be cancelled by emergency stop
       const conversation =
-        await conversationService.loadConversation(conversationId)
+        await conversationService.loadConversationWithCompaction(conversationId, sessionId)
 
       if (conversation && conversation.messages.length > 0) {
         logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+
         // Convert conversation messages to the format expected by agent mode
         // Exclude the last message since it's the current user input that will be added
         const messagesToConvert = conversation.messages.slice(0, -1)
@@ -1681,10 +1684,11 @@ export const router = {
       }
 
       // Manage WhatsApp MCP server auto-configuration
+      // Note: The actual server path is determined at runtime in mcp-service.ts createTransport()
+      // This ensures the correct internal bundled path is always used, regardless of what's in config
       try {
         const prevWhatsappEnabled = !!(prev as any)?.whatsappEnabled
         const nextWhatsappEnabled = !!(merged as any)?.whatsappEnabled
-        const WHATSAPP_SERVER_NAME = "whatsapp"
 
         if (prevWhatsappEnabled !== nextWhatsappEnabled) {
           const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
@@ -1694,27 +1698,16 @@ export const router = {
             // WhatsApp is being enabled
             const { mcpService } = await import("./mcp-service")
             if (!hasWhatsappServer) {
-              // Auto-add WhatsApp MCP server when enabled
-              // Determine the path to the WhatsApp MCP server
-              // In development: use the monorepo packages path
-              // In production: the package should be bundled with the app
-              let whatsappServerPath: string
-              if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
-                // Development: use path relative to the monorepo root
-                whatsappServerPath = path.resolve(app.getAppPath(), "../../packages/mcp-whatsapp/dist/index.js")
-              } else {
-                // Production: use path relative to app resources
-                // The WhatsApp MCP package should be bundled in extraResources
-                whatsappServerPath = path.join(process.resourcesPath || app.getAppPath(), "mcp-whatsapp/dist/index.js")
-              }
-
+              // Auto-add WhatsApp MCP server config when enabled
+              // The path in config is just a placeholder - the actual path is determined
+              // at runtime in createTransport() to ensure the correct bundled path is used
               const updatedMcpConfig: MCPConfig = {
                 ...currentMcpConfig,
                 mcpServers: {
                   ...currentMcpConfig.mcpServers,
                   [WHATSAPP_SERVER_NAME]: {
                     command: "node",
-                    args: [whatsappServerPath],
+                    args: [getInternalWhatsAppServerPath()],
                     transport: "stdio",
                   },
                 },

@@ -19,6 +19,7 @@ export type RendererHandlers = {
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void
   emergencyStopAgent: () => void
+  onPanelSizeChanged: (size: { width: number; height: number }) => void
   clearAgentSessionProgress: (sessionId: string) => void
   clearInactiveSessions: () => void
 

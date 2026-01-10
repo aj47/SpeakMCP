@@ -201,6 +201,16 @@ export interface ConversationMessage {
   timestamp: number
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
+  /**
+   * When true, this message is a compaction summary that replaces older messages.
+   * Messages before a summary message have been discarded to save context space.
+   */
+  isSummary?: boolean
+  /**
+   * Number of messages that were summarized into this summary message.
+   * Only set when isSummary is true.
+   */
+  summarizedMessageCount?: number
 }
 
 export interface ConversationMetadata {
@@ -487,9 +497,7 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
-  panelNormalModeSize?: { width: number; height: number }
-  panelAgentModeSize?: { width: number; height: number }
-  panelTextInputModeSize?: { width: number; height: number }
+  panelProgressSize?: { width: number; height: number }
 
   // Floating Panel Auto-Show Configuration
   // When false, the floating panel will not automatically appear during agent sessions

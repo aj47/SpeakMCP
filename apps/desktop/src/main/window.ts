@@ -20,6 +20,16 @@ type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
+// Notify renderer of panel size changes from main process
+function notifyPanelSizeChanged(width: number, height: number) {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  whenPanelReady(() => {
+    getRendererHandlers<RendererHandlers>(win.webContents).onPanelSizeChanged.send({ width, height })
+  })
+}
+
 // Track panel webContents ready state to avoid sending IPC before renderer is ready
 let panelWebContentsReady = false
 
@@ -243,10 +253,10 @@ export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
 // Minimum height for waveform panel:
 // - Drag bar: 24px
 // - Waveform: 24px
-// - Submit button + hint: 28px
-// - Padding: ~4px
-// Total: ~80px
-export const WAVEFORM_MIN_HEIGHT = 80
+// - Submit button + hint: 36px
+// - Padding: ~26px
+// Total: ~110px
+export const WAVEFORM_MIN_HEIGHT = 110
 
 // Minimum height for text input panel:
 // - Hint text row: ~20px
@@ -255,6 +265,14 @@ export const WAVEFORM_MIN_HEIGHT = 80
 // - Padding (p-3 = 12px top + 12px bottom + gap-3 = 12px between)
 // Total: ~160px minimum
 export const TEXT_INPUT_MIN_HEIGHT = 160
+
+// Minimum height for progress/agent view:
+// - Header: ~40px
+// - Progress content: ~100px
+// - Follow-up input: ~40px
+// - Padding: ~20px
+// Total: ~200px
+export const PROGRESS_MIN_HEIGHT = 200
 
 const panelWindowSize = {
   width: Math.max(260, MIN_WAVEFORM_WIDTH),
@@ -271,17 +289,16 @@ const textInputPanelWindowSize = {
   height: 180,
 }
 
-// Get the saved panel size (unified across all modes)
-const getSavedPanelSize = () => {
+// Get the saved panel size (mode-aware)
+const getSavedPanelSize = (mode?: "waveform" | "progress") => {
   const config = configStore.get()
 
-  logApp(`[window.ts] getSavedPanelSize - checking config...`)
+  logApp(`[window.ts] getSavedPanelSize - checking config for mode: ${mode || 'default'}...`)
 
-  const validateSize = (savedSize: { width: number; height: number }) => {
+  const validateSize = (savedSize: { width: number; height: number }, minHeight: number) => {
     const maxWidth = 3000
     const maxHeight = 2000
     const minWidth = 200
-    const minHeight = WAVEFORM_MIN_HEIGHT
 
     if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
       logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
@@ -296,9 +313,16 @@ const getSavedPanelSize = () => {
     return savedSize
   }
 
+  // For progress mode, check panelProgressSize first
+  if (mode === "progress" && config.panelProgressSize) {
+    logApp(`[window.ts] Found saved progress size:`, config.panelProgressSize)
+    return validateSize(config.panelProgressSize, PROGRESS_MIN_HEIGHT)
+  }
+
+  // Fall back to panelCustomSize for all modes
   if (config.panelCustomSize) {
     logApp(`[window.ts] Found saved panel size:`, config.panelCustomSize)
-    return validateSize(config.panelCustomSize)
+    return validateSize(config.panelCustomSize, WAVEFORM_MIN_HEIGHT)
   }
 
   logApp(`[window.ts] No saved panel size, using default:`, panelWindowSize)
@@ -711,17 +735,22 @@ export function resizePanelForAgentMode() {
   if (!win) return
 
   try {
-    const savedSize = getSavedPanelSize()
+    const savedSize = getSavedPanelSize("progress")
     const [currentWidth, currentHeight] = win.getSize()
 
-    // Only resize if current size is smaller than saved size
-    // This handles the case where panel was shrunk for waveform recording
-    if (currentHeight < savedSize.height || currentWidth < savedSize.width) {
-      logApp(`[resizePanelForAgentMode] Resizing panel from ${currentWidth}x${currentHeight} to saved size ${savedSize.width}x${savedSize.height}`)
-      win.setSize(savedSize.width, savedSize.height)
+    // Always restore to at least saved size or PROGRESS_MIN_HEIGHT
+    const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
+    const targetWidth = Math.max(savedSize.width, MIN_WAVEFORM_WIDTH)
+
+    // Only resize if dimensions actually differ (avoid unnecessary reposition)
+    if (currentHeight !== targetHeight || currentWidth !== targetWidth) {
+      logApp(`[resizePanelForAgentMode] Resizing panel from ${currentWidth}x${currentHeight} to ${targetWidth}x${targetHeight}`)
+      win.setSize(targetWidth, targetHeight)
+      // Notify renderer of the size change
+      notifyPanelSizeChanged(targetWidth, targetHeight)
 
       // Reposition to maintain the panel's anchor point
-      const position = calculatePanelPosition(savedSize, "agent")
+      const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "agent")
       win.setPosition(position.x, position.y)
     }
   } catch (e) {
@@ -753,6 +782,8 @@ export function resizePanelForTextInput() {
     // Only resize if needed
     if (currentHeight < TEXT_INPUT_MIN_HEIGHT || currentWidth < textInputPanelWindowSize.width) {
       win.setSize(targetWidth, targetHeight)
+      // Notify renderer of the size change
+      notifyPanelSizeChanged(targetWidth, targetHeight)
 
       // Reposition to maintain the panel's anchor point
       const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "textInput")
@@ -792,6 +823,8 @@ export function resizePanelForWaveform() {
     logApp(`[resizePanelForWaveform] Resizing panel from current size to ${newWidth}x${targetHeight}`)
 
     win.setSize(newWidth, targetHeight)
+    // Notify renderer of the size change
+    notifyPanelSizeChanged(newWidth, targetHeight)
 
     // Reposition to maintain the panel's anchor point (e.g., bottom-right of screen)
     const position = calculatePanelPosition({ width: newWidth, height: targetHeight }, "normal")

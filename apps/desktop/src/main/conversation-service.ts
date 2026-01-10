@@ -159,11 +159,11 @@ export class ConversationService {
     }
 
     // Compact if needed (this will save to disk if compaction occurs)
-    // Compaction is best-effort: if it fails, return the unmodified conversation
+    // Best-effort: if compaction fails, return the original conversation
     try {
       return await this.compactOnLoad(conversation, sessionId)
     } catch (error) {
-      logApp(`Failed to compact conversation ${conversationId}: ${error}`)
+      logApp(`Failed to compact conversation ${conversationId}, returning original: ${error}`)
       return conversation
     }
   }

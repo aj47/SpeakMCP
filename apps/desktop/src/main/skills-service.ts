@@ -311,12 +311,124 @@ export const skillsPath = path.join(
   "skills.json"
 )
 
-// Skills folder for SKILL.md files (optional - for users who want to manage skills as files)
+// Skills folder for SKILL.md files in App Data (user-writable location)
+// This is the single canonical location for all skills across all platforms:
+// - macOS: ~/Library/Application Support/app.speakmcp/skills/
+// - Windows: %APPDATA%/app.speakmcp/skills/
+// - Linux: ~/.config/app.speakmcp/skills/
 export const skillsFolder = path.join(
   app.getPath("appData"),
   process.env.APP_ID,
   "skills"
 )
+
+/**
+ * Get the path to bundled skills (shipped with the app)
+ * In development: apps/desktop/resources/bundled-skills
+ * In production: resources/bundled-skills (in extraResources)
+ */
+function getBundledSkillsPath(): string {
+  if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
+    // Development: use paths relative to the app directory
+    return path.join(app.getAppPath(), "resources", "bundled-skills")
+  } else {
+    // Production: use paths relative to app resources (bundled in extraResources)
+    const resourcesDir = process.resourcesPath || app.getAppPath()
+    return path.join(resourcesDir, "bundled-skills")
+  }
+}
+
+/**
+ * Recursively copy a directory
+ * Cross-platform compatible using Node.js fs module
+ */
+function copyDirRecursive(src: string, dest: string): void {
+  // Create destination directory if it doesn't exist
+  fs.mkdirSync(dest, { recursive: true })
+
+  const entries = fs.readdirSync(src, { withFileTypes: true })
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name)
+    const destPath = path.join(dest, entry.name)
+
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath)
+    } else {
+      fs.copyFileSync(srcPath, destPath)
+    }
+  }
+}
+
+/**
+ * Initialize bundled skills by copying them to the App Data skills folder.
+ * This is called on app startup to ensure bundled skills are available.
+ * Skills are only copied if they don't already exist (preserves user modifications).
+ */
+export function initializeBundledSkills(): { copied: string[]; skipped: string[]; errors: string[] } {
+  const bundledPath = getBundledSkillsPath()
+  const result = { copied: [] as string[], skipped: [] as string[], errors: [] as string[] }
+
+  logApp(`Initializing bundled skills from: ${bundledPath}`)
+  logApp(`Skills folder (App Data): ${skillsFolder}`)
+
+  // Check if bundled skills directory exists
+  if (!fs.existsSync(bundledPath)) {
+    logApp("No bundled skills directory found, skipping initialization")
+    return result
+  }
+
+  // Ensure skills folder exists in App Data
+  fs.mkdirSync(skillsFolder, { recursive: true })
+
+  try {
+    // Recursively find all skill directories (directories containing SKILL.md)
+    const processDirectory = (dirPath: string, relativePath: string = "") => {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+
+        const entryPath = path.join(dirPath, entry.name)
+        const entryRelativePath = relativePath ? path.join(relativePath, entry.name) : entry.name
+        const skillMdPath = path.join(entryPath, "SKILL.md")
+
+        if (fs.existsSync(skillMdPath)) {
+          // This is a skill directory - copy it if it doesn't exist
+          const destPath = path.join(skillsFolder, entryRelativePath)
+
+          if (fs.existsSync(destPath)) {
+            result.skipped.push(entryRelativePath)
+            logApp(`Bundled skill already exists, skipping: ${entryRelativePath}`)
+          } else {
+            try {
+              // Ensure parent directory exists
+              fs.mkdirSync(path.dirname(destPath), { recursive: true })
+              copyDirRecursive(entryPath, destPath)
+              result.copied.push(entryRelativePath)
+              logApp(`Copied bundled skill: ${entryRelativePath}`)
+            } catch (error) {
+              const errorMsg = `Failed to copy ${entryRelativePath}: ${error instanceof Error ? error.message : String(error)}`
+              result.errors.push(errorMsg)
+              logApp(errorMsg)
+            }
+          }
+        } else {
+          // Not a skill directory, recurse into it to find nested skills
+          processDirectory(entryPath, entryRelativePath)
+        }
+      }
+    }
+
+    processDirectory(bundledPath)
+  } catch (error) {
+    logApp("Error initializing bundled skills:", error)
+    result.errors.push(`Error scanning bundled skills: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  logApp(`Bundled skills initialization complete: ${result.copied.length} copied, ${result.skipped.length} skipped, ${result.errors.length} errors`)
+  return result
+}
 
 /**
  * Parse a SKILL.md file content into skill metadata and instructions
@@ -634,9 +746,21 @@ class SkillsService {
     let result = `
 # Agent Skills
 
-**Skills Folder**: ${skillsFolder}
+## Skills Installation Directory
+**IMPORTANT**: All skills MUST be installed to this ABSOLUTE path:
+\`${skillsFolder}\`
 
-You can create new skills by writing .md files to the skills folder. Use this format:
+When creating or installing skills, ALWAYS use this exact absolute path. Do NOT use relative paths like \`skills/\` or \`./skills/\`.
+
+### Creating New Skills
+To create a new skill, write a SKILL.md file to a subdirectory of the skills folder:
+\`\`\`bash
+# Example: Creating a new skill called "my-skill"
+mkdir -p "${skillsFolder}/my-skill"
+# Then create the SKILL.md file in that directory
+\`\`\`
+
+SKILL.md format:
 \`\`\`
 ---
 name: skill-name
@@ -644,6 +768,13 @@ description: What this skill does
 ---
 
 Your instructions here in markdown...
+\`\`\`
+
+### Installing Skills from GitHub
+When downloading skills from GitHub or other sources, always install to the skills folder:
+\`\`\`bash
+cd "${skillsFolder}"
+# Then clone or download the skill here
 \`\`\`
 
 After creating a skill file, it will be available on the next agent session.
@@ -715,6 +846,12 @@ ${skill.instructions}`
 
     return `
 # Active Agent Skills
+
+## Skills Installation Directory
+**IMPORTANT**: All skills MUST be installed to this ABSOLUTE path:
+\`${skillsFolder}\`
+
+When creating or installing skills, ALWAYS use this exact absolute path. Do NOT use relative paths.
 
 The following skills provide specialized instructions for specific tasks.
 Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
@@ -1033,6 +1170,7 @@ ${skillsContent}
   /**
    * Scan the skills folder for SKILL.md files and import any new ones.
    * Uses file path de-duplication to prevent re-importing the same files on repeated scans.
+   * Recursively scans nested directories to find skills at any depth.
    */
   scanSkillsFolder(): AgentSkill[] {
     const importedSkills: AgentSkill[] = []
@@ -1043,14 +1181,35 @@ ${skillsContent}
         return importedSkills
       }
 
-      const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
+      // Recursively scan for SKILL.md files
+      const scanDirectory = (dirPath: string) => {
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true })
 
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          // Look for SKILL.md in subdirectory
-          const skillPath = path.join(skillsFolder, entry.name, "SKILL.md")
-          if (fs.existsSync(skillPath)) {
-            // Check if already imported (de-duplication by file path)
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const entryPath = path.join(dirPath, entry.name)
+            const skillPath = path.join(entryPath, "SKILL.md")
+
+            if (fs.existsSync(skillPath)) {
+              // This directory contains a SKILL.md - import it
+              if (this.getSkillByFilePath(skillPath)) {
+                logApp(`Skill already imported, skipping: ${entry.name}`)
+                continue
+              }
+              try {
+                const skill = this.importSkillFromFile(skillPath)
+                importedSkills.push(skill)
+                logApp(`Imported skill from folder: ${entry.name}`)
+              } catch (error) {
+                logApp(`Failed to import skill from ${skillPath}:`, error)
+              }
+            } else {
+              // No SKILL.md here, recurse into subdirectory
+              scanDirectory(entryPath)
+            }
+          } else if (entry.name.endsWith(".md") && dirPath === skillsFolder) {
+            // Import standalone .md files only at the top level
+            const skillPath = path.join(dirPath, entry.name)
             if (this.getSkillByFilePath(skillPath)) {
               logApp(`Skill already imported, skipping: ${entry.name}`)
               continue
@@ -1058,28 +1217,15 @@ ${skillsContent}
             try {
               const skill = this.importSkillFromFile(skillPath)
               importedSkills.push(skill)
-              logApp(`Imported skill from folder: ${entry.name}`)
+              logApp(`Imported skill from file: ${entry.name}`)
             } catch (error) {
               logApp(`Failed to import skill from ${skillPath}:`, error)
             }
           }
-        } else if (entry.name.endsWith(".md")) {
-          // Import standalone .md files
-          const skillPath = path.join(skillsFolder, entry.name)
-          // Check if already imported (de-duplication by file path)
-          if (this.getSkillByFilePath(skillPath)) {
-            logApp(`Skill already imported, skipping: ${entry.name}`)
-            continue
-          }
-          try {
-            const skill = this.importSkillFromFile(skillPath)
-            importedSkills.push(skill)
-            logApp(`Imported skill from file: ${entry.name}`)
-          } catch (error) {
-            logApp(`Failed to import skill from ${skillPath}:`, error)
-          }
         }
       }
+
+      scanDirectory(skillsFolder)
     } catch (error) {
       logApp("Error scanning skills folder:", error)
     }

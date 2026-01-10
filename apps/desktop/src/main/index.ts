@@ -21,6 +21,7 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { initializeBundledSkills, skillsService } from "./skills-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -135,6 +136,21 @@ app.whenReady().then(() => {
       )
       logApp("Failed to initialize MCP service on startup:", error)
     })
+
+  // Initialize bundled skills (copy from app resources to App Data if needed)
+  // Then scan the skills folder to import any new skills into the registry
+  try {
+    const skillsResult = initializeBundledSkills()
+    logApp(`Bundled skills: ${skillsResult.copied.length} copied, ${skillsResult.skipped.length} skipped`)
+
+    // Scan the skills folder to import any new skills (including just-copied bundled skills)
+    const importedSkills = skillsService.scanSkillsFolder()
+    if (importedSkills.length > 0) {
+      logApp(`Imported ${importedSkills.length} skills from skills folder`)
+    }
+  } catch (error) {
+    logApp("Failed to initialize bundled skills:", error)
+  }
 
 	  try {
 	    const cfg = configStore.get()

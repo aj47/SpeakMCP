@@ -54,6 +54,11 @@ module.exports = {
         from: "../../packages/mcp-whatsapp/dist",
         to: "mcp-whatsapp/dist",
         filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
       }
     ]
   },
@@ -74,6 +79,11 @@ module.exports = {
       {
         from: "../../packages/mcp-whatsapp/dist",
         to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
         filter: ["**/*"]
       }
     ],
@@ -230,6 +240,11 @@ module.exports = {
       {
         from: "../../packages/mcp-whatsapp/dist",
         to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
         filter: ["**/*"]
       }
     ]

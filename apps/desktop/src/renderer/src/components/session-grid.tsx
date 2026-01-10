@@ -21,9 +21,10 @@ interface SessionGridProps {
   sessionCount: number
   className?: string
   resetKey?: number
+  isExpandedToFullWindow?: boolean
 }
 
-export function SessionGrid({ children, sessionCount, className, resetKey = 0 }: SessionGridProps) {
+export function SessionGrid({ children, sessionCount, className, resetKey = 0, isExpandedToFullWindow = false }: SessionGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const [gap, setGap] = useState(16) // Default to gap-4 = 16px
@@ -66,7 +67,8 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
       <div
         ref={containerRef}
         className={cn(
-          "flex flex-wrap gap-4 p-4 content-start",
+          "flex flex-wrap content-start",
+          isExpandedToFullWindow ? "h-full p-0 gap-0" : "gap-4 p-4",
           className
         )}
       >
@@ -87,6 +89,7 @@ interface SessionTileWrapperProps {
   onDragEnd?: () => void
   isDragTarget?: boolean
   isDragging?: boolean
+  isExpandedToFullWindow?: boolean
 }
 
 // Calculate half container width for tile sizing, clamped to min/max
@@ -110,6 +113,7 @@ export function SessionTileWrapper({
   onDragEnd,
   isDragTarget,
   isDragging,
+  isExpandedToFullWindow,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { containerWidth, gap, resetKey } = useSessionGridContext()
@@ -177,37 +181,44 @@ export function SessionTileWrapper({
     onDragEnd?.()
   }
 
+  // When expanded to full window, use 100% width and height instead of the resizable dimensions
+  const effectiveWidth = isExpandedToFullWindow ? "100%" : width
+  const effectiveHeight = isExpandedToFullWindow ? "100%" : (isCollapsed ? "auto" : height)
+
   return (
     <div
       ref={containerRef}
       className={cn(
-        "relative flex-shrink-0 transition-all duration-200",
+        "relative transition-all duration-200",
+        isExpandedToFullWindow ? "flex-grow" : "flex-shrink-0",
         isResizing && "select-none",
         isDragTarget && "ring-2 ring-blue-500 ring-offset-2",
         isDragging && "opacity-50",
         className
       )}
-      style={{ width, height: isCollapsed ? "auto" : height }}
-      draggable={!isResizing}
+      style={{ width: effectiveWidth, height: effectiveHeight }}
+      draggable={!isResizing && !isExpandedToFullWindow}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      {/* Drag handle indicator in top-left */}
-      <div
-        className="absolute top-2 left-2 z-10 p-1 rounded bg-muted/50 cursor-grab active:cursor-grabbing opacity-0 hover:opacity-100 transition-opacity"
-        title="Drag to reorder"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
+      {/* Drag handle indicator in top-left - hide when expanded to full window */}
+      {!isExpandedToFullWindow && (
+        <div
+          className="absolute top-2 left-2 z-10 p-1 rounded bg-muted/50 cursor-grab active:cursor-grabbing opacity-0 hover:opacity-100 transition-opacity"
+          title="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
 
       {/* Main content */}
       <div className={cn("w-full", isCollapsed ? "h-auto" : "h-full")}>
         {children}
       </div>
 
-      {/* Resize handles - hide when collapsed */}
-      {!isCollapsed && (
+      {/* Resize handles - hide when collapsed or expanded to full window */}
+      {!isCollapsed && !isExpandedToFullWindow && (
         <>
           {/* Right edge resize handle */}
           <div

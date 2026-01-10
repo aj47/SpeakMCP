@@ -96,11 +96,20 @@ export function Component() {
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
   const [collapsedSessions, setCollapsedSessions] = useState<Record<string, boolean>>({})
   const [tileResetKey, setTileResetKey] = useState(0)
+  const [expandedToFullWindowId, setExpandedToFullWindowId] = useState<string | null>(null)
 
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const handleCollapsedChange = useCallback((sessionId: string, collapsed: boolean) => {
     setCollapsedSessions(prev => ({ ...prev, [sessionId]: collapsed }))
+  }, [])
+
+  const handleExpandToFullWindow = useCallback((sessionId: string) => {
+    setExpandedToFullWindowId(sessionId)
+  }, [])
+
+  const handleCollapseFromFullWindow = useCallback(() => {
+    setExpandedToFullWindowId(null)
   }, [])
 
   const allProgressEntries = React.useMemo(() => {
@@ -465,9 +474,9 @@ export function Component() {
                 onDismissPendingContinuation={handleDismissPendingContinuation}
               />
             ) : (
-              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey}>
-                {/* Pending continuation tile first */}
-                {pendingProgress && pendingSessionId && (
+              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey} isExpandedToFullWindow={!!expandedToFullWindowId}>
+                {/* Pending continuation tile first - hide when a tile is expanded */}
+                {pendingProgress && pendingSessionId && !expandedToFullWindowId && (
                   <SessionTileWrapper
                     key={pendingSessionId}
                     sessionId={pendingSessionId}
@@ -494,10 +503,16 @@ export function Component() {
                 {allProgressEntries.map(([sessionId, progress], index) => {
                   const isCollapsed = collapsedSessions[sessionId] ?? false
                   const adjustedIndex = pendingProgress ? index + 1 : index
+                  const isExpandedToFullWindow = expandedToFullWindowId === sessionId
+                  // Skip rendering if another tile is expanded to full window
+                  if (expandedToFullWindowId && !isExpandedToFullWindow) {
+                    return null
+                  }
                   return (
                     <div
                       key={sessionId}
                       ref={(el) => { sessionRefs.current[sessionId] = el }}
+                      className={cn(isExpandedToFullWindow && "w-full h-full")}
                     >
                       <SessionTileWrapper
                         sessionId={sessionId}
@@ -508,6 +523,7 @@ export function Component() {
                         onDragEnd={handleDragEnd}
                         isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
                         isDragging={draggedSessionId === sessionId}
+                        isExpandedToFullWindow={isExpandedToFullWindow}
                       >
                         <AgentProgress
                           progress={progress}
@@ -517,6 +533,9 @@ export function Component() {
                           onDismiss={() => handleDismissSession(sessionId)}
                           isCollapsed={isCollapsed}
                           onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                          isExpandedToFullWindow={isExpandedToFullWindow}
+                          onExpandToFullWindow={() => handleExpandToFullWindow(sessionId)}
+                          onCollapseFromFullWindow={handleCollapseFromFullWindow}
                         />
                       </SessionTileWrapper>
                     </div>

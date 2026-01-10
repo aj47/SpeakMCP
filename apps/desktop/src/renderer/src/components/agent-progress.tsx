@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX, Expand, Shrink } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -33,6 +33,12 @@ interface AgentProgressProps {
   onCollapsedChange?: (collapsed: boolean) => void
   /** For tile variant: callback when a follow-up message is sent */
   onFollowUpSent?: () => void
+  /** For tile variant: whether the tile is expanded to full window */
+  isExpandedToFullWindow?: boolean
+  /** For tile variant: callback to expand tile to full window */
+  onExpandToFullWindow?: () => void
+  /** For tile variant: callback to collapse from full window */
+  onCollapseFromFullWindow?: () => void
 }
 
 // Enhanced conversation message component
@@ -1016,6 +1022,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   isCollapsed: controlledIsCollapsed,
   onCollapsedChange,
   onFollowUpSent,
+  isExpandedToFullWindow,
+  onExpandToFullWindow,
+  onCollapseFromFullWindow,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -1675,6 +1684,25 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleCollapse} title={isCollapsed ? "Expand panel" : "Collapse panel"}>
               {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
             </Button>
+            {/* Expand to full window / Collapse from full window */}
+            {(onExpandToFullWindow || onCollapseFromFullWindow) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (isExpandedToFullWindow) {
+                    onCollapseFromFullWindow?.()
+                  } else {
+                    onExpandToFullWindow?.()
+                  }
+                }}
+                title={isExpandedToFullWindow ? "Exit full window" : "Expand to full window"}
+              >
+                {isExpandedToFullWindow ? <Shrink className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
+              </Button>
+            )}
             {!isComplete && !isSnoozed && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleSnooze(e); }} title="Minimize">
                 <Minimize2 className="h-3 w-3" />

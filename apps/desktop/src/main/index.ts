@@ -179,6 +179,12 @@ app.whenReady().then(() => {
 
   app.on("before-quit", () => {
     makePanelWindowClosable()
+
+    // Clean up MCP server processes to prevent orphaned node processes
+    // This terminates all child processes spawned by StdioClientTransport
+    mcpService.cleanup().catch((error) => {
+      logApp("Error during MCP service cleanup on quit:", error)
+    })
   })
 })
 

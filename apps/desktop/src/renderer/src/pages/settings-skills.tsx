@@ -74,6 +74,8 @@ export function Component() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["skills"] })
+      // Also invalidate enabled-skill-ids since new skills are auto-enabled for current profile
+      queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
       setIsCreateDialogOpen(false)
       resetNewSkillForm()
       toast.success("Skill created successfully")
@@ -132,6 +134,8 @@ export function Component() {
     onSuccess: (skill: AgentSkill | null) => {
       if (skill) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
+        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
+        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
         toast.success(`Skill "${skill.name}" imported successfully`)
       }
     },
@@ -148,6 +152,8 @@ export function Component() {
     onSuccess: (skill: AgentSkill | null) => {
       if (skill) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
+        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
+        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
         toast.success(`Skill "${skill.name}" imported successfully`)
       }
     },
@@ -164,6 +170,10 @@ export function Component() {
     onSuccess: (result: { imported: AgentSkill[]; skipped: string[]; errors: Array<{ folder: string; error: string }> } | null) => {
       if (result) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
+        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
+        if (result.imported.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
+        }
         const messages: string[] = []
         if (result.imported.length > 0) {
           messages.push(`Imported ${result.imported.length} skill(s)`)
@@ -216,7 +226,9 @@ export function Component() {
     },
     onSuccess: (importedSkills: AgentSkill[]) => {
       queryClient.invalidateQueries({ queryKey: ["skills"] })
+      // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
       if (importedSkills.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
         toast.success(`Imported ${importedSkills.length} skill(s) from folder`)
       } else {
         toast.info("No new skills found in folder")
@@ -235,7 +247,9 @@ export function Component() {
     onSuccess: (result) => {
       if (result) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
+        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
         if (result.imported.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
           toast.success(`Imported ${result.imported.length} skill(s) from GitHub: ${result.imported.map(s => s.name).join(", ")}`)
         } else if (result.errors.length > 0) {
           toast.error(`Failed to import: ${result.errors.join("; ")}`)

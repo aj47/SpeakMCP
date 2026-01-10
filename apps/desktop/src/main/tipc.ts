@@ -279,11 +279,14 @@ async function processWithAgentMode(
 
     if (conversationId) {
       logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+      // Use loadConversationWithCompaction to automatically compact old conversations on load
+      // Pass sessionId so that compaction summarization can be cancelled by emergency stop
       const conversation =
-        await conversationService.loadConversation(conversationId)
+        await conversationService.loadConversationWithCompaction(conversationId, sessionId)
 
       if (conversation && conversation.messages.length > 0) {
         logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+
         // Convert conversation messages to the format expected by agent mode
         // Exclude the last message since it's the current user input that will be added
         const messagesToConvert = conversation.messages.slice(0, -1)

@@ -149,9 +149,10 @@ export class ConversationService {
    * The compaction is persisted to disk, so subsequent loads will be faster.
    *
    * @param conversationId - The ID of the conversation to load
+   * @param sessionId - Optional session ID for cancellation support during summarization
    * @returns The conversation (possibly compacted), or null if not found
    */
-  async loadConversationWithCompaction(conversationId: string): Promise<Conversation | null> {
+  async loadConversationWithCompaction(conversationId: string, sessionId?: string): Promise<Conversation | null> {
     const conversation = await this.loadConversation(conversationId)
     if (!conversation) {
       return null
@@ -160,7 +161,7 @@ export class ConversationService {
     // Compact if needed (this will save to disk if compaction occurs)
     // Best-effort: if compaction fails, return the original conversation
     try {
-      return await this.compactOnLoad(conversation)
+      return await this.compactOnLoad(conversation, sessionId)
     } catch (error) {
       logApp(`Failed to compact conversation ${conversationId}, returning original: ${error}`)
       return conversation
@@ -318,9 +319,10 @@ export class ConversationService {
    * is loaded, not during the agent loop.
    *
    * @param conversation - The conversation to compact
+   * @param sessionId - Optional session ID for cancellation support during summarization
    * @returns The compacted conversation
    */
-  private async compactOnLoad(conversation: Conversation): Promise<Conversation> {
+  private async compactOnLoad(conversation: Conversation, sessionId?: string): Promise<Conversation> {
     const messageCount = conversation.messages.length
     if (messageCount <= COMPACTION_MESSAGE_THRESHOLD) {
       return conversation
@@ -339,28 +341,46 @@ export class ConversationService {
     // Build a summary of the older messages
     const summaryInput = messagesToSummarize
       .map((m) => {
-        let messageText = `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`
+        let text = `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`
+
+        // Include tool calls if present
         if (m.toolCalls && m.toolCalls.length > 0) {
-          const toolCallsSummary = m.toolCalls
-            .map((tc) => `${tc.name}(${JSON.stringify(tc.arguments).substring(0, 200)})`)
+          const toolCallsStr = m.toolCalls
+            .map((tc) => {
+              const argsStr = JSON.stringify(tc.arguments).substring(0, 200)
+              return `${tc.name}(${argsStr})`
+            })
             .join(", ")
-          messageText += `\nTool calls: ${toolCallsSummary}`
+          text += `\nTool calls: ${toolCallsStr}`
         }
+
+        // Include tool results if present
         if (m.toolResults && m.toolResults.length > 0) {
-          const toolResultsSummary = m.toolResults
-            .map((tr) => `${tr.success ? "success" : "error"}: ${tr.content.substring(0, 200)}`)
+          const toolResultsStr = m.toolResults
+            .map((tr) => {
+              const status = tr.success ? "success" : "error"
+              const content = (tr.error || tr.content || "").substring(0, 200)
+              return `${status}: ${content}`
+            })
             .join(", ")
-          messageText += `\nTool results: ${toolResultsSummary}`
+          text += `\nTool results: ${toolResultsStr}`
         }
-        return messageText
+
+        return text
       })
       .join("\n\n")
 
     let summaryContent: string
+    const summarizationPrompt = `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${summaryInput}`
     try {
-      summaryContent = await summarizeContent(
-        `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${summaryInput}`
-      )
+      summaryContent = await summarizeContent(summarizationPrompt, sessionId)
+      // summarizeContent() swallows errors internally and returns the input text on failure.
+      // Detect this by checking if the result equals or contains the full prompt (failure case).
+      // A successful summary should be significantly shorter than the prompt.
+      if (summaryContent === summarizationPrompt || summaryContent.length >= summarizationPrompt.length * 0.9) {
+        logApp(`[conversationService] compactOnLoad: summarization likely failed (output too similar to input), keeping original`)
+        return conversation
+      }
     } catch (error) {
       logApp(`[conversationService] compactOnLoad: summarization failed, keeping original:`, error)
       return conversation
@@ -376,8 +396,7 @@ export class ConversationService {
       summarizedMessageCount: messagesToSummarize.length,
     }
 
-    // Create a new compacted conversation object (don't mutate the original)
-    // This ensures if save fails, we can return the original unmodified
+    // Create compacted conversation (don't mutate original)
     const compactedConversation: Conversation = {
       ...conversation,
       messages: [summaryMessage, ...messagesToKeep],
@@ -385,9 +404,14 @@ export class ConversationService {
     }
 
     // Persist the compacted conversation
-    // If this throws, the original conversation is still intact
-    await this.saveConversation(compactedConversation)
-    this.updateConversationIndex(compactedConversation)
+    // Note: saveConversation() already calls updateConversationIndex(), so no need to call it separately
+    // If save fails, return the original conversation (best-effort)
+    try {
+      await this.saveConversation(compactedConversation)
+    } catch (error) {
+      logApp(`[conversationService] compactOnLoad: failed to persist, returning original:`, error)
+      return conversation
+    }
 
     logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${compactedConversation.messages.length}`)
     return compactedConversation

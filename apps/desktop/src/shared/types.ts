@@ -201,9 +201,15 @@ export interface ConversationMessage {
   timestamp: number
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
-  /** When true, this message is a compaction summary that replaces older messages */
+  /**
+   * When true, this message is a compaction summary that replaces older messages.
+   * Messages before a summary message have been discarded to save context space.
+   */
   isSummary?: boolean
-  /** Number of messages that were summarized into this summary message (only set when isSummary is true) */
+  /**
+   * Number of messages that were summarized into this summary message.
+   * Only set when isSummary is true.
+   */
   summarizedMessageCount?: number
 }
 

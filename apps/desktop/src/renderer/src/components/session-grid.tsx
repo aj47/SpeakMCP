@@ -3,14 +3,24 @@ import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
-// Context to share container width, gap, and reset key with tile wrappers
+// Context to share container width, gap, reset key, and expanded state with tile wrappers
 interface SessionGridContextValue {
   containerWidth: number
+  containerHeight: number
   gap: number
   resetKey: number
+  expandedSessionId: string | null
+  setExpandedSessionId: (id: string | null) => void
 }
 
-const SessionGridContext = createContext<SessionGridContextValue>({ containerWidth: 0, gap: 16, resetKey: 0 })
+const SessionGridContext = createContext<SessionGridContextValue>({
+  containerWidth: 0,
+  containerHeight: 0,
+  gap: 16,
+  resetKey: 0,
+  expandedSessionId: null,
+  setExpandedSessionId: () => {},
+})
 
 export function useSessionGridContext() {
   return useContext(SessionGridContext)
@@ -26,7 +36,9 @@ interface SessionGridProps {
 export function SessionGrid({ children, sessionCount, className, resetKey = 0 }: SessionGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(0)
   const [gap, setGap] = useState(16) // Default to gap-4 = 16px
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
 
   useEffect(() => {
     const updateMeasurements = () => {
@@ -38,8 +50,16 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
         const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
         const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
         const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
-        const totalPadding = paddingLeft + paddingRight
-        setContainerWidth(containerRef.current.clientWidth - totalPadding)
+        const totalHorizontalPadding = paddingLeft + paddingRight
+        setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
+
+        // Compute height for full-window expansion
+        const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
+        const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
+        const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
+        const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
+        const totalVerticalPadding = paddingTop + paddingBottom
+        setContainerHeight(containerRef.current.clientHeight - totalVerticalPadding)
 
         // Also compute gap from styles to handle className overrides (columnGap or gap)
         // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
@@ -62,7 +82,7 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
   }, [])
 
   return (
-    <SessionGridContext.Provider value={{ containerWidth, gap, resetKey }}>
+    <SessionGridContext.Provider value={{ containerWidth, containerHeight, gap, resetKey, expandedSessionId, setExpandedSessionId }}>
       <div
         ref={containerRef}
         className={cn(
@@ -112,9 +132,13 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { containerWidth, gap, resetKey } = useSessionGridContext()
+  const { containerWidth, containerHeight, gap, resetKey, expandedSessionId } = useSessionGridContext()
   const hasInitializedRef = useRef(false)
   const lastResetKeyRef = useRef(resetKey)
+
+  // Check if this tile is expanded or if another tile is expanded
+  const isExpanded = expandedSessionId === sessionId
+  const anotherTileExpanded = expandedSessionId !== null && expandedSessionId !== sessionId
 
   const {
     width,
@@ -177,6 +201,17 @@ export function SessionTileWrapper({
     onDragEnd?.()
   }
 
+  // Hide this tile if another tile is expanded
+  if (anotherTileExpanded) {
+    return null
+  }
+
+  // Calculate dimensions - use full container size when expanded
+  const displayWidth = isExpanded ? containerWidth : width
+  const displayHeight = isExpanded
+    ? (containerHeight > 0 ? containerHeight : height)
+    : (isCollapsed ? "auto" : height)
+
   return (
     <div
       ref={containerRef}
@@ -187,27 +222,29 @@ export function SessionTileWrapper({
         isDragging && "opacity-50",
         className
       )}
-      style={{ width, height: isCollapsed ? "auto" : height }}
-      draggable={!isResizing}
+      style={{ width: displayWidth, height: displayHeight }}
+      draggable={!isResizing && !isExpanded}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      {/* Drag handle indicator in top-left */}
-      <div
-        className="absolute top-2 left-2 z-10 p-1 rounded bg-muted/50 cursor-grab active:cursor-grabbing opacity-0 hover:opacity-100 transition-opacity"
-        title="Drag to reorder"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
+      {/* Drag handle indicator in top-left - hide when expanded */}
+      {!isExpanded && (
+        <div
+          className="absolute top-2 left-2 z-10 p-1 rounded bg-muted/50 cursor-grab active:cursor-grabbing opacity-0 hover:opacity-100 transition-opacity"
+          title="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
 
       {/* Main content */}
-      <div className={cn("w-full", isCollapsed ? "h-auto" : "h-full")}>
+      <div className={cn("w-full", isCollapsed && !isExpanded ? "h-auto" : "h-full")}>
         {children}
       </div>
 
-      {/* Resize handles - hide when collapsed */}
-      {!isCollapsed && (
+      {/* Resize handles - hide when collapsed or expanded */}
+      {!isCollapsed && !isExpanded && (
         <>
           {/* Right edge resize handle */}
           <div

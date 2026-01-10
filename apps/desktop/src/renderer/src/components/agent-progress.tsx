@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX, Expand, Shrink } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -16,6 +16,7 @@ import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
+import { useSessionGridContext } from "@renderer/components/session-grid"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -1068,6 +1069,21 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const isQueuePaused = useIsQueuePaused(progress?.conversationId)
   const hasQueuedMessages = queuedMessages.length > 0
 
+  // Get expand functionality from session grid context
+  const { expandedSessionId, setExpandedSessionId } = useSessionGridContext()
+  const isExpandedToFull = progress?.sessionId && expandedSessionId === progress.sessionId
+
+  // Handle expand/shrink toggle
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!progress?.sessionId) return
+    if (isExpandedToFull) {
+      setExpandedSessionId(null)
+    } else {
+      setExpandedSessionId(progress.sessionId)
+    }
+  }
+
   // Helper to toggle expansion state for a specific item
   // Uses defaultExpanded fallback for items that haven't been explicitly toggled yet
   // (like tool executions which default to expanded)
@@ -1675,6 +1691,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleCollapse} title={isCollapsed ? "Expand panel" : "Collapse panel"}>
               {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
             </Button>
+            {/* Expand to full window / Shrink back */}
+            {isRealSession && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleExpand} title={isExpandedToFull ? "Shrink to normal size" : "Expand to fill window"}>
+                {isExpandedToFull ? <Shrink className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
+              </Button>
+            )}
             {!isComplete && !isSnoozed && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleSnooze(e); }} title="Minimize">
                 <Minimize2 className="h-3 w-3" />

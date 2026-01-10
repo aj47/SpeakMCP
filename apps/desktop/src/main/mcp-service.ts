@@ -2674,10 +2674,6 @@ export class MCPService {
         environment.WHATSAPP_LOG_MESSAGES = "true"
       }
 
-      // Inject harness output setting (default true)
-      // When true, the harness handles typing indicators and message sending automatically
-      environment.WHATSAPP_HARNESS_OUTPUT = (config.whatsappHarnessOutput ?? true) ? "true" : "false"
-
       // Set auth directory to SpeakMCP data folder
       environment.WHATSAPP_AUTH_DIR = path.join(app.getPath("appData"), process.env.APP_ID || "speakmcp", "whatsapp-auth")
     }

@@ -529,17 +529,6 @@ function analyzeToolCapabilities(
   return { summary, relevantTools: uniqueRelevantTools }
 }
 
-// Options for agent mode processing
-export interface AgentModeOptions {
-  conversationId?: string // Conversation ID for linking to conversation history
-  sessionId?: string // Session ID for progress routing and isolation
-  onProgress?: (update: AgentProgressUpdate) => void // Optional callback for external progress consumers (e.g., SSE)
-  profileSnapshot?: SessionProfileSnapshot // Profile snapshot for session isolation
-  // When true, accept any non-empty response as complete without requiring tool calls.
-  // Used for WhatsApp harness mode where simple conversational responses are expected.
-  acceptSimpleResponse?: boolean
-}
-
 export async function processTranscriptWithAgentMode(
   transcript: string,
   availableTools: MCPTool[],
@@ -555,12 +544,8 @@ export async function processTranscriptWithAgentMode(
   sessionId?: string, // Session ID for progress routing and isolation
   onProgress?: (update: AgentProgressUpdate) => void, // Optional callback for external progress consumers (e.g., SSE)
   profileSnapshot?: SessionProfileSnapshot, // Profile snapshot for session isolation
-  options?: AgentModeOptions, // Additional options
 ): Promise<AgentModeResponse> {
   const config = configStore.get()
-
-  // Extract options with defaults
-  const acceptSimpleResponse = options?.acceptSimpleResponse ?? false
 
   // Store IDs for use in progress updates
   const currentConversationId = conversationId
@@ -1733,15 +1718,13 @@ Return ONLY JSON per schema.`,
       // for simple Q&A like "hi" where the LLM just responds without tool calls.
       // We use a lower threshold here (any non-empty response) because short greetings
       // like "Hi." or "Hello." are valid complete responses to simple greetings.
-      // Also accept when acceptSimpleResponse is enabled (e.g., WhatsApp harness mode).
       const noToolsAvailable = !availableTools || availableTools.length === 0
       const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
-      if ((noToolsAvailable || !isActionableRequest || acceptSimpleResponse) && hasAnyResponse && llmResponse.needsMoreWork !== true) {
+      if ((noToolsAvailable || !isActionableRequest) && hasAnyResponse && llmResponse.needsMoreWork !== true) {
         if (isDebugLLM()) {
-          logLLM("Non-actionable/simple request with substantive response - accepting as complete", {
+          logLLM("Non-actionable request with substantive response - accepting as complete", {
             noToolsAvailable,
             isActionableRequest,
-            acceptSimpleResponse,
             responseLength: trimmedContent.length,
             responsePreview: trimmedContent.substring(0, 100),
           })

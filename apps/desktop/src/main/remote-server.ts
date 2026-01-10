@@ -100,8 +100,6 @@ interface RunAgentOptions {
   prompt: string
   conversationId?: string
   onProgress?: (update: AgentProgressUpdate) => void
-  /** Origin of the request - used to mark conversations for security purposes */
-  origin?: "whatsapp" | "desktop" | "remote" | "unknown"
 }
 
 function formatConversationHistoryForApi(
@@ -141,89 +139,6 @@ function formatConversationHistoryForApi(
   }))
 }
 
-/**
- * Check if a conversation ID represents a WhatsApp conversation.
- * WhatsApp conversation IDs have the format: whatsapp_<chatId> or whatsapp_<chatId>_<timestamp>
- */
-function isWhatsAppConversation(conversationId: string | undefined): boolean {
-  return !!conversationId && conversationId.startsWith("whatsapp_")
-}
-
-/**
- * Extract the WhatsApp chat ID (recipient) from a WhatsApp conversation ID.
- * Handles formats: whatsapp_<chatId> and whatsapp_<chatId>_<timestamp>
- */
-function extractWhatsAppChatId(conversationId: string): string | null {
-  if (!conversationId.startsWith("whatsapp_")) {
-    return null
-  }
-  // Remove "whatsapp_" prefix
-  const remainder = conversationId.substring(9)
-  // Check if this is a timestamped ID (whatsapp_<chatId>_<timestamp>)
-  // Chat IDs contain @ (e.g., 61406142826@s.whatsapp.net)
-  const atIndex = remainder.indexOf("@")
-  if (atIndex === -1) {
-    return null
-  }
-  // Find the end of the chat ID (next _ after the domain, or end of string)
-  const afterAt = remainder.substring(atIndex)
-  const nextUnderscore = afterAt.indexOf("_")
-  if (nextUnderscore === -1) {
-    // No timestamp suffix - return the whole remainder
-    return remainder
-  }
-  // Has timestamp suffix - extract just the chat ID part
-  return remainder.substring(0, atIndex + nextUnderscore)
-}
-
-/**
- * Send a WhatsApp typing indicator via the MCP tool.
- * This is called by the harness layer to show typing status automatically.
- */
-async function sendWhatsAppTypingIndicator(chatId: string): Promise<void> {
-  try {
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Sending typing indicator to ${chatId}`)
-    const result = await mcpService.executeToolCall(
-      { name: "whatsapp:whatsapp_send_typing", arguments: { to: chatId } },
-      undefined,
-      true // skip approval check for harness-level calls
-    )
-    if (result.isError) {
-      const errorMessage = result.content.map(c => c.text).join(', ')
-      diagnosticsService.logWarning("remote-server", `[WhatsApp Harness] Typing indicator failed: ${errorMessage}`)
-    } else {
-      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Typing indicator sent successfully to ${chatId}`)
-    }
-  } catch (error) {
-    diagnosticsService.logWarning("remote-server", `[WhatsApp Harness] Failed to send typing indicator: ${error}`)
-    // Don't throw - typing indicator failures shouldn't break the flow
-  }
-}
-
-/**
- * Send a WhatsApp message via the MCP tool.
- * This is called by the harness layer to send responses automatically.
- */
-async function sendWhatsAppMessage(chatId: string, text: string): Promise<void> {
-  try {
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Sending message to ${chatId} (${text.length} chars)`)
-    const result = await mcpService.executeToolCall(
-      { name: "whatsapp:whatsapp_send_message", arguments: { to: chatId, text } },
-      undefined,
-      true // skip approval check for harness-level calls
-    )
-    if (result.isError) {
-      const errorMessage = result.content.map(c => c.text).join(', ')
-      diagnosticsService.logError("remote-server", `[WhatsApp Harness] Failed to send message to ${chatId}: ${errorMessage}`)
-    } else {
-      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Message sent successfully to ${chatId}`)
-    }
-  } catch (error) {
-    diagnosticsService.logError("remote-server", `[WhatsApp Harness] Failed to send message to ${chatId}`, error)
-    // Don't throw - let the agent loop complete even if WhatsApp sending fails
-  }
-}
-
 async function runAgent(options: RunAgentOptions): Promise<{
   content: string
   conversationId: string
@@ -235,7 +150,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
     timestamp?: number
   }>
 }> {
-  const { prompt, conversationId: inputConversationId, onProgress, origin } = options
+  const { prompt, conversationId: inputConversationId, onProgress } = options
   const cfg = configStore.get()
 
   // Set agent mode state for process management - ensure clean state
@@ -251,8 +166,6 @@ async function runAgent(options: RunAgentOptions): Promise<{
     toolResults?: any[]
   }> | undefined
   let conversationId = inputConversationId
-  // Track if this is an existing conversation (important for security - see below)
-  let isExistingConversation = false
 
   // Create or continue conversation - matching tipc.ts createMcpTextInput logic
   if (conversationId) {
@@ -264,8 +177,6 @@ async function runAgent(options: RunAgentOptions): Promise<{
     )
 
     if (updatedConversation) {
-      // This is an existing conversation - it was created by a prior request
-      isExistingConversation = true
       // Load conversation history excluding the message we just added (the current user input)
       // This matches tipc.ts processWithAgentMode behavior
       const messagesToConvert = updatedConversation.messages.slice(0, -1)
@@ -293,12 +204,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
       }))
     } else {
       // Conversation not found - create it with the provided ID to maintain session continuity
-      // This is important for external integrations like WhatsApp where the conversation_id
-      // is based on the sender's identifier (e.g., whatsapp_61406142826@s.whatsapp.net)
-      // Default origin to "remote" for non-WhatsApp remote clients to ensure origin is always persisted
-      const effectiveOrigin = origin || "remote"
-      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID (origin: ${effectiveOrigin})`)
-      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user", effectiveOrigin)
+      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID`)
+      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user")
       // Update conversationId to use the actual persisted ID (which may be sanitized)
       // This ensures session lookup and later operations use the correct ID
       conversationId = newConversation.id
@@ -310,12 +217,10 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Create a new conversation if none exists (only when no conversationId was provided at all)
   if (!conversationId) {
-    // For requests without a conversationId, default origin to "remote" since they come via the remote server
     const newConversation = await conversationService.createConversationWithId(
       conversationService.generateConversationIdPublic(),
       prompt,
-      "user",
-      origin || "remote"
+      "user"
     )
     conversationId = newConversation.id
     diagnosticsService.logInfo("remote-server", `Created new conversation ${conversationId}`)
@@ -375,85 +280,17 @@ async function runAgent(options: RunAgentOptions): Promise<{
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
   const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
-  // Determine if this is a WhatsApp conversation and harness output is enabled
-  // SECURITY: Only enable harness-level WhatsApp calls (which bypass tool approval) for
-  // conversations that genuinely originated from WhatsApp. We check:
-  // 1. The conversation ID has whatsapp_ prefix (format check)
-  // 2. EITHER the current request has origin="whatsapp" (from X-SpeakMCP-Origin header)
-  //    OR the conversation was created with origin="whatsapp" (stored in metadata)
-  // This prevents an attacker from crafting a whatsapp_ prefixed conversation_id
-  // and triggering WhatsApp sends without approval.
-  const isWhatsApp = isWhatsAppConversation(conversationId)
-  const whatsappChatId = isWhatsApp ? extractWhatsAppChatId(conversationId!) : null
-
-  // Check if this conversation has WhatsApp origin
-  // SECURITY: For existing conversations, ONLY trust the stored origin metadata.
-  // The request header is only used to set the origin when creating a NEW conversation.
-  // This prevents attackers from retroactively enabling the approval-bypassing harness
-  // by adding the X-SpeakMCP-Origin header to requests for existing conversations.
-  //
-  // MIGRATION: For pre-existing WhatsApp conversations (created before origin tracking was
-  // introduced), we allow a one-time migration: if the conversation ID has the whatsapp_ prefix
-  // AND the current request has origin="whatsapp" AND the stored origin is null, we update
-  // the stored origin to "whatsapp". This ensures existing WhatsApp conversations continue
-  // to work after upgrading, avoiding the need for users to start new sessions.
-  let hasWhatsAppOrigin = false
-  if (isExistingConversation) {
-    // For existing conversations, stored metadata is authoritative
-    const storedOrigin = await conversationService.getConversationOrigin(conversationId)
-    if (storedOrigin === "whatsapp") {
-      hasWhatsAppOrigin = true
-    } else if (storedOrigin === null && isWhatsApp && origin === "whatsapp") {
-      // MIGRATION: Pre-existing WhatsApp conversation without origin metadata.
-      // The whatsapp_ prefix + current request origin header indicates this is a legitimate
-      // WhatsApp conversation from before origin tracking. Migrate it.
-      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Migrating pre-existing WhatsApp conversation ${conversationId} - setting origin to "whatsapp"`)
-      await conversationService.setConversationOrigin(conversationId, "whatsapp")
-      hasWhatsAppOrigin = true
-    }
-    // If storedOrigin is a non-whatsapp value (like "remote", "desktop"), don't allow migration
-  } else {
-    // For new conversations, trust the request header (which will be stored in metadata)
-    hasWhatsAppOrigin = origin === "whatsapp"
-  }
-
-  // Debug: Log all harness conditions
-  diagnosticsService.logInfo("remote-server", `[WhatsApp Harness DEBUG] Conditions: isWhatsApp=${isWhatsApp}, whatsappChatId=${whatsappChatId}, hasWhatsAppOrigin=${hasWhatsAppOrigin}, whatsappHarnessOutput=${cfg.whatsappHarnessOutput}`)
-
-  const useWhatsAppHarness = isWhatsApp && whatsappChatId && hasWhatsAppOrigin && (cfg.whatsappHarnessOutput ?? true)
-
-  diagnosticsService.logInfo("remote-server", `[WhatsApp Harness DEBUG] useWhatsAppHarness=${useWhatsAppHarness}`)
-
-  if (useWhatsAppHarness) {
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Enabled for conversation ${conversationId}, chatId: ${whatsappChatId} (origin verified)`)
-  } else if (isWhatsApp && whatsappChatId && !hasWhatsAppOrigin) {
-    diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Skipped for conversation ${conversationId} (security: origin not verified as WhatsApp)`)
-  }
-
   try {
     await mcpService.initialize()
-
-    // Send typing indicator after MCP is initialized so WhatsApp server is ready
-    if (useWhatsAppHarness) {
-      await sendWhatsAppTypingIndicator(whatsappChatId)
-    }
 
     mcpService.registerExistingProcessesWithAgentManager()
 
     // Get available tools filtered by profile snapshot if available (for session isolation)
     // This ensures revived sessions use the same tool list they started with
-    let availableTools = profileSnapshot?.mcpServerConfig
+    const availableTools = profileSnapshot?.mcpServerConfig
       ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
       : mcpService.getAvailableTools()
 
-    // When WhatsApp harness is enabled, filter out WhatsApp send/typing tools since the harness
-    // handles replies automatically. This prevents the agent from being encouraged to use these
-    // tools when the response will already be sent by the harness.
-    if (useWhatsAppHarness) {
-      const whatsappReplyTools = ["whatsapp:whatsapp_send_message", "whatsapp:whatsapp_send_typing"]
-      availableTools = availableTools.filter(tool => !whatsappReplyTools.includes(tool.name))
-      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Filtered out ${whatsappReplyTools.length} WhatsApp reply tools from available tools`)
-    }
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
       return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig)
@@ -469,21 +306,10 @@ async function runAgent(options: RunAgentOptions): Promise<{
       sessionId, // Pass session ID for progress routing
       onProgress, // Pass progress callback for SSE streaming
       profileSnapshot, // Pass profile snapshot for session isolation
-      // When WhatsApp harness output is enabled, accept simple conversational responses
-      // without requiring tool calls (e.g., agent responds "banana" to "reply with banana")
-      { acceptSimpleResponse: useWhatsAppHarness },
     )
 
     // Mark session as completed
     agentSessionTracker.completeSession(sessionId, "Agent completed successfully")
-
-    // If WhatsApp harness output is enabled, automatically send the final response
-    if (useWhatsAppHarness && agentResult.content) {
-      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] About to send final response to ${whatsappChatId} (${agentResult.content.length} chars)`)
-      await sendWhatsAppMessage(whatsappChatId, agentResult.content)
-    } else if (useWhatsAppHarness && !agentResult.content) {
-      diagnosticsService.logInfo("remote-server", `[WhatsApp Harness] Skipping send - no content in agent result`)
-    }
 
     // Format conversation history for API response (convert MCPToolResult to ToolResult format)
     const formattedHistory = formatConversationHistoryForApi(agentResult.conversationHistory)
@@ -493,11 +319,6 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
-
-    // If WhatsApp harness is enabled, notify user of the error
-    if (useWhatsAppHarness && whatsappChatId) {
-      await sendWhatsAppMessage(whatsappChatId, "Sorry, I encountered an error while processing your request. Please try again later.")
-    }
 
     throw error
   } finally {
@@ -611,35 +432,8 @@ export async function startRemoteServer() {
       // Check if client wants SSE streaming
       const isStreaming = body.stream === true
 
-      // ─────────────────────────────────────────────────────────────────────────────
-      // X-SpeakMCP-Origin Header Security Model
-      // ─────────────────────────────────────────────────────────────────────────────
-      // The X-SpeakMCP-Origin header indicates the source of the request (e.g., "whatsapp").
-      // This header is used to enable the WhatsApp harness, which bypasses manual approval
-      // for WhatsApp responses.
-      //
-      // Security considerations:
-      // 1. API Key as Primary Security: The remoteServerApiKey is the primary security
-      //    mechanism. Any client with the API key can already execute agent actions,
-      //    so the harness bypass is not a significant additional risk.
-      //
-      // 2. Origin Stored in Metadata: When a conversation is FIRST created, the origin
-      //    is persisted in conversation metadata (see createConversation in conversation-service.ts).
-      //    For existing conversations, the stored origin is the ONLY source of truth -
-      //    the request header is completely ignored (see hasWhatsAppOrigin logic in runAgent).
-      //
-      // 3. Header Only Trusted for New Conversations: The X-SpeakMCP-Origin header is
-      //    only used to set the origin when creating a NEW conversation. An attacker
-      //    cannot retroactively add WhatsApp origin to an existing conversation.
-      //
-      // 4. Defense in Depth: Even if an attacker forges the header, they would also need
-      //    a valid whatsapp_* prefixed conversation_id that matches the expected format.
-      // ─────────────────────────────────────────────────────────────────────────────
-      const originHeader = req.headers["x-speakmcp-origin"]
-      const origin = originHeader === "whatsapp" ? "whatsapp" as const : undefined
-
-      console.log("[remote-server] Chat request:", { conversationId: conversationId || "new", promptLength: prompt.length, streaming: isStreaming, origin: origin || "none" })
-      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}${origin ? ` (origin: ${origin})` : ""}`)
+      console.log("[remote-server] Chat request:", { conversationId: conversationId || "new", promptLength: prompt.length, streaming: isStreaming })
+      diagnosticsService.logInfo("remote-server", `Handling completion request${conversationId ? ` for conversation ${conversationId}` : ""}${isStreaming ? " (streaming)" : ""}`)
 
       if (isStreaming) {
         // SSE streaming mode
@@ -664,7 +458,7 @@ export async function startRemoteServer() {
         }
 
         try {
-          const result = await runAgent({ prompt, conversationId, onProgress, origin })
+          const result = await runAgent({ prompt, conversationId, onProgress })
 
           // Record as if user submitted a text input
           recordHistory(result.content)
@@ -696,7 +490,7 @@ export async function startRemoteServer() {
       }
 
       // Non-streaming mode (existing behavior)
-      const result = await runAgent({ prompt, conversationId, origin })
+      const result = await runAgent({ prompt, conversationId })
 
       // Record as if user submitted a text input
       recordHistory(result.content)

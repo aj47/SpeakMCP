@@ -365,24 +365,6 @@ export function Component() {
             </Control>
 
             <Control
-              label={<ControlLabel label="Automatic Harness Output" tooltip="When enabled, the harness automatically sends typing indicators and messages to WhatsApp. When disabled, the agent must explicitly call WhatsApp tools." />}
-              className="px-3"
-            >
-              <Switch
-                checked={cfg.whatsappHarnessOutput ?? true}
-                onCheckedChange={(value) => {
-                  saveConfig({ whatsappHarnessOutput: value })
-                }}
-              />
-              <div className="mt-1 text-xs text-muted-foreground">
-                When enabled (default), WhatsApp becomes transparent like TTS - the harness automatically sends typing indicators and messages.
-              </div>
-              <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                ⚠️ Changes to this setting require restarting the WhatsApp connection to take effect.
-              </div>
-            </Control>
-
-            <Control
               label={<ControlLabel label="Log Message Content" tooltip="Log the content of WhatsApp messages. Disable for privacy." />}
               className="px-3"
             >

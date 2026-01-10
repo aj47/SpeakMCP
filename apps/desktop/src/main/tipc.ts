@@ -1723,8 +1723,7 @@ export const router = {
           const whatsappSettingsChanged =
             JSON.stringify((prev as any)?.whatsappAllowFrom) !== JSON.stringify((merged as any)?.whatsappAllowFrom) ||
             (prev as any)?.whatsappAutoReply !== (merged as any)?.whatsappAutoReply ||
-            (prev as any)?.whatsappLogMessages !== (merged as any)?.whatsappLogMessages ||
-            (prev as any)?.whatsappHarnessOutput !== (merged as any)?.whatsappHarnessOutput
+            (prev as any)?.whatsappLogMessages !== (merged as any)?.whatsappLogMessages
 
           // If auto-reply is enabled, also restart when Remote Server settings change
           // This includes remoteServerEnabled because prepareEnvironment() only enables

@@ -38,7 +38,6 @@ const config: WhatsAppConfig = {
   callbackUrl: process.env.WHATSAPP_CALLBACK_URL,
   callbackApiKey: process.env.WHATSAPP_CALLBACK_API_KEY,
   logMessages: process.env.WHATSAPP_LOG_MESSAGES === "true",
-  harnessOutput: process.env.WHATSAPP_HARNESS_OUTPUT !== "false", // Default true
 }
 
 // Create WhatsApp session
@@ -148,24 +147,10 @@ async function processMessage(message: WhatsAppMessage): Promise<void> {
       // Build message content - use array format if there's an image, otherwise string
       let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
 
-      // When harness output is enabled, the harness automatically handles typing indicators and message sending
-      // The agent doesn't need to call WhatsApp tools explicitly - just respond naturally
-      // WhatsApp send/typing tools are filtered out from available tools when harness is enabled
-      let textContent: string
-      if (config.harnessOutput) {
-        // Simplified prompt - harness handles output automatically
-        // Don't mention WhatsApp tools since they're filtered out when harness is enabled
-        textContent = `[WhatsApp message from ${message.fromName || message.from}]: ${messageText}
+      // Simplified prompt - the MCP server handles output automatically
+      const textContent = `[WhatsApp message from ${message.fromName || message.from}]: ${messageText}
 
 Note: This is a WhatsApp message. Respond naturally - your response will be automatically sent back.`
-      } else {
-        // Legacy prompt - agent must explicitly call WhatsApp tools
-        textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
-
-ACTION REQUIRED - RESPOND IMMEDIATELY:
-This is a real-time WhatsApp conversation. Use the whatsapp_send_message tool NOW to reply to ${replyTarget}.
-Do NOT just acknowledge the message - actually send a response using the tool.`
-      }
 
       // If there's an image, create a multimodal message
       if (message.mediaType === "image" && message.mediaBuffer) {
@@ -189,6 +174,15 @@ Do NOT just acknowledge the message - actually send a response using the tool.`
         messageContent = textContent
       }
 
+      // Send typing indicator immediately so user knows we're processing
+      try {
+        await whatsapp.sendTypingIndicator(replyTarget)
+        console.error(`[MCP-WhatsApp] Sent typing indicator to ${replyTarget}`)
+      } catch (error) {
+        console.error(`[MCP-WhatsApp] Failed to send typing indicator:`, error)
+        // Continue even if typing indicator fails
+      }
+
       console.error(`[MCP-WhatsApp] Forwarding message to callback URL: ${config.callbackUrl}`)
       console.error(`[MCP-WhatsApp] Using conversation_id: ${conversationId}`)
 
@@ -197,7 +191,6 @@ Do NOT just acknowledge the message - actually send a response using the tool.`
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${config.callbackApiKey}`,
-          "X-SpeakMCP-Origin": "whatsapp",
         },
         body: JSON.stringify({
           model: "default",
@@ -212,8 +205,8 @@ Do NOT just acknowledge the message - actually send a response using the tool.`
         }),
       })
 
-      console.error(`[MCP-WhatsApp] Callback response received. autoReply=${config.autoReply}, harnessOutput=${config.harnessOutput}, responseOk=${response.ok}`)
-      if (response.ok && config.autoReply && !config.harnessOutput) {
+      console.error(`[MCP-WhatsApp] Callback response received. autoReply=${config.autoReply}, responseOk=${response.ok}`)
+      if (response.ok && config.autoReply) {
         // Parse response - support both OpenAI-style (choices[0].message.content) and simple (content) formats
         const data = (await response.json()) as {
           content?: string

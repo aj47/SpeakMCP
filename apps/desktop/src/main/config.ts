@@ -185,7 +185,6 @@ const getConfig = () => {
     whatsappAllowFrom: [],
     whatsappAutoReply: false,
     whatsappLogMessages: false,
-    whatsappHarnessOutput: true, // By default, harness handles typing indicators and message sending
 
     // Streamer Mode - hides sensitive info for screen sharing
     streamerModeEnabled: false,

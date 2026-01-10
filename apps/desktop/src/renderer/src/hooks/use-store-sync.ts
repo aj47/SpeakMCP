@@ -17,16 +17,6 @@ export function useStoreSync() {
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
       (update: AgentProgressUpdate) => {
-        const sessionId = update.sessionId
-
-        logUI('[useStoreSync] Received progress update:', {
-          sessionId,
-          iteration: `${update.currentIteration}/${update.maxIterations}`,
-          isComplete: update.isComplete,
-          isSnoozed: update.isSnoozed,
-          stepsCount: update.steps.length,
-        })
-
         updateSessionProgress(update)
 
         // Mark conversation as completed when agent finishes

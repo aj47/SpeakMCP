@@ -117,9 +117,13 @@ export function SessionTile({
   const hasPendingApproval = !!progress?.pendingToolApproval
   const hasQueuedMessages = queuedMessages.length > 0
 
-  const handleToggleCollapse = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setIsCollapsed(!isCollapsed)
+  // Toggle collapse state for the session tile
+  // Note: stopPropagation() is intentional here - when users click the header to
+  // expand/collapse, we don't want to also trigger the tile-level onFocus handler.
+  // The collapse/expand action is distinct from selecting/focusing a session.
+  const handleToggleCollapse = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation()
+    setIsCollapsed(prev => !prev)
   }
 
   // Resize handlers
@@ -253,22 +257,38 @@ export function SessionTile({
       )}
       style={{ height: isCollapsed ? "auto" : tileHeight }}
     >
-      {/* Header */}
+      {/* Header - clicking on left portion (status, title) toggles collapse */}
       <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
-        {getStatusIndicator()}
-        <span className="flex-1 truncate font-medium text-sm">
-          {getTitle()}
-        </span>
-        {hasPendingApproval && (
-          <Badge variant="outline" className="text-amber-600 border-amber-500 text-xs">
-            Approval
-          </Badge>
-        )}
+        {/* Clickable area for collapse toggle - includes status indicator and title */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={!isCollapsed}
+          aria-label={isCollapsed ? "Expand session" : "Collapse session"}
+          className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 rounded-sm"
+          onClick={handleToggleCollapse}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleToggleCollapse(e)
+            }
+          }}
+          title={isCollapsed ? "Click to expand" : "Click to collapse"}
+        >
+          {getStatusIndicator()}
+          <span className="flex-1 truncate font-medium text-sm">
+            {getTitle()}
+          </span>
+          {hasPendingApproval && (
+            <Badge variant="outline" className="text-amber-600 border-amber-500 text-xs">
+              Approval
+            </Badge>
+          )}
+          {/* Collapse indicator chevron */}
+          {isCollapsed ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronUp className="h-3 w-3 shrink-0 text-muted-foreground" />}
+        </div>
+        {/* Action buttons - clicking these should NOT trigger collapse */}
         <div className="flex items-center gap-1">
-          {/* Collapse/Expand toggle */}
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleCollapse} title={isCollapsed ? "Expand panel" : "Collapse panel"}>
-            {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-          </Button>
           {isActive && !isSnoozed && onSnooze && (
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onSnooze(); }} title="Minimize">
               <Minimize2 className="h-3 w-3" />

@@ -7,6 +7,13 @@ import {
   ConversationMessage,
   ConversationHistoryItem,
 } from "../shared/types"
+import { summarizeContent } from "./context-budget"
+
+// Threshold for compacting conversations on load
+// When a conversation exceeds this many messages, older ones are summarized
+const COMPACTION_MESSAGE_THRESHOLD = 20
+// Number of recent messages to keep intact after compaction
+const COMPACTION_KEEP_LAST = 10
 
 export class ConversationService {
   private static instance: ConversationService | null = null
@@ -134,6 +141,24 @@ export class ConversationService {
     } catch (error) {
       return null
     }
+  }
+
+  /**
+   * Load a conversation and compact it if it exceeds the message threshold.
+   * Use this when loading conversations for continued use (e.g., in agent mode).
+   * The compaction is persisted to disk, so subsequent loads will be faster.
+   *
+   * @param conversationId - The ID of the conversation to load
+   * @returns The conversation (possibly compacted), or null if not found
+   */
+  async loadConversationWithCompaction(conversationId: string): Promise<Conversation | null> {
+    const conversation = await this.loadConversation(conversationId)
+    if (!conversation) {
+      return null
+    }
+
+    // Compact if needed (this will save to disk if compaction occurs)
+    return this.compactOnLoad(conversation)
   }
 
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
@@ -278,6 +303,68 @@ export class ConversationService {
     } catch (error) {
       return null
     }
+  }
+
+  /**
+   * Compact a conversation by summarizing older messages.
+   * Called when loading a conversation that exceeds the message threshold.
+   * This is a lazy compaction strategy - we only compact when the conversation
+   * is loaded, not during the agent loop.
+   *
+   * @param conversation - The conversation to compact
+   * @returns The compacted conversation
+   */
+  private async compactOnLoad(conversation: Conversation): Promise<Conversation> {
+    const messageCount = conversation.messages.length
+    if (messageCount <= COMPACTION_MESSAGE_THRESHOLD) {
+      return conversation
+    }
+
+    // Calculate how many messages to summarize
+    const messagesToSummarize = conversation.messages.slice(0, messageCount - COMPACTION_KEEP_LAST)
+    const messagesToKeep = conversation.messages.slice(messageCount - COMPACTION_KEEP_LAST)
+
+    if (messagesToSummarize.length === 0) {
+      return conversation
+    }
+
+    logApp(`[conversationService] compactOnLoad: compacting ${messagesToSummarize.length} messages for ${conversation.id}`)
+
+    // Build a summary of the older messages
+    const summaryInput = messagesToSummarize
+      .map((m) => `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`)
+      .join("\n\n")
+
+    let summaryContent: string
+    try {
+      summaryContent = await summarizeContent(
+        `Summarize this conversation history concisely, preserving key facts, decisions, and context:\n\n${summaryInput}`
+      )
+    } catch (error) {
+      logApp(`[conversationService] compactOnLoad: summarization failed, keeping original:`, error)
+      return conversation
+    }
+
+    // Create summary message
+    const summaryMessage: ConversationMessage = {
+      id: this.generateMessageId(),
+      role: "assistant",
+      content: summaryContent,
+      timestamp: messagesToSummarize[0]?.timestamp || Date.now(),
+      isSummary: true,
+      summarizedMessageCount: messagesToSummarize.length,
+    }
+
+    // Replace conversation messages with summary + recent messages
+    conversation.messages = [summaryMessage, ...messagesToKeep]
+    conversation.updatedAt = Date.now()
+
+    // Persist the compacted conversation
+    await this.saveConversation(conversation)
+    this.updateConversationIndex(conversation)
+
+    logApp(`[conversationService] compactOnLoad: compacted ${messagesToSummarize.length} messages into summary, new count: ${conversation.messages.length}`)
+    return conversation
   }
 
   async deleteAllConversations(): Promise<void> {

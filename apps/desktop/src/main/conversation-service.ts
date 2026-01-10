@@ -158,7 +158,13 @@ export class ConversationService {
     }
 
     // Compact if needed (this will save to disk if compaction occurs)
-    return this.compactOnLoad(conversation)
+    // Best-effort: if compaction fails, return the original conversation
+    try {
+      return await this.compactOnLoad(conversation)
+    } catch (error) {
+      logApp(`Failed to compact conversation ${conversationId}, returning original: ${error}`)
+      return conversation
+    }
   }
 
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
@@ -332,7 +338,22 @@ export class ConversationService {
 
     // Build a summary of the older messages
     const summaryInput = messagesToSummarize
-      .map((m) => `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`)
+      .map((m) => {
+        let messageText = `${m.role}: ${m.content?.substring(0, 500) || "(empty)"}`
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          const toolCallsSummary = m.toolCalls
+            .map((tc) => `${tc.name}(${JSON.stringify(tc.arguments).substring(0, 200)})`)
+            .join(", ")
+          messageText += `\nTool calls: ${toolCallsSummary}`
+        }
+        if (m.toolResults && m.toolResults.length > 0) {
+          const toolResultsSummary = m.toolResults
+            .map((tr) => `${tr.success ? "success" : "error"}: ${tr.content.substring(0, 200)}`)
+            .join(", ")
+          messageText += `\nTool results: ${toolResultsSummary}`
+        }
+        return messageText
+      })
       .join("\n\n")
 
     let summaryContent: string

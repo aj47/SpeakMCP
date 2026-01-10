@@ -189,6 +189,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
         role: msg.role,
         content: msg.content,
         toolCalls: msg.toolCalls,
+        // Preserve timestamp for correct ordering in UI (matching tipc.ts)
+        timestamp: msg.timestamp,
         // Convert toolResults from stored format to MCPToolResult format (matching tipc.ts)
         toolResults: msg.toolResults?.map((tr) => ({
           content: [
@@ -202,8 +204,6 @@ async function runAgent(options: RunAgentOptions): Promise<{
       }))
     } else {
       // Conversation not found - create it with the provided ID to maintain session continuity
-      // This is important for external integrations like WhatsApp where the conversation_id
-      // is based on the sender's identifier (e.g., whatsapp_61406142826@s.whatsapp.net)
       diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID`)
       const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user")
       // Update conversationId to use the actual persisted ID (which may be sanitized)
@@ -217,7 +217,11 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Create a new conversation if none exists (only when no conversationId was provided at all)
   if (!conversationId) {
-    const newConversation = await conversationService.createConversation(prompt, "user")
+    const newConversation = await conversationService.createConversationWithId(
+      conversationService.generateConversationIdPublic(),
+      prompt,
+      "user"
+    )
     conversationId = newConversation.id
     diagnosticsService.logInfo("remote-server", `Created new conversation ${conversationId}`)
   }
@@ -278,6 +282,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   try {
     await mcpService.initialize()
+
     mcpService.registerExistingProcessesWithAgentManager()
 
     // Get available tools filtered by profile snapshot if available (for session isolation)
@@ -285,6 +290,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
     const availableTools = profileSnapshot?.mcpServerConfig
       ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
       : mcpService.getAvailableTools()
+
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
       return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig)
@@ -313,6 +319,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
+
     throw error
   } finally {
     // Clean up agent state to ensure next session starts fresh

@@ -444,6 +444,29 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
 export function setPanelMode(mode: "normal" | "agent" | "textInput") {
   _currentPanelMode = mode
   applyPanelMode(mode)
+
+  // When switching to agent mode, ensure panel is resized appropriately
+  // This fixes the issue where panel stays at waveform size (110px) when
+  // transitioning from voice input to progress pane (needs 200px+)
+  // See: https://github.com/aj47/SpeakMCP/issues/913
+  if (mode === "agent") {
+    const win = WINDOWS.get("panel")
+    if (win) {
+      const [currentWidth, currentHeight] = win.getSize()
+      // Only resize if panel is too small for agent mode
+      if (currentHeight < PROGRESS_MIN_HEIGHT) {
+        const savedSize = getSavedPanelSize("progress")
+        const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
+        const targetWidth = Math.max(savedSize.width, currentWidth, MIN_WAVEFORM_WIDTH)
+        logApp(`[setPanelMode] Panel too small for agent mode (${currentWidth}x${currentHeight}), resizing to ${targetWidth}x${targetHeight}`)
+        win.setSize(targetWidth, targetHeight)
+        notifyPanelSizeChanged(targetWidth, targetHeight)
+        // Reposition to maintain the panel's anchor point
+        const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "agent")
+        win.setPosition(position.x, position.y)
+      }
+    }
+  }
 }
 
 export function getCurrentPanelMode(): "normal" | "agent" | "textInput" {

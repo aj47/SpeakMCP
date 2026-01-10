@@ -552,7 +552,7 @@ export class MCPService {
           const existingNodePath = environment.NODE_PATH || ""
           environment = {
             ...environment,
-            NODE_PATH: existingNodePath ? `${nodeModulesPath}:${existingNodePath}` : nodeModulesPath,
+            NODE_PATH: existingNodePath ? `${nodeModulesPath}${path.delimiter}${existingNodePath}` : nodeModulesPath,
           }
           if (isDebugTools()) {
             logTools(`[${serverName}] Using internal server path: ${scriptPath}`)

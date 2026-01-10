@@ -45,6 +45,11 @@ export const Component = () => {
       icon: "i-mingcute-tool-line",
     },
     {
+      text: "Skills",
+      href: "/settings/skills",
+      icon: "i-mingcute-sparkles-line",
+    },
+    {
       text: "Remote Server",
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",

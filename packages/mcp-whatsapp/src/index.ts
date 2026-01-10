@@ -47,18 +47,30 @@ const whatsapp = new WhatsAppSession(config)
 const pendingMessages: WhatsAppMessage[] = []
 const MAX_PENDING_MESSAGES = 100
 
+/**
+ * Normalize a chatId to a consistent format for use as a map/set key.
+ * WhatsApp can return different JID formats for the same chat:
+ * - "@s.whatsapp.net" (phone number format)
+ * - "@lid" (Linked ID format)
+ * This function extracts just the numeric ID to ensure consistency.
+ */
+function normalizeChatId(chatId: string): string {
+  // Strip the @suffix and non-numeric characters to get a consistent key
+  return chatId.replace(/@.*$/, "").replace(/[^0-9]/g, "")
+}
+
 // Track users who have requested a new session via /new command
-// Key: chatId (e.g., "61406142826@s.whatsapp.net"), Value: true if new session requested
+// Key: normalized chatId (numeric only), Value: true if new session requested
 const newSessionRequested: Set<string> = new Set()
 
 // Track active conversation IDs per chat
-// Key: chatId, Value: current active conversationId (with timestamp if created via /new)
+// Key: normalized chatId (numeric only), Value: current active conversationId (with timestamp if created via /new)
 // This ensures subsequent messages go to the same conversation after /new
 const activeConversations: Map<string, string> = new Map()
 
 // Message processing queue per chat to ensure serial processing
 // This prevents race conditions when multiple messages arrive for the same conversation
-// Key: chatId, Value: { queue: messages waiting to be processed, isProcessing: whether a message is currently being processed }
+// Key: normalized chatId (numeric only), Value: { queue: messages waiting to be processed, isProcessing: whether a message is currently being processed }
 const messageQueues: Map<string, { queue: WhatsAppMessage[], isProcessing: boolean }> = new Map()
 
 // Process the next message in a chat's queue
@@ -88,7 +100,8 @@ async function processNextMessage(chatId: string): Promise<void> {
 
 // Queue a message for processing
 function queueMessage(message: WhatsAppMessage): void {
-  const chatId = message.chatId || message.from
+  const rawChatId = message.chatId || message.from
+  const chatId = normalizeChatId(rawChatId) // Normalize for consistent queue management
 
   if (!messageQueues.has(chatId)) {
     messageQueues.set(chatId, { queue: [], isProcessing: false })
@@ -104,12 +117,13 @@ function queueMessage(message: WhatsAppMessage): void {
 
 // Process a single message (extracted from the original message handler)
 async function processMessage(message: WhatsAppMessage): Promise<void> {
-  const chatId = message.chatId || message.from
+  const rawChatId = message.chatId || message.from
+  const chatId = normalizeChatId(rawChatId) // Normalize for consistent key lookups
   const messageText = message.text || ""
 
   // Debug log for message processing
   console.error(`[MCP-WhatsApp] === PROCESSING MESSAGE ===`)
-  console.error(`[MCP-WhatsApp] Chat ID: ${chatId}`)
+  console.error(`[MCP-WhatsApp] Chat ID: ${rawChatId} (normalized: ${chatId})`)
 
   // Add to pending queue (for compatibility with existing get_messages tool)
   pendingMessages.push(message)
@@ -122,14 +136,15 @@ async function processMessage(message: WhatsAppMessage): Promise<void> {
     try {
       // Use message.chatId for groups/DMs instead of message.from
       // In groups, message.from is the participant, but we need to reply to the chat
-      const replyTarget = message.chatId || message.from
+      const replyTarget = rawChatId
 
       // Determine conversation ID - use new unique ID if /new was requested
       // Otherwise use the active conversation for this chat (persists the timestamped ID)
+      // Use normalized chatId in conversation IDs for consistency across @lid/@s.whatsapp.net formats
       let conversationId: string
       if (newSessionRequested.has(chatId)) {
         // Generate a unique conversation ID for this new session
-        conversationId = `whatsapp_${replyTarget}_${Date.now()}`
+        conversationId = `whatsapp_${chatId}_${Date.now()}`
         newSessionRequested.delete(chatId)
         activeConversations.set(chatId, conversationId)
         console.error(`[MCP-WhatsApp] Starting new session for ${chatId}: ${conversationId}`)
@@ -139,7 +154,7 @@ async function processMessage(message: WhatsAppMessage): Promise<void> {
         console.error(`[MCP-WhatsApp] Continuing session for ${chatId}: ${conversationId}`)
       } else {
         // First message from this chat - use static ID and store it
-        conversationId = `whatsapp_${replyTarget}`
+        conversationId = `whatsapp_${chatId}`
         activeConversations.set(chatId, conversationId)
         console.error(`[MCP-WhatsApp] Starting default session for ${chatId}: ${conversationId}`)
       }
@@ -230,7 +245,8 @@ Note: This is a WhatsApp message. Respond naturally - your response will be auto
 
 // Handle incoming messages - delegates to serial queue processing
 whatsapp.on("message", async (message: WhatsAppMessage) => {
-  const chatId = message.chatId || message.from
+  const rawChatId = message.chatId || message.from
+  const chatId = normalizeChatId(rawChatId) // Normalize for consistent key lookups
   const messageText = message.text || ""
 
   // Debug log for /new command detection - show character codes for debugging
@@ -244,6 +260,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
   console.error(`[MCP-WhatsApp] Char codes: [${charCodes}]`)
   console.error(`[MCP-WhatsApp] Expected: "/new" (char codes: [47,110,101,119])`)
   console.error(`[MCP-WhatsApp] Match check: "${lower}" === "/new" ? ${lower === "/new"}`)
+  console.error(`[MCP-WhatsApp] Chat ID: ${rawChatId} (normalized: ${chatId})`)
 
   // Handle /new command - start a new session on next message
   // Also check for common variations
@@ -254,10 +271,10 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
     newSessionRequested.add(chatId)
     console.error(`[MCP-WhatsApp] /new command received from ${chatId} - next message will start a new session`)
 
-    // Send confirmation to the user
+    // Send confirmation to the user (use rawChatId for WhatsApp API)
     try {
       await whatsapp.sendMessage({
-        to: chatId,
+        to: rawChatId,
         text: "✅ New session requested. Your next message will start a fresh conversation.",
       })
     } catch (error) {

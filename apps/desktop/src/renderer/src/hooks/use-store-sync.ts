@@ -1,9 +1,8 @@
 import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
-import { AgentProgressUpdate, Conversation, ConversationMessage, QueuedMessage } from '@shared/types'
-import { logUI, logStateChange } from '@renderer/lib/debug'
-import { useSaveConversationMutation } from '@renderer/lib/queries'
+import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
+import { logUI } from '@renderer/lib/debug'
 
 export function useStoreSync() {
   const updateSessionProgress = useAgentStore((s) => s.updateSessionProgress)
@@ -14,7 +13,6 @@ export function useStoreSync() {
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const updateMessageQueue = useAgentStore((s) => s.updateMessageQueue)
   const markConversationCompleted = useConversationStore((s) => s.markConversationCompleted)
-  const saveConversationMutation = useSaveConversationMutation()
 
   useEffect(() => {
     const unlisten = rendererHandlers.agentProgressUpdate.listen(
@@ -31,14 +29,13 @@ export function useStoreSync() {
 
         updateSessionProgress(update)
 
-        // Save complete conversation history when agent completes
+        // Mark conversation as completed when agent finishes
+        // NOTE: We no longer call saveCompleteConversationHistory here because:
+        // 1. Messages are already saved incrementally via llm.ts saveMessageIncremental()
+        // 2. Calling saveCompleteConversationHistory causes race conditions when multiple
+        //    messages arrive for the same conversation - each agent overwrites with its
+        //    own in-memory history, causing message order corruption
         if (update.isComplete && update.conversationId) {
-          if (update.conversationHistory && update.conversationHistory.length > 0) {
-            saveCompleteConversationHistory(
-              update.conversationId,
-              update.conversationHistory
-            )
-          }
           markConversationCompleted(update.conversationId)
         }
       }
@@ -108,44 +105,4 @@ export function useStoreSync() {
       logUI('[useStoreSync] Failed to hydrate message queues:', error)
     })
   }, [])
-
-  async function saveCompleteConversationHistory(
-    conversationId: string,
-    conversationHistory: Array<{
-      role: 'user' | 'assistant' | 'tool'
-      content: string
-      toolCalls?: Array<{ name: string; arguments: any }>
-      toolResults?: Array<{ success: boolean; content: string; error?: string }>
-      timestamp?: number
-    }>
-  ) {
-    try {
-      const currentConv = await tipcClient.loadConversation({ conversationId })
-      if (!currentConv) return
-
-      const messages: ConversationMessage[] = conversationHistory.map(
-        (entry, index) => ({
-          id: `msg_${entry.timestamp || Date.now()}_${index}`,
-          role: entry.role,
-          content: entry.content,
-          timestamp: entry.timestamp || Date.now(),
-          toolCalls: entry.toolCalls,
-          toolResults: entry.toolResults,
-        })
-      )
-
-      const updatedConversation: Conversation = {
-        ...currentConv,
-        messages,
-        updatedAt: Date.now(),
-      }
-
-      await saveConversationMutation.mutateAsync({
-        conversation: updatedConversation,
-      })
-    } catch (error) {
-      console.error('Failed to save conversation history:', error)
-    }
-  }
 }
-

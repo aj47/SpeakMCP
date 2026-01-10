@@ -278,6 +278,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
         role: msg.role,
         content: msg.content,
         toolCalls: msg.toolCalls,
+        // Preserve timestamp for correct ordering in UI (matching tipc.ts)
+        timestamp: msg.timestamp,
         // Convert toolResults from stored format to MCPToolResult format (matching tipc.ts)
         toolResults: msg.toolResults?.map((tr) => ({
           content: [

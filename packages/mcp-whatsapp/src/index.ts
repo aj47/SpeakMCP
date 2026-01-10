@@ -52,7 +52,190 @@ const MAX_PENDING_MESSAGES = 100
 // Key: chatId (e.g., "61406142826@s.whatsapp.net"), Value: true if new session requested
 const newSessionRequested: Set<string> = new Set()
 
-// Handle incoming messages
+// Track active conversation IDs per chat
+// Key: chatId, Value: current active conversationId (with timestamp if created via /new)
+// This ensures subsequent messages go to the same conversation after /new
+const activeConversations: Map<string, string> = new Map()
+
+// Message processing queue per chat to ensure serial processing
+// This prevents race conditions when multiple messages arrive for the same conversation
+// Key: chatId, Value: { queue: messages waiting to be processed, isProcessing: whether a message is currently being processed }
+const messageQueues: Map<string, { queue: WhatsAppMessage[], isProcessing: boolean }> = new Map()
+
+// Process the next message in a chat's queue
+async function processNextMessage(chatId: string): Promise<void> {
+  const queueState = messageQueues.get(chatId)
+  if (!queueState || queueState.queue.length === 0 || queueState.isProcessing) {
+    return
+  }
+
+  const message = queueState.queue.shift()!
+  queueState.isProcessing = true
+  console.error(`[MCP-WhatsApp] Processing queued message for ${chatId} (${queueState.queue.length} remaining in queue)`)
+
+  try {
+    await processMessage(message)
+  } catch (error) {
+    console.error(`[MCP-WhatsApp] Error processing queued message for ${chatId}:`, error)
+  } finally {
+    queueState.isProcessing = false
+    // Process next message in queue if any
+    if (queueState.queue.length > 0) {
+      // Small delay to allow disk writes to complete and prevent overwhelming the agent
+      setTimeout(() => processNextMessage(chatId), 100)
+    }
+  }
+}
+
+// Queue a message for processing
+function queueMessage(message: WhatsAppMessage): void {
+  const chatId = message.chatId || message.from
+
+  if (!messageQueues.has(chatId)) {
+    messageQueues.set(chatId, { queue: [], isProcessing: false })
+  }
+
+  const queueState = messageQueues.get(chatId)!
+  queueState.queue.push(message)
+  console.error(`[MCP-WhatsApp] Queued message for ${chatId} (queue size: ${queueState.queue.length})`)
+
+  // Start processing if not already in progress
+  processNextMessage(chatId)
+}
+
+// Process a single message (extracted from the original message handler)
+async function processMessage(message: WhatsAppMessage): Promise<void> {
+  const chatId = message.chatId || message.from
+  const messageText = message.text || ""
+
+  // Debug log for message processing
+  console.error(`[MCP-WhatsApp] === PROCESSING MESSAGE ===`)
+  console.error(`[MCP-WhatsApp] Chat ID: ${chatId}`)
+
+  // Add to pending queue (for compatibility with existing get_messages tool)
+  pendingMessages.push(message)
+  if (pendingMessages.length > MAX_PENDING_MESSAGES) {
+    pendingMessages.shift()
+  }
+
+  // If callback URL is configured, forward the message
+  if (config.callbackUrl && config.callbackApiKey) {
+    try {
+      // Use message.chatId for groups/DMs instead of message.from
+      // In groups, message.from is the participant, but we need to reply to the chat
+      const replyTarget = message.chatId || message.from
+
+      // Determine conversation ID - use new unique ID if /new was requested
+      // Otherwise use the active conversation for this chat (persists the timestamped ID)
+      let conversationId: string
+      if (newSessionRequested.has(chatId)) {
+        // Generate a unique conversation ID for this new session
+        conversationId = `whatsapp_${replyTarget}_${Date.now()}`
+        newSessionRequested.delete(chatId)
+        activeConversations.set(chatId, conversationId)
+        console.error(`[MCP-WhatsApp] Starting new session for ${chatId}: ${conversationId}`)
+      } else if (activeConversations.has(chatId)) {
+        // Use existing active conversation ID (preserves timestamped IDs from /new)
+        conversationId = activeConversations.get(chatId)!
+        console.error(`[MCP-WhatsApp] Continuing session for ${chatId}: ${conversationId}`)
+      } else {
+        // First message from this chat - use static ID and store it
+        conversationId = `whatsapp_${replyTarget}`
+        activeConversations.set(chatId, conversationId)
+        console.error(`[MCP-WhatsApp] Starting default session for ${chatId}: ${conversationId}`)
+      }
+
+      // Build message content - use array format if there's an image, otherwise string
+      let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
+
+      // When harness output is enabled, the harness automatically handles typing indicators and message sending
+      // The agent doesn't need to call WhatsApp tools explicitly - just respond naturally
+      // WhatsApp send/typing tools are filtered out from available tools when harness is enabled
+      let textContent: string
+      if (config.harnessOutput) {
+        // Simplified prompt - harness handles output automatically
+        // Don't mention WhatsApp tools since they're filtered out when harness is enabled
+        textContent = `[WhatsApp message from ${message.fromName || message.from}]: ${messageText}
+
+Note: This is a WhatsApp message. Respond naturally - your response will be automatically sent back.`
+      } else {
+        // Legacy prompt - agent must explicitly call WhatsApp tools
+        textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
+
+ACTION REQUIRED - RESPOND IMMEDIATELY:
+This is a real-time WhatsApp conversation. Use the whatsapp_send_message tool NOW to reply to ${replyTarget}.
+Do NOT just acknowledge the message - actually send a response using the tool.`
+      }
+
+      // If there's an image, create a multimodal message
+      if (message.mediaType === "image" && message.mediaBuffer) {
+        // Format as OpenAI-compatible content array with image
+        const base64Image = message.mediaBuffer.toString("base64")
+        const mimeType = message.mediaMimetype || "image/jpeg"
+        messageContent = [
+          {
+            type: "text",
+            text: textContent,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${base64Image}`,
+            },
+          },
+        ]
+        console.error(`[MCP-WhatsApp] Forwarding image message (${message.mediaBuffer!.length} bytes)`)
+      } else {
+        messageContent = textContent
+      }
+
+      console.error(`[MCP-WhatsApp] Forwarding message to callback URL: ${config.callbackUrl}`)
+      console.error(`[MCP-WhatsApp] Using conversation_id: ${conversationId}`)
+
+      const response = await fetch(config.callbackUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${config.callbackApiKey}`,
+          "X-SpeakMCP-Origin": "whatsapp",
+        },
+        body: JSON.stringify({
+          model: "default",
+          messages: [
+            {
+              role: "user",
+              content: messageContent,
+            },
+          ],
+          conversation_id: conversationId,
+          stream: false,
+        }),
+      })
+
+      console.error(`[MCP-WhatsApp] Callback response received. autoReply=${config.autoReply}, harnessOutput=${config.harnessOutput}, responseOk=${response.ok}`)
+      if (response.ok && config.autoReply && !config.harnessOutput) {
+        // Parse response - support both OpenAI-style (choices[0].message.content) and simple (content) formats
+        const data = (await response.json()) as {
+          content?: string
+          choices?: Array<{ message?: { content?: string } }>
+        }
+        // Try OpenAI format first, then fall back to simple format
+        const replyContent = data.choices?.[0]?.message?.content || data.content
+        if (replyContent) {
+          console.error(`[MCP-WhatsApp] autoReply: Sending message to ${replyTarget} (${replyContent.length} chars)`)
+          await whatsapp.sendMessage({
+            to: replyTarget,
+            text: replyContent,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("[MCP-WhatsApp] Error forwarding message to callback:", error)
+    }
+  }
+}
+
+// Handle incoming messages - delegates to serial queue processing
 whatsapp.on("message", async (message: WhatsAppMessage) => {
   const chatId = message.chatId || message.from
   const messageText = message.text || ""
@@ -91,6 +274,7 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
     // Don't forward /new command to the agent
     return
   }
+
   // Only log message content if logging is enabled to avoid accidental leakage
   if (config.logMessages) {
     console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}: ${messageText.substring(0, 50)}...`)
@@ -99,119 +283,10 @@ whatsapp.on("message", async (message: WhatsAppMessage) => {
     console.error(`[MCP-WhatsApp] New message from ${message.fromName || message.from}${mediaInfo}`)
   }
 
-  // Add to pending queue
-  pendingMessages.push(message)
-  if (pendingMessages.length > MAX_PENDING_MESSAGES) {
-    pendingMessages.shift()
-  }
-
-  // If callback URL is configured, forward the message
-  if (config.callbackUrl && config.callbackApiKey) {
-    try {
-      // Use message.chatId for groups/DMs instead of message.from
-      // In groups, message.from is the participant, but we need to reply to the chat
-      const replyTarget = message.chatId || message.from
-
-      // Determine conversation ID - use new unique ID if /new was requested
-      let conversationId: string
-      if (newSessionRequested.has(chatId)) {
-        // Generate a unique conversation ID for this new session
-        conversationId = `whatsapp_${replyTarget}_${Date.now()}`
-        newSessionRequested.delete(chatId)
-        console.error(`[MCP-WhatsApp] Starting new session for ${chatId}: ${conversationId}`)
-      } else {
-        // Use the static conversation ID for continuity
-        conversationId = `whatsapp_${replyTarget}`
-      }
-
-      // Build message content - use array format if there's an image, otherwise string
-      let messageContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
-
-      // When harness output is enabled, the harness automatically handles typing indicators and message sending
-      // The agent doesn't need to call WhatsApp tools explicitly - just respond naturally
-      // WhatsApp send/typing tools are filtered out from available tools when harness is enabled
-      let textContent: string
-      if (config.harnessOutput) {
-        // Simplified prompt - harness handles output automatically
-        // Don't mention WhatsApp tools since they're filtered out when harness is enabled
-        textContent = `[WhatsApp message from ${message.fromName || message.from}]: ${messageText}
-
-Note: This is a WhatsApp message. Respond naturally - your response will be automatically sent back.`
-      } else {
-        // Legacy prompt - agent must explicitly call WhatsApp tools
-        textContent = `[WhatsApp message from ${message.fromName || message.from} (chat_id: ${replyTarget})]: ${messageText}
-
-ACTION REQUIRED - RESPOND IMMEDIATELY:
-1. FIRST, call whatsapp_send_typing with to="${replyTarget}" to show typing indicator
-2. THEN, briefly acknowledge the message and explain what you're doing (e.g., "Got it, let me look into that..." or "Processing your request...")
-3. If you need to think or process, you can continue after sending the initial acknowledgment
-
-To send any reply, use whatsapp_send_message with to="${replyTarget}"`
-      }
-
-      if (message.mediaType === "image" && message.mediaBuffer) {
-        // Format as OpenAI-compatible content array with image
-        const base64Image = message.mediaBuffer.toString("base64")
-        const mimeType = message.mediaMimetype || "image/jpeg"
-        messageContent = [
-          {
-            type: "text",
-            text: textContent,
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${mimeType};base64,${base64Image}`,
-            },
-          },
-        ]
-        console.error(`[MCP-WhatsApp] Forwarding image message (${message.mediaBuffer.length} bytes)`)
-      } else {
-        messageContent = textContent
-      }
-
-      const response = await fetch(config.callbackUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.callbackApiKey}`,
-          "X-SpeakMCP-Origin": "whatsapp",
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: "user",
-              content: messageContent,
-            },
-          ],
-          conversation_id: conversationId,
-          stream: false,
-        }),
-      })
-
-      console.error(`[MCP-WhatsApp] Callback response received. autoReply=${config.autoReply}, harnessOutput=${config.harnessOutput}, responseOk=${response.ok}`)
-      if (response.ok && config.autoReply && !config.harnessOutput) {
-        // Parse response - support both OpenAI-style (choices[0].message.content) and simple (content) formats
-        const data = (await response.json()) as {
-          content?: string
-          choices?: Array<{ message?: { content?: string } }>
-        }
-        // Try OpenAI format first, then fall back to simple format
-        const replyContent = data.choices?.[0]?.message?.content || data.content
-        if (replyContent) {
-          console.error(`[MCP-WhatsApp] autoReply: Sending message to ${replyTarget} (${replyContent.length} chars)`)
-          await whatsapp.sendMessage({
-            to: replyTarget,
-            text: replyContent,
-          })
-        }
-      } else if (config.harnessOutput) {
-        console.error(`[MCP-WhatsApp] Skipping autoReply - harnessOutput is enabled (harness will send the message)`)
-      }
-    } catch (error) {
-      console.error("[MCP-WhatsApp] Failed to forward message to callback:", error)
-    }
-  }
+  // Queue the message for serial processing
+  // This ensures messages from the same chat are processed one at a time,
+  // preventing race conditions that cause message ordering issues in the UI
+  queueMessage(message)
 })
 
 // Handle connection updates

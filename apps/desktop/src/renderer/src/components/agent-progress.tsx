@@ -1685,7 +1685,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
             </Button>
             {/* Expand to full window / Collapse from full window */}
-            {(onExpandToFullWindow || onCollapseFromFullWindow) && (
+            {/* Only show when the appropriate callback for the current state is available */}
+            {(isExpandedToFullWindow ? onCollapseFromFullWindow : onExpandToFullWindow) && (
               <Button
                 variant="ghost"
                 size="icon"

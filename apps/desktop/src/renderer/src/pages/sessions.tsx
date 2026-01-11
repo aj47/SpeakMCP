@@ -157,6 +157,14 @@ export function Component() {
     }
   }, [agentProgressById])
 
+  // Clear expandedToFullWindowId if the expanded session no longer exists
+  // This prevents the grid from being empty if the user dismisses the expanded session
+  useEffect(() => {
+    if (expandedToFullWindowId && !agentProgressById.has(expandedToFullWindowId)) {
+      setExpandedToFullWindowId(null)
+    }
+  }, [expandedToFullWindowId, agentProgressById])
+
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)
 
@@ -496,6 +504,8 @@ export function Component() {
                       onDismiss={handleDismissPendingContinuation}
                       isCollapsed={false}
                       onCollapsedChange={() => {}}
+                      onExpandToFullWindow={pendingSessionId ? () => handleExpandToFullWindow(pendingSessionId) : undefined}
+                      onCollapseFromFullWindow={handleCollapseFromFullWindow}
                     />
                   </SessionTileWrapper>
                 )}

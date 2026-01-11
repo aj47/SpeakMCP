@@ -17,6 +17,12 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
+import {
+  createAgentTrace,
+  endAgentTrace,
+  isLangfuseEnabled,
+  flushLangfuse,
+} from "./langfuse-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -403,6 +409,20 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run with profile snapshot for isolation
   // Note: createSession is a no-op if the session already exists, so this is safe for resumed sessions
   agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
+
+  // Create Langfuse trace for this agent session if enabled
+  if (isLangfuseEnabled()) {
+    createAgentTrace(currentSessionId, {
+      name: "Agent Session",
+      metadata: {
+        conversationId: currentConversationId,
+        maxIterations,
+        hasHistory: !!previousConversationHistory?.length,
+        profileId: effectiveProfileSnapshot?.profileId,
+      },
+      input: transcript,
+    })
+  }
 
   // Track context usage info for progress display
   // Declared here so emit() can access it
@@ -1308,6 +1328,15 @@ Return ONLY JSON per schema.`,
         finalContent: "",
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+
+      // End Langfuse trace for early completion
+      if (isLangfuseEnabled()) {
+        endAgentTrace(currentSessionId, {
+          output: "",
+          metadata: { totalIterations: iteration, earlyCompletion: true },
+        })
+        flushLangfuse().catch(() => {})
+      }
 
       return {
         content: "",
@@ -2650,6 +2679,19 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       finalContent,
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
+  }
+
+  // End Langfuse trace for this agent session if enabled
+  if (isLangfuseEnabled()) {
+    endAgentTrace(currentSessionId, {
+      output: finalContent,
+      metadata: {
+        totalIterations: iteration,
+        wasAborted: false,
+      },
+    })
+    // Flush to ensure trace is sent
+    flushLangfuse().catch(() => {})
   }
 
   // Clean up session state at the end of agent processing

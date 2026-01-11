@@ -189,6 +189,12 @@ const getConfig = () => {
     // Streamer Mode - hides sensitive info for screen sharing
     streamerModeEnabled: false,
 
+    // Langfuse Observability - disabled by default
+    langfuseEnabled: false,
+    langfusePublicKey: undefined,
+    langfuseSecretKey: undefined,
+    langfuseBaseUrl: undefined, // Uses cloud.langfuse.com by default
+
   }
 
   try {

@@ -39,6 +39,13 @@ import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
+import { randomUUID } from "crypto"
+import {
+  createToolSpan,
+  endToolSpan,
+  isLangfuseEnabled,
+  getAgentTrace,
+} from "./langfuse-service"
 
 // Default filesystem MCP server name
 const DEFAULT_FILESYSTEM_SERVER_NAME = "speakmcp-filesystem"
@@ -2408,8 +2415,19 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
-    profileMcpConfig?: ProfileMcpServerConfig
+    profileMcpConfig?: ProfileMcpServerConfig,
+    sessionId?: string // Optional session ID for Langfuse tracing
   ): Promise<MCPToolResult> {
+    // Create Langfuse span for tool call if enabled and we have a trace
+    const spanId = isLangfuseEnabled() && sessionId ? randomUUID() : null
+    if (spanId && sessionId) {
+      createToolSpan(sessionId, spanId, {
+        name: `Tool: ${toolCall.name}`,
+        input: toolCall.arguments as Record<string, unknown>,
+        metadata: { toolName: toolCall.name },
+      })
+    }
+
     try {
       if (isDebugTools()) {
         logTools("Requested tool call", toolCall)
@@ -2619,6 +2637,14 @@ export class MCPService {
         isError: true,
       }
 
+      // End Langfuse span with success
+      if (spanId) {
+        endToolSpan(spanId, {
+          output: result.content,
+          level: result.isError ? "WARNING" : "DEFAULT",
+        })
+      }
+
       return result
     } catch (error) {
       diagnosticsService.logError(
@@ -2626,6 +2652,14 @@ export class MCPService {
         `Tool execution error for ${toolCall.name}`,
         error,
       )
+
+      // End Langfuse span with error
+      if (spanId) {
+        endToolSpan(spanId, {
+          level: "ERROR",
+          statusMessage: error instanceof Error ? error.message : String(error),
+        })
+      }
 
       return {
         content: [

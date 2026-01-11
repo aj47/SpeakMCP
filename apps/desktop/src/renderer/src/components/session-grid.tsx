@@ -62,7 +62,11 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
       const totalVerticalPadding = paddingTop + paddingBottom
       const containerRect = containerRef.current.getBoundingClientRect()
       // Available height is from container top to viewport bottom, minus vertical padding
-      const availableViewportHeight = window.innerHeight - containerRect.top - totalVerticalPadding
+      // Clamp containerRect.top to >= 0 to handle when user has scrolled past the grid top
+      // This prevents the height from exceeding the viewport when containerRect.top is negative
+      const clampedTop = Math.max(containerRect.top, 0)
+      // Clamp the result to >= 0 to handle when the grid is below the viewport
+      const availableViewportHeight = Math.max(window.innerHeight - clampedTop - totalVerticalPadding, 0)
       setContainerHeight(availableViewportHeight)
 
       // Also compute gap from styles to handle className overrides (columnGap or gap)

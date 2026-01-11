@@ -256,7 +256,10 @@ export function SessionTileWrapper({
   } : {}
 
   // Calculate dimensions - use full container size when expanded
-  const displayWidth = isExpanded ? containerWidth : width
+  // Fall back to current width if containerWidth is 0 (before first measurement)
+  const displayWidth = isExpanded
+    ? (containerWidth > 0 ? containerWidth : width)
+    : width
   const displayHeight = isExpanded
     ? (containerHeight > 0 ? containerHeight : height)
     : (isCollapsed ? "auto" : height)

@@ -9,7 +9,7 @@ export const TILE_DIMENSIONS = {
   height: {
     default: 300,
     min: 150,
-    max: 800,
+    max: 4000, // Allow tiles to fill large displays - effectively no practical limit
   },
 } as const
 

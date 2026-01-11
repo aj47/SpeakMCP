@@ -26,7 +26,7 @@ import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useMessageQueue, useIsQueuePaused } from "@renderer/stores"
 
 const MIN_HEIGHT = 120
-const MAX_HEIGHT = 600
+const MAX_HEIGHT = 4000 // Allow tiles to fill large displays - effectively no practical limit
 const DEFAULT_HEIGHT = 280
 
 interface SessionTileProps {

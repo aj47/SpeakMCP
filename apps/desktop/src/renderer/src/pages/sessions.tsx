@@ -385,7 +385,7 @@ export function Component() {
   }, [allProgressEntries])
 
   return (
-    <div className="group/tile flex h-full flex-col">
+    <div className="group/tile flex h-full flex-col relative">
       {/* Main content area */}
       <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
@@ -501,10 +501,10 @@ export function Component() {
                 onDismissPendingContinuation={handleDismissPendingContinuation}
               />
             ) : (
-              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey} isExpandedToFullWindow={!!expandedToFullWindowId}>
+              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey} isExpandedToFullWindow={!!expandedToFullWindowId} className={cn(expandedToFullWindowId && "hidden")}>
                 {/* Pending continuation tile first - hide when another tile is expanded */}
-                {pendingProgress && pendingSessionId && (!expandedToFullWindowId || expandedToFullWindowId === pendingSessionId) && (
-                  <div className={cn(expandedToFullWindowId === pendingSessionId && "w-full h-full")}>
+                {pendingProgress && pendingSessionId && !expandedToFullWindowId && (
+                  <div>
                     <SessionTileWrapper
                       key={pendingSessionId}
                       sessionId={pendingSessionId}
@@ -515,7 +515,6 @@ export function Component() {
                       onDragEnd={() => {}}
                       isDragTarget={false}
                       isDragging={false}
-                      isExpandedToFullWindow={expandedToFullWindowId === pendingSessionId}
                     >
                       <AgentProgress
                         progress={pendingProgress}
@@ -525,7 +524,6 @@ export function Component() {
                         onDismiss={handleDismissPendingContinuation}
                         isCollapsed={false}
                         onCollapsedChange={() => {}}
-                        isExpandedToFullWindow={expandedToFullWindowId === pendingSessionId}
                         onExpandToFullWindow={() => {
                           console.log('[Sessions] Pending tile expand clicked, pendingSessionId:', pendingSessionId)
                           handleExpandToFullWindow(pendingSessionId)
@@ -535,20 +533,14 @@ export function Component() {
                     </SessionTileWrapper>
                   </div>
                 )}
-                {/* Regular sessions */}
+                {/* Regular sessions - grid is hidden when a session is expanded */}
                 {allProgressEntries.map(([sessionId, progress], index) => {
                   const isCollapsed = collapsedSessions[sessionId] ?? false
                   const adjustedIndex = pendingProgress ? index + 1 : index
-                  const isExpandedToFullWindow = expandedToFullWindowId === sessionId
-                  // Skip rendering if another tile is expanded to full window
-                  if (expandedToFullWindowId && !isExpandedToFullWindow) {
-                    return null
-                  }
                   return (
                     <div
                       key={sessionId}
                       ref={(el) => { sessionRefs.current[sessionId] = el }}
-                      className={cn(isExpandedToFullWindow && "w-full h-full")}
                     >
                       <SessionTileWrapper
                         sessionId={sessionId}
@@ -559,7 +551,6 @@ export function Component() {
                         onDragEnd={handleDragEnd}
                         isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
                         isDragging={draggedSessionId === sessionId}
-                        isExpandedToFullWindow={isExpandedToFullWindow}
                       >
                         <AgentProgress
                           progress={progress}
@@ -569,7 +560,6 @@ export function Component() {
                           onDismiss={() => handleDismissSession(sessionId)}
                           isCollapsed={isCollapsed}
                           onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                          isExpandedToFullWindow={isExpandedToFullWindow}
                           onExpandToFullWindow={() => handleExpandToFullWindow(sessionId)}
                           onCollapseFromFullWindow={handleCollapseFromFullWindow}
                         />
@@ -583,6 +573,34 @@ export function Component() {
         )}
 
       </div>
+
+      {/* Expanded session overlay - rendered outside the scrolling grid for proper height containment */}
+      {expandedToFullWindowId && (() => {
+        // Find the expanded session - could be a pending session or a regular session
+        const isPendingExpanded = expandedToFullWindowId === pendingSessionId
+        const expandedProgress = isPendingExpanded
+          ? pendingProgress
+          : agentProgressById.get(expandedToFullWindowId)
+
+        if (!expandedProgress) return null
+
+        return (
+          <div className="absolute inset-0 p-2 bg-background z-10">
+            <AgentProgress
+              progress={expandedProgress}
+              variant="tile"
+              isFocused={true}
+              onFocus={() => {}}
+              onDismiss={isPendingExpanded ? handleDismissPendingContinuation : () => handleDismissSession(expandedToFullWindowId)}
+              isCollapsed={false}
+              onCollapsedChange={() => {}}
+              isExpandedToFullWindow={true}
+              onExpandToFullWindow={() => {}}
+              onCollapseFromFullWindow={handleCollapseFromFullWindow}
+            />
+          </div>
+        )
+      })()}
     </div>
   )
 }

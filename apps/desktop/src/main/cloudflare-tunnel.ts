@@ -28,10 +28,14 @@ const NAMED_TUNNEL_CONNECTED_REGEX = /Connection [a-f0-9-]+ registered|Registere
 
 /**
  * Expand tilde (~) in file paths to the user's home directory
+ * Handles both "~" alone and "~/path" format
  */
 function expandTilde(filePath: string): string {
-  if (filePath.startsWith("~")) {
-    return path.join(os.homedir(), filePath.slice(1))
+  if (filePath === "~") {
+    return os.homedir()
+  }
+  if (filePath.startsWith("~/")) {
+    return path.join(os.homedir(), filePath.slice(2))
   }
   return filePath
 }

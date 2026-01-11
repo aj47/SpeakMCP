@@ -27,6 +27,16 @@ const TUNNEL_URL_REGEX = /https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/
 const NAMED_TUNNEL_CONNECTED_REGEX = /Connection [a-f0-9-]+ registered|Registered tunnel connection|INF Connection [a-f0-9-]+ registered/i
 
 /**
+ * Expand tilde (~) in file paths to the user's home directory
+ */
+function expandTilde(filePath: string): string {
+  if (filePath.startsWith("~")) {
+    return path.join(os.homedir(), filePath.slice(1))
+  }
+  return filePath
+}
+
+/**
  * Common paths where cloudflared might be installed
  */
 function getCloudflaredSearchPaths(): string[] {
@@ -335,7 +345,7 @@ export async function startNamedCloudflareTunnel(options: {
   }
 
   // Verify credentials file exists
-  const credsPath = credentialsPath || getDefaultCredentialsPath(tunnelId)
+  const credsPath = expandTilde(credentialsPath || getDefaultCredentialsPath(tunnelId))
   try {
     await access(credsPath, constants.F_OK | constants.R_OK)
   } catch {
@@ -368,7 +378,13 @@ export async function startNamedCloudflareTunnel(options: {
   return new Promise<{ success: boolean; url?: string; error?: string }>((resolve) => {
     try {
       // For named tunnels, we use: cloudflared tunnel --credentials-file <path> run --url http://localhost:<port> <tunnel-id>
-      // Note: The ingress rule is passed via --url flag for simple single-service tunnels
+      //
+      // Note about --url flag: While Cloudflare's official docs recommend using a config.yml file
+      // with ingress rules for locally-managed tunnels, the --url flag is supported by cloudflared
+      // as a convenience for simple single-service tunnels. This approach is used by quick tunnels
+      // and works reliably across cloudflared versions. For complex multi-service setups, users
+      // should create a config.yml manually.
+      // See: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/
       const args = [
         "tunnel",
         "--credentials-file", credsPath,

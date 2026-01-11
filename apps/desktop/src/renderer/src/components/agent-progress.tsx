@@ -16,7 +16,6 @@ import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
-import { useSessionGridContext } from "@renderer/components/session-grid"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -34,6 +33,10 @@ interface AgentProgressProps {
   onCollapsedChange?: (collapsed: boolean) => void
   /** For tile variant: callback when a follow-up message is sent */
   onFollowUpSent?: () => void
+  /** For tile variant: callback to expand this tile to full view */
+  onExpand?: () => void
+  /** For tile variant: whether this tile is in expanded/full view mode */
+  isExpanded?: boolean
 }
 
 // Enhanced conversation message component
@@ -1017,6 +1020,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   isCollapsed: controlledIsCollapsed,
   onCollapsedChange,
   onFollowUpSent,
+  onExpand,
+  isExpanded,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -1068,21 +1073,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   const queuedMessages = useMessageQueue(progress?.conversationId)
   const isQueuePaused = useIsQueuePaused(progress?.conversationId)
   const hasQueuedMessages = queuedMessages.length > 0
-
-  // Get expand functionality from session grid context
-  const { expandedSessionId, setExpandedSessionId } = useSessionGridContext()
-  const isExpandedToFull = Boolean(progress?.sessionId && expandedSessionId === progress.sessionId)
-
-  // Handle expand/shrink toggle
-  const handleToggleExpand = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!progress?.sessionId) return
-    if (isExpandedToFull) {
-      setExpandedSessionId(null)
-    } else {
-      setExpandedSessionId(progress.sessionId)
-    }
-  }
 
   // Helper to toggle expansion state for a specific item
   // Uses defaultExpanded fallback for items that haven't been explicitly toggled yet
@@ -1675,8 +1665,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           WebkitAppRegion: "no-drag"
         } as React.CSSProperties}
       >
-        {/* Tile Header */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
+        {/* Tile Header - clickable to toggle collapse */}
+        <div
+          className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0 cursor-pointer"
+          onClick={handleToggleCollapse}
+        >
           {getStatusIndicator()}
           <span className="flex-1 truncate font-medium text-sm">
             {getTitle()}
@@ -1692,9 +1685,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
             </Button>
             {/* Expand to full window / Shrink back */}
-            {isRealSession && (
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleExpand} title={isExpandedToFull ? "Shrink to normal size" : "Expand to fill window"}>
-                {isExpandedToFull ? <Shrink className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
+            {onExpand && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onExpand()
+                }}
+                title={isExpanded ? "Back to grid" : "Expand to fill window"}
+              >
+                {isExpanded ? <Shrink className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
               </Button>
             )}
             {!isComplete && !isSnoozed && (

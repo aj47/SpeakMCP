@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
-import { SessionGrid, SessionTileWrapper, useSessionGridContext } from "@renderer/components/session-grid"
+import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
@@ -74,40 +74,6 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
   )
 }
 
-// Wrapper component that conditionally renders based on expanded state
-// Uses CSS hiding to preserve UI state when another tile is expanded
-function SessionTileWithRef({
-  sessionId,
-  sessionRef,
-  children,
-  ...props
-}: {
-  sessionId: string
-  sessionRef: (el: HTMLDivElement | null) => void
-  children: React.ReactNode
-} & Omit<React.ComponentProps<typeof SessionTileWrapper>, 'children' | 'sessionId'>) {
-  const { expandedSessionId } = useSessionGridContext()
-
-  // When another tile is expanded, hide this tile but keep it mounted to preserve state
-  const isHidden = expandedSessionId !== null && expandedSessionId !== sessionId
-  const hiddenStyle = isHidden ? {
-    position: 'absolute' as const,
-    visibility: 'hidden' as const,
-    pointerEvents: 'none' as const,
-    width: 0,
-    height: 0,
-    overflow: 'hidden' as const,
-  } : {}
-
-  return (
-    <div ref={sessionRef} style={hiddenStyle}>
-      <SessionTileWrapper sessionId={sessionId} {...props}>
-        {children}
-      </SessionTileWrapper>
-    </div>
-  )
-}
-
 export function Component() {
   const queryClient = useQueryClient()
   const { id: routeHistoryItemId } = useParams<{ id: string }>()
@@ -118,6 +84,8 @@ export function Component() {
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
   const viewMode = useAgentStore((s) => s.viewMode)
   const setViewMode = useAgentStore((s) => s.setViewMode)
+
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
 
   // Get config for shortcut displays
   const configQuery = useConfigQuery()
@@ -377,10 +345,51 @@ export function Component() {
     toast.success("Tile sizes reset to default")
   }, [])
 
+  const handleCollapseExpanded = useCallback(() => {
+    setExpandedSessionId(null)
+  }, [])
+
   // Count inactive (completed) sessions
   const inactiveSessionCount = useMemo(() => {
     return allProgressEntries.filter(([_, progress]) => progress?.isComplete).length
   }, [allProgressEntries])
+
+  // Check if expanded session is a regular session or a pending session
+  const expandedProgress = expandedSessionId
+    ? (agentProgressById.get(expandedSessionId) || (expandedSessionId === pendingSessionId ? pendingProgress : null))
+    : null
+  const isExpandedPending = expandedSessionId === pendingSessionId
+
+  // If a session is expanded, show the expanded view
+  if (expandedSessionId && expandedProgress) {
+    const isCollapsed = collapsedSessions[expandedSessionId] ?? false
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 min-h-0 p-4">
+          <div className="h-full">
+            <AgentProgress
+              progress={expandedProgress}
+              variant="tile"
+              isExpanded={true}
+              isFocused={true}
+              onFocus={() => {}}
+              onDismiss={async () => {
+                if (isExpandedPending) {
+                  handleDismissPendingContinuation()
+                } else {
+                  await handleDismissSession(expandedSessionId)
+                }
+                setExpandedSessionId(null)
+              }}
+              isCollapsed={isCollapsed}
+              onCollapsedChange={(collapsed) => handleCollapsedChange(expandedSessionId, collapsed)}
+              onExpand={handleCollapseExpanded}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="group/tile flex h-full flex-col">
@@ -519,8 +528,9 @@ export function Component() {
                       isFocused={true}
                       onFocus={() => {}}
                       onDismiss={handleDismissPendingContinuation}
-                      isCollapsed={false}
-                      onCollapsedChange={() => {}}
+                      isCollapsed={collapsedSessions[pendingSessionId] ?? false}
+                      onCollapsedChange={(collapsed) => handleCollapsedChange(pendingSessionId, collapsed)}
+                      onExpand={() => setExpandedSessionId(pendingSessionId)}
                     />
                   </SessionTileWrapper>
                 )}
@@ -529,28 +539,32 @@ export function Component() {
                   const isCollapsed = collapsedSessions[sessionId] ?? false
                   const adjustedIndex = pendingProgress ? index + 1 : index
                   return (
-                    <SessionTileWithRef
+                    <div
                       key={sessionId}
-                      sessionId={sessionId}
-                      sessionRef={(el) => { sessionRefs.current[sessionId] = el }}
-                      index={adjustedIndex}
-                      isCollapsed={isCollapsed}
-                      onDragStart={handleDragStart}
-                      onDragOver={handleDragOver}
-                      onDragEnd={handleDragEnd}
-                      isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
-                      isDragging={draggedSessionId === sessionId}
+                      ref={(el) => { sessionRefs.current[sessionId] = el }}
                     >
-                      <AgentProgress
-                        progress={progress}
-                        variant="tile"
-                        isFocused={focusedSessionId === sessionId}
-                        onFocus={() => handleFocusSession(sessionId)}
-                        onDismiss={() => handleDismissSession(sessionId)}
+                      <SessionTileWrapper
+                        sessionId={sessionId}
+                        index={adjustedIndex}
                         isCollapsed={isCollapsed}
-                        onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                      />
-                    </SessionTileWithRef>
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDragEnd={handleDragEnd}
+                        isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
+                        isDragging={draggedSessionId === sessionId}
+                      >
+                        <AgentProgress
+                          progress={progress}
+                          variant="tile"
+                          isFocused={focusedSessionId === sessionId}
+                          onFocus={() => handleFocusSession(sessionId)}
+                          onDismiss={() => handleDismissSession(sessionId)}
+                          isCollapsed={isCollapsed}
+                          onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                          onExpand={() => setExpandedSessionId(sessionId)}
+                        />
+                      </SessionTileWrapper>
+                    </div>
                   )
                 })}
               </SessionGrid>

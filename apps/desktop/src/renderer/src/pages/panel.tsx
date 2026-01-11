@@ -32,6 +32,7 @@ export function Component() {
     getInitialVisualizerData(),
   )
   const [recording, setRecording] = useState(false)
+  const [isStartingRecording, setIsStartingRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
@@ -107,28 +108,6 @@ export function Component() {
     const entry = Array.from(agentProgressById?.values() ?? []).find(p => p && !p.isSnoozed)
     return entry || null
   }, [agentProgress, agentProgressById])
-
-  useEffect(() => {
-    logUI('[Panel] agentProgress changed:', {
-      hasProgress: !!agentProgress,
-      sessionId: agentProgress?.sessionId,
-      focusedSessionId,
-      totalSessions: agentProgressById.size,
-      activeSessionCount,
-      hasMultipleSessions,
-      allSessionIds: Array.from(agentProgressById.keys())
-    })
-  }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
-
-  useEffect(() => {
-    logUI('[Panel] recording state changed:', {
-      recording,
-      anyActiveNonSnoozed,
-      anyVisibleSessions,
-      showTextInput,
-      mcpMode
-    })
-  }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
@@ -360,6 +339,8 @@ export function Component() {
     recorder.on("record-start", () => {
       setRecording(true)
       recordingRef.current = true
+      // Clear the "starting" flag now that recording has actually started
+      setIsStartingRecording(false)
       // Pass mcpMode to main process so it knows we're in MCP toggle mode
       // This is critical for preventing panel close on key release in toggle mode
       tipcClient.recordEvent({ type: "start", mcpMode: mcpModeRef.current })
@@ -380,6 +361,7 @@ export function Component() {
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
       setRecording(false)
+      setIsStartingRecording(false)
       recordingRef.current = false
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
@@ -550,6 +532,10 @@ export function Component() {
   // MCP handlers
   useEffect(() => {
     const unlisten = rendererHandlers.startMcpRecording.listen((data) => {
+      // Immediately mark that recording is starting to hide progress overlay
+      // This prevents flash of stale progress UI during async mic initialization (~280ms)
+      setIsStartingRecording(true)
+
       // Store the conversationId, sessionId, and fromTile flag for use when recording ends
       mcpConversationIdRef.current = data?.conversationId
       mcpSessionIdRef.current = data?.sessionId
@@ -639,6 +625,7 @@ export function Component() {
         logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
         setRecording(false)
+        setIsStartingRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
@@ -667,21 +654,6 @@ export function Component() {
   // 3. Hiding on ANY agentProgress change would close text input when background
   //    sessions get updates, which breaks the UX when user is typing
 
-  // Debug: Log overlay visibility conditions
-  useEffect(() => {
-    logUI('[Panel] Overlay visibility check:', {
-      hasAgentProgress: !!agentProgress,
-      mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions && !recording,
-      anyVisibleSessions,
-      recording,
-      anyActiveNonSnoozed,
-      agentProgressSessionId: agentProgress?.sessionId,
-      agentProgressComplete: agentProgress?.isComplete,
-      agentProgressSnoozed: agentProgress?.isSnoozed
-    })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
-
   // Clear agent progress handler
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
@@ -693,6 +665,7 @@ export function Component() {
       if (recordingRef.current) {
         isConfirmedRef.current = false
         setRecording(false)
+        setIsStartingRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
@@ -725,6 +698,7 @@ export function Component() {
       if (recordingRef.current) {
         isConfirmedRef.current = false
         setRecording(false)
+        setIsStartingRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
@@ -844,8 +818,8 @@ export function Component() {
 
             <div className="relative flex grow items-center overflow-hidden">
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
-              {anyVisibleSessions && !recording && (
+              {/* Hide overlay when recording or starting recording to prevent flash of stale progress */}
+              {anyVisibleSessions && !recording && !isStartingRecording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"

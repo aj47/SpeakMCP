@@ -95,7 +95,7 @@ export function Component() {
   const tunnelStatus = tunnelStatusQuery.data
   const isCloudflaredInstalled = cloudflaredInstalledQuery.data ?? false
   const isCloudflaredLoggedIn = cloudflaredLoggedInQuery.data ?? false
-  const tunnelList = tunnelListQuery.data?.tunnels ?? []
+  const tunnelList: Array<{ id: string; name: string; created_at: string }> = tunnelListQuery.data?.tunnels ?? []
   const tunnelMode = cfg?.cloudflareTunnelMode ?? "quick"
 
   const bindOptions: Array<{ label: string; value: "127.0.0.1" | "0.0.0.0" }> = useMemo(

@@ -3145,7 +3145,7 @@ export const router = {
     .input<{ repoIdentifier: string }>()
     .action(async ({ input }) => {
       const { skillsService } = await import("./skills-service")
-      const result = skillsService.importSkillFromGitHub(input.repoIdentifier)
+      const result = await skillsService.importSkillFromGitHub(input.repoIdentifier)
       // Auto-enable all imported skills for the current profile so they're immediately usable
       for (const skill of result.imported) {
         profileService.enableSkillForCurrentProfile(skill.id)

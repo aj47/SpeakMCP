@@ -387,11 +387,7 @@ export function Component() {
   return (
     <div className="group/tile flex h-full flex-col">
       {/* Main content area */}
-      <div className={cn(
-        "flex-1 scrollbar-hide-until-hover",
-        // When expanded to full window, disable scrolling and constrain height
-        expandedToFullWindowId ? "overflow-hidden" : "overflow-y-auto"
-      )}>
+      <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
         {allProgressEntries.length === 0 && !pendingProgress ? (
           <EmptyState

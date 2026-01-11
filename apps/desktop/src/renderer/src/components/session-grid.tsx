@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, createContext, useContext } from "react"
+import React, { useRef, useState, useEffect, createContext, useContext, useCallback } from "react"
 import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
@@ -40,40 +40,41 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
   const [gap, setGap] = useState(16) // Default to gap-4 = 16px
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const updateMeasurements = () => {
-      if (containerRef.current) {
-        // Dynamically compute padding from computed styles to handle className overrides
-        const computedStyle = getComputedStyle(containerRef.current)
-        // Use proper NaN check to allow 0 as a valid padding value
-        const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
-        const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
-        const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
-        const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
-        const totalHorizontalPadding = paddingLeft + paddingRight
-        setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
+  // Memoize updateMeasurements so we can call it from multiple effects
+  const updateMeasurements = useCallback(() => {
+    if (containerRef.current) {
+      // Dynamically compute padding from computed styles to handle className overrides
+      const computedStyle = getComputedStyle(containerRef.current)
+      // Use proper NaN check to allow 0 as a valid padding value
+      const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
+      const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
+      const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
+      const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
+      const totalHorizontalPadding = paddingLeft + paddingRight
+      setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
 
-        // Compute height for full-window expansion
-        // Use viewport-based calculation to ensure expanded tiles fill visible area
-        const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
-        const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
-        const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
-        const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
-        const totalVerticalPadding = paddingTop + paddingBottom
-        const containerRect = containerRef.current.getBoundingClientRect()
-        // Available height is from container top to viewport bottom, minus vertical padding
-        const availableViewportHeight = window.innerHeight - containerRect.top - totalVerticalPadding
-        setContainerHeight(availableViewportHeight)
+      // Compute height for full-window expansion
+      // Use viewport-based calculation to ensure expanded tiles fill visible area
+      const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
+      const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
+      const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
+      const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
+      const totalVerticalPadding = paddingTop + paddingBottom
+      const containerRect = containerRef.current.getBoundingClientRect()
+      // Available height is from container top to viewport bottom, minus vertical padding
+      const availableViewportHeight = window.innerHeight - containerRect.top - totalVerticalPadding
+      setContainerHeight(availableViewportHeight)
 
-        // Also compute gap from styles to handle className overrides (columnGap or gap)
-        // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
-        const parsedColumnGap = parseFloat(computedStyle.columnGap)
-        const parsedGap = parseFloat(computedStyle.gap)
-        const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
-        setGap(columnGap)
-      }
+      // Also compute gap from styles to handle className overrides (columnGap or gap)
+      // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
+      const parsedColumnGap = parseFloat(computedStyle.columnGap)
+      const parsedGap = parseFloat(computedStyle.gap)
+      const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
+      setGap(columnGap)
     }
+  }, [])
 
+  useEffect(() => {
     updateMeasurements()
 
     // Also update on resize
@@ -85,11 +86,29 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
     // Listen to window resize for viewport-based height calculation
     window.addEventListener('resize', updateMeasurements)
 
+    // Listen to scroll events on the scrollable parent to update containerHeight
+    // This ensures expanded tiles fill the visible area correctly after scrolling
+    const scrollableParent = containerRef.current?.closest('.overflow-y-auto')
+    if (scrollableParent) {
+      scrollableParent.addEventListener('scroll', updateMeasurements)
+    }
+
     return () => {
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateMeasurements)
+      if (scrollableParent) {
+        scrollableParent.removeEventListener('scroll', updateMeasurements)
+      }
     }
-  }, [])
+  }, [updateMeasurements])
+
+  // Recalculate height when a tile is expanded to get the correct viewport-relative position
+  // This is especially important if the user has scrolled before expanding
+  useEffect(() => {
+    if (expandedSessionId !== null) {
+      updateMeasurements()
+    }
+  }, [expandedSessionId, updateMeasurements])
 
   return (
     <SessionGridContext.Provider value={{ containerWidth, containerHeight, gap, resetKey, expandedSessionId, setExpandedSessionId }}>

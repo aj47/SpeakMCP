@@ -102,7 +102,10 @@ export function Component() {
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const handleCollapsedChange = useCallback((sessionId: string, collapsed: boolean) => {
-    setCollapsedSessions(prev => ({ ...prev, [sessionId]: collapsed }))
+    setCollapsedSessions(prev => ({
+      ...prev,
+      [sessionId]: collapsed
+    }))
   }, [])
 
   const allProgressEntries = React.useMemo(() => {
@@ -515,7 +518,7 @@ export function Component() {
                     key={pendingSessionId}
                     sessionId={pendingSessionId}
                     index={0}
-                    isCollapsed={false}
+                    isCollapsed={collapsedSessions[pendingSessionId] ?? false}
                     onDragStart={() => {}}
                     onDragOver={() => {}}
                     onDragEnd={() => {}}

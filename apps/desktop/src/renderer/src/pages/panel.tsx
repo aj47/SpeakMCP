@@ -32,7 +32,6 @@ export function Component() {
     getInitialVisualizerData(),
   )
   const [recording, setRecording] = useState(false)
-  const [isStartingRecording, setIsStartingRecording] = useState(false)
   const [mcpMode, setMcpMode] = useState(false)
   const [showTextInput, setShowTextInput] = useState(false)
   const isConfirmedRef = useRef(false)
@@ -337,10 +336,6 @@ export function Component() {
     const recorder = (recorderRef.current = new Recorder())
 
     recorder.on("record-start", () => {
-      setRecording(true)
-      recordingRef.current = true
-      // Clear the "starting" flag now that recording has actually started
-      setIsStartingRecording(false)
       // Pass mcpMode to main process so it knows we're in MCP toggle mode
       // This is critical for preventing panel close on key release in toggle mode
       tipcClient.recordEvent({ type: "start", mcpMode: mcpModeRef.current })
@@ -361,7 +356,6 @@ export function Component() {
     recorder.on("record-end", (blob, duration) => {
       const currentMcpMode = mcpModeRef.current
       setRecording(false)
-      setIsStartingRecording(false)
       recordingRef.current = false
       setVisualizerData(() => getInitialVisualizerData())
       tipcClient.recordEvent({ type: "end" })
@@ -532,10 +526,6 @@ export function Component() {
   // MCP handlers
   useEffect(() => {
     const unlisten = rendererHandlers.startMcpRecording.listen((data) => {
-      // Immediately mark that recording is starting to hide progress overlay
-      // This prevents flash of stale progress UI during async mic initialization (~280ms)
-      setIsStartingRecording(true)
-
       // Store the conversationId, sessionId, and fromTile flag for use when recording ends
       mcpConversationIdRef.current = data?.conversationId
       mcpSessionIdRef.current = data?.sessionId
@@ -560,7 +550,10 @@ export function Component() {
 
       setMcpMode(true)
       mcpModeRef.current = true
-      // Mode sizing is now applied in main before show; avoid duplicate calls here
+      // Set recording state immediately to show waveform UI without waiting for async mic init
+      // This prevents flash of stale progress UI during the ~280ms mic initialization
+      setRecording(true)
+      recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -625,7 +618,6 @@ export function Component() {
         logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
         setRecording(false)
-        setIsStartingRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
@@ -665,7 +657,6 @@ export function Component() {
       if (recordingRef.current) {
         isConfirmedRef.current = false
         setRecording(false)
-        setIsStartingRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
@@ -698,7 +689,6 @@ export function Component() {
       if (recordingRef.current) {
         isConfirmedRef.current = false
         setRecording(false)
-        setIsStartingRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData())
         recorderRef.current?.stopRecording()
@@ -818,8 +808,8 @@ export function Component() {
 
             <div className="relative flex grow items-center overflow-hidden">
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {/* Hide overlay when recording or starting recording to prevent flash of stale progress */}
-              {anyVisibleSessions && !recording && !isStartingRecording && (
+              {/* Hide overlay when recording to show waveform instead */}
+              {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
                     variant="overlay"
@@ -836,7 +826,7 @@ export function Component() {
                 )
               )}
 
-              {/* Waveform visualization and submit controls - only show when recording is active */}
+              {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
                   {/* Waveform */}

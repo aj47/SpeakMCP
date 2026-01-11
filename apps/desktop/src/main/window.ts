@@ -415,10 +415,10 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
   if (!win) return
 
   // Panel size is now unified across all modes
-  // Mode switching only affects focus behavior and z-order, not size
-  // Position is not updated on mode change - this is intentional since:
-  // 1. Size is unified so position doesn't need adjustment for different dimensions
-  // 2. User's custom positioning should be respected
+  // Mode switching primarily affects focus behavior and z-order
+  // Note: setPanelMode() may conditionally resize the panel when switching to
+  // agent mode if the panel is too small (see below). This ensures the progress
+  // pane has enough space after transitioning from waveform recording.
   const now = Date.now()
 
   // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
@@ -444,6 +444,33 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
 export function setPanelMode(mode: "normal" | "agent" | "textInput") {
   _currentPanelMode = mode
   applyPanelMode(mode)
+
+  // When switching to agent mode, ensure panel is resized appropriately
+  // This fixes the issue where panel stays at waveform size (110px) when
+  // transitioning from voice input to progress pane (needs 200px+)
+  // See: https://github.com/aj47/SpeakMCP/issues/913
+  if (mode === "agent") {
+    const win = WINDOWS.get("panel")
+    if (win) {
+      try {
+        const [currentWidth, currentHeight] = win.getSize()
+        // Only resize if panel is too small for agent mode
+        if (currentHeight < PROGRESS_MIN_HEIGHT) {
+          const savedSize = getSavedPanelSize("progress")
+          const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
+          const targetWidth = Math.max(savedSize.width, currentWidth, MIN_WAVEFORM_WIDTH)
+          logApp(`[setPanelMode] Panel too small for agent mode (${currentWidth}x${currentHeight}), resizing to ${targetWidth}x${targetHeight}`)
+          win.setSize(targetWidth, targetHeight)
+          notifyPanelSizeChanged(targetWidth, targetHeight)
+          // Reposition to maintain the panel's anchor point
+          const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "agent")
+          win.setPosition(position.x, position.y)
+        }
+      } catch (e) {
+        logApp("[setPanelMode] Failed to resize panel for agent mode:", e)
+      }
+    }
+  }
 }
 
 export function getCurrentPanelMode(): "normal" | "agent" | "textInput" {

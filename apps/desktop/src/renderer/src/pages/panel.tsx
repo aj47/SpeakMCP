@@ -108,28 +108,6 @@ export function Component() {
     return entry || null
   }, [agentProgress, agentProgressById])
 
-  useEffect(() => {
-    logUI('[Panel] agentProgress changed:', {
-      hasProgress: !!agentProgress,
-      sessionId: agentProgress?.sessionId,
-      focusedSessionId,
-      totalSessions: agentProgressById.size,
-      activeSessionCount,
-      hasMultipleSessions,
-      allSessionIds: Array.from(agentProgressById.keys())
-    })
-  }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
-
-  useEffect(() => {
-    logUI('[Panel] recording state changed:', {
-      recording,
-      anyActiveNonSnoozed,
-      anyVisibleSessions,
-      showTextInput,
-      mcpMode
-    })
-  }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
-
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
 
@@ -358,8 +336,6 @@ export function Component() {
     const recorder = (recorderRef.current = new Recorder())
 
     recorder.on("record-start", () => {
-      setRecording(true)
-      recordingRef.current = true
       // Pass mcpMode to main process so it knows we're in MCP toggle mode
       // This is critical for preventing panel close on key release in toggle mode
       tipcClient.recordEvent({ type: "start", mcpMode: mcpModeRef.current })
@@ -574,7 +550,10 @@ export function Component() {
 
       setMcpMode(true)
       mcpModeRef.current = true
-      // Mode sizing is now applied in main before show; avoid duplicate calls here
+      // Set recording state immediately to show waveform UI without waiting for async mic init
+      // This prevents flash of stale progress UI during the ~280ms mic initialization
+      setRecording(true)
+      recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -666,21 +645,6 @@ export function Component() {
   // 2. mcpTextInputMutation.onSuccess/onError also hide it (lines 194, 204)
   // 3. Hiding on ANY agentProgress change would close text input when background
   //    sessions get updates, which breaks the UX when user is typing
-
-  // Debug: Log overlay visibility conditions
-  useEffect(() => {
-    logUI('[Panel] Overlay visibility check:', {
-      hasAgentProgress: !!agentProgress,
-      mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions && !recording,
-      anyVisibleSessions,
-      recording,
-      anyActiveNonSnoozed,
-      agentProgressSessionId: agentProgress?.sessionId,
-      agentProgressComplete: agentProgress?.isComplete,
-      agentProgressSnoozed: agentProgress?.isSnoozed
-    })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -844,7 +808,7 @@ export function Component() {
 
             <div className="relative flex grow items-center overflow-hidden">
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
+              {/* Hide overlay when recording to show waveform instead */}
               {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
@@ -862,7 +826,7 @@ export function Component() {
                 )
               )}
 
-              {/* Waveform visualization and submit controls - only show when recording is active */}
+              {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
                   {/* Waveform */}

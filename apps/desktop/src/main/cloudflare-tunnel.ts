@@ -313,6 +313,87 @@ function getDefaultCredentialsPath(tunnelId: string): string {
 }
 
 /**
+ * Ensure DNS route exists for a named tunnel hostname.
+ * Runs `cloudflared tunnel route dns <tunnel-id> <hostname>` to create a CNAME record.
+ * Uses --overwrite-dns flag to update existing records if needed.
+ *
+ * @returns Promise<{ success: boolean; error?: string }>
+ */
+async function ensureDnsRoute(options: {
+  tunnelId: string
+  hostname: string
+  cloudflaredPath: string | null
+}): Promise<{ success: boolean; error?: string }> {
+  const { tunnelId, hostname, cloudflaredPath } = options
+  const command = cloudflaredPath || "cloudflared"
+
+  // Create enhanced environment for spawn
+  const enhancedEnv: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === "string") {
+      enhancedEnv[key] = value
+    }
+  }
+  enhancedEnv.PATH = getEnhancedPath()
+
+  debugLog(`Ensuring DNS route: ${hostname} -> tunnel ${tunnelId}`)
+
+  return new Promise((resolve) => {
+    const proc = spawn(command, [
+      "tunnel",
+      "route",
+      "dns",
+      "--overwrite-dns",
+      tunnelId,
+      hostname,
+    ], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: enhancedEnv as NodeJS.ProcessEnv,
+    })
+
+    let stdout = ""
+    let stderr = ""
+
+    proc.stdout?.on("data", (data: Buffer) => {
+      stdout += data.toString()
+    })
+
+    proc.stderr?.on("data", (data: Buffer) => {
+      stderr += data.toString()
+    })
+
+    proc.on("error", (err: Error) => {
+      diagnosticsService.logError("cloudflare-tunnel", "DNS route error", err)
+      resolve({ success: false, error: `Failed to configure DNS route: ${err.message}` })
+    })
+
+    proc.on("close", (code: number | null) => {
+      const output = stdout + stderr
+      if (code === 0) {
+        debugLog(`DNS route configured successfully: ${hostname}`)
+        resolve({ success: true })
+      } else {
+        // Check if it's just a "record already exists" situation (not an error)
+        if (output.includes("already exists") || output.includes("CNAME")) {
+          debugLog(`DNS route already exists for ${hostname}`)
+          resolve({ success: true })
+        } else {
+          const errorMsg = `DNS route configuration failed (exit ${code}): ${output.trim()}`
+          diagnosticsService.logError("cloudflare-tunnel", errorMsg)
+          resolve({ success: false, error: errorMsg })
+        }
+      }
+    })
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      proc.kill()
+      resolve({ success: false, error: "Timeout configuring DNS route" })
+    }, 30000)
+  })
+}
+
+/**
  * Start a Named Cloudflare Tunnel for persistent URLs
  * Requires prior setup: cloudflared tunnel login && cloudflared tunnel create <name>
  */
@@ -354,6 +435,19 @@ export async function startNamedCloudflareTunnel(options: {
     await access(credsPath, constants.F_OK | constants.R_OK)
   } catch {
     tunnelError = `Tunnel credentials file not found: ${credsPath}. Please run 'cloudflared tunnel login' and 'cloudflared tunnel create <name>' first.`
+    diagnosticsService.logError("cloudflare-tunnel", tunnelError)
+    return { success: false, error: tunnelError }
+  }
+
+  // Ensure DNS route is configured before starting the tunnel
+  // This creates a CNAME record pointing the hostname to the tunnel
+  const dnsResult = await ensureDnsRoute({
+    tunnelId,
+    hostname,
+    cloudflaredPath,
+  })
+  if (!dnsResult.success) {
+    tunnelError = dnsResult.error || "Failed to configure DNS route"
     diagnosticsService.logError("cloudflare-tunnel", tunnelError)
     return { success: false, error: tunnelError }
   }

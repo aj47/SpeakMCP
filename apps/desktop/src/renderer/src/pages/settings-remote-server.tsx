@@ -390,7 +390,7 @@ export function Component() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => window.open("https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-a-cloudflare-tunnel/", "_blank")}
+                          onClick={() => window.open("https://developers.cloudflare.com/load-balancing/private-network/public-to-tunnel/#1-configure-a-cloudflare-tunnel-with-an-assigned-virtual-network", "_blank")}
                         >
                           <ExternalLink className="h-3.5 w-3.5 mr-1" />
                           Setup Guide

@@ -554,6 +554,15 @@ export type Config = {
 	  remoteServerCorsOrigins?: string[]
 	  remoteServerAutoShowPanel?: boolean // Auto-show floating panel when receiving remote messages
 
+  // Cloudflare Tunnel Configuration
+  // Tunnel mode: "quick" for random URLs (no account required), "named" for persistent URLs (requires account)
+  cloudflareTunnelMode?: "quick" | "named"
+  // Named tunnel configuration (for persistent URLs)
+  cloudflareTunnelId?: string // The tunnel UUID (e.g., "abc123-def456-...")
+  cloudflareTunnelName?: string // Human-readable tunnel name
+  cloudflareTunnelCredentialsPath?: string // Path to credentials JSON file (defaults to ~/.cloudflared/<tunnel-id>.json)
+  cloudflareTunnelHostname?: string // Custom hostname for the tunnel (e.g., "myapp.example.com")
+
   // WhatsApp Integration Configuration
   whatsappEnabled?: boolean
   whatsappAllowFrom?: string[]  // Phone numbers allowed to message (international format without +)

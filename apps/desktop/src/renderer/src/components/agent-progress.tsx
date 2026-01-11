@@ -1071,7 +1071,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   // Get expand functionality from session grid context
   const { expandedSessionId, setExpandedSessionId } = useSessionGridContext()
-  const isExpandedToFull = progress?.sessionId && expandedSessionId === progress.sessionId
+  const isExpandedToFull = Boolean(progress?.sessionId && expandedSessionId === progress.sessionId)
 
   // Handle expand/shrink toggle
   const handleToggleExpand = (e: React.MouseEvent) => {

@@ -85,6 +85,8 @@ export function Component() {
   const viewMode = useAgentStore((s) => s.viewMode)
   const setViewMode = useAgentStore((s) => s.setViewMode)
 
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
+
   // Get config for shortcut displays
   const configQuery = useConfigQuery()
   const textInputShortcut = getTextInputShortcutDisplay(configQuery.data?.textInputShortcut, configQuery.data?.customTextInputShortcut)
@@ -100,7 +102,10 @@ export function Component() {
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const handleCollapsedChange = useCallback((sessionId: string, collapsed: boolean) => {
-    setCollapsedSessions(prev => ({ ...prev, [sessionId]: collapsed }))
+    setCollapsedSessions(prev => ({
+      ...prev,
+      [sessionId]: collapsed
+    }))
   }, [])
 
   const allProgressEntries = React.useMemo(() => {
@@ -343,10 +348,51 @@ export function Component() {
     toast.success("Tile sizes reset to default")
   }, [])
 
+  const handleCollapseExpanded = useCallback(() => {
+    setExpandedSessionId(null)
+  }, [])
+
   // Count inactive (completed) sessions
   const inactiveSessionCount = useMemo(() => {
     return allProgressEntries.filter(([_, progress]) => progress?.isComplete).length
   }, [allProgressEntries])
+
+  // Check if expanded session is a regular session or a pending session
+  const expandedProgress = expandedSessionId
+    ? (agentProgressById.get(expandedSessionId) || (expandedSessionId === pendingSessionId ? pendingProgress : null))
+    : null
+  const isExpandedPending = expandedSessionId === pendingSessionId
+
+  // If a session is expanded, show the expanded view
+  if (expandedSessionId && expandedProgress) {
+    const isCollapsed = collapsedSessions[expandedSessionId] ?? false
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 min-h-0 p-4">
+          <div className="h-full">
+            <AgentProgress
+              progress={expandedProgress}
+              variant="tile"
+              isExpanded={true}
+              isFocused={true}
+              onFocus={() => {}}
+              onDismiss={async () => {
+                if (isExpandedPending) {
+                  handleDismissPendingContinuation()
+                } else {
+                  await handleDismissSession(expandedSessionId)
+                }
+                setExpandedSessionId(null)
+              }}
+              isCollapsed={isCollapsed}
+              onCollapsedChange={(collapsed) => handleCollapsedChange(expandedSessionId, collapsed)}
+              onExpand={handleCollapseExpanded}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="group/tile flex h-full flex-col">
@@ -472,7 +518,7 @@ export function Component() {
                     key={pendingSessionId}
                     sessionId={pendingSessionId}
                     index={0}
-                    isCollapsed={false}
+                    isCollapsed={collapsedSessions[pendingSessionId] ?? false}
                     onDragStart={() => {}}
                     onDragOver={() => {}}
                     onDragEnd={() => {}}
@@ -485,8 +531,9 @@ export function Component() {
                       isFocused={true}
                       onFocus={() => {}}
                       onDismiss={handleDismissPendingContinuation}
-                      isCollapsed={false}
-                      onCollapsedChange={() => {}}
+                      isCollapsed={collapsedSessions[pendingSessionId] ?? false}
+                      onCollapsedChange={(collapsed) => handleCollapsedChange(pendingSessionId, collapsed)}
+                      onExpand={() => setExpandedSessionId(pendingSessionId)}
                     />
                   </SessionTileWrapper>
                 )}
@@ -517,6 +564,7 @@ export function Component() {
                           onDismiss={() => handleDismissSession(sessionId)}
                           isCollapsed={isCollapsed}
                           onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                          onExpand={() => setExpandedSessionId(sessionId)}
                         />
                       </SessionTileWrapper>
                     </div>

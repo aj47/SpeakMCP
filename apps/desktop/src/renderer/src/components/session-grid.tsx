@@ -10,7 +10,11 @@ interface SessionGridContextValue {
   resetKey: number
 }
 
-const SessionGridContext = createContext<SessionGridContextValue>({ containerWidth: 0, gap: 16, resetKey: 0 })
+const SessionGridContext = createContext<SessionGridContextValue>({
+  containerWidth: 0,
+  gap: 16,
+  resetKey: 0,
+})
 
 export function useSessionGridContext() {
   return useContext(SessionGridContext)
@@ -28,28 +32,28 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
   const [containerWidth, setContainerWidth] = useState(0)
   const [gap, setGap] = useState(16) // Default to gap-4 = 16px
 
-  useEffect(() => {
-    const updateMeasurements = () => {
-      if (containerRef.current) {
-        // Dynamically compute padding from computed styles to handle className overrides
-        const computedStyle = getComputedStyle(containerRef.current)
-        // Use proper NaN check to allow 0 as a valid padding value
-        const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
-        const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
-        const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
-        const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
-        const totalPadding = paddingLeft + paddingRight
-        setContainerWidth(containerRef.current.clientWidth - totalPadding)
+  const updateMeasurements = () => {
+    if (containerRef.current) {
+      // Dynamically compute padding from computed styles to handle className overrides
+      const computedStyle = getComputedStyle(containerRef.current)
+      // Use proper NaN check to allow 0 as a valid padding value
+      const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
+      const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
+      const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
+      const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
+      const totalHorizontalPadding = paddingLeft + paddingRight
+      setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
 
-        // Also compute gap from styles to handle className overrides (columnGap or gap)
-        // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
-        const parsedColumnGap = parseFloat(computedStyle.columnGap)
-        const parsedGap = parseFloat(computedStyle.gap)
-        const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
-        setGap(columnGap)
-      }
+      // Also compute gap from styles to handle className overrides (columnGap or gap)
+      // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
+      const parsedColumnGap = parseFloat(computedStyle.columnGap)
+      const parsedGap = parseFloat(computedStyle.gap)
+      const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
+      setGap(columnGap)
     }
+  }
 
+  useEffect(() => {
     updateMeasurements()
 
     // Also update on resize
@@ -58,7 +62,9 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
       resizeObserver.observe(containerRef.current)
     }
 
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+    }
   }, [])
 
   return (

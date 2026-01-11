@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
-import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
+import { SessionGrid, SessionTileWrapper, useSessionGridContext } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
 import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
@@ -70,6 +70,35 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Wrapper component that conditionally renders based on expanded state
+// This prevents empty flex items in the grid when another tile is expanded
+function SessionTileWithRef({
+  sessionId,
+  sessionRef,
+  children,
+  ...props
+}: {
+  sessionId: string
+  sessionRef: (el: HTMLDivElement | null) => void
+  children: React.ReactNode
+} & Omit<React.ComponentProps<typeof SessionTileWrapper>, 'children' | 'sessionId'>) {
+  const { expandedSessionId } = useSessionGridContext()
+
+  // Don't render the wrapper div at all if another tile is expanded
+  // This prevents empty flex items from participating in gap layout
+  if (expandedSessionId !== null && expandedSessionId !== sessionId) {
+    return null
+  }
+
+  return (
+    <div ref={sessionRef}>
+      <SessionTileWrapper sessionId={sessionId} {...props}>
+        {children}
+      </SessionTileWrapper>
     </div>
   )
 }
@@ -495,31 +524,28 @@ export function Component() {
                   const isCollapsed = collapsedSessions[sessionId] ?? false
                   const adjustedIndex = pendingProgress ? index + 1 : index
                   return (
-                    <div
+                    <SessionTileWithRef
                       key={sessionId}
-                      ref={(el) => { sessionRefs.current[sessionId] = el }}
+                      sessionId={sessionId}
+                      sessionRef={(el) => { sessionRefs.current[sessionId] = el }}
+                      index={adjustedIndex}
+                      isCollapsed={isCollapsed}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDragEnd={handleDragEnd}
+                      isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
+                      isDragging={draggedSessionId === sessionId}
                     >
-                      <SessionTileWrapper
-                        sessionId={sessionId}
-                        index={adjustedIndex}
+                      <AgentProgress
+                        progress={progress}
+                        variant="tile"
+                        isFocused={focusedSessionId === sessionId}
+                        onFocus={() => handleFocusSession(sessionId)}
+                        onDismiss={() => handleDismissSession(sessionId)}
                         isCollapsed={isCollapsed}
-                        onDragStart={handleDragStart}
-                        onDragOver={handleDragOver}
-                        onDragEnd={handleDragEnd}
-                        isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
-                        isDragging={draggedSessionId === sessionId}
-                      >
-                        <AgentProgress
-                          progress={progress}
-                          variant="tile"
-                          isFocused={focusedSessionId === sessionId}
-                          onFocus={() => handleFocusSession(sessionId)}
-                          onDismiss={() => handleDismissSession(sessionId)}
-                          isCollapsed={isCollapsed}
-                          onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                        />
-                      </SessionTileWrapper>
-                    </div>
+                        onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                      />
+                    </SessionTileWithRef>
                   )
                 })}
               </SessionGrid>

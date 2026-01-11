@@ -54,12 +54,16 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
         setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
 
         // Compute height for full-window expansion
+        // Use viewport-based calculation to ensure expanded tiles fill visible area
         const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
         const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
         const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
         const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
         const totalVerticalPadding = paddingTop + paddingBottom
-        setContainerHeight(containerRef.current.clientHeight - totalVerticalPadding)
+        const containerRect = containerRef.current.getBoundingClientRect()
+        // Available height is from container top to viewport bottom, minus vertical padding
+        const availableViewportHeight = window.innerHeight - containerRect.top - totalVerticalPadding
+        setContainerHeight(availableViewportHeight)
 
         // Also compute gap from styles to handle className overrides (columnGap or gap)
         // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
@@ -78,7 +82,13 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
       resizeObserver.observe(containerRef.current)
     }
 
-    return () => resizeObserver.disconnect()
+    // Listen to window resize for viewport-based height calculation
+    window.addEventListener('resize', updateMeasurements)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateMeasurements)
+    }
   }, [])
 
   return (
@@ -216,10 +226,15 @@ export function SessionTileWrapper({
     }
   }, [setExpandedSessionId])
 
-  // Hide this tile if another tile is expanded
-  if (anotherTileExpanded) {
-    return null
-  }
+  // When another tile is expanded, hide this tile but keep it mounted to preserve state
+  const hiddenStyle = anotherTileExpanded ? {
+    position: 'absolute' as const,
+    visibility: 'hidden' as const,
+    pointerEvents: 'none' as const,
+    width: 0,
+    height: 0,
+    overflow: 'hidden' as const,
+  } : {}
 
   // Calculate dimensions - use full container size when expanded
   const displayWidth = isExpanded ? containerWidth : width
@@ -237,7 +252,10 @@ export function SessionTileWrapper({
         isDragging && "opacity-50",
         className
       )}
-      style={{ width: displayWidth, height: displayHeight }}
+      style={{
+        ...hiddenStyle,
+        ...(anotherTileExpanded ? {} : { width: displayWidth, height: displayHeight })
+      }}
       draggable={!isResizing && !isExpanded}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}

@@ -75,7 +75,7 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
 }
 
 // Wrapper component that conditionally renders based on expanded state
-// This prevents empty flex items in the grid when another tile is expanded
+// Uses CSS hiding to preserve UI state when another tile is expanded
 function SessionTileWithRef({
   sessionId,
   sessionRef,
@@ -88,14 +88,19 @@ function SessionTileWithRef({
 } & Omit<React.ComponentProps<typeof SessionTileWrapper>, 'children' | 'sessionId'>) {
   const { expandedSessionId } = useSessionGridContext()
 
-  // Don't render the wrapper div at all if another tile is expanded
-  // This prevents empty flex items from participating in gap layout
-  if (expandedSessionId !== null && expandedSessionId !== sessionId) {
-    return null
-  }
+  // When another tile is expanded, hide this tile but keep it mounted to preserve state
+  const isHidden = expandedSessionId !== null && expandedSessionId !== sessionId
+  const hiddenStyle = isHidden ? {
+    position: 'absolute' as const,
+    visibility: 'hidden' as const,
+    pointerEvents: 'none' as const,
+    width: 0,
+    height: 0,
+    overflow: 'hidden' as const,
+  } : {}
 
   return (
-    <div ref={sessionRef}>
+    <div ref={sessionRef} style={hiddenStyle}>
       <SessionTileWrapper sessionId={sessionId} {...props}>
         {children}
       </SessionTileWrapper>

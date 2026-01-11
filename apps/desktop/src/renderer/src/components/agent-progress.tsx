@@ -1686,13 +1686,27 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </Button>
             {/* Expand to full window / Collapse from full window */}
             {/* Only show when the appropriate callback for the current state is available */}
-            {(isExpandedToFullWindow ? onCollapseFromFullWindow : onExpandToFullWindow) && (
+            {(() => {
+              const shouldShow = isExpandedToFullWindow ? onCollapseFromFullWindow : onExpandToFullWindow
+              console.log('[AgentProgress] Expand button visibility check:', {
+                isExpandedToFullWindow,
+                hasOnExpandToFullWindow: !!onExpandToFullWindow,
+                hasOnCollapseFromFullWindow: !!onCollapseFromFullWindow,
+                shouldShow: !!shouldShow,
+                sessionId: progress?.sessionId
+              })
+              return shouldShow
+            })() && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
                 onClick={(e) => {
                   e.stopPropagation()
+                  console.log('[AgentProgress] Expand/Collapse button clicked:', {
+                    isExpandedToFullWindow,
+                    sessionId: progress?.sessionId
+                  })
                   if (isExpandedToFullWindow) {
                     onCollapseFromFullWindow?.()
                   } else {

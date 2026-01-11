@@ -105,10 +105,12 @@ export function Component() {
   }, [])
 
   const handleExpandToFullWindow = useCallback((sessionId: string) => {
+    console.log('[Sessions] handleExpandToFullWindow called with sessionId:', sessionId)
     setExpandedToFullWindowId(sessionId)
   }, [])
 
   const handleCollapseFromFullWindow = useCallback(() => {
+    console.log('[Sessions] handleCollapseFromFullWindow called')
     setExpandedToFullWindowId(null)
   }, [])
 
@@ -483,31 +485,38 @@ export function Component() {
               />
             ) : (
               <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey} isExpandedToFullWindow={!!expandedToFullWindowId}>
-                {/* Pending continuation tile first - hide when a tile is expanded */}
-                {pendingProgress && pendingSessionId && !expandedToFullWindowId && (
-                  <SessionTileWrapper
-                    key={pendingSessionId}
-                    sessionId={pendingSessionId}
-                    index={0}
-                    isCollapsed={false}
-                    onDragStart={() => {}}
-                    onDragOver={() => {}}
-                    onDragEnd={() => {}}
-                    isDragTarget={false}
-                    isDragging={false}
-                  >
-                    <AgentProgress
-                      progress={pendingProgress}
-                      variant="tile"
-                      isFocused={true}
-                      onFocus={() => {}}
-                      onDismiss={handleDismissPendingContinuation}
+                {/* Pending continuation tile first - hide when another tile is expanded */}
+                {pendingProgress && pendingSessionId && (!expandedToFullWindowId || expandedToFullWindowId === pendingSessionId) && (
+                  <div className={cn(expandedToFullWindowId === pendingSessionId && "w-full h-full")}>
+                    <SessionTileWrapper
+                      key={pendingSessionId}
+                      sessionId={pendingSessionId}
+                      index={0}
                       isCollapsed={false}
-                      onCollapsedChange={() => {}}
-                      onExpandToFullWindow={pendingSessionId ? () => handleExpandToFullWindow(pendingSessionId) : undefined}
-                      onCollapseFromFullWindow={handleCollapseFromFullWindow}
-                    />
-                  </SessionTileWrapper>
+                      onDragStart={() => {}}
+                      onDragOver={() => {}}
+                      onDragEnd={() => {}}
+                      isDragTarget={false}
+                      isDragging={false}
+                      isExpandedToFullWindow={expandedToFullWindowId === pendingSessionId}
+                    >
+                      <AgentProgress
+                        progress={pendingProgress}
+                        variant="tile"
+                        isFocused={true}
+                        onFocus={() => {}}
+                        onDismiss={handleDismissPendingContinuation}
+                        isCollapsed={false}
+                        onCollapsedChange={() => {}}
+                        isExpandedToFullWindow={expandedToFullWindowId === pendingSessionId}
+                        onExpandToFullWindow={() => {
+                          console.log('[Sessions] Pending tile expand clicked, pendingSessionId:', pendingSessionId)
+                          handleExpandToFullWindow(pendingSessionId)
+                        }}
+                        onCollapseFromFullWindow={handleCollapseFromFullWindow}
+                      />
+                    </SessionTileWrapper>
+                  </div>
                 )}
                 {/* Regular sessions */}
                 {allProgressEntries.map(([sessionId, progress], index) => {

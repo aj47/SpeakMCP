@@ -17,6 +17,13 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
+import {
+  isSummarizationEnabled,
+  shouldSummarizeStep,
+  summarizeAgentStep,
+  summarizationService,
+  type SummarizationInput,
+} from "./summarization-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -404,6 +411,9 @@ export async function processTranscriptWithAgentMode(
   // Note: createSession is a no-op if the session already exists, so this is safe for resumed sessions
   agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
 
+  // Track step summaries for dual-model mode
+  const stepSummaries: import("../shared/types").AgentStepSummary[] = []
+
   // Track context usage info for progress display
   // Declared here so emit() can access it
   let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
@@ -445,6 +455,9 @@ export async function processTranscriptWithAgentMode(
       modelInfo: modelInfoRef,
       // Include profile name from session snapshot for UI display
       profileName,
+      // Dual-model summarization data
+      stepSummaries: stepSummaries.length > 0 ? stepSummaries : undefined,
+      latestSummary: stepSummaries.length > 0 ? stepSummaries[stepSummaries.length - 1] : undefined,
     }
 
     // Fire and forget - don't await, but catch errors
@@ -508,6 +521,72 @@ export async function processTranscriptWithAgentMode(
       logLLM("[saveMessageIncremental] Failed to save message:", error)
       diagnosticsService.logWarning("llm", "Failed to save message incrementally", error)
     }
+  }
+
+  // Helper function to generate a step summary using the weak model (if dual-model enabled)
+  const generateStepSummary = async (
+    stepNumber: number,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[],
+    assistantResponse?: string,
+  ) => {
+    if (!isSummarizationEnabled()) {
+      return null
+    }
+
+    const hasToolCalls = !!toolCalls && toolCalls.length > 0
+    const isCompletion = false // Will be set to true on final iteration
+
+    if (!shouldSummarizeStep(hasToolCalls, isCompletion)) {
+      return null
+    }
+
+    const input: SummarizationInput = {
+      sessionId: currentSessionId,
+      stepNumber,
+      toolCalls: toolCalls?.map(tc => ({
+        name: tc.name,
+        arguments: tc.arguments,
+      })),
+      toolResults: toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: Array.isArray(tr.content)
+          ? tr.content.map(c => c.text).join("\n")
+          : String(tr.content || ""),
+        error: tr.isError
+          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
+          : undefined,
+      })),
+      assistantResponse,
+      recentMessages: conversationHistory.slice(-5).map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+    }
+
+    try {
+      const summary = await summarizeAgentStep(input)
+      if (summary) {
+        stepSummaries.push(summary)
+        summarizationService.addSummary(summary)
+
+        if (isDebugLLM()) {
+          logLLM("[Dual-Model] Generated step summary:", {
+            stepNumber: summary.stepNumber,
+            importance: summary.importance,
+            actionSummary: summary.actionSummary,
+          })
+        }
+
+        return summary
+      }
+    } catch (error) {
+      if (isDebugLLM()) {
+        logLLM("[Dual-Model] Error generating step summary:", error)
+      }
+    }
+
+    return null
   }
 
   // Helper function to add a message to conversation history AND save it incrementally
@@ -1510,6 +1589,24 @@ Return ONLY JSON per schema.`,
           }
         }
 
+      // Generate final completion summary (if dual-model enabled)
+      if (isSummarizationEnabled()) {
+        const lastToolCalls = conversationHistory
+          .filter(m => m.toolCalls && m.toolCalls.length > 0)
+          .flatMap(m => m.toolCalls || [])
+          .slice(-5)
+        const lastToolResults = conversationHistory
+          .filter(m => m.toolResults && m.toolResults.length > 0)
+          .flatMap(m => m.toolResults || [])
+          .slice(-5)
+
+        await generateStepSummary(
+          iteration,
+          lastToolCalls,
+          lastToolResults,
+          finalContent,
+        )
+      }
 
       // Add completion step
       const completionStep = createProgressStep(
@@ -2032,6 +2129,23 @@ Return ONLY JSON per schema.`,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
     }
+
+    // Generate step summary after tool execution (if dual-model enabled)
+    await generateStepSummary(
+      iteration,
+      toolCallsArray,
+      toolResults,
+      llmResponse.content || undefined,
+    )
+
+    // Emit progress update with new summary
+    emit({
+      currentIteration: iteration,
+      maxIterations,
+      steps: progressSteps.slice(-3),
+      isComplete: false,
+      conversationHistory: formatConversationForProgress(conversationHistory),
+    })
 
     // Enhanced completion detection with better error handling
     const hasErrors = toolResults.some((result) => result.isError)

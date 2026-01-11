@@ -189,6 +189,12 @@ const getConfig = () => {
     // Streamer Mode - hides sensitive info for screen sharing
     streamerModeEnabled: false,
 
+    // Dual-Model Agent Mode defaults
+    dualModelEnabled: false,
+    dualModelSummarizationFrequency: "every_response",
+    dualModelSummaryDetailLevel: "compact",
+    dualModelAutoSaveImportant: false,
+
   }
 
   try {

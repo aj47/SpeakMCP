@@ -377,6 +377,8 @@ async function processWithAgentMode(
   }
 }
 import { diagnosticsService } from "./diagnostics"
+import { memoryService } from "./memory-service"
+import { summarizationService } from "./summarization-service"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
@@ -3177,6 +3179,73 @@ export const router = {
       const { skillsService } = await import("./skills-service")
       const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
       return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+    }),
+
+  // Memory service handlers
+  getAllMemories: t.procedure.action(async () => {
+    return memoryService.getAllMemories()
+  }),
+
+  getMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.getMemory(input.id)
+    }),
+
+  saveMemoryFromSummary: t.procedure
+    .input<{
+      summary: import("../shared/types").AgentStepSummary
+      title?: string
+      userNotes?: string
+      tags?: string[]
+      conversationTitle?: string
+      conversationId?: string
+    }>()
+    .action(async ({ input }) => {
+      const memory = memoryService.createMemoryFromSummary(
+        input.summary,
+        input.title,
+        input.userNotes,
+        input.tags,
+        input.conversationTitle,
+        input.conversationId,
+      )
+      const success = await memoryService.saveMemory(memory)
+      return { success, memory: success ? memory : null }
+    }),
+
+  updateMemory: t.procedure
+    .input<{
+      id: string
+      updates: Partial<Omit<import("../shared/types").AgentMemory, "id" | "createdAt">>
+    }>()
+    .action(async ({ input }) => {
+      return memoryService.updateMemory(input.id, input.updates)
+    }),
+
+  deleteMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.deleteMemory(input.id)
+    }),
+
+  searchMemories: t.procedure
+    .input<{ query: string }>()
+    .action(async ({ input }) => {
+      return memoryService.searchMemories(input.query)
+    }),
+
+  // Summarization service handlers
+  getSessionSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getSummaries(input.sessionId)
+    }),
+
+  getImportantSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getImportantSummaries(input.sessionId)
     }),
 }
 

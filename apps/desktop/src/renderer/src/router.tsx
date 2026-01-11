@@ -58,11 +58,6 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/whatsapp",
           lazy: () => import("./pages/settings-whatsapp"),
         },
-        {
-          path: "settings/dual-model",
-          lazy: () => import("./pages/settings-dual-model"),
-        },
-
       ],
     },
     {

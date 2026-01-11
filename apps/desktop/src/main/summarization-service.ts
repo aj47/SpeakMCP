@@ -1,22 +1,22 @@
 /**
  * Summarization Service for Dual-Model Agent Mode
- * 
+ *
  * Uses a "weak" (cheaper/faster) model to summarize agent steps
  * for user-facing UI and memory extraction.
  */
 
 import { generateText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { configStore } from "./config"
 import { logLLM, isDebugLLM } from "./debug"
+import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "../shared/index"
 import type { LanguageModel } from "ai"
-import type { AgentStepSummary } from "../shared/types"
+import type { AgentStepSummary, ModelPreset } from "../shared/types"
 
 export interface SummarizationInput {
   sessionId: string
   stepNumber: number
-  
+
   // Context about what happened
   agentThought?: string          // Agent's reasoning/thinking
   toolCalls?: Array<{
@@ -29,7 +29,7 @@ export interface SummarizationInput {
     error?: string
   }>
   assistantResponse?: string     // Final response text from agent
-  
+
   // Full conversation context (last few messages for context)
   recentMessages?: Array<{
     role: "user" | "assistant" | "tool"
@@ -37,52 +37,53 @@ export interface SummarizationInput {
   }>
 }
 
-type ProviderType = "openai" | "groq" | "gemini"
+/**
+ * Get a preset by ID, merging built-in presets with saved data
+ */
+function getPresetById(presetId: string): ModelPreset | undefined {
+  const config = configStore.get()
+  const builtIn = getBuiltInModelPresets()
+  const savedPresets = config.modelPresets || []
+
+  // Merge built-in presets with saved properties
+  const allPresets = builtIn.map(preset => {
+    const saved = savedPresets.find(s => s.id === preset.id)
+    return saved ? { ...preset, ...Object.fromEntries(Object.entries(saved).filter(([_, v]) => v !== undefined)) } : preset
+  })
+
+  // Add custom presets
+  const customPresets = savedPresets.filter(p => !p.isBuiltIn)
+  allPresets.push(...customPresets)
+
+  return allPresets.find(p => p.id === presetId)
+}
 
 /**
- * Get the weak model configuration from settings
+ * Get the weak model configuration from settings using presets
  */
-function getWeakModelConfig(): { providerId: ProviderType; model: string; apiKey: string; baseUrl?: string } | null {
+function getWeakModelConfig(): { model: string; apiKey: string; baseUrl: string } | null {
   const config = configStore.get()
-  
+
   if (!config.dualModelEnabled) {
     return null
   }
-  
-  const providerId = config.dualModelWeakProviderId
-  if (!providerId) {
+
+  // Get preset ID - fall back to current model preset if not set
+  const presetId = config.dualModelWeakPresetId || config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const preset = getPresetById(presetId)
+
+  if (!preset || !preset.apiKey) {
     return null
   }
-  
-  let model: string
-  let apiKey: string
-  let baseUrl: string | undefined
-  
-  switch (providerId) {
-    case "openai":
-      model = config.dualModelWeakOpenaiModel || "gpt-4o-mini"
-      apiKey = config.openaiApiKey || ""
-      baseUrl = config.openaiBaseUrl
-      break
-    case "groq":
-      model = config.dualModelWeakGroqModel || "llama-3.1-8b-instant"
-      apiKey = config.groqApiKey || ""
-      baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      break
-    case "gemini":
-      model = config.dualModelWeakGeminiModel || "gemini-1.5-flash-002"
-      apiKey = config.geminiApiKey || ""
-      baseUrl = config.geminiBaseUrl
-      break
-    default:
-      return null
+
+  // Get model name - fall back to a default if not set
+  const model = config.dualModelWeakModelName || preset.mcpToolsModel || "gpt-4o-mini"
+
+  return {
+    model,
+    apiKey: preset.apiKey,
+    baseUrl: preset.baseUrl,
   }
-  
-  if (!apiKey) {
-    return null
-  }
-  
-  return { providerId, model, apiKey, baseUrl }
 }
 
 /**
@@ -93,32 +94,19 @@ function createWeakModel(): LanguageModel | null {
   if (!modelConfig) {
     return null
   }
-  
-  const { providerId, model, apiKey, baseUrl } = modelConfig
-  
+
+  const { model, apiKey, baseUrl } = modelConfig
+
   if (isDebugLLM()) {
-    logLLM(`[SummarizationService] Creating weak model: ${providerId}/${model}`)
+    logLLM(`[SummarizationService] Creating weak model: ${model} at ${baseUrl}`)
   }
-  
-  switch (providerId) {
-    case "openai":
-    case "groq": {
-      const openai = createOpenAI({
-        apiKey,
-        baseURL: baseUrl,
-      })
-      return openai.chat(model)
-    }
-    case "gemini": {
-      const google = createGoogleGenerativeAI({
-        apiKey,
-        baseURL: baseUrl,
-      })
-      return google(model)
-    }
-    default:
-      return null
-  }
+
+  // All presets use OpenAI-compatible API
+  const openai = createOpenAI({
+    apiKey,
+    baseURL: baseUrl,
+  })
+  return openai.chat(model)
 }
 
 /**
@@ -234,7 +222,10 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
  */
 export function isSummarizationEnabled(): boolean {
   const config = configStore.get()
-  return config.dualModelEnabled === true && !!config.dualModelWeakProviderId
+  // Check if dual model is enabled and we have a valid weak model preset
+  const presetId = config.dualModelWeakPresetId || config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const preset = getPresetById(presetId)
+  return config.dualModelEnabled === true && !!preset && !!preset.apiKey
 }
 
 /**

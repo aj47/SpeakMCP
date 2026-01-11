@@ -132,7 +132,7 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { containerWidth, containerHeight, gap, resetKey, expandedSessionId } = useSessionGridContext()
+  const { containerWidth, containerHeight, gap, resetKey, expandedSessionId, setExpandedSessionId } = useSessionGridContext()
   const hasInitializedRef = useRef(false)
   const lastResetKeyRef = useRef(resetKey)
 
@@ -200,6 +200,21 @@ export function SessionTileWrapper({
   const handleDragEnd = () => {
     onDragEnd?.()
   }
+
+  // Clear expandedSessionId when the expanded tile is unmounted
+  // This prevents the grid from being stuck blank if the expanded session is dismissed
+  // We use a ref to track the current expanded state so we have the latest value at unmount time
+  const isExpandedRef = useRef(isExpanded)
+  isExpandedRef.current = isExpanded
+
+  useEffect(() => {
+    return () => {
+      // On unmount, if this tile was expanded, clear the expansion state
+      if (isExpandedRef.current) {
+        setExpandedSessionId(null)
+      }
+    }
+  }, [setExpandedSessionId])
 
   // Hide this tile if another tile is expanded
   if (anotherTileExpanded) {

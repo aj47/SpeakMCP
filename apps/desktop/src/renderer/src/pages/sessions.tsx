@@ -159,14 +159,6 @@ export function Component() {
     }
   }, [agentProgressById])
 
-  // Clear expandedToFullWindowId if the expanded session no longer exists
-  // This prevents the grid from being empty if the user dismisses the expanded session
-  useEffect(() => {
-    if (expandedToFullWindowId && !agentProgressById.has(expandedToFullWindowId)) {
-      setExpandedToFullWindowId(null)
-    }
-  }, [expandedToFullWindowId, agentProgressById])
-
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)
 
@@ -240,6 +232,31 @@ export function Component() {
       })),
     }
   }, [pendingConversationId, pendingConversationQuery.data])
+
+  // Clear expandedToFullWindowId if the expanded session no longer exists
+  // This prevents the grid from being empty if the user dismisses the expanded session
+  // Note: pending sessions have IDs like "pending-conv_..." and are not in agentProgressById
+  useEffect(() => {
+    if (!expandedToFullWindowId) return
+
+    // Check if it's a pending session
+    const isPendingSession = expandedToFullWindowId === pendingSessionId
+    // Check if it's a regular session in the progress map
+    const isRegularSession = agentProgressById.has(expandedToFullWindowId)
+
+    console.log('[Sessions] Checking if expanded session still exists:', {
+      expandedToFullWindowId,
+      pendingSessionId,
+      isPendingSession,
+      isRegularSession,
+      shouldClear: !isPendingSession && !isRegularSession
+    })
+
+    if (!isPendingSession && !isRegularSession) {
+      console.log('[Sessions] Clearing expandedToFullWindowId - session no longer exists')
+      setExpandedToFullWindowId(null)
+    }
+  }, [expandedToFullWindowId, agentProgressById, pendingSessionId])
 
   // Handle continuing a conversation - check for existing active session first
   // If found, focus it; otherwise create a pending tile

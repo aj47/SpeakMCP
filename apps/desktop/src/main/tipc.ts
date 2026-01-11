@@ -2786,6 +2786,17 @@ export const router = {
     return startCloudflareTunnel()
   }),
 
+  startNamedCloudflareTunnel: t.procedure
+    .input<{
+      tunnelId: string
+      hostname: string
+      credentialsPath?: string
+    }>()
+    .action(async ({ input }) => {
+      const { startNamedCloudflareTunnel } = await import("./cloudflare-tunnel")
+      return startNamedCloudflareTunnel(input)
+    }),
+
   stopCloudflareTunnel: t.procedure.action(async () => {
     const { stopCloudflareTunnel } = await import("./cloudflare-tunnel")
     return stopCloudflareTunnel()
@@ -2794,6 +2805,16 @@ export const router = {
   getCloudflareTunnelStatus: t.procedure.action(async () => {
     const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
     return getCloudflareTunnelStatus()
+  }),
+
+  listCloudflareTunnels: t.procedure.action(async () => {
+    const { listCloudflareTunnels } = await import("./cloudflare-tunnel")
+    return listCloudflareTunnels()
+  }),
+
+  checkCloudflaredLoggedIn: t.procedure.action(async () => {
+    const { checkCloudflaredLoggedIn } = await import("./cloudflare-tunnel")
+    return checkCloudflaredLoggedIn()
   }),
 
   // MCP Elicitation handlers (Protocol 2025-11-25)

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
 import { Control, ControlGroup, ControlLabel } from "@renderer/components/ui/control"
 import { Switch } from "@renderer/components/ui/switch"
 import { Input } from "@renderer/components/ui/input"
@@ -15,7 +15,7 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import type { Config } from "@shared/types"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { QRCodeSVG } from "qrcode.react"
-import { EyeOff } from "lucide-react"
+import { EyeOff, ExternalLink } from "lucide-react"
 
 /**
  * Mask a URL for streamer mode - masks all alphanumeric content (including the protocol)
@@ -49,6 +49,20 @@ export function Component() {
     staleTime: 60000, // Check once per minute
   })
 
+  const cloudflaredLoggedInQuery = useQuery({
+    queryKey: ["cloudflared-logged-in"],
+    queryFn: () => tipcClient.checkCloudflaredLoggedIn(),
+    staleTime: 60000, // Check once per minute
+    enabled: cfg?.remoteServerEnabled && cfg?.cloudflareTunnelMode === "named",
+  })
+
+  const tunnelListQuery = useQuery({
+    queryKey: ["cloudflare-tunnel-list"],
+    queryFn: () => tipcClient.listCloudflareTunnels(),
+    staleTime: 60000, // Refresh once per minute
+    enabled: cfg?.remoteServerEnabled && cfg?.cloudflareTunnelMode === "named" && (cloudflaredLoggedInQuery.data ?? false),
+  })
+
   const tunnelStatusQuery = useQuery({
     queryKey: ["cloudflare-tunnel-status"],
     queryFn: () => tipcClient.getCloudflareTunnelStatus(),
@@ -63,6 +77,14 @@ export function Component() {
     },
   })
 
+  const startNamedTunnelMutation = useMutation({
+    mutationFn: (params: { tunnelId: string; hostname: string; credentialsPath?: string }) =>
+      tipcClient.startNamedCloudflareTunnel(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cloudflare-tunnel-status"] })
+    },
+  })
+
   const stopTunnelMutation = useMutation({
     mutationFn: () => tipcClient.stopCloudflareTunnel(),
     onSuccess: () => {
@@ -72,6 +94,9 @@ export function Component() {
 
   const tunnelStatus = tunnelStatusQuery.data
   const isCloudflaredInstalled = cloudflaredInstalledQuery.data ?? false
+  const isCloudflaredLoggedIn = cloudflaredLoggedInQuery.data ?? false
+  const tunnelList = tunnelListQuery.data?.tunnels ?? []
+  const tunnelMode = cfg?.cloudflareTunnelMode ?? "quick"
 
   const bindOptions: Array<{ label: string; value: "127.0.0.1" | "0.0.0.0" }> = useMemo(
     () => [
@@ -303,15 +328,18 @@ export function Component() {
             title="Cloudflare Tunnel"
             endDescription={(
               <div className="break-words whitespace-normal">
-                Create a secure tunnel to expose your remote server to the internet using{" "}
+                Create a secure tunnel to expose your remote server to the internet.{" "}
+                <strong>Quick tunnels</strong> provide random URLs (no account needed).{" "}
+                <strong>Named tunnels</strong> provide{" "}
                 <a
-                  href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/"
+                  href="https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/"
                   target="_blank"
                   rel="noreferrer noopener"
                   className="underline"
                 >
-                  Cloudflare Quick Tunnels
-                </a>. No account required.
+                  persistent URLs
+                </a>{" "}
+                (requires Cloudflare account).
               </div>
             )}
           >
@@ -330,6 +358,99 @@ export function Component() {
               </div>
             ) : (
               <>
+                <Control label={<ControlLabel label="Tunnel Mode" tooltip="Quick tunnels are easy but have random URLs. Named tunnels require setup but have persistent URLs." />} className="px-3">
+                  <Select
+                    value={tunnelMode}
+                    onValueChange={(value: "quick" | "named") => {
+                      // Stop any running tunnel when switching modes
+                      if (tunnelStatus?.running) {
+                        stopTunnelMutation.mutate()
+                      }
+                      saveConfig({ cloudflareTunnelMode: value })
+                    }}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quick">Quick Tunnel (Random URL)</SelectItem>
+                      <SelectItem value="named">Named Tunnel (Persistent)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Control>
+
+                {/* Named Tunnel Configuration */}
+                {tunnelMode === "named" && (
+                  <>
+                    {!isCloudflaredLoggedIn ? (
+                      <div className="px-3 py-2">
+                        <div className="text-sm text-amber-600 dark:text-amber-400 mb-2">
+                          You need to authenticate with Cloudflare first. Run <code className="bg-muted px-1 rounded">cloudflared tunnel login</code> in your terminal.
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open("https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-a-cloudflare-tunnel/", "_blank")}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                          Setup Guide
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Control label={<ControlLabel label="Tunnel ID" tooltip="The UUID of your named tunnel. Find it with 'cloudflared tunnel list'" />} className="px-3">
+                          <div className="flex flex-col gap-2">
+                            <Input
+                              type="text"
+                              value={cfg?.cloudflareTunnelId ?? ""}
+                              onChange={(e) => saveConfig({ cloudflareTunnelId: e.currentTarget.value })}
+                              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                              className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
+                            />
+                            {tunnelList.length > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Available tunnels: {tunnelList.map((t) => (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    className="underline cursor-pointer ml-1 hover:text-foreground"
+                                    onClick={() => saveConfig({
+                                      cloudflareTunnelId: t.id,
+                                      cloudflareTunnelName: t.name,
+                                    })}
+                                  >
+                                    {t.name}
+                                  </button>
+                                )).reduce<React.ReactNode[]>((acc, el, i) => (i === 0 ? [el] : [...acc, ", ", el]), [])}
+                              </div>
+                            )}
+                          </div>
+                        </Control>
+
+                        <Control label={<ControlLabel label="Hostname" tooltip="The public hostname for your tunnel (e.g., myapp.example.com). Must be configured in Cloudflare DNS." />} className="px-3">
+                          <Input
+                            type="text"
+                            value={cfg?.cloudflareTunnelHostname ?? ""}
+                            onChange={(e) => saveConfig({ cloudflareTunnelHostname: e.currentTarget.value })}
+                            placeholder="myapp.example.com"
+                            className="w-full sm:w-[300px] max-w-full min-w-0"
+                          />
+                        </Control>
+
+                        <Control label={<ControlLabel label="Credentials Path" tooltip="Path to credentials JSON file. Leave empty to use default (~/.cloudflared/<tunnel-id>.json)" />} className="px-3">
+                          <Input
+                            type="text"
+                            value={cfg?.cloudflareTunnelCredentialsPath ?? ""}
+                            onChange={(e) => saveConfig({ cloudflareTunnelCredentialsPath: e.currentTarget.value })}
+                            placeholder="~/.cloudflared/<tunnel-id>.json (default)"
+                            className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
+                          />
+                        </Control>
+                      </>
+                    )}
+                  </>
+                )}
+
                 <Control label="Tunnel Status" className="px-3">
                   <div className="flex items-center gap-2">
                     {tunnelStatus?.starting ? (
@@ -340,7 +461,9 @@ export function Component() {
                     ) : tunnelStatus?.running ? (
                       <>
                         <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                        <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
+                        <span className="text-sm text-green-600 dark:text-green-400">
+                          Connected {tunnelStatus.mode === "named" ? "(Named)" : "(Quick)"}
+                        </span>
                       </>
                     ) : (
                       <>
@@ -357,10 +480,29 @@ export function Component() {
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => startTunnelMutation.mutate()}
-                        disabled={startTunnelMutation.isPending}
+                        onClick={() => {
+                          if (tunnelMode === "named") {
+                            if (!cfg?.cloudflareTunnelId || !cfg?.cloudflareTunnelHostname) {
+                              return // Validation handled in UI
+                            }
+                            startNamedTunnelMutation.mutate({
+                              tunnelId: cfg.cloudflareTunnelId,
+                              hostname: cfg.cloudflareTunnelHostname,
+                              credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
+                            })
+                          } else {
+                            startTunnelMutation.mutate()
+                          }
+                        }}
+                        disabled={
+                          startTunnelMutation.isPending ||
+                          startNamedTunnelMutation.isPending ||
+                          (tunnelMode === "named" && (!cfg?.cloudflareTunnelId || !cfg?.cloudflareTunnelHostname))
+                        }
                       >
-                        {startTunnelMutation.isPending ? "Starting..." : "Start Tunnel"}
+                        {startTunnelMutation.isPending || startNamedTunnelMutation.isPending
+                          ? "Starting..."
+                          : "Start Tunnel"}
                       </Button>
                     ) : (
                       <Button
@@ -371,6 +513,16 @@ export function Component() {
                       >
                         {stopTunnelMutation.isPending ? "Stopping..." : "Stop Tunnel"}
                       </Button>
+                    )}
+                    {tunnelMode === "named" && !cfg?.cloudflareTunnelId && (
+                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                        Enter Tunnel ID to start
+                      </span>
+                    )}
+                    {tunnelMode === "named" && cfg?.cloudflareTunnelId && !cfg?.cloudflareTunnelHostname && (
+                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                        Enter Hostname to start
+                      </span>
                     )}
                   </div>
                 </Control>
@@ -398,7 +550,9 @@ export function Component() {
                       <div className="mt-1 text-xs text-muted-foreground">
                         {streamerMode
                           ? <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1"><EyeOff className="h-3 w-3" />URL hidden in Streamer Mode</span>
-                          : "This URL is temporary and will change when you restart the tunnel."}
+                          : tunnelStatus.mode === "named"
+                            ? "This URL is persistent and will remain the same across restarts."
+                            : "This URL is temporary and will change when you restart the tunnel."}
                       </div>
                     </Control>
 

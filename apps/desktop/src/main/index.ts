@@ -7,6 +7,20 @@ import {
   makePanelWindowClosable,
   WINDOWS,
 } from "./window"
+
+// Linux GPU workarounds: Prevent GPU-related errors on various Linux configurations
+// These flags help with systems that have problematic GPU drivers or run in VMs
+if (process.platform === "linux") {
+  // Disable GPU sandbox which can cause issues on some Linux systems
+  app.commandLine.appendSwitch("disable-gpu-sandbox")
+  // Use ANGLE for better compatibility with different GPU drivers
+  app.commandLine.appendSwitch("use-angle", "gl")
+  // Disable GPU compositing if hardware acceleration causes issues
+  // This can be overridden by users who have working GPU acceleration
+  if (process.env.SPEAKMCP_DISABLE_GPU === "1") {
+    app.commandLine.appendSwitch("disable-gpu")
+  }
+}
 import { listenToKeyboardEvents } from "./keyboard"
 import { registerIpcMain } from "@egoist/tipc/main"
 import { router } from "./tipc"

@@ -68,7 +68,7 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0, i
         ref={containerRef}
         className={cn(
           "flex flex-wrap content-start",
-          isExpandedToFullWindow ? "h-full p-2 gap-0" : "gap-4 p-4",
+          isExpandedToFullWindow ? "h-full max-h-full p-2 gap-0 overflow-hidden" : "gap-4 p-4",
           className
         )}
       >

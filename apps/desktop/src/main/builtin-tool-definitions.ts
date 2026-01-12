@@ -118,7 +118,7 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
   },
   {
     name: `${BUILTIN_SERVER_NAME}:get_settings`,
-    description: "Get the current status of SpeakMCP feature toggles including post-processing, TTS (text-to-speech), and tool approval settings.",
+    description: "Get the current status of SpeakMCP feature toggles including post-processing, TTS (text-to-speech), tool approval, verification, message queue, and parallel tool execution settings.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -162,6 +162,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
         enabled: {
           type: "boolean",
           description: "Whether to enable (true) or disable (false) tool approval. If not provided, toggles to the opposite of the current state.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:toggle_verification`,
+    description: "Enable or disable task completion verification. When enabled (default), the agent verifies whether the user's task has been completed before finishing. Disable for faster responses without verification.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "Whether to enable (true) or disable (false) verification. If not provided, toggles to the opposite of the current state.",
         },
       },
       required: [],

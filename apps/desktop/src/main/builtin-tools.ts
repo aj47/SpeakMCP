@@ -519,6 +519,9 @@ const toolHandlers: Record<string, ToolHandler> = {
             postProcessingEffective: postProcessingEffective,
             ttsEnabled: config.ttsEnabled ?? true,
             toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
+            verificationEnabled: config.mcpVerifyCompletionEnabled ?? true,
+            messageQueueEnabled: config.mcpMessageQueueEnabled ?? true,
+            parallelToolExecutionEnabled: config.mcpParallelToolExecution ?? true,
             whatsappEnabled: config.whatsappEnabled ?? false,
             descriptions: {
               postProcessingEnabled: "When enabled AND a prompt is configured, transcripts are cleaned up and improved using AI",
@@ -526,6 +529,9 @@ const toolHandlers: Record<string, ToolHandler> = {
               postProcessingEffective: "True only when post-processing is both enabled AND a prompt is configured",
               ttsEnabled: "When enabled, assistant responses are read aloud",
               toolApprovalEnabled: "When enabled, a confirmation dialog appears before any tool executes (affects new sessions only)",
+              verificationEnabled: "When enabled, the agent verifies task completion before finishing. Disable for faster responses without verification",
+              messageQueueEnabled: "When enabled, users can queue messages while the agent is processing",
+              parallelToolExecutionEnabled: "When enabled, multiple tool calls from a single LLM response are executed concurrently",
               whatsappEnabled: "When enabled, allows sending and receiving WhatsApp messages through SpeakMCP",
             },
           }, null, 2),
@@ -648,6 +654,43 @@ const toolHandlers: Record<string, ToolHandler> = {
             previousValue: currentValue,
             newValue: enabled,
             message: `Tool approval has been ${enabled ? "enabled" : "disabled"}. Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_verification: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.mcpVerifyCompletionEnabled ?? true
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      mcpVerifyCompletionEnabled: enabled,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "verificationEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `Task completion verification has been ${enabled ? "enabled" : "disabled"}. ${enabled ? "The agent will verify task completion before finishing." : "The agent will respond faster without verification."} Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
           }, null, 2),
         },
       ],

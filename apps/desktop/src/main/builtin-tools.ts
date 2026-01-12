@@ -801,6 +801,24 @@ const toolHandlers: Record<string, ToolHandler> = {
     const guidelines = args.guidelines
     const systemPrompt = args.systemPrompt as string | undefined
 
+    // Check if a profile with the same name already exists (case-insensitive)
+    const profiles = profileService.getProfiles()
+    const existingProfile = profiles.find((p) => p.name.toLowerCase() === name.toLowerCase())
+    if (existingProfile) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `A profile named '${name}' already exists. Profile names must be unique (case-insensitive).`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
     try {
       const profile = profileService.createProfile(name, guidelines, systemPrompt)
 
@@ -901,6 +919,24 @@ const toolHandlers: Record<string, ToolHandler> = {
       if (trimmedName === "") {
         return {
           content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a non-empty string" }) }],
+          isError: true,
+        }
+      }
+      // Check if the new name conflicts with an existing profile (case-insensitive, excluding current profile)
+      const existingProfile = profiles.find(
+        (p) => p.id !== profile.id && p.name.toLowerCase() === trimmedName.toLowerCase()
+      )
+      if (existingProfile) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: false,
+                error: `A profile named '${trimmedName}' already exists. Profile names must be unique (case-insensitive).`,
+              }),
+            },
+          ],
           isError: true,
         }
       }

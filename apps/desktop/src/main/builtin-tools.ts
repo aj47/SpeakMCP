@@ -14,7 +14,7 @@
 
 import { configStore } from "./config"
 import { profileService } from "./profile-service"
-import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
+import { mcpService, type MCPTool, type MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
@@ -519,12 +519,14 @@ const toolHandlers: Record<string, ToolHandler> = {
             postProcessingEffective: postProcessingEffective,
             ttsEnabled: config.ttsEnabled ?? true,
             toolApprovalEnabled: config.mcpRequireApprovalBeforeToolCall ?? false,
+            whatsappEnabled: config.whatsappEnabled ?? false,
             descriptions: {
               postProcessingEnabled: "When enabled AND a prompt is configured, transcripts are cleaned up and improved using AI",
               postProcessingPromptConfigured: "Whether a post-processing prompt has been configured in settings",
               postProcessingEffective: "True only when post-processing is both enabled AND a prompt is configured",
               ttsEnabled: "When enabled, assistant responses are read aloud",
               toolApprovalEnabled: "When enabled, a confirmation dialog appears before any tool executes (affects new sessions only)",
+              whatsappEnabled: "When enabled, allows sending and receiving WhatsApp messages through SpeakMCP",
             },
           }, null, 2),
         },
@@ -646,6 +648,50 @@ const toolHandlers: Record<string, ToolHandler> = {
             previousValue: currentValue,
             newValue: enabled,
             message: `Tool approval has been ${enabled ? "enabled" : "disabled"}. Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  toggle_whatsapp: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.whatsappEnabled ?? false
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      whatsappEnabled: enabled,
+    })
+
+    // Trigger WhatsApp MCP server lifecycle changes
+    try {
+      await handleWhatsAppToggle(currentValue, enabled)
+    } catch (_e) {
+      // lifecycle is best-effort
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "whatsappEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `WhatsApp integration has been ${enabled ? "enabled" : "disabled"}.`,
           }, null, 2),
         },
       ],

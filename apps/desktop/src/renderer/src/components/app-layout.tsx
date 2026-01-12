@@ -23,6 +23,8 @@ export const Component = () => {
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
   const configQuery = useConfigQuery()
 
+  const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
+
   const settingsNavLinks: NavLinkItem[] = [
     {
       text: "General",
@@ -54,11 +56,12 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
-    {
+    // Only show WhatsApp settings when enabled
+    ...(whatsappEnabled ? [{
       text: "WhatsApp",
       href: "/settings/whatsapp",
       icon: "i-mingcute-message-4-line",
-    },
+    }] : []),
   ]
 
   // Route aliases that should highlight the same nav item

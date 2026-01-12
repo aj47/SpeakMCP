@@ -49,6 +49,7 @@ export interface Settings {
   transcriptPostProcessingEnabled: boolean;
   mcpRequireApprovalBeforeToolCall: boolean;
   ttsEnabled: boolean;
+  whatsappEnabled: boolean;
   mcpMaxIterations: number;
 }
 
@@ -68,6 +69,7 @@ export interface SettingsUpdate {
   transcriptPostProcessingEnabled?: boolean;
   mcpRequireApprovalBeforeToolCall?: boolean;
   ttsEnabled?: boolean;
+  whatsappEnabled?: boolean;
   mcpMaxIterations?: number;
   mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
   mcpToolsOpenaiModel?: string;

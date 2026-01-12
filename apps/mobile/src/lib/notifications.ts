@@ -137,9 +137,15 @@ export async function getPushToken(): Promise<PushTokenInfo | null> {
 
   try {
     // Get Expo push token (works for both iOS and Android)
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId 
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId
       ?? Constants.easConfig?.projectId;
-    
+
+    if (!projectId) {
+      console.error('[Notifications] No EAS projectId configured. Push notifications require EAS project configuration.');
+      console.error('[Notifications] Add projectId to app.json: extra.eas.projectId or configure via eas.json');
+      return null;
+    }
+
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
@@ -278,10 +284,10 @@ export function parseNotificationData(
   if (!data) return null;
 
   return {
+    ...data,
     type: data.type as 'message' | 'system' | undefined,
     conversationId: data.conversationId as string | undefined,
     sessionId: data.sessionId as string | undefined,
-    ...data,
   };
 }
 

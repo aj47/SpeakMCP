@@ -129,9 +129,13 @@ function Navigation() {
       return;
     }
 
-    if (data.type === 'message' && data.sessionId) {
+    if (data.type === 'message' && (data.sessionId || data.conversationId)) {
       // Navigate to the specific chat session
-      sessionStore.setCurrentSession(data.sessionId);
+      // sessionId takes priority over conversationId
+      const sessionIdentifier = data.sessionId || data.conversationId;
+      if (sessionIdentifier) {
+        sessionStore.setCurrentSession(sessionIdentifier);
+      }
       navigationRef.navigate('Chat' as never);
     } else if (data.type === 'message') {
       // Navigate to sessions list if no specific session

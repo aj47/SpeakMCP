@@ -91,6 +91,7 @@ export function useNotificationProvider(): NotificationContextValue {
   const [permissionStatus, setPermissionStatus] = useState<Notifications.PermissionStatus | null>(null);
   const [pushToken, setPushToken] = useState<PushTokenInfo | null>(null);
   const [badgeCount, setBadgeCountState] = useState(0);
+  const [pendingNotificationData, setPendingNotificationData] = useState<NotificationData | null>(null);
   const onNotificationTapRef = useRef<((data: NotificationData) => void) | null>(null);
 
   const isSupported = isPushNotificationsSupported();
@@ -122,17 +123,26 @@ export function useNotificationProvider(): NotificationContextValue {
       const lastResponse = await getLastNotificationResponse();
       if (lastResponse) {
         const data = parseNotificationData(lastResponse.notification);
-        if (data && onNotificationTapRef.current) {
-          // Delay to ensure navigation is ready
-          setTimeout(() => {
-            onNotificationTapRef.current?.(data);
-          }, 500);
+        if (data) {
+          // Store as pending - will be handled when tap handler is set
+          setPendingNotificationData(data);
         }
       }
     }
 
     initialize();
   }, []);
+
+  // Process pending notification when tap handler is registered
+  useEffect(() => {
+    if (pendingNotificationData && onNotificationTapRef.current) {
+      // Delay to ensure navigation is ready
+      setTimeout(() => {
+        onNotificationTapRef.current?.(pendingNotificationData);
+        setPendingNotificationData(null);
+      }, 500);
+    }
+  }, [pendingNotificationData]);
 
   // Set up notification listeners
   useEffect(() => {

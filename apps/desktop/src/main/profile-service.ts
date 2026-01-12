@@ -1,7 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig, MCPServerConfig } from "@shared/types"
+import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig, ProfileSkillsConfig, MCPServerConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { configStore } from "./config"
@@ -228,6 +228,30 @@ function isValidModelConfig(config: unknown): boolean {
     if (c[field] !== undefined && typeof c[field] !== "string") {
       return false
     }
+  }
+
+  return true
+}
+
+/**
+ * Validates the shape of an imported skills config
+ * Returns true if the config has a valid structure, false otherwise
+ */
+function isValidSkillsConfig(config: unknown): config is Partial<ProfileSkillsConfig> {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  // enabledSkillIds must be an array of strings if present
+  if (c.enabledSkillIds !== undefined && !isStringArray(c.enabledSkillIds)) {
+    return false
+  }
+
+  // allSkillsDisabledByDefault must be a boolean if present
+  if (c.allSkillsDisabledByDefault !== undefined && typeof c.allSkillsDisabledByDefault !== "boolean") {
+    return false
   }
 
   return true
@@ -539,6 +563,108 @@ class ProfileService {
     return this.updateProfileModelConfig(id, modelConfig)
   }
 
+  /**
+   * Update the skills configuration for a profile
+   * Merges with existing config - only provided fields are updated
+   */
+  updateProfileSkillsConfig(id: string, skillsConfig: Partial<ProfileSkillsConfig>): Profile {
+    if (!this.profilesData) {
+      this.loadProfiles()
+    }
+
+    const profile = this.getProfile(id)
+    if (!profile) {
+      throw new Error(`Profile with id ${id} not found`)
+    }
+
+    // Merge with existing config - only update fields that are explicitly provided
+    const mergedSkillsConfig: ProfileSkillsConfig = {
+      ...(profile.skillsConfig ?? {}),
+      ...(skillsConfig.enabledSkillIds !== undefined && { enabledSkillIds: skillsConfig.enabledSkillIds }),
+      ...(skillsConfig.allSkillsDisabledByDefault !== undefined && { allSkillsDisabledByDefault: skillsConfig.allSkillsDisabledByDefault }),
+    }
+
+    const updatedProfile = {
+      ...profile,
+      skillsConfig: mergedSkillsConfig,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.profilesData!.profiles.findIndex((p) => p.id === id)
+    this.profilesData!.profiles[index] = updatedProfile
+    this.saveProfiles()
+    return updatedProfile
+  }
+
+  /**
+   * Toggle a skill's enabled state for a specific profile
+   */
+  toggleProfileSkill(profileId: string, skillId: string): Profile {
+    const profile = this.getProfile(profileId)
+    if (!profile) {
+      throw new Error(`Profile with id ${profileId} not found`)
+    }
+
+    const currentEnabledSkills = profile.skillsConfig?.enabledSkillIds ?? []
+    const isCurrentlyEnabled = currentEnabledSkills.includes(skillId)
+
+    const newEnabledSkillIds = isCurrentlyEnabled
+      ? currentEnabledSkills.filter(id => id !== skillId)
+      : [...currentEnabledSkills, skillId]
+
+    return this.updateProfileSkillsConfig(profileId, {
+      enabledSkillIds: newEnabledSkillIds,
+      allSkillsDisabledByDefault: true, // Ensure opt-in behavior
+    })
+  }
+
+  /**
+   * Check if a skill is enabled for a specific profile
+   */
+  isSkillEnabledForProfile(profileId: string, skillId: string): boolean {
+    const profile = this.getProfile(profileId)
+    if (!profile) {
+      return false
+    }
+
+    const enabledSkillIds = profile.skillsConfig?.enabledSkillIds ?? []
+    return enabledSkillIds.includes(skillId)
+  }
+
+  /**
+   * Get all enabled skill IDs for a profile
+   */
+  getEnabledSkillIdsForProfile(profileId: string): string[] {
+    const profile = this.getProfile(profileId)
+    if (!profile) {
+      return []
+    }
+    return profile.skillsConfig?.enabledSkillIds ?? []
+  }
+
+  /**
+   * Enable a skill for the current profile (used when installing new skills)
+   * This allows newly installed skills to be immediately usable by the agent
+   */
+  enableSkillForCurrentProfile(skillId: string): Profile | undefined {
+    const currentProfile = this.getCurrentProfile()
+    if (!currentProfile) {
+      return undefined
+    }
+
+    const currentEnabledSkills = currentProfile.skillsConfig?.enabledSkillIds ?? []
+
+    // Already enabled, no need to update
+    if (currentEnabledSkills.includes(skillId)) {
+      return currentProfile
+    }
+
+    return this.updateProfileSkillsConfig(currentProfile.id, {
+      enabledSkillIds: [...currentEnabledSkills, skillId],
+      allSkillsDisabledByDefault: true, // Maintain opt-in behavior
+    })
+  }
+
   exportProfile(id: string): string {
     const profile = this.getProfile(id)
     if (!profile) {
@@ -565,6 +691,11 @@ class ProfileService {
     // Include model configuration if it exists
     if (profile.modelConfig) {
       exportData.modelConfig = profile.modelConfig
+    }
+
+    // Include skills configuration if it exists
+    if (profile.skillsConfig) {
+      exportData.skillsConfig = profile.skillsConfig
     }
 
     // Include actual MCP server definitions for enabled servers
@@ -726,6 +857,15 @@ class ProfileService {
           this.updateProfileModelConfig(newProfile.id, importData.modelConfig)
         } else {
           logApp("Warning: Invalid modelConfig format in import data, skipping")
+        }
+      }
+
+      // Apply skills configuration if present
+      if (importData.skillsConfig && typeof importData.skillsConfig === "object") {
+        if (isValidSkillsConfig(importData.skillsConfig)) {
+          this.updateProfileSkillsConfig(newProfile.id, importData.skillsConfig)
+        } else {
+          logApp("Warning: Invalid skillsConfig format in import data, skipping")
         }
       }
 

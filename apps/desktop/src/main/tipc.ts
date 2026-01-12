@@ -47,7 +47,7 @@ import {
   processTranscriptWithTools,
   processTranscriptWithAgentMode,
 } from "./llm"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, WHATSAPP_SERVER_NAME, getInternalWhatsAppServerPath } from "./mcp-service"
 import {
   saveCustomPosition,
   updatePanelPosition,
@@ -186,6 +186,7 @@ async function processWithAgentMode(
         systemPrompt: currentProfile.systemPrompt,
         mcpServerConfig: currentProfile.mcpServerConfig,
         modelConfig: currentProfile.modelConfig,
+        skillsConfig: currentProfile.skillsConfig,
       }
     }
   }
@@ -262,7 +263,7 @@ async function processWithAgentMode(
 
       // Execute the tool call (approval either not required or was granted)
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig)
+      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig, sessionId)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -279,11 +280,14 @@ async function processWithAgentMode(
 
     if (conversationId) {
       logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+      // Use loadConversationWithCompaction to automatically compact old conversations on load
+      // Pass sessionId so that compaction summarization can be cancelled by emergency stop
       const conversation =
-        await conversationService.loadConversation(conversationId)
+        await conversationService.loadConversationWithCompaction(conversationId, sessionId)
 
       if (conversation && conversation.messages.length > 0) {
         logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+
         // Convert conversation messages to the format expected by agent mode
         // Exclude the last message since it's the current user input that will be added
         const messagesToConvert = conversation.messages.slice(0, -1)
@@ -1330,6 +1334,7 @@ export const router = {
             systemPrompt: currentProfile.systemPrompt,
             mcpServerConfig: currentProfile.mcpServerConfig,
             modelConfig: currentProfile.modelConfig,
+            skillsConfig: currentProfile.skillsConfig,
           }
         }
       }
@@ -1679,10 +1684,11 @@ export const router = {
       }
 
       // Manage WhatsApp MCP server auto-configuration
+      // Note: The actual server path is determined at runtime in mcp-service.ts createTransport()
+      // This ensures the correct internal bundled path is always used, regardless of what's in config
       try {
         const prevWhatsappEnabled = !!(prev as any)?.whatsappEnabled
         const nextWhatsappEnabled = !!(merged as any)?.whatsappEnabled
-        const WHATSAPP_SERVER_NAME = "whatsapp"
 
         if (prevWhatsappEnabled !== nextWhatsappEnabled) {
           const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
@@ -1692,27 +1698,16 @@ export const router = {
             // WhatsApp is being enabled
             const { mcpService } = await import("./mcp-service")
             if (!hasWhatsappServer) {
-              // Auto-add WhatsApp MCP server when enabled
-              // Determine the path to the WhatsApp MCP server
-              // In development: use the monorepo packages path
-              // In production: the package should be bundled with the app
-              let whatsappServerPath: string
-              if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
-                // Development: use path relative to the monorepo root
-                whatsappServerPath = path.resolve(app.getAppPath(), "../../packages/mcp-whatsapp/dist/index.js")
-              } else {
-                // Production: use path relative to app resources
-                // The WhatsApp MCP package should be bundled in extraResources
-                whatsappServerPath = path.join(process.resourcesPath || app.getAppPath(), "mcp-whatsapp/dist/index.js")
-              }
-
+              // Auto-add WhatsApp MCP server config when enabled
+              // The path in config is just a placeholder - the actual path is determined
+              // at runtime in createTransport() to ensure the correct bundled path is used
               const updatedMcpConfig: MCPConfig = {
                 ...currentMcpConfig,
                 mcpServers: {
                   ...currentMcpConfig.mcpServers,
                   [WHATSAPP_SERVER_NAME]: {
                     command: "node",
-                    args: [whatsappServerPath],
+                    args: [getInternalWhatsAppServerPath()],
                     transport: "stdio",
                   },
                 },
@@ -1754,6 +1749,23 @@ export const router = {
         }
       } catch (_e) {
         // lifecycle is best-effort
+      }
+
+      // Reinitialize Langfuse if any Langfuse config fields changed
+      // This ensures config changes take effect without requiring app restart
+      try {
+        const langfuseConfigChanged =
+          (prev as any)?.langfuseEnabled !== (merged as any)?.langfuseEnabled ||
+          (prev as any)?.langfuseSecretKey !== (merged as any)?.langfuseSecretKey ||
+          (prev as any)?.langfusePublicKey !== (merged as any)?.langfusePublicKey ||
+          (prev as any)?.langfuseBaseUrl !== (merged as any)?.langfuseBaseUrl
+
+        if (langfuseConfigChanged) {
+          const { reinitializeLangfuse } = await import("./langfuse-service")
+          reinitializeLangfuse()
+        }
+      } catch (_e) {
+        // Langfuse reinitialization is best-effort
       }
     }),
 
@@ -2791,6 +2803,17 @@ export const router = {
     return startCloudflareTunnel()
   }),
 
+  startNamedCloudflareTunnel: t.procedure
+    .input<{
+      tunnelId: string
+      hostname: string
+      credentialsPath?: string
+    }>()
+    .action(async ({ input }) => {
+      const { startNamedCloudflareTunnel } = await import("./cloudflare-tunnel")
+      return startNamedCloudflareTunnel(input)
+    }),
+
   stopCloudflareTunnel: t.procedure.action(async () => {
     const { stopCloudflareTunnel } = await import("./cloudflare-tunnel")
     return stopCloudflareTunnel()
@@ -2799,6 +2822,16 @@ export const router = {
   getCloudflareTunnelStatus: t.procedure.action(async () => {
     const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
     return getCloudflareTunnelStatus()
+  }),
+
+  listCloudflareTunnels: t.procedure.action(async () => {
+    const { listCloudflareTunnels } = await import("./cloudflare-tunnel")
+    return listCloudflareTunnels()
+  }),
+
+  checkCloudflaredLoggedIn: t.procedure.action(async () => {
+    const { checkCloudflaredLoggedIn } = await import("./cloudflare-tunnel")
+    return checkCloudflaredLoggedIn()
   }),
 
   // MCP Elicitation handlers (Protocol 2025-11-25)
@@ -2950,6 +2983,238 @@ export const router = {
       })
 
       return true
+    }),
+
+  // Agent Skills Management
+  getSkills: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getSkills()
+  }),
+
+  getEnabledSkills: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getEnabledSkills()
+  }),
+
+  getSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.getSkill(input.id)
+    }),
+
+  createSkill: t.procedure
+    .input<{ name: string; description: string; instructions: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.createSkill(input.name, input.description, input.instructions)
+      // Auto-enable the new skill for the current profile so it's immediately usable
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return skill
+    }),
+
+  updateSkill: t.procedure
+    .input<{ id: string; name?: string; description?: string; instructions?: string; enabled?: boolean }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const { id, ...updates } = input
+      return skillsService.updateSkill(id, updates)
+    }),
+
+  deleteSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.deleteSkill(input.id)
+    }),
+
+  toggleSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.toggleSkill(input.id)
+    }),
+
+  importSkillFromMarkdown: t.procedure
+    .input<{ content: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.importSkillFromMarkdown(input.content)
+      // Auto-enable the imported skill for the current profile so it's immediately usable
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return skill
+    }),
+
+  exportSkillToMarkdown: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.exportSkillToMarkdown(input.id)
+    }),
+
+  // Import a single skill - can be a .md file or a folder containing SKILL.md
+  importSkillFile: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skill",
+      filters: [
+        { name: "Skill Files", extensions: ["md"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+      properties: ["openFile", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const skill = skillsService.importSkillFromFile(result.filePaths[0])
+    // Auto-enable the imported skill for the current profile so it's immediately usable
+    profileService.enableSkillForCurrentProfile(skill.id)
+    return skill
+  }),
+
+  // Import a skill from a folder containing SKILL.md
+  importSkillFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skill Folder",
+      message: "Select a folder containing SKILL.md",
+      properties: ["openDirectory", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const skill = skillsService.importSkillFromFolder(result.filePaths[0])
+    // Auto-enable the imported skill for the current profile so it's immediately usable
+    profileService.enableSkillForCurrentProfile(skill.id)
+    return skill
+  }),
+
+  // Bulk import all skill folders from a parent directory
+  importSkillsFromParentFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skills from Folder",
+      message: "Select a folder containing multiple skill folders (each with SKILL.md)",
+      properties: ["openDirectory", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const importResult = skillsService.importSkillsFromParentFolder(result.filePaths[0])
+    // Auto-enable all imported skills for the current profile so they're immediately usable
+    for (const skill of importResult.imported) {
+      profileService.enableSkillForCurrentProfile(skill.id)
+    }
+    return importResult
+  }),
+
+  saveSkillFile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.getSkill(input.id)
+      if (!skill) {
+        throw new Error(`Skill with id ${input.id} not found`)
+      }
+
+      const result = await dialog.showSaveDialog({
+        title: "Export Skill",
+        defaultPath: `${skill.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.md`,
+        filters: [
+          { name: "Markdown Files", extensions: ["md"] },
+        ],
+      })
+
+      if (result.canceled || !result.filePath) {
+        return false
+      }
+
+      const content = skillsService.exportSkillToMarkdown(input.id)
+      fs.writeFileSync(result.filePath, content)
+      return true
+    }),
+
+  openSkillsFolder: t.procedure.action(async () => {
+    const { skillsFolder } = await import("./skills-service")
+    // Ensure folder exists
+    fs.mkdirSync(skillsFolder, { recursive: true })
+    await shell.openPath(skillsFolder)
+  }),
+
+  scanSkillsFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const importedSkills = skillsService.scanSkillsFolder()
+    // Auto-enable all newly imported skills for the current profile so they're immediately usable
+    for (const skill of importedSkills) {
+      profileService.enableSkillForCurrentProfile(skill.id)
+    }
+    return importedSkills
+  }),
+
+  // Import skill(s) from a GitHub repository
+  importSkillFromGitHub: t.procedure
+    .input<{ repoIdentifier: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const result = await skillsService.importSkillFromGitHub(input.repoIdentifier)
+      // Auto-enable all imported skills for the current profile so they're immediately usable
+      for (const skill of result.imported) {
+        profileService.enableSkillForCurrentProfile(skill.id)
+      }
+      return result
+    }),
+
+  getEnabledSkillsInstructions: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getEnabledSkillsInstructions()
+  }),
+
+  // Per-profile skill management
+  getProfileSkillsConfig: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const profile = profileService.getProfile(input.profileId)
+      return profile?.skillsConfig ?? { enabledSkillIds: [], allSkillsDisabledByDefault: true }
+    }),
+
+  updateProfileSkillsConfig: t.procedure
+    .input<{ profileId: string; enabledSkillIds?: string[]; allSkillsDisabledByDefault?: boolean }>()
+    .action(async ({ input }) => {
+      const { profileId, ...config } = input
+      return profileService.updateProfileSkillsConfig(profileId, config)
+    }),
+
+  toggleProfileSkill: t.procedure
+    .input<{ profileId: string; skillId: string }>()
+    .action(async ({ input }) => {
+      return profileService.toggleProfileSkill(input.profileId, input.skillId)
+    }),
+
+  isSkillEnabledForProfile: t.procedure
+    .input<{ profileId: string; skillId: string }>()
+    .action(async ({ input }) => {
+      return profileService.isSkillEnabledForProfile(input.profileId, input.skillId)
+    }),
+
+  getEnabledSkillIdsForProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      return profileService.getEnabledSkillIdsForProfile(input.profileId)
+    }),
+
+  // Get enabled skills instructions for a specific profile
+  getEnabledSkillsInstructionsForProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
+      return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
     }),
 }
 

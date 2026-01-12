@@ -760,6 +760,24 @@ export function Component() {
 
         </ControlGroup>
 
+        {/* WhatsApp Integration */}
+        <ControlGroup
+          title="WhatsApp Integration"
+          endDescription={(
+            <div className="break-words whitespace-normal">
+              Enable WhatsApp messaging through SpeakMCP.{" "}
+              <a href="/settings/whatsapp" className="underline">Configure WhatsApp settings</a>.
+            </div>
+          )}
+        >
+          <Control label={<ControlLabel label="Enable WhatsApp" tooltip="When enabled, allows sending and receiving WhatsApp messages through SpeakMCP" />} className="px-3">
+            <Switch
+              checked={configQuery.data?.whatsappEnabled ?? false}
+              onCheckedChange={(value) => saveConfig({ whatsappEnabled: value })}
+            />
+          </Control>
+        </ControlGroup>
+
         {/* Agent Settings */}
         <ControlGroup title="Agent Settings">
           <Control label={<ControlLabel label="Message Queuing" tooltip="Allow queueing messages while the agent is processing. Messages will be processed in order after the current task completes." />} className="px-3">

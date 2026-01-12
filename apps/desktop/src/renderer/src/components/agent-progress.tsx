@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX, Expand, Shrink } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -33,6 +33,10 @@ interface AgentProgressProps {
   onCollapsedChange?: (collapsed: boolean) => void
   /** For tile variant: callback when a follow-up message is sent */
   onFollowUpSent?: () => void
+  /** For tile variant: callback to expand this tile to full view */
+  onExpand?: () => void
+  /** For tile variant: whether this tile is in expanded/full view mode */
+  isExpanded?: boolean
 }
 
 // Enhanced conversation message component
@@ -1016,6 +1020,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   isCollapsed: controlledIsCollapsed,
   onCollapsedChange,
   onFollowUpSent,
+  onExpand,
+  isExpanded,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false)
@@ -1659,8 +1665,11 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           WebkitAppRegion: "no-drag"
         } as React.CSSProperties}
       >
-        {/* Tile Header */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
+        {/* Tile Header - clickable to toggle collapse */}
+        <div
+          className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0 cursor-pointer"
+          onClick={handleToggleCollapse}
+        >
           {getStatusIndicator()}
           <span className="flex-1 truncate font-medium text-sm">
             {getTitle()}
@@ -1675,6 +1684,21 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleToggleCollapse} title={isCollapsed ? "Expand panel" : "Collapse panel"}>
               {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
             </Button>
+            {/* Expand to full window / Shrink back */}
+            {onExpand && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onExpand()
+                }}
+                title={isExpanded ? "Back to grid" : "Expand to fill window"}
+              >
+                {isExpanded ? <Shrink className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
+              </Button>
+            )}
             {!isComplete && !isSnoozed && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleSnooze(e); }} title="Minimize">
                 <Minimize2 className="h-3 w-3" />
@@ -1955,12 +1979,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </Badge>
           )}
         </div>
-        {/* Esc hint - subtle text in the middle, only in overlay variant where Esc actually closes */}
-        {variant === "overlay" && (
-          <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
-            Press Esc to close panel
-          </span>
-        )}
         <div className="flex items-center gap-3">
           {/* Profile name */}
           {profileName && (
@@ -2152,23 +2170,6 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         isSessionActive={!isComplete}
         className="flex-shrink-0"
       />
-
-      {/* Overlay variant: Esc hint and progress bar in styled footer */}
-      {variant === "overlay" && (
-        <div className="flex items-center justify-between px-3 py-1 bg-muted/10 border-t border-border/20 flex-shrink-0">
-          <span className="text-[10px] text-muted-foreground/50">Press Esc to close</span>
-          {!isComplete && (
-            <div className="flex-1 ml-3 h-0.5 bg-muted/50 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500 ease-out"
-                style={{
-                  width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
-                }}
-              />
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Default variant: Original slim full-width progress bar */}
       {variant !== "overlay" && !isComplete && (

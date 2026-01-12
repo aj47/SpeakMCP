@@ -14,7 +14,7 @@ import type {
   ElicitResult,
   ClientCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
-import { configStore } from "./config"
+import { configStore, dataFolder } from "./config"
 import {
   MCPConfig,
   MCPServerConfig,
@@ -29,7 +29,7 @@ import { requestSampling, cancelAllSamplingRequests } from "./mcp-sampling"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { spawn } from "child_process"
 import { promisify } from "util"
-import { access, constants, readFileSync, existsSync } from "fs"
+import { access, constants, readFileSync, existsSync, mkdirSync } from "fs"
 import path from "path"
 import os from "os"
 import { diagnosticsService } from "./diagnostics"
@@ -40,8 +40,120 @@ import { isDebugTools, logTools } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
 import { mcpFileSyncService } from "./mcp-file-sync"
+import { randomUUID } from "crypto"
+import {
+  createToolSpan,
+  endToolSpan,
+  isLangfuseEnabled,
+  getAgentTrace,
+} from "./langfuse-service"
+
+// Default filesystem MCP server name
+const DEFAULT_FILESYSTEM_SERVER_NAME = "speakmcp-filesystem"
+
+/**
+ * Ensure the default filesystem MCP server is configured.
+ * This gives the agent access to the SpeakMCP data folder (skills, etc.)
+ * Works cross-platform by using Electron's app.getPath("appData")
+ */
+function ensureDefaultFilesystemServer(config: Config): { config: Config; changed: boolean } {
+  const mcpConfig = config.mcpConfig || { mcpServers: {} }
+
+  // Check if our default filesystem server already exists
+  if (mcpConfig.mcpServers[DEFAULT_FILESYSTEM_SERVER_NAME]) {
+    return { config, changed: false }
+  }
+
+  // Ensure the skills folder exists
+  const skillsFolder = path.join(dataFolder, "skills")
+  if (!existsSync(skillsFolder)) {
+    try {
+      mkdirSync(skillsFolder, { recursive: true })
+    } catch (error) {
+      // Log error but don't fail MCP initialization - skills folder is optional
+      // This handles edge cases like permissions issues or file existing as non-directory
+      if (isDebugTools()) {
+        logTools(`Failed to create skills folder at ${skillsFolder}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      // Continue without the filesystem server since we couldn't create the folder
+      return { config, changed: false }
+    }
+  }
+
+  // Create the default filesystem server config pointing to the skills folder only
+  // This scopes access to just the skills folder, not the entire data folder
+  // to reduce accidental exposure of unrelated (potentially sensitive) app data
+  const filesystemServerConfig: MCPServerConfig = {
+    transport: "stdio" as MCPTransportType,
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", skillsFolder],
+  }
+
+  const newMcpConfig: MCPConfig = {
+    ...mcpConfig,
+    mcpServers: {
+      ...mcpConfig.mcpServers,
+      [DEFAULT_FILESYSTEM_SERVER_NAME]: filesystemServerConfig,
+    },
+  }
+
+  if (isDebugTools()) {
+    logTools(`Auto-configured default filesystem server with path: ${skillsFolder}`)
+  }
+
+  return {
+    config: { ...config, mcpConfig: newMcpConfig },
+    changed: true,
+  }
+}
 
 const accessAsync = promisify(access)
+
+/**
+ * Internal server constants
+ * Internal servers are managed by SpeakMCP and should always use bundled paths
+ * rather than user-configured paths to prevent stale/incorrect paths from external workspaces
+ */
+export const WHATSAPP_SERVER_NAME = "whatsapp"
+
+/**
+ * Get paths for the internal WhatsApp MCP server
+ * Returns both the script path and node_modules path needed to run the server
+ */
+export function getInternalWhatsAppServerPaths(): { scriptPath: string; nodeModulesPath: string } {
+  if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
+    // Development: use paths relative to the monorepo root
+    const monorepoRoot = path.resolve(app.getAppPath(), "../..")
+    return {
+      scriptPath: path.join(monorepoRoot, "packages/mcp-whatsapp/dist/index.js"),
+      // In pnpm monorepo, dependencies are in root node_modules
+      nodeModulesPath: path.join(monorepoRoot, "node_modules"),
+    }
+  } else {
+    // Production: use paths relative to app resources (bundled in extraResources)
+    const resourcesDir = process.resourcesPath || app.getAppPath()
+    return {
+      scriptPath: path.join(resourcesDir, "mcp-whatsapp/dist/index.js"),
+      // In production, node_modules is bundled alongside the script
+      nodeModulesPath: path.join(resourcesDir, "mcp-whatsapp/node_modules"),
+    }
+  }
+}
+
+/**
+ * Get the path to the internal WhatsApp MCP server (legacy compat)
+ */
+export function getInternalWhatsAppServerPath(): string {
+  return getInternalWhatsAppServerPaths().scriptPath
+}
+
+/**
+ * Check if a server is an internally-managed server
+ * Internal servers have their paths managed by SpeakMCP, not user config
+ */
+export function isInternalServer(serverName: string): boolean {
+  return serverName === WHATSAPP_SERVER_NAME
+}
 
 export interface MCPTool {
   name: string
@@ -368,7 +480,15 @@ export class MCPService {
         this.isInitializing = true
         this.initializationProgress = { current: 0, total: 0 }
 
-        const baseConfig = configStore.get()
+        let baseConfig = configStore.get()
+
+        // Ensure default filesystem server is configured (for agent skill management)
+        const { config: configWithFilesystem, changed: filesystemAdded } = ensureDefaultFilesystemServer(baseConfig)
+        if (filesystemAdded) {
+          baseConfig = configWithFilesystem
+          configStore.save(baseConfig)
+        }
+
         const { normalized: normalizedMcpConfig, changed: mcpConfigChanged } = normalizeMcpConfig(
           baseConfig.mcpConfig || { mcpServers: {} },
         )
@@ -493,12 +613,32 @@ export class MCPService {
         const resolvedCommand = await this.resolveCommandPath(
           serverConfig.command,
         )
-        const environment = await this.prepareEnvironment(serverName, serverConfig.env)
+        let environment = await this.prepareEnvironment(serverName, serverConfig.env)
+
+        // For internal servers (like WhatsApp), always use the bundled path
+        // This prevents stale paths from external workspaces from being used
+        let args = serverConfig.args || []
+        if (serverName === WHATSAPP_SERVER_NAME) {
+          const { scriptPath, nodeModulesPath } = getInternalWhatsAppServerPaths()
+          args = [scriptPath]
+          // Set NODE_PATH so Node.js can find the dependencies
+          // This is needed because pnpm uses symlinks and the spawned process
+          // runs from a different context than the main Electron process
+          const existingNodePath = environment.NODE_PATH || ""
+          environment = {
+            ...environment,
+            NODE_PATH: existingNodePath ? `${nodeModulesPath}${path.delimiter}${existingNodePath}` : nodeModulesPath,
+          }
+          if (isDebugTools()) {
+            logTools(`[${serverName}] Using internal server path: ${scriptPath}`)
+            logTools(`[${serverName}] NODE_PATH: ${environment.NODE_PATH}`)
+          }
+        }
 
         // Create transport with stderr piped so we can capture logs
         const transport = new StdioClientTransport({
           command: resolvedCommand,
-          args: serverConfig.args || [],
+          args,
           env: environment,
           stderr: "pipe", // Pipe stderr so we can capture it
         })
@@ -2300,8 +2440,30 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
-    profileMcpConfig?: ProfileMcpServerConfig
+    profileMcpConfig?: ProfileMcpServerConfig,
+    sessionId?: string // Optional session ID for Langfuse tracing
   ): Promise<MCPToolResult> {
+    // Create Langfuse span for tool call if enabled and we have a trace
+    const spanId = isLangfuseEnabled() && sessionId ? randomUUID() : null
+    if (spanId && sessionId) {
+      createToolSpan(sessionId, spanId, {
+        name: `Tool: ${toolCall.name}`,
+        input: toolCall.arguments as Record<string, unknown>,
+        metadata: { toolName: toolCall.name },
+      })
+    }
+
+    // Helper to ensure span is ended before returning
+    const endSpanAndReturn = (result: MCPToolResult): MCPToolResult => {
+      if (spanId) {
+        endToolSpan(spanId, {
+          output: result.content,
+          level: result.isError ? "WARNING" : "DEFAULT",
+        })
+      }
+      return result
+    }
+
     try {
       if (isDebugTools()) {
         logTools("Requested tool call", toolCall)
@@ -2331,7 +2493,7 @@ export class MCPService {
           noLink: true,
         })
         if (response !== 0) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2339,11 +2501,25 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
       }
       // Check if this is a built-in tool first
       if (isBuiltinTool(toolCall.name)) {
+        // Guard against executing built-in tools that are disabled in the profile config
+        // This ensures built-in tools (like execute_command) respect the same disabled tools rules as external tools
+        if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
+          return endSpanAndReturn({
+            content: [
+              {
+                type: "text",
+                text: `Tool ${toolCall.name} is currently disabled for this profile.`,
+              },
+            ],
+            isError: true,
+          })
+        }
+
         if (isDebugTools()) {
           logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
         }
@@ -2352,7 +2528,7 @@ export class MCPService {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })
           }
-          return result
+          return endSpanAndReturn(result)
         }
       }
 
@@ -2380,7 +2556,7 @@ export class MCPService {
         })()
 
         if (isServerDisabledForSession) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2388,13 +2564,13 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
         if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2402,7 +2578,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         const result = await this.executeServerTool(
@@ -2415,7 +2591,7 @@ export class MCPService {
         // Track resource information from tool results
         this.trackResourceFromResult(serverName, result)
 
-        return result
+        return endSpanAndReturn(result)
       }
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
@@ -2443,20 +2619,11 @@ export class MCPService {
       })
 
       if (matchingTool && matchingTool.name.includes(":")) {
-        // Check if it's a built-in tool
-        if (isBuiltinTool(matchingTool.name)) {
-          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
-          if (result) {
-            return result
-          }
-        }
-
-        const [serverName, toolName] = matchingTool.name.split(":", 2)
-
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
+        // This check applies to BOTH built-in tools and external tools
         if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2464,8 +2631,20 @@ export class MCPService {
               },
             ],
             isError: true,
+          })
+        }
+
+        // Check if it's a built-in tool
+        if (isBuiltinTool(matchingTool.name)) {
+          const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
+          if (result) {
+            return endSpanAndReturn(result)
           }
         }
+
+        const [serverName, toolName] = matchingTool.name.split(":", 2)
+
+        // Note: disabledTools check is already done above for both built-in and external tools
 
         const result = await this.executeServerTool(
           serverName,
@@ -2477,14 +2656,15 @@ export class MCPService {
         // Track resource information from tool results
         this.trackResourceFromResult(serverName, result)
 
-        return result
+        return endSpanAndReturn(result)
       }
 
       // No matching tools found
       const availableToolNames = allTools
         .map((t) => t.name)
         .join(", ")
-      const result: MCPToolResult = {
+
+      return endSpanAndReturn({
         content: [
           {
             type: "text",
@@ -2492,15 +2672,21 @@ export class MCPService {
           },
         ],
         isError: true,
-      }
-
-      return result
+      })
     } catch (error) {
       diagnosticsService.logError(
         "mcp-service",
         `Tool execution error for ${toolCall.name}`,
         error,
       )
+
+      // End Langfuse span with error
+      if (spanId) {
+        endToolSpan(spanId, {
+          level: "ERROR",
+          statusMessage: error instanceof Error ? error.message : String(error),
+        })
+      }
 
       return {
         content: [
@@ -2768,6 +2954,45 @@ export class MCPService {
    */
   clearAllServerLogs(): void {
     this.serverLogs.clear()
+  }
+}
+
+/**
+ * Handle WhatsApp MCP server lifecycle when the whatsappEnabled setting changes.
+ * This function manages auto-adding the server config, starting, and stopping the server.
+ *
+ * @param prevEnabled - Previous value of whatsappEnabled setting
+ * @param nextEnabled - New value of whatsappEnabled setting
+ */
+export async function handleWhatsAppToggle(prevEnabled: boolean, nextEnabled: boolean): Promise<void> {
+  if (prevEnabled !== nextEnabled) {
+    const config = configStore.get()
+    const currentMcpConfig = config.mcpConfig || { mcpServers: {} }
+    const hasWhatsappServer = !!currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]
+
+    if (nextEnabled) {
+      // WhatsApp is being enabled
+      if (!hasWhatsappServer) {
+        // Auto-add WhatsApp MCP server config when enabled
+        const updatedMcpConfig: MCPConfig = {
+          ...currentMcpConfig,
+          mcpServers: {
+            ...currentMcpConfig.mcpServers,
+            [WHATSAPP_SERVER_NAME]: {
+              command: "node",
+              args: [getInternalWhatsAppServerPath()],
+              transport: "stdio" as MCPTransportType,
+            },
+          },
+        }
+        configStore.save({ ...config, mcpConfig: updatedMcpConfig })
+      }
+      // Start/restart the WhatsApp server
+      await mcpService.restartServer(WHATSAPP_SERVER_NAME)
+    } else if (!nextEnabled && hasWhatsappServer) {
+      // Stop the WhatsApp server when disabled (but keep config for re-enabling)
+      await mcpService.stopServer(WHATSAPP_SERVER_NAME)
+    }
   }
 }
 

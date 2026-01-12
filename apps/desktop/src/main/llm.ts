@@ -20,6 +20,12 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
+import {
+  createAgentTrace,
+  endAgentTrace,
+  isLangfuseEnabled,
+  flushLangfuse,
+} from "./langfuse-service"
 
 /**
  * Build discovery context for discovery-aware system prompts
@@ -44,6 +50,7 @@ function buildSystemPrompt(
   isAgentMode: boolean,
   relevantTools?: Array<{ name: string; description: string; inputSchema?: any }>,
   customSystemPrompt?: string,
+  skillsInstructions?: string,
 ): string {
   const config = configStore.get()
 
@@ -54,6 +61,7 @@ function buildSystemPrompt(
       userGuidelines,
       isAgentMode,
       customSystemPrompt,
+      skillsInstructions,
     )
   }
 
@@ -63,6 +71,7 @@ function buildSystemPrompt(
     isAgentMode,
     relevantTools,
     customSystemPrompt,
+    skillsInstructions,
   )
 }
 
@@ -217,12 +226,23 @@ export async function processTranscriptWithTools(
   )
 
   const userGuidelines = config.mcpToolsSystemPrompt
-  const systemPrompt = buildSystemPrompt(
+  // Load enabled agent skills instructions for non-agent mode too
+  // Use the current profile's skills config
+  const { skillsService } = await import("./skills-service")
+  const { profileService } = await import("./profile-service")
+  const currentProfileId = config.mcpCurrentProfileId
+  const enabledSkillIds = currentProfileId
+    ? profileService.getEnabledSkillIdsForProfile(currentProfileId)
+    : []
+  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+
+  const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
     false,
     undefined,
     config.mcpCustomSystemPrompt,
+    skillsInstructions,
   )
 
   const messages = [
@@ -401,181 +421,7 @@ async function executeToolWithRetries(
   }
 }
 
-// Helper function to analyze tool capabilities and match them to user requests
-function analyzeToolCapabilities(
-  availableTools: MCPTool[],
-  transcript: string,
-): { summary: string; relevantTools: MCPTool[] } {
-  const transcriptLower = transcript.toLowerCase()
-  const relevantTools: MCPTool[] = []
 
-  // Define capability patterns based on common keywords and tool descriptions
-  const patterns = {
-    filesystem: {
-      keywords: [
-        "file",
-        "directory",
-        "folder",
-        "desktop",
-        "list",
-        "ls",
-        "contents",
-        "browse",
-        "create",
-        "write",
-        "read",
-      ],
-      toolDescriptionKeywords: [
-        "file",
-        "directory",
-        "folder",
-        "filesystem",
-        "path",
-        "create",
-        "write",
-        "read",
-        "list",
-      ],
-    },
-    terminal: {
-      keywords: [
-        "command",
-        "execute",
-        "run",
-        "terminal",
-        "shell",
-        "bash",
-        "script",
-      ],
-      toolDescriptionKeywords: [
-        "command",
-        "execute",
-        "terminal",
-        "shell",
-        "session",
-        "run",
-      ],
-    },
-    system: {
-      keywords: ["system", "process", "status", "info", "monitor", "snapshot"],
-      toolDescriptionKeywords: [
-        "system",
-        "process",
-        "status",
-        "monitor",
-        "snapshot",
-        "info",
-      ],
-    },
-    web: {
-      keywords: [
-        "web",
-        "http",
-        "api",
-        "request",
-        "url",
-        "fetch",
-        "search",
-        "amazon",
-        "google",
-        "website",
-        "online",
-        "browser",
-        "navigate",
-        "click",
-        "form",
-        "login",
-        "purchase",
-        "buy",
-        "order",
-        "cart",
-        "checkout",
-        "email",
-        "gmail",
-        "social media",
-        "facebook",
-        "twitter",
-        "linkedin",
-        "instagram",
-      ],
-      toolDescriptionKeywords: [
-        "web",
-        "http",
-        "api",
-        "request",
-        "url",
-        "fetch",
-        "search",
-        "browser",
-        "navigate",
-        "click",
-        "snapshot",
-        "screenshot",
-        "playwright",
-        "automation",
-      ],
-    },
-    communication: {
-      keywords: [
-        "send",
-        "message",
-        "email",
-        "notification",
-        "slack",
-        "discord",
-      ],
-      toolDescriptionKeywords: [
-        "send",
-        "message",
-        "email",
-        "notification",
-        "slack",
-        "discord",
-        "communicate",
-      ],
-    },
-  }
-
-  // Check which patterns match the transcript
-  const matchedCapabilities: string[] = []
-
-  for (const [capability, pattern] of Object.entries(patterns)) {
-    const hasKeyword = pattern.keywords.some((keyword) =>
-      transcriptLower.includes(keyword),
-    )
-
-    // Find tools that match this capability based on their descriptions
-    const capabilityTools = availableTools.filter((tool) => {
-      const toolNameLower = tool.name.toLowerCase()
-      const toolDescLower = tool.description.toLowerCase()
-
-      return pattern.toolDescriptionKeywords.some(
-        (keyword) =>
-          toolNameLower.includes(keyword) || toolDescLower.includes(keyword),
-      )
-    })
-
-    if (hasKeyword && capabilityTools.length > 0) {
-      matchedCapabilities.push(capability)
-      relevantTools.push(...capabilityTools)
-    }
-  }
-
-  let summary = ""
-  if (matchedCapabilities.length > 0) {
-    summary = `Detected ${matchedCapabilities.join(", ")} capabilities. Can help with this request using available tools.`
-  } else {
-    summary = "Analyzing available tools for potential solutions."
-  }
-
-  // Remove duplicates from relevant tools
-  const uniqueRelevantTools = relevantTools.filter(
-    (tool, index, self) =>
-      index === self.findIndex((t) => t.name === tool.name),
-  )
-
-  return { summary, relevantTools: uniqueRelevantTools }
-}
 
 export async function processTranscriptWithAgentMode(
   transcript: string,
@@ -615,6 +461,26 @@ export async function processTranscriptWithAgentMode(
   // Note: createSession is a no-op if the session already exists, so this is safe for resumed sessions
   agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
 
+  // Create Langfuse trace for this agent session if enabled
+  if (isLangfuseEnabled()) {
+    createAgentTrace(currentSessionId, {
+      name: "Agent Session",
+      metadata: {
+        conversationId: currentConversationId,
+        maxIterations,
+        hasHistory: !!previousConversationHistory?.length,
+        profileId: effectiveProfileSnapshot?.profileId,
+      },
+      input: transcript,
+    })
+  }
+
+  // Declare variables that need to be accessible in the finally block for Langfuse tracing
+  let iteration = 0
+  let finalContent = ""
+  let wasAborted = false // Track if agent was aborted for observability
+
+  try {
   // Track context usage info for progress display
   // Declared here so emit() can access it
   let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
@@ -780,12 +646,9 @@ export async function processTranscriptWithAgentMode(
   )
   progressSteps.push(initialStep)
 
-  // Analyze available tool capabilities
-  const toolCapabilities = analyzeToolCapabilities(availableTools, transcript)
-
-  // Update initial step with tool analysis
+  // Update initial step with tool count
   initialStep.status = "completed"
-  initialStep.description = `Found ${availableTools.length} available tools. ${toolCapabilities.summary}`
+  initialStep.description = `Found ${availableTools.length} available tools.`
 
   // Remove duplicates from available tools to prevent confusion
   const uniqueAvailableTools = availableTools.filter(
@@ -799,13 +662,23 @@ export async function processTranscriptWithAgentMode(
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
 
+  // Load enabled agent skills instructions for the current profile
+  // Skills provide specialized instructions that improve AI performance on specific tasks
+  // Use per-profile skills config if available, otherwise fall back to empty (no skills)
+  const { skillsService } = await import("./skills-service")
+  const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
+  logLLM(`[processTranscriptWithAgentMode] Loading skills for session ${currentSessionId}. enabledSkillIds: [${enabledSkillIds.join(', ')}]`)
+  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+  logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
+
   // Construct system prompt using the new approach
   const systemPrompt = buildSystemPrompt(
     uniqueAvailableTools,
     agentModeGuidelines,
     true,
-    toolCapabilities.relevantTools,
+    undefined, // relevantTools removed - let LLM decide tool relevance
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
+    skillsInstructions, // agent skills instructions
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -989,8 +862,9 @@ export async function processTranscriptWithAgentMode(
       uniqueAvailableTools,
       agentModeGuidelines, // Use session-bound guidelines
       true,
-      toolCapabilities.relevantTools,
+      undefined, // relevantTools removed
       customSystemPrompt, // Use session-bound custom system prompt
+      skillsInstructions, // agent skills instructions
     )
 
     const postVerifySummaryMessages = [
@@ -1001,7 +875,7 @@ export async function processTranscriptWithAgentMode(
     const { messages: shrunkMessages, estTokensAfter: verifyEstTokens, maxTokens: verifyMaxTokens } = await shrinkMessagesForLLM({
       messages: postVerifySummaryMessages as any,
       availableTools: uniqueAvailableTools,
-      relevantTools: toolCapabilities.relevantTools,
+      relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
       onSummarizationProgress: (current, total) => {
@@ -1112,10 +986,7 @@ Return ONLY JSON per schema.`,
     conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
-  let iteration = 0
-  let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {
@@ -1138,7 +1009,7 @@ Return ONLY JSON per schema.`,
       // Emit final progress (ensure final output is saved in history)
       const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
       const finalOutput = (finalContent || "") + killNote
-      conversationHistory.push({ role: "assistant", content: finalOutput })
+      conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
       emit({
         currentIteration: iteration,
         maxIterations,
@@ -1148,6 +1019,7 @@ Return ONLY JSON per schema.`,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
+      wasAborted = true
       break
     }
 
@@ -1238,7 +1110,7 @@ Return ONLY JSON per schema.`,
     const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: uniqueAvailableTools,
-      relevantTools: toolCapabilities.relevantTools,
+      relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
       onSummarizationProgress: (current, total, message) => {
@@ -1265,7 +1137,7 @@ Return ONLY JSON per schema.`,
       thinkingStep.description = "Emergency stop triggered"
       const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
       const finalOutput = (finalContent || "") + killNote
-      conversationHistory.push({ role: "assistant", content: finalOutput })
+      conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
       emit({
         currentIteration: iteration,
         maxIterations,
@@ -1274,6 +1146,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -1332,7 +1205,7 @@ Return ONLY JSON per schema.`,
         thinkingStep.description = "Emergency stop triggered"
         const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
         const finalOutput = (finalContent || "") + killNote
-        conversationHistory.push({ role: "assistant", content: finalOutput })
+        conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
         emit({
           currentIteration: iteration,
           maxIterations,
@@ -1341,6 +1214,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
     } catch (error: any) {
@@ -1352,7 +1226,7 @@ Return ONLY JSON per schema.`,
         // Ensure final output appears in saved conversation on abort
         const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
         const finalOutput = (finalContent || "") + killNote
-        conversationHistory.push({ role: "assistant", content: finalOutput })
+        conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
         emit({
           currentIteration: iteration,
           maxIterations,
@@ -1361,6 +1235,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
 
@@ -1477,7 +1352,7 @@ Return ONLY JSON per schema.`,
           const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
           const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
           const userNudge = `Your previous response was empty. The task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue working on the task and provide a response.`
-          conversationHistory.push({ role: "user", content: userNudge })
+          conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
 
           // Continue the loop instead of returning
           continue
@@ -1511,6 +1386,15 @@ Return ONLY JSON per schema.`,
         finalContent: "",
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+
+      // End Langfuse trace for early completion
+      if (isLangfuseEnabled()) {
+        endAgentTrace(currentSessionId, {
+          output: "",
+          metadata: { totalIterations: iteration, earlyCompletion: true },
+        })
+        flushLangfuse().catch(() => {})
+      }
 
       return {
         content: "",
@@ -1567,13 +1451,13 @@ Return ONLY JSON per schema.`,
       const contentText = (llmResponse.content || "")
       const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
       if (hasToolMarkers) {
-        conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim() })
-        conversationHistory.push({ role: "user", content: "Please use the native tool-calling interface to call the tools directly, rather than describing them in text." })
+        conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim(), timestamp: Date.now() })
+        conversationHistory.push({ role: "user", content: "Please use the native tool-calling interface to call the tools directly, rather than describing them in text.", timestamp: Date.now() })
         continue
       }
 
       // Check if there are actionable tools for this request
-      const hasActionableTools = toolCapabilities.relevantTools.length > 0
+      const hasActionableTools = uniqueAvailableTools.length > 0
       const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
 
       // Check if the response contains substantive content (a real answer, not a placeholder)
@@ -1591,12 +1475,13 @@ Return ONLY JSON per schema.`,
         // nudge the model to produce structured toolCalls to actually perform the work.
         // Only add assistant message if non-empty to avoid blank entries
         if (contentText.trim().length > 0) {
-          conversationHistory.push({ role: "assistant", content: contentText.trim() })
+          conversationHistory.push({ role: "assistant", content: contentText.trim(), timestamp: Date.now() })
         }
         conversationHistory.push({
           role: "user",
           content:
             "Before marking complete: please use the available tools to actually perform the steps. Call the tools directly using the native function calling interface.",
+          timestamp: Date.now(),
         })
         noOpCount = 0
         continue
@@ -1676,12 +1561,12 @@ Return ONLY JSON per schema.`,
           const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
           const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
           const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
-          conversationHistory.push({ role: "user", content: userNudge })
+          conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
           verificationFailCount++
           // If we haven't executed any tools and we keep failing verification, demand structured tool calls
           const hasToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
           if (!hasToolResultsSoFar && verificationFailCount >= 2) {
-            conversationHistory.push({ role: "user", content: "Important: Do not just state intent. Use the available tools by calling them directly via the native function calling interface to complete the task." })
+            conversationHistory.push({ role: "user", content: "Important: Do not just state intent. Use the available tools by calling them directly via the native function calling interface to complete the task.", timestamp: Date.now() })
             verificationFailCount = 0 // reset on success
           }
           noOpCount = 0
@@ -1744,7 +1629,7 @@ Return ONLY JSON per schema.`,
       noOpCount++
 
       // Check if this is an actionable request that should have executed tools
-      const isActionableRequest = toolCapabilities.relevantTools.length > 0
+      const isActionableRequest = uniqueAvailableTools.length > 0
       const contentText = llmResponse.content || ""
 
       // Check if tools have already been executed for THIS user prompt (current turn)
@@ -1760,18 +1645,16 @@ Return ONLY JSON per schema.`,
 
       const trimmedContent = contentText.trim()
 
-      // IMPORTANT: For non-actionable requests (no relevant tools OR no tools at all),
-      // accept any non-empty text response as complete. This prevents infinite loops
-      // for simple Q&A like "hi" where the LLM just responds without tool calls.
+      // IMPORTANT: If the LLM provides a substantive response without calling tools,
+      // accept it as complete. This prevents infinite loops for simple Q&A like "hi"
+      // where the LLM just responds without tool calls.
+      // The LLM choosing NOT to use tools is a valid decision - trust it.
       // We use a lower threshold here (any non-empty response) because short greetings
       // like "Hi." or "Hello." are valid complete responses to simple greetings.
-      const noToolsAvailable = !availableTools || availableTools.length === 0
       const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
-      if ((noToolsAvailable || !isActionableRequest) && hasAnyResponse && llmResponse.needsMoreWork !== true) {
+      if (hasAnyResponse && llmResponse.needsMoreWork !== true) {
         if (isDebugLLM()) {
-          logLLM("Non-actionable request with substantive response - accepting as complete", {
-            noToolsAvailable,
-            isActionableRequest,
+          logLLM("Substantive response without tool calls - accepting as complete", {
             responseLength: trimmedContent.length,
             responsePreview: trimmedContent.substring(0, 100),
           })
@@ -1866,10 +1749,11 @@ Return ONLY JSON per schema.`,
       }
 
       // Nudge the model to either use tools or provide a complete answer.
+      // Only nudge when verification is enabled - when disabled, trust the LLM's decision.
       // For actionable requests (with relevant tools), nudge immediately.
       // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
       // giving the LLM a chance to self-correct.
-      if (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1)) {
+      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1))) {
         // Add nudge to push the agent forward
         // Only add assistant message if non-empty to avoid blank entries
         if (contentText.trim().length > 0) {
@@ -1914,7 +1798,7 @@ Return ONLY JSON per schema.`,
       logLLM(`Agent session ${currentSessionId} stopped before tool execution`)
       const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
       const finalOutput = (finalContent || "") + killNote
-      conversationHistory.push({ role: "assistant", content: finalOutput })
+      conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
       emit({
         currentIteration: iteration,
         maxIterations,
@@ -1923,6 +1807,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -2021,7 +1906,7 @@ Return ONLY JSON per schema.`,
       if (anyCancelled) {
         const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
         const finalOutput = (finalContent || "") + killNote
-        conversationHistory.push({ role: "assistant", content: finalOutput })
+        conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
         emit({
           currentIteration: iteration,
           maxIterations,
@@ -2030,6 +1915,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
 
@@ -2066,7 +1952,7 @@ Return ONLY JSON per schema.`,
           logLLM(`Agent session ${currentSessionId} stopped during tool execution`)
           const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
           const finalOutput = (finalContent || "") + killNote
-          conversationHistory.push({ role: "assistant", content: finalOutput })
+          conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
           emit({
             currentIteration: iteration,
             maxIterations,
@@ -2075,6 +1961,7 @@ Return ONLY JSON per schema.`,
             finalContent: finalOutput,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
+          wasAborted = true
           break
         }
 
@@ -2138,7 +2025,7 @@ Return ONLY JSON per schema.`,
           progressSteps.push(toolResultStep)
           const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
           const finalOutput = (finalContent || "") + killNote
-          conversationHistory.push({ role: "assistant", content: finalOutput })
+          conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
           emit({
             currentIteration: iteration,
             maxIterations,
@@ -2147,6 +2034,7 @@ Return ONLY JSON per schema.`,
             finalContent: finalOutput,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
+          wasAborted = true
           break
         }
 
@@ -2204,6 +2092,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -2291,6 +2180,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       conversationHistory.push({
         role: "tool",
         content: errorSummary,
+        timestamp: Date.now(),
       })
     }
 
@@ -2314,6 +2204,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         conversationHistory.push({
           role: "user",
           content: summaryPrompt,
+          timestamp: Date.now(),
         })
 
         // Create a summary request step
@@ -2341,6 +2232,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
+          skillsInstructions, // agent skills instructions
         )
 
         const summaryMessages = [
@@ -2351,7 +2243,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens, maxTokens: summaryMaxTokens } = await shrinkMessagesForLLM({
           messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
-          relevantTools: toolCapabilities.relevantTools,
+          relevantTools: undefined,
           isAgentMode: true,
           sessionId: currentSessionId,
           onSummarizationProgress: (current, total) => {
@@ -2377,7 +2269,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             logLLM(`Agent session ${currentSessionId} stopped during summary generation`)
             const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
             const finalOutput = (finalContent || "") + killNote
-            conversationHistory.push({ role: "assistant", content: finalOutput })
+            conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
             emit({
               currentIteration: iteration,
               maxIterations,
@@ -2386,6 +2278,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
               finalContent: finalOutput,
               conversationHistory: formatConversationForProgress(conversationHistory),
             })
+            wasAborted = true
             break
           }
 
@@ -2404,6 +2297,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           conversationHistory.push({
             role: "assistant",
             content: finalContent,
+            timestamp: Date.now(),
           })
         } catch (error) {
           // If summary generation fails, fall back to the original content
@@ -2415,6 +2309,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           conversationHistory.push({
             role: "assistant",
             content: finalContent,
+            timestamp: Date.now(),
           })
         }
       } else {
@@ -2480,7 +2375,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          logLLM(`Agent session ${currentSessionId} stopped during verification`)
 	          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
 	          const finalOutput = (finalContent || "") + killNote
-	          conversationHistory.push({ role: "assistant", content: finalOutput })
+	          conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
 	          emit({
 	            currentIteration: iteration,
 	            maxIterations,
@@ -2489,6 +2384,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	            finalContent: finalOutput,
 	            conversationHistory: formatConversationForProgress(conversationHistory),
 	          })
+	          wasAborted = true
 	          break
 	        }
 
@@ -2498,7 +2394,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
 	          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
 	          const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
-	          conversationHistory.push({ role: "user", content: userNudge })
+	          conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
 	          noOpCount = 0
 	          continue
 	        }
@@ -2513,7 +2409,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             if (result.stopped) {
               const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
               const finalOutput = (finalContent || "") + killNote
-              conversationHistory.push({ role: "assistant", content: finalOutput })
+              conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
               emit({
                 currentIteration: iteration,
                 maxIterations,
@@ -2526,20 +2422,20 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             }
             finalContent = result.content
             if (finalContent.trim().length > 0) {
-              conversationHistory.push({ role: "assistant", content: finalContent })
+              conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
             }
           } catch (e) {
             // If summary generation fails, still add the existing finalContent to history
             // so the mobile client has the complete conversation
             if (finalContent.trim().length > 0) {
-              conversationHistory.push({ role: "assistant", content: finalContent })
+              conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
             }
           }
         } else {
           // Even when skipping post-verify summary, ensure the final content is in history
           // This prevents intermediate messages from disappearing on mobile
           if (finalContent.trim().length > 0) {
-            conversationHistory.push({ role: "assistant", content: finalContent })
+            conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
           }
         }
 
@@ -2585,6 +2481,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         conversationHistory.push({
           role: "user",
           content: summaryPrompt,
+          timestamp: Date.now(),
         })
 
         // Create a summary request step
@@ -2612,6 +2509,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           true, // isAgentMode
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
+          skillsInstructions, // agent skills instructions
         )
 
         const summaryMessages = [
@@ -2622,7 +2520,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens2, maxTokens: summaryMaxTokens2 } = await shrinkMessagesForLLM({
           messages: summaryMessages as any,
           availableTools: uniqueAvailableTools,
-          relevantTools: toolCapabilities.relevantTools,
+          relevantTools: undefined,
           isAgentMode: true,
           sessionId: currentSessionId,
           onSummarizationProgress: (current, total) => {
@@ -2658,6 +2556,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           conversationHistory.push({
             role: "assistant",
             content: finalContent,
+            timestamp: Date.now(),
           })
         } catch (error) {
           // If summary generation fails, fall back to the original content
@@ -2669,6 +2568,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           conversationHistory.push({
             role: "assistant",
             content: finalContent,
+            timestamp: Date.now(),
           })
         }
 
@@ -2679,12 +2579,13 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         // If there are actionable tools and we haven't executed any tools yet,
         // skip verification and force the model to produce structured toolCalls instead of intent-only text.
         const hasAnyToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
-        const hasActionableTools = toolCapabilities.relevantTools.length > 0
+        const hasActionableTools = uniqueAvailableTools.length > 0
         if (hasActionableTools && !hasAnyToolResultsSoFar) {
           conversationHistory.push({
             role: "user",
             content:
               "Before verifying or completing: please use the available tools to actually perform the steps. Call them directly using the native function calling interface.",
+            timestamp: Date.now(),
           })
           noOpCount = 0
           continue
@@ -2695,6 +2596,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         conversationHistory.push({
           role: "assistant",
           content: finalContent,
+          timestamp: Date.now(),
         })
       }
 
@@ -2744,7 +2646,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          const missing = (verification?.missingItems || []).filter((s: string) => s && s.trim()).map((s: string) => `- ${s}`).join("\n")
 	          const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
 	          const userNudge = `Verifier indicates the task is not complete.\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
-	          conversationHistory.push({ role: "user", content: userNudge })
+	          conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
 	          noOpCount = 0
 	          continue
 	        }
@@ -2818,6 +2720,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       conversationHistory.push({
         role: "assistant",
         content: finalContent,
+        timestamp: Date.now(),
       })
     }
 
@@ -2843,13 +2746,28 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     })
   }
 
-  // Clean up session state at the end of agent processing
-  agentSessionStateManager.cleanupSession(currentSessionId)
+    return {
+      content: finalContent,
+      conversationHistory,
+      totalIterations: iteration,
+    }
+  } finally {
+    // End Langfuse trace for this agent session if enabled
+    // This is in a finally block to ensure traces are closed even on unexpected exceptions
+    if (isLangfuseEnabled()) {
+      endAgentTrace(currentSessionId, {
+        output: finalContent,
+        metadata: {
+          totalIterations: iteration,
+          wasAborted,
+        },
+      })
+      // Flush to ensure trace is sent
+      flushLangfuse().catch(() => {})
+    }
 
-  return {
-    content: finalContent,
-    conversationHistory,
-    totalIterations: iteration,
+    // Clean up session state at the end of agent processing
+    agentSessionStateManager.cleanupSession(currentSessionId)
   }
 }
 
@@ -2894,9 +2812,19 @@ async function makeLLMCall(
       // This prevents late streaming updates from appearing after the response is ready
       let streamingAborted = false
 
+      // Track the last accumulated streaming content to use as the final text
+      // This ensures the user sees the same content they watched stream in
+      let lastStreamedContent = ""
+
+      // Track whether streaming failed - if so, we should not use partial/stale content
+      // to overwrite the full structured response
+      let streamingFailed = false
+
       // Wrap the callback to ignore updates after the structured call completes
+      // and track the accumulated content for consistency
       const wrappedOnStreamingUpdate = (chunk: string, accumulated: string) => {
         if (!streamingAborted) {
+          lastStreamedContent = accumulated
           onStreamingUpdate(chunk, accumulated)
         }
       }
@@ -2911,6 +2839,8 @@ async function makeLLMCall(
         streamingAbortController,
       ).catch(err => {
         // Streaming errors are non-fatal - we still have the structured call
+        // Mark streaming as failed so we don't use partial/stale content
+        streamingFailed = true
         if (isDebugLLM()) {
           logLLM("Streaming call failed (non-fatal):", err)
         }
@@ -2931,6 +2861,22 @@ async function makeLLMCall(
         // Unregister the streaming abort controller since we're done with it
         if (sessionId) {
           agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
+        }
+      }
+
+      // Use the streamed content for display consistency if:
+      // 1. We have streamed content AND
+      // 2. Streaming didn't fail (to avoid using partial/stale content) AND
+      // 3. There are no tool calls (to maintain consistency between content and toolCalls)
+      // This ensures what the user saw streaming is what they get at the end for text-only responses.
+      // When tool calls are present, we keep the structured response content to maintain
+      // consistency between content and toolCalls in the conversation history.
+      // This prevents downstream agent logic from seeing mismatched text content and tool calls.
+      const hasToolCalls = result.toolCalls && result.toolCalls.length > 0
+      if (lastStreamedContent && !streamingFailed && !hasToolCalls) {
+        result = {
+          ...result,
+          content: lastStreamedContent,
         }
       }
 

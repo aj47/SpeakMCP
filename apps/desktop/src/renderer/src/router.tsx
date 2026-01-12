@@ -51,8 +51,16 @@ export const router: ReturnType<typeof createBrowserRouter> =
           lazy: () => import("./pages/settings-remote-server"),
         },
         {
+          path: "settings/skills",
+          lazy: () => import("./pages/settings-skills"),
+        },
+        {
           path: "settings/whatsapp",
           lazy: () => import("./pages/settings-whatsapp"),
+        },
+        {
+          path: "settings/langfuse",
+          lazy: () => import("./pages/settings-langfuse"),
         },
 
       ],

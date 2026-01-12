@@ -104,10 +104,7 @@ const getConfig = () => {
     panelPosition: "top-right",
     panelDragEnabled: true,
     panelCustomSize: { width: 300, height: 200 },
-    // Mode-specific panel sizes (will be set on first resize in each mode)
-    panelNormalModeSize: undefined,
-    panelAgentModeSize: undefined,
-    panelTextInputModeSize: undefined,
+    panelProgressSize: undefined,
     // Floating panel auto-show - when true, panel auto-shows during agent sessions
     floatingPanelAutoShow: true,
     // Hide floating panel when main app is focused (default: enabled)
@@ -192,6 +189,12 @@ const getConfig = () => {
     // Streamer Mode - hides sensitive info for screen sharing
     streamerModeEnabled: false,
 
+    // Langfuse Observability - disabled by default
+    langfuseEnabled: false,
+    langfusePublicKey: undefined,
+    langfuseSecretKey: undefined,
+    langfuseBaseUrl: undefined, // Uses cloud.langfuse.com by default
+
   }
 
   try {
@@ -200,6 +203,12 @@ const getConfig = () => {
     ) as Config
     // Apply migration for deprecated Groq TTS settings
     const mergedConfig = { ...defaultConfig, ...savedConfig }
+
+    // Migration: Remove deprecated mode-specific panel sizes (these were never used)
+    delete (mergedConfig as any).panelNormalModeSize
+    delete (mergedConfig as any).panelAgentModeSize
+    delete (mergedConfig as any).panelTextInputModeSize
+
     return migrateGroqTtsConfig(mergedConfig)
   } catch {
     return defaultConfig

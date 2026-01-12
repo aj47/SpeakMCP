@@ -201,6 +201,16 @@ export interface ConversationMessage {
   timestamp: number
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
+  /**
+   * When true, this message is a compaction summary that replaces older messages.
+   * Messages before a summary message have been discarded to save context space.
+   */
+  isSummary?: boolean
+  /**
+   * Number of messages that were summarized into this summary message.
+   * Only set when isSummary is true.
+   */
+  summarizedMessageCount?: number
 }
 
 export interface ConversationMetadata {
@@ -266,6 +276,16 @@ export type ProfileModelConfig = {
   ttsProviderId?: "openai" | "groq" | "gemini"
 }
 
+// Per-profile skills configuration
+// Skills are disabled by default for each profile; users opt-in to specific skills
+export type ProfileSkillsConfig = {
+  // List of skill IDs that are enabled for this profile
+  enabledSkillIds?: string[]
+  // When true, newly-added skills are also disabled by default for this profile
+  // This ensures strict opt-in behavior
+  allSkillsDisabledByDefault?: boolean
+}
+
 // Profile Management Types
 export type Profile = {
   id: string
@@ -276,6 +296,7 @@ export type Profile = {
   isDefault?: boolean
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
+  skillsConfig?: ProfileSkillsConfig
   systemPrompt?: string
 }
 
@@ -295,6 +316,7 @@ export type SessionProfileSnapshot = {
   systemPrompt?: string
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
+  skillsConfig?: ProfileSkillsConfig
 }
 
 export interface ModelPreset {
@@ -307,6 +329,25 @@ export interface ModelPreset {
   updatedAt?: number
   mcpToolsModel?: string
   transcriptProcessingModel?: string
+}
+
+// Agent Skills Types
+// Skills are instruction files that can be loaded dynamically to improve AI performance on specialized tasks
+// Based on Anthropic's Agent Skills specification (formerly Claude Skills)
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  instructions: string // The markdown content with instructions
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  source?: "local" | "imported" // Where the skill came from
+  filePath?: string // Path to the SKILL.md file if loaded from disk
+}
+
+export interface AgentSkillsData {
+  skills: AgentSkill[]
 }
 
 export type Config = {
@@ -456,9 +497,7 @@ export type Config = {
   panelCustomPosition?: { x: number; y: number }
   panelDragEnabled?: boolean
   panelCustomSize?: { width: number; height: number }
-  panelNormalModeSize?: { width: number; height: number }
-  panelAgentModeSize?: { width: number; height: number }
-  panelTextInputModeSize?: { width: number; height: number }
+  panelProgressSize?: { width: number; height: number }
 
   // Floating Panel Auto-Show Configuration
   // When false, the floating panel will not automatically appear during agent sessions
@@ -519,6 +558,15 @@ export type Config = {
 	  remoteServerCorsOrigins?: string[]
 	  remoteServerAutoShowPanel?: boolean // Auto-show floating panel when receiving remote messages
 
+  // Cloudflare Tunnel Configuration
+  // Tunnel mode: "quick" for random URLs (no account required), "named" for persistent URLs (requires account)
+  cloudflareTunnelMode?: "quick" | "named"
+  // Named tunnel configuration (for persistent URLs)
+  cloudflareTunnelId?: string // The tunnel UUID (e.g., "abc123-def456-...")
+  cloudflareTunnelName?: string // Human-readable tunnel name
+  cloudflareTunnelCredentialsPath?: string // Path to credentials JSON file (defaults to ~/.cloudflared/<tunnel-id>.json)
+  cloudflareTunnelHostname?: string // Custom hostname for the tunnel (e.g., "myapp.example.com")
+
   // WhatsApp Integration Configuration
   whatsappEnabled?: boolean
   whatsappAllowFrom?: string[]  // Phone numbers allowed to message (international format without +)
@@ -532,6 +580,13 @@ export type Config = {
   // Streamer Mode Configuration
   // When enabled, hides sensitive information (phone numbers, QR codes, API keys) for screen sharing
   streamerModeEnabled?: boolean
+
+  // Langfuse Observability Configuration
+  // When enabled, traces all LLM calls, agent sessions, and MCP tool calls
+  langfuseEnabled?: boolean
+  langfusePublicKey?: string
+  langfuseSecretKey?: string
+  langfuseBaseUrl?: string // Default: https://cloud.langfuse.com (or custom self-hosted URL)
 
 }
 

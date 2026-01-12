@@ -126,6 +126,8 @@ class AgentSessionTracker {
     const session = this.sessions.get(sessionId)
     if (session) {
       Object.assign(session, updates)
+      // Emit update to UI so sidebar and other components reflect changes (e.g., title updates)
+      emitSessionUpdate()
     }
   }
 

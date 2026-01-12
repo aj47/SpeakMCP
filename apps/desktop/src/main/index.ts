@@ -21,6 +21,7 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { initializeBundledSkills, skillsService } from "./skills-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -136,6 +137,21 @@ app.whenReady().then(() => {
       logApp("Failed to initialize MCP service on startup:", error)
     })
 
+  // Initialize bundled skills (copy from app resources to App Data if needed)
+  // Then scan the skills folder to import any new skills into the registry
+  try {
+    const skillsResult = initializeBundledSkills()
+    logApp(`Bundled skills: ${skillsResult.copied.length} copied, ${skillsResult.skipped.length} skipped`)
+
+    // Scan the skills folder to import any new skills (including just-copied bundled skills)
+    const importedSkills = skillsService.scanSkillsFolder()
+    if (importedSkills.length > 0) {
+      logApp(`Imported ${importedSkills.length} skills from skills folder`)
+    }
+  } catch (error) {
+    logApp("Failed to initialize bundled skills:", error)
+  }
+
 	  try {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
@@ -177,8 +193,53 @@ app.whenReady().then(() => {
     }
   })
 
-  app.on("before-quit", () => {
+  // Track if we're already cleaning up to prevent re-entry
+  let isCleaningUp = false
+  const CLEANUP_TIMEOUT_MS = 5000 // 5 second timeout for graceful cleanup
+
+  app.on("before-quit", async (event) => {
     makePanelWindowClosable()
+
+    // Prevent re-entry during cleanup
+    if (isCleaningUp) {
+      return
+    }
+
+    // Prevent the quit from happening immediately so we can wait for cleanup
+    event.preventDefault()
+    isCleaningUp = true
+
+    // Clean up MCP server processes to prevent orphaned node processes
+    // This terminates all child processes spawned by StdioClientTransport
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        mcpService.cleanup(),
+        new Promise<void>((_, reject) => {
+          const id = setTimeout(
+            () => reject(new Error("MCP cleanup timeout")),
+            CLEANUP_TIMEOUT_MS
+          )
+          timeoutId = id
+          // unref() ensures this timer won't keep the event loop alive
+          // if cleanup finishes quickly (only available in Node.js)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (id && typeof (id as any).unref === "function") {
+            (id as any).unref()
+          }
+        }),
+      ])
+    } catch (error) {
+      logApp("Error during MCP service cleanup on quit:", error)
+    } finally {
+      // Clear the timeout to avoid any lingering references
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
+    }
+
+    // Now actually quit the app
+    app.quit()
   })
 })
 

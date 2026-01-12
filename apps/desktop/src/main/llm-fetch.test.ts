@@ -58,6 +58,14 @@ vi.mock('./ai-sdk-provider', () => ({
   createLanguageModel: vi.fn(() => ({})),
   getCurrentProviderId: vi.fn(() => 'openai'),
   getTranscriptProviderId: vi.fn(() => 'openai'),
+  getCurrentModelName: vi.fn(() => 'gpt-4o-mini'),
+}))
+
+// Mock the langfuse-service module
+vi.mock('./langfuse-service', () => ({
+  isLangfuseEnabled: vi.fn(() => false),
+  createLLMGeneration: vi.fn(() => null),
+  endLLMGeneration: vi.fn(),
 }))
 
 describe('LLM Fetch with AI SDK', () => {

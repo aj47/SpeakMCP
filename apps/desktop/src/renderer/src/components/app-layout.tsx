@@ -23,6 +23,8 @@ export const Component = () => {
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
   const configQuery = useConfigQuery()
 
+  const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
+
   const settingsNavLinks: NavLinkItem[] = [
     {
       text: "General",
@@ -45,14 +47,25 @@ export const Component = () => {
       icon: "i-mingcute-tool-line",
     },
     {
+      text: "Skills",
+      href: "/settings/skills",
+      icon: "i-mingcute-sparkles-line",
+    },
+    {
       text: "Remote Server",
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
-    {
+    // Only show WhatsApp settings when enabled
+    ...(whatsappEnabled ? [{
       text: "WhatsApp",
       href: "/settings/whatsapp",
       icon: "i-mingcute-message-4-line",
+    }] : []),
+    {
+      text: "Langfuse",
+      href: "/settings/langfuse",
+      icon: "i-mingcute-chart-line-line",
     },
   ]
 

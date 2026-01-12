@@ -30,6 +30,7 @@ export interface SessionStore {
   setServerConversationId: (serverConversationId: string) => Promise<void>;
   setServerConversationIdForSession: (sessionId: string, serverConversationId: string) => Promise<void>;
   getServerConversationId: () => string | undefined;
+  findSessionByServerConversationId: (serverConversationId: string) => Session | null;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -466,6 +467,12 @@ export function useSessions(): SessionStore {
     return session?.serverConversationId;
   }, [getCurrentSession]);
 
+  // Find a session by its server-side conversation ID (for notification deep linking)
+  const findSessionByServerConversationId = useCallback((serverConversationId: string): Session | null => {
+    const sessions = sessionsRef.current;
+    return sessions.find(s => s.serverConversationId === serverConversationId) || null;
+  }, []);
+
   return {
     sessions,
     currentSessionId,
@@ -483,6 +490,7 @@ export function useSessions(): SessionStore {
     setServerConversationId,
     setServerConversationIdForSession,
     getServerConversationId,
+    findSessionByServerConversationId,
   };
 }
 

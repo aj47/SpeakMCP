@@ -12,7 +12,7 @@ import { TunnelConnectionContext, useTunnelConnectionProvider } from './src/stor
 import { ProfileContext, useProfileProvider } from './src/store/profile';
 import { NotificationContext, useNotificationProvider, NotificationData } from './src/store/notifications';
 import { clearServerBadgeCount } from './src/lib/notifications';
-import { View, Image, Text, StyleSheet } from 'react-native';
+import { View, Image, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import { ConnectionStatusIndicator } from './src/ui/ConnectionStatusIndicator';
@@ -132,12 +132,30 @@ function Navigation() {
 
     if (data.type === 'message' && (data.sessionId || data.conversationId)) {
       // Navigate to the specific chat session
-      // sessionId takes priority over conversationId
-      const sessionIdentifier = data.sessionId || data.conversationId;
-      if (sessionIdentifier) {
-        sessionStore.setCurrentSession(sessionIdentifier);
+      // Try to find session by local sessionId first, then by server conversationId
+      let targetSessionId: string | null = null;
+
+      if (data.sessionId) {
+        // sessionId from notification is already a local session ID
+        targetSessionId = data.sessionId;
+      } else if (data.conversationId) {
+        // conversationId is a server-side ID - need to find the matching local session
+        const session = sessionStore.findSessionByServerConversationId(data.conversationId);
+        if (session) {
+          targetSessionId = session.id;
+          console.log('[App] Found session by serverConversationId:', session.id);
+        } else {
+          console.log('[App] No session found for conversationId:', data.conversationId);
+        }
       }
-      navigationRef.navigate('Chat' as never);
+
+      if (targetSessionId) {
+        sessionStore.setCurrentSession(targetSessionId);
+        navigationRef.navigate('Chat' as never);
+      } else {
+        // No matching session found - navigate to sessions list
+        navigationRef.navigate('Sessions' as never);
+      }
     } else if (data.type === 'message') {
       // Navigate to sessions list if no specific session
       navigationRef.navigate('Sessions' as never);
@@ -150,18 +168,33 @@ function Navigation() {
     return () => notificationProvider.setOnNotificationTap(null);
   }, [handleNotificationTap, notificationProvider]);
 
-  // Clear notifications when app becomes active
+  // Clear notifications when app becomes active (including from background)
   useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && cfg.ready) {
+        // Clear badge when user opens the app or brings it to foreground
+        notificationProvider.clearNotifications();
+        // Also clear badge count on server if connected
+        if (cfg.config.baseUrl && cfg.config.apiKey) {
+          clearServerBadgeCount(cfg.config.baseUrl, cfg.config.apiKey).catch((err) => {
+            console.warn('[App] Failed to clear server badge count:', err);
+          });
+        }
+      }
+    };
+
+    // Also clear immediately if app is already active and config is ready
     if (cfg.ready) {
-      // Clear badge when user opens the app
       notificationProvider.clearNotifications();
-      // Also clear badge count on server if connected
       if (cfg.config.baseUrl && cfg.config.apiKey) {
         clearServerBadgeCount(cfg.config.baseUrl, cfg.config.apiKey).catch((err) => {
           console.warn('[App] Failed to clear server badge count:', err);
         });
       }
     }
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
   }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey, notificationProvider]);
 
   if (!cfg.ready || !sessionStore.ready) {

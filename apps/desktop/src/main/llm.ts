@@ -411,16 +411,22 @@ export async function processTranscriptWithAgentMode(
   agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
 
   // Create Langfuse trace for this agent session if enabled
+  // - traceId: unique ID for this trace (our agent session ID)
+  // - sessionId: groups traces together in Langfuse (our conversation ID)
   if (isLangfuseEnabled()) {
     createAgentTrace(currentSessionId, {
       name: "Agent Session",
+      sessionId: currentConversationId,  // Groups all agent sessions in this conversation
       metadata: {
-        conversationId: currentConversationId,
         maxIterations,
         hasHistory: !!previousConversationHistory?.length,
         profileId: effectiveProfileSnapshot?.profileId,
+        profileName: effectiveProfileSnapshot?.profileName,
       },
       input: transcript,
+      tags: effectiveProfileSnapshot?.profileName
+        ? [`profile:${effectiveProfileSnapshot.profileName}`]
+        : undefined,
     })
   }
 

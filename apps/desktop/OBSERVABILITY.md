@@ -34,11 +34,18 @@ SpeakMCP integrates with [Langfuse](https://langfuse.com/) to provide comprehens
 
 Once configured, all agent interactions will appear in your Langfuse dashboard:
 
+- **Sessions**: Conversations are grouped by session ID, allowing you to:
+  - Replay entire conversation threads
+  - See all agent interactions within a conversation
+  - Track costs and token usage per conversation
+  - Debug multi-turn conversations end-to-end
+
 - **Traces**: Each agent session creates a trace containing:
   - User input (voice transcription or text)
   - All LLM generations with token counts
   - All MCP tool calls with inputs/outputs
   - Final output/response
+  - Profile tags (e.g., `profile:General Assistant`)
 
 - **Generations**: Individual LLM API calls showing:
   - Model used (e.g., `gpt-4o`, `gemini-2.0-flash`)
@@ -53,6 +60,16 @@ Once configured, all agent interactions will appear in your Langfuse dashboard:
   - Output results
   - Execution time
   - Success/error status
+
+### Langfuse Features Used
+
+| Feature | SpeakMCP Mapping |
+|---------|------------------|
+| **Sessions** | Conversation ID - groups all agent interactions in a conversation |
+| **Traces** | Agent Session ID - individual agent run with all LLM/tool calls |
+| **Tags** | Profile name (e.g., `profile:General Assistant`) for filtering |
+| **Generations** | Individual LLM API calls with token usage |
+| **Spans** | MCP tool executions with inputs/outputs |
 
 ### Self-Hosted Langfuse
 

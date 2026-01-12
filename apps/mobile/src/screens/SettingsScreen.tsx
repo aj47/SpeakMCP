@@ -93,10 +93,6 @@ export default function SettingsScreen({ navigation }: any) {
   const [customModelDraft, setCustomModelDraft] = useState('');
   const modelUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Push notification state
-  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
-  const [isTogglingPush, setIsTogglingPush] = useState(false);
-
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   // Create settings API client when we have valid credentials
@@ -523,59 +519,6 @@ export default function SettingsScreen({ navigation }: any) {
   useEffect(() => {
     setDraft(config);
   }, [ready]);
-
-  // Load push notification state on mount
-  useEffect(() => {
-    PushNotifications.isEnabled().then(setPushNotificationsEnabled);
-  }, []);
-
-  // Handle push notification toggle
-  const handlePushNotificationToggle = async (enabled: boolean) => {
-    if (!config.baseUrl || !config.apiKey) {
-      Alert.alert(
-        'Configuration Required',
-        'Please configure your API settings first before enabling push notifications.'
-      );
-      return;
-    }
-
-    setIsTogglingPush(true);
-    try {
-      if (enabled) {
-        // Request permissions first
-        const hasPermission = await PushNotifications.requestNotificationPermissions();
-        if (!hasPermission) {
-          Alert.alert(
-            'Permission Required',
-            'Push notifications require permission. Please enable notifications in your device settings.'
-          );
-          setIsTogglingPush(false);
-          return;
-        }
-
-        // Register token with server
-        const success = await PushNotifications.registerToken(config.baseUrl, config.apiKey);
-        if (success) {
-          setPushNotificationsEnabled(true);
-        } else {
-          Alert.alert('Error', 'Failed to register for push notifications. Please try again.');
-        }
-      } else {
-        // Unregister token from server
-        const success = await PushNotifications.unregisterToken(config.baseUrl, config.apiKey);
-        if (success) {
-          setPushNotificationsEnabled(false);
-        } else {
-          Alert.alert('Error', 'Failed to unregister push notifications. Please try again.');
-        }
-      }
-    } catch (error: any) {
-      console.error('[Settings] Push notification toggle error:', error);
-      Alert.alert('Error', error.message || 'Failed to toggle push notifications');
-    } finally {
-      setIsTogglingPush(false);
-    }
-  };
 
   // Clear connection error when draft changes
   useEffect(() => {

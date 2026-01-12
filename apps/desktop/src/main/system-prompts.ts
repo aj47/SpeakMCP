@@ -1,3 +1,5 @@
+import { DiscoveryContext, MCPToolSummary, SkillSummary } from '@shared/file-discovery-types'
+
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
 TOOL USAGE:
@@ -150,4 +152,89 @@ export function constructMinimalSystemPrompt(
   }
 
   return prompt
+}
+
+/**
+ * Format tool summaries for compact system prompt (names only)
+ */
+function formatToolSummaries(summaries: MCPToolSummary[]): string {
+  return summaries
+    .filter(s => s.status === 'connected')
+    .map(s => `- ${s.serverName}: ${s.toolNames.join(', ')}`)
+    .join('\n')
+}
+
+/**
+ * Format skill summaries for system prompt
+ */
+function formatSkillSummaries(skills: SkillSummary[]): string {
+  return skills
+    .map(s => `- ${s.name}: ${s.description}`)
+    .join('\n')
+}
+
+/**
+ * Construct a discovery-aware system prompt that uses file hints
+ * This reduces token usage by only including tool names, not full descriptions
+ */
+export function constructDiscoverySystemPrompt(
+  context: DiscoveryContext,
+  userGuidelines?: string,
+  isAgentMode: boolean = false,
+  customSystemPrompt?: string,
+  skillsInstructions?: string,
+): string {
+  let prompt = getEffectiveSystemPrompt(customSystemPrompt)
+
+  if (isAgentMode) {
+    prompt += AGENT_MODE_ADDITIONS
+  }
+
+  // Add agent skills instructions if provided
+  // Skills are injected early in the prompt so they can influence tool usage behavior
+  if (skillsInstructions?.trim()) {
+    prompt += `\n\n${skillsInstructions.trim()}`
+  }
+
+  // Add discovery folder hint
+  prompt += `\n\nDYNAMIC CONTEXT DISCOVERY:`
+  prompt += `\nTool and skill details are available as files in: ${context.discoveryFolderPath}`
+  prompt += `\nRead {server}/{tool}.json for full tool schemas when needed.`
+
+  // Add compact tool summaries (names only)
+  if (context.mcpToolSummaries.length > 0) {
+    prompt += `\n\nAVAILABLE MCP SERVERS AND TOOLS:\n${formatToolSummaries(context.mcpToolSummaries)}`
+  }
+
+  // Add skill summaries with clear usage instructions
+  if (context.skillSummaries.length > 0) {
+    prompt += `\n\nAVAILABLE SKILLS:\n${formatSkillSummaries(context.skillSummaries)}`
+    prompt += `\n\nUSING SKILLS:`
+    prompt += `\nWhen a user request matches a skill's description, you MUST:`
+    prompt += `\n1. Read the skill file: ${context.skillsFolderPath}/{skill-id}/SKILL.md`
+    prompt += `\n2. Follow the instructions in the skill file exactly`
+    prompt += `\n3. Use any scripts or tools mentioned in the skill`
+  }
+
+  // Add active profile hint
+  if (context.activeProfilePath) {
+    prompt += `\n\nACTIVE PROFILE: ${context.activeProfilePath}`
+  }
+
+  // Add user guidelines
+  if (userGuidelines?.trim()) {
+    prompt += `\n\nUSER GUIDELINES:\n${userGuidelines.trim()}`
+  }
+
+  return prompt
+}
+
+/**
+ * Get discovery context hint for the agent
+ * This tells the agent where to find detailed information
+ */
+export function getDiscoveryHint(discoveryFolderPath: string): string {
+  return `For detailed tool schemas, read files from ${discoveryFolderPath}/mcp-tools/{server}/{tool}.json
+For skill instructions, read ${discoveryFolderPath}/skills/{skill-id}/SKILL.md
+For profile details, read ${discoveryFolderPath}/profiles/{profile}.md`
 }

@@ -39,6 +39,7 @@ import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
+import { mcpFileSyncService } from "./mcp-file-sync"
 import { randomUUID } from "crypto"
 import {
   createToolSpan,
@@ -836,6 +837,24 @@ export class MCPService {
         })
       }
 
+      // Sync tool descriptions to files for dynamic context discovery
+      mcpFileSyncService.syncServerTools(
+        serverName,
+        toolsResult.tools.map(t => ({
+          name: t.name,
+          description: t.description || `Tool from ${serverName} server`,
+          inputSchema: t.inputSchema as object,
+        }))
+      )
+      mcpFileSyncService.updateServerStatus(serverName, {
+        status: "connected",
+        transport: transportType,
+        toolCount: toolsResult.tools.length,
+        lastConnected: Date.now(),
+        ...(serverConfig.command && { command: serverConfig.command }),
+        ...(serverConfig.url && { url: serverConfig.url }),
+      })
+
       // For stdio transport, track the process for agent mode
       if (transportType === "stdio" && transport instanceof StdioClientTransport) {
         const pid = transport.pid
@@ -873,6 +892,12 @@ export class MCPService {
   private cleanupServer(serverName: string) {
     // Get transport before deleting
     const transport = this.transports.get(serverName)
+    // Update file sync status
+    mcpFileSyncService.updateServerStatus(serverName, {
+      status: "disconnected",
+      transport: "stdio", // Default, will be overwritten on next connect
+      toolCount: 0,
+    })
 
     this.transports.delete(serverName)
     this.clients.delete(serverName)

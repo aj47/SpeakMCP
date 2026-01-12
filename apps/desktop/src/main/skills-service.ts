@@ -2,6 +2,7 @@ import { app } from "electron"
 import path from "path"
 import fs from "fs"
 import { AgentSkill, AgentSkillsData } from "@shared/types"
+import { SkillSummary } from "@shared/file-discovery-types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { exec } from "child_process"
@@ -537,6 +538,24 @@ class SkillsService {
 
   getSkillByFilePath(filePath: string): AgentSkill | undefined {
     return this.getSkills().find(s => s.filePath === filePath)
+  }
+
+  /**
+   * Get skill summaries for discovery context (used by file-based dynamic context discovery)
+   */
+  getSkillSummaries(): SkillSummary[] {
+    return this.getSkills().map(skill => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+    }))
+  }
+
+  /**
+   * Get the skills folder path (used by file-based dynamic context discovery)
+   */
+  getSkillsFolderPath(): string {
+    return skillsFolder
   }
 
   createSkill(

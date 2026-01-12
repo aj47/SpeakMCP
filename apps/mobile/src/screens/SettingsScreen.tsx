@@ -9,6 +9,7 @@ import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
 import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
+import { useNotifications } from '../store/notifications';
 import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
@@ -49,6 +50,16 @@ export default function SettingsScreen({ navigation }: any) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
   const { setCurrentProfile: setProfileContext } = useProfile();
+
+  // Push notification state
+  const {
+    settings: notificationSettings,
+    permissionStatus: notificationPermission,
+    isSupported: notificationsSupported,
+    updateSettings: updateNotificationSettings,
+    registerForPushNotifications,
+  } = useNotifications();
+  const [isRequestingNotificationPermission, setIsRequestingNotificationPermission] = useState(false);
 
   // Remote settings state
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -268,6 +279,35 @@ export default function SettingsScreen({ navigation }: any) {
     } catch (error: any) {
       console.error('[Settings] Failed to update setting:', error);
       setRemoteError(error.message || 'Failed to update setting');
+    }
+  };
+
+  // Handle push notification toggle
+  const handleNotificationToggle = async (enabled: boolean) => {
+    if (enabled) {
+      // If enabling and we don't have permission, request it
+      if (notificationPermission !== 'granted') {
+        setIsRequestingNotificationPermission(true);
+        try {
+          const token = await registerForPushNotifications();
+          if (token) {
+            await updateNotificationSettings({ enabled: true });
+            console.log('[Settings] Push notifications enabled with token:', token.token.substring(0, 20) + '...');
+          } else {
+            Alert.alert(
+              'Permission Required',
+              'Push notifications require permission. Please enable notifications in your device settings.',
+              [{ text: 'OK' }]
+            );
+          }
+        } finally {
+          setIsRequestingNotificationPermission(false);
+        }
+      } else {
+        await updateNotificationSettings({ enabled: true });
+      }
+    } else {
+      await updateNotificationSettings({ enabled: false });
     }
   };
 
@@ -675,6 +715,47 @@ export default function SettingsScreen({ navigation }: any) {
         <Text style={styles.helperText}>
           Queue messages while the agent is busy processing
         </Text>
+
+        {/* Push Notifications Section */}
+        <Text style={styles.sectionTitle}>Notifications</Text>
+
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Push Notifications</Text>
+            {!notificationsSupported && (
+              <Text style={[styles.helperText, { marginTop: 2 }]}>
+                Only available on physical devices
+              </Text>
+            )}
+            {notificationsSupported && notificationPermission === 'denied' && (
+              <Text style={[styles.helperText, { marginTop: 2, color: theme.colors.destructive }]}>
+                Permission denied - enable in device settings
+              </Text>
+            )}
+          </View>
+          <Switch
+            value={notificationSettings.enabled && notificationPermission === 'granted'}
+            onValueChange={handleNotificationToggle}
+            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+            thumbColor={notificationSettings.enabled && notificationPermission === 'granted' ? theme.colors.primaryForeground : theme.colors.background}
+            disabled={!notificationsSupported || isRequestingNotificationPermission}
+          />
+        </View>
+        <Text style={styles.helperText}>
+          Receive notifications when new messages arrive from your AI assistant
+        </Text>
+
+        {notificationSettings.enabled && notificationPermission === 'granted' && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Show Message Preview</Text>
+            <Switch
+              value={notificationSettings.showPreviews}
+              onValueChange={(v) => updateNotificationSettings({ showPreviews: v })}
+              trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+              thumbColor={notificationSettings.showPreviews ? theme.colors.primaryForeground : theme.colors.background}
+            />
+          </View>
+        )}
 
         {/* Remote Settings Section - only show when connected to a SpeakMCP desktop server */}
         {settingsClient && (isLoadingRemote || isSpeakMCPServer) && (

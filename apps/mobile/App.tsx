@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ChatScreen from './src/screens/ChatScreen';
@@ -10,12 +10,13 @@ import { MessageQueueContext, useMessageQueue } from './src/store/message-queue'
 import { ConnectionManagerContext, useConnectionManagerProvider } from './src/store/connectionManager';
 import { TunnelConnectionContext, useTunnelConnectionProvider } from './src/store/tunnelConnection';
 import { ProfileContext, useProfileProvider } from './src/store/profile';
+import { NotificationContext, useNotificationProvider, NotificationData } from './src/store/notifications';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
 import { ConnectionStatusIndicator } from './src/ui/ConnectionStatusIndicator';
 import * as Linking from 'expo-linking';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback, useRef } from 'react';
 
 
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
@@ -50,9 +51,14 @@ function Navigation() {
   const cfg = useConfig();
   const sessionStore = useSessions();
   const messageQueueStore = useMessageQueue();
+  const navigationRef = useNavigationContainerRef();
+  const isNavigationReady = useRef(false);
 
   // Initialize tunnel connection manager for persistence and auto-reconnection
   const tunnelConnection = useTunnelConnectionProvider();
+
+  // Initialize notification provider
+  const notificationProvider = useNotificationProvider();
 
   // Create connection manager config from app config
   const clientConfig = useMemo(() => ({
@@ -115,6 +121,38 @@ function Navigation() {
     return () => subscription.remove();
   }, [cfg.ready]);
 
+  // Handle notification taps for deep linking to conversations
+  const handleNotificationTap = useCallback((data: NotificationData) => {
+    console.log('[App] Notification tapped:', data);
+    if (!isNavigationReady.current) {
+      console.log('[App] Navigation not ready, skipping notification navigation');
+      return;
+    }
+
+    if (data.type === 'message' && data.sessionId) {
+      // Navigate to the specific chat session
+      sessionStore.setCurrentSession(data.sessionId);
+      navigationRef.navigate('Chat' as never);
+    } else if (data.type === 'message') {
+      // Navigate to sessions list if no specific session
+      navigationRef.navigate('Sessions' as never);
+    }
+  }, [sessionStore, navigationRef]);
+
+  // Set up notification tap handler
+  useEffect(() => {
+    notificationProvider.setOnNotificationTap(handleNotificationTap);
+    return () => notificationProvider.setOnNotificationTap(null);
+  }, [handleNotificationTap, notificationProvider]);
+
+  // Clear notifications when app becomes active
+  useEffect(() => {
+    if (cfg.ready) {
+      // Clear badge when user opens the app
+      notificationProvider.clearNotifications();
+    }
+  }, [cfg.ready, notificationProvider]);
+
   if (!cfg.ready || !sessionStore.ready) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
@@ -137,43 +175,49 @@ function Navigation() {
           <MessageQueueContext.Provider value={messageQueueStore}>
             <ConnectionManagerContext.Provider value={connectionManager}>
               <TunnelConnectionContext.Provider value={tunnelConnection}>
-                <NavigationContainer theme={navTheme}>
-                  <Stack.Navigator
-                    initialRouteName="Settings"
-                    screenOptions={{
-                      headerTitleStyle: { ...theme.typography.h2 },
-                      headerStyle: { backgroundColor: theme.colors.card },
-                      headerTintColor: theme.colors.foreground,
-                      contentStyle: { backgroundColor: theme.colors.background },
-                      headerLeft: () => (
-                        <Image
-                          source={speakMCPIcon}
-                          style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
-                          resizeMode="contain"
-                        />
-                      ),
-                      headerRight: () => (
-                        <ConnectionStatusIndicator
-                          state={tunnelConnection.connectionInfo.state}
-                          retryCount={tunnelConnection.connectionInfo.retryCount}
-                          compact
-                        />
-                      ),
-                    }}
+                <NotificationContext.Provider value={notificationProvider}>
+                  <NavigationContainer
+                    ref={navigationRef}
+                    theme={navTheme}
+                    onReady={() => { isNavigationReady.current = true; }}
                   >
-                    <Stack.Screen
-                      name="Settings"
-                      component={SettingsScreen}
-                      options={{ title: 'SpeakMCP' }}
-                    />
-                    <Stack.Screen
-                      name="Sessions"
-                      component={SessionListScreen}
-                      options={{ title: 'Chats' }}
-                    />
-                    <Stack.Screen name="Chat" component={ChatScreen} />
-                  </Stack.Navigator>
-                </NavigationContainer>
+                    <Stack.Navigator
+                      initialRouteName="Settings"
+                      screenOptions={{
+                        headerTitleStyle: { ...theme.typography.h2 },
+                        headerStyle: { backgroundColor: theme.colors.card },
+                        headerTintColor: theme.colors.foreground,
+                        contentStyle: { backgroundColor: theme.colors.background },
+                        headerLeft: () => (
+                          <Image
+                            source={speakMCPIcon}
+                            style={{ width: 28, height: 28, marginLeft: 12, marginRight: 8 }}
+                            resizeMode="contain"
+                          />
+                        ),
+                        headerRight: () => (
+                          <ConnectionStatusIndicator
+                            state={tunnelConnection.connectionInfo.state}
+                            retryCount={tunnelConnection.connectionInfo.retryCount}
+                            compact
+                          />
+                        ),
+                      }}
+                    >
+                      <Stack.Screen
+                        name="Settings"
+                        component={SettingsScreen}
+                        options={{ title: 'SpeakMCP' }}
+                      />
+                      <Stack.Screen
+                        name="Sessions"
+                        component={SessionListScreen}
+                        options={{ title: 'Chats' }}
+                      />
+                      <Stack.Screen name="Chat" component={ChatScreen} />
+                    </Stack.Navigator>
+                  </NavigationContainer>
+                </NotificationContext.Provider>
               </TunnelConnectionContext.Provider>
             </ConnectionManagerContext.Provider>
           </MessageQueueContext.Provider>

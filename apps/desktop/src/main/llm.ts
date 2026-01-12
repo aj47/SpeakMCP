@@ -5,7 +5,7 @@ import {
   LLMToolCallResponse,
   MCPToolResult,
 } from "./mcp-service"
-import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
+import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
@@ -30,6 +30,7 @@ import {
   summarizationService,
   type SummarizationInput,
 } from "./summarization-service"
+import { memoryService } from "./memory-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -192,6 +193,14 @@ export async function processTranscriptWithTools(
     : []
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
+  // Load memories for context (even in non-agent mode, memories can be helpful)
+  const allMemories = await memoryService.getAllMemories()
+  // Filter to high importance and critical memories, limit to 5 for non-agent mode
+  const relevantMemories = allMemories
+    .filter(m => m.importance === 'high' || m.importance === 'critical')
+    .slice(0, 5)
+  logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context`)
+
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
@@ -199,6 +208,7 @@ export async function processTranscriptWithTools(
     undefined,
     config.mcpCustomSystemPrompt,
     skillsInstructions,
+    relevantMemories,
   )
 
   const messages = [
@@ -705,6 +715,20 @@ export async function processTranscriptWithAgentMode(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
   logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
 
+  // Load memories for agent context
+  // Memories provide context from previous sessions - user preferences, past decisions, important learnings
+  const allMemories = await memoryService.getAllMemories()
+  // Include all high/critical importance memories, and some recent medium importance ones
+  const relevantMemories = allMemories
+    .filter(m => m.importance === 'high' || m.importance === 'critical')
+    .concat(
+      allMemories
+        .filter(m => m.importance === 'medium')
+        .slice(0, 5)
+    )
+    .slice(0, 15) // Cap at 15 memories to manage context size
+  logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)
+
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -713,6 +737,7 @@ export async function processTranscriptWithAgentMode(
     undefined, // relevantTools removed - let LLM decide tool relevance
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
     skillsInstructions, // agent skills instructions
+    relevantMemories, // memories from previous sessions
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -899,6 +924,7 @@ export async function processTranscriptWithAgentMode(
       undefined, // relevantTools removed
       customSystemPrompt, // Use session-bound custom system prompt
       skillsInstructions, // agent skills instructions
+      relevantMemories, // memories from previous sessions
     )
 
     const postVerifySummaryMessages = [
@@ -2302,6 +2328,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
+          relevantMemories, // memories from previous sessions
         )
 
         const summaryMessages = [
@@ -2579,6 +2606,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
+          relevantMemories, // memories from previous sessions
         )
 
         const summaryMessages = [

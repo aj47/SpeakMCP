@@ -766,6 +766,7 @@ export async function startRemoteServer() {
         transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
         ttsEnabled: cfg.ttsEnabled ?? true,
+        whatsappEnabled: cfg.whatsappEnabled ?? false,
         // Agent settings
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
       })
@@ -791,6 +792,9 @@ export async function startRemoteServer() {
       }
       if (typeof body.ttsEnabled === "boolean") {
         updates.ttsEnabled = body.ttsEnabled
+      }
+      if (typeof body.whatsappEnabled === "boolean") {
+        updates.whatsappEnabled = body.whatsappEnabled
       }
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
         // Coerce to integer to avoid surprising iteration counts with floats

@@ -168,6 +168,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:toggle_whatsapp`,
+    description: "Enable or disable WhatsApp integration. When enabled, allows sending and receiving WhatsApp messages through SpeakMCP.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "Whether to enable (true) or disable (false) WhatsApp integration. If not provided, toggles to the opposite of the current state.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:execute_command`,
     description: "Execute a shell command. If skillId is provided, the command runs in that skill's directory (where SKILL.md is located). This is the primary way for skills to run shell commands, scripts, and automation.",
     inputSchema: {

@@ -5,7 +5,7 @@ import fs from "fs"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
@@ -834,6 +834,16 @@ export async function startRemoteServer() {
 
       configStore.save({ ...cfg, ...updates })
       diagnosticsService.logInfo("remote-server", `Updated settings: ${Object.keys(updates).join(", ")}`)
+
+      // Trigger WhatsApp MCP server lifecycle if whatsappEnabled changed
+      if (updates.whatsappEnabled !== undefined) {
+        try {
+          const prevEnabled = cfg.whatsappEnabled ?? false
+          await handleWhatsAppToggle(prevEnabled, updates.whatsappEnabled)
+        } catch (_e) {
+          // lifecycle is best-effort
+        }
+      }
 
       return reply.send({
         success: true,

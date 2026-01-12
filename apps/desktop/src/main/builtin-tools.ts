@@ -14,7 +14,7 @@
 
 import { configStore } from "./config"
 import { profileService } from "./profile-service"
-import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
+import { mcpService, type MCPTool, type MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
@@ -674,6 +674,13 @@ const toolHandlers: Record<string, ToolHandler> = {
       ...config,
       whatsappEnabled: enabled,
     })
+
+    // Trigger WhatsApp MCP server lifecycle changes
+    try {
+      await handleWhatsAppToggle(currentValue, enabled)
+    } catch (_e) {
+      // lifecycle is best-effort
+    }
 
     return {
       content: [

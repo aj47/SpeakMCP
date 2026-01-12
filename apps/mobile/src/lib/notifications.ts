@@ -332,6 +332,15 @@ export async function isEnabled(): Promise<boolean> {
 }
 
 /**
+ * Normalize baseUrl by removing trailing /v1 if present to avoid duplication.
+ * The baseUrl may already end with /v1 (OpenAI-compatible format), so we strip it
+ * before appending our own /v1/push/* paths.
+ */
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/v1\/?$/, '');
+}
+
+/**
  * Register push token with the desktop server
  */
 export async function registerToken(baseUrl: string, apiKey: string): Promise<boolean> {
@@ -339,7 +348,7 @@ export async function registerToken(baseUrl: string, apiKey: string): Promise<bo
   if (!tokenInfo) return false;
 
   try {
-    const response = await fetch(`${baseUrl}/v1/push/register`, {
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/push/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -375,7 +384,7 @@ export async function unregisterToken(baseUrl: string, apiKey: string): Promise<
   }
 
   try {
-    const response = await fetch(`${baseUrl}/v1/push/unregister`, {
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/push/unregister`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

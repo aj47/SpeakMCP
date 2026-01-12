@@ -478,9 +478,10 @@ export async function startRemoteServer() {
             },
           })
 
-          // Send push notification if client requested it and tokens are registered
-          const sendPush = body.send_push_notification === true
-          if (sendPush && isPushEnabled()) {
+          // Send push notification by default if tokens are registered
+          // Client can set send_push_notification: false to explicitly disable
+          const shouldSendPush = body.send_push_notification !== false && isPushEnabled()
+          if (shouldSendPush) {
             const conversationTitle = prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt
             // Fire and forget - don't block the response
             sendMessageNotification(result.conversationId, conversationTitle, result.content).catch((err) => {
@@ -513,10 +514,10 @@ export async function startRemoteServer() {
 
       console.log("[remote-server] Chat response:", { conversationId: result.conversationId, responseLength: result.content.length })
 
-      // Send push notification if client requested it and tokens are registered
-      // Client can set send_push_notification: true to request a push when response is ready
-      const sendPush = body.send_push_notification === true
-      if (sendPush && isPushEnabled()) {
+      // Send push notification by default if tokens are registered
+      // Client can set send_push_notification: false to explicitly disable
+      const shouldSendPush = body.send_push_notification !== false && isPushEnabled()
+      if (shouldSendPush) {
         const conversationTitle = prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt
         // Fire and forget - don't block the response
         sendMessageNotification(result.conversationId, conversationTitle, result.content).catch((err) => {

@@ -298,6 +298,15 @@ export default function SettingsScreen({ navigation }: any) {
           if (token) {
             await updateNotificationSettings({ enabled: true });
             console.log('[Settings] Push notifications enabled with token:', token.token.substring(0, 20) + '...');
+            // Also register with server if API is configured
+            if (config.baseUrl && config.apiKey) {
+              try {
+                await PushNotifications.registerToken(config.baseUrl, config.apiKey);
+                console.log('[Settings] Push token registered with server');
+              } catch (regError) {
+                console.warn('[Settings] Failed to register token with server:', regError);
+              }
+            }
           } else {
             Alert.alert(
               'Permission Required',
@@ -802,18 +811,6 @@ export default function SettingsScreen({ navigation }: any) {
         <Text style={styles.helperText}>
           Receive notifications when new messages arrive from your AI assistant
         </Text>
-
-        {notificationSettings.enabled && notificationPermission === 'granted' && (
-          <View style={styles.row}>
-            <Text style={styles.label}>Show Message Preview</Text>
-            <Switch
-              value={notificationSettings.showPreviews}
-              onValueChange={(v) => updateNotificationSettings({ showPreviews: v })}
-              trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-              thumbColor={notificationSettings.showPreviews ? theme.colors.primaryForeground : theme.colors.background}
-            />
-          </View>
-        )}
 
         {/* Remote Settings Section - only show when connected to a SpeakMCP desktop server */}
         {settingsClient && (isLoadingRemote || isSpeakMCPServer) && (

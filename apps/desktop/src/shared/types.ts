@@ -184,18 +184,14 @@ export interface AgentProgressUpdate {
 export interface DualModelConfig {
   enabled: boolean
 
-  // Strong model (planning & execution) - uses existing mcpToolsProviderId/model by default
-  // If not set, falls back to the main MCP tools provider settings
-  strongModelProviderId?: "openai" | "groq" | "gemini"
-  strongModelOpenaiModel?: string
-  strongModelGroqModel?: string
-  strongModelGeminiModel?: string
+  // Strong model (planning & execution) - uses a preset ID
+  // If not set, falls back to the current model preset
+  strongModelPresetId?: string
+  strongModelName?: string  // Model name within the preset
 
-  // Weak model (summarization)
-  weakModelProviderId?: "openai" | "groq" | "gemini"
-  weakModelOpenaiModel?: string
-  weakModelGroqModel?: string
-  weakModelGeminiModel?: string
+  // Weak model (summarization) - uses a preset ID
+  weakModelPresetId?: string
+  weakModelName?: string  // Model name within the preset
 
   // Summarization settings
   summarizationFrequency?: "every_response" | "major_steps_only"
@@ -656,17 +652,14 @@ export type Config = {
 
   // Dual-Model Agent Mode Configuration
   dualModelEnabled?: boolean
-  dualModelStrongProviderId?: "openai" | "groq" | "gemini"
-  dualModelStrongOpenaiModel?: string
-  dualModelStrongGroqModel?: string
-  dualModelStrongGeminiModel?: string
-  dualModelWeakProviderId?: "openai" | "groq" | "gemini"
-  dualModelWeakOpenaiModel?: string
-  dualModelWeakGroqModel?: string
-  dualModelWeakGeminiModel?: string
+  dualModelStrongPresetId?: string  // Preset ID for strong model
+  dualModelStrongModelName?: string  // Model name within the preset
+  dualModelWeakPresetId?: string  // Preset ID for weak model
+  dualModelWeakModelName?: string  // Model name within the preset
   dualModelSummarizationFrequency?: "every_response" | "major_steps_only"
   dualModelSummaryDetailLevel?: "compact" | "detailed"
   dualModelAutoSaveImportant?: boolean
+  dualModelSectionCollapsed?: boolean  // UI state for settings section
 
 }
 

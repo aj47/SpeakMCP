@@ -577,6 +577,18 @@ export type Config = {
   // When enabled, hides sensitive information (phone numbers, QR codes, API keys) for screen sharing
   streamerModeEnabled?: boolean
 
+  // Push Notification Configuration for Mobile App
+  // Stores registered push notification tokens from mobile clients
+  pushNotificationTokens?: PushNotificationToken[]
+}
+
+// Push Notification Token (from mobile clients)
+export interface PushNotificationToken {
+  token: string
+  type: 'expo'
+  platform: 'ios' | 'android'
+  registeredAt: number
+  deviceId?: string
 }
 
 

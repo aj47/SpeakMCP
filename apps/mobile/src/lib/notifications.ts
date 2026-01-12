@@ -310,3 +310,82 @@ export async function getLastNotificationResponse(): Promise<Notifications.Notif
   return Notifications.getLastNotificationResponseAsync();
 }
 
+// Server token registration keys
+const SERVER_TOKEN_ENABLED_KEY = 'push_server_token_enabled_v1';
+
+/**
+ * Check if push notifications are registered with the server
+ */
+export async function isEnabled(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(SERVER_TOKEN_ENABLED_KEY);
+    return value === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Register push token with the desktop server
+ */
+export async function registerToken(baseUrl: string, apiKey: string): Promise<boolean> {
+  const tokenInfo = await getPushToken();
+  if (!tokenInfo) return false;
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/push/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        token: tokenInfo.token,
+        type: tokenInfo.type,
+        platform: Platform.OS as 'ios' | 'android',
+      }),
+    });
+
+    if (response.ok) {
+      await AsyncStorage.setItem(SERVER_TOKEN_ENABLED_KEY, 'true');
+      return true;
+    }
+    console.error('[Notifications] Server registration failed:', await response.text());
+    return false;
+  } catch (error) {
+    console.error('[Notifications] Server registration error:', error);
+    return false;
+  }
+}
+
+/**
+ * Unregister push token from the desktop server
+ */
+export async function unregisterToken(baseUrl: string, apiKey: string): Promise<boolean> {
+  const tokenInfo = await loadStoredPushToken();
+  if (!tokenInfo) {
+    await AsyncStorage.setItem(SERVER_TOKEN_ENABLED_KEY, 'false');
+    return true;
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/push/unregister`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ token: tokenInfo.token }),
+    });
+
+    if (response.ok) {
+      await AsyncStorage.setItem(SERVER_TOKEN_ENABLED_KEY, 'false');
+      return true;
+    }
+    console.error('[Notifications] Server unregistration failed:', await response.text());
+    return false;
+  } catch (error) {
+    console.error('[Notifications] Server unregistration error:', error);
+    return false;
+  }
+}

@@ -20,7 +20,8 @@
         "NSMicrophoneUsageDescription": "This app uses the microphone for voice input.",
         "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to transcribe your voice.",
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for configuration.",
-        "NSUserNotificationsUsageDescription": "This app sends notifications when new messages arrive from your AI assistant."
+        "NSUserNotificationsUsageDescription": "This app sends notifications when new messages arrive from your AI assistant.",
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {

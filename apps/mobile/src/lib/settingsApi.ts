@@ -92,7 +92,7 @@ export class SettingsApiClient {
     };
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  protected async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const response = await fetch(url, {
       ...options,
@@ -167,8 +167,51 @@ export class SettingsApiClient {
   }
 }
 
+// Push notification registration/unregistration
+export interface PushTokenRegistration {
+  token: string;
+  type: 'expo';
+  platform: 'ios' | 'android';
+  deviceId?: string;
+}
+
+export interface PushStatusResponse {
+  enabled: boolean;
+  tokenCount: number;
+  platforms: string[];
+}
+
+// Extended client with push notification methods
+export class ExtendedSettingsApiClient extends SettingsApiClient {
+  // Register push notification token
+  async registerPushToken(registration: PushTokenRegistration): Promise<{ success: boolean; message: string; tokenCount: number }> {
+    return this.request('/push/register', {
+      method: 'POST',
+      body: JSON.stringify(registration),
+    });
+  }
+
+  // Unregister push notification token
+  async unregisterPushToken(token: string): Promise<{ success: boolean; message: string; tokenCount: number }> {
+    return this.request('/push/unregister', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  }
+
+  // Get push notification status
+  async getPushStatus(): Promise<PushStatusResponse> {
+    return this.request<PushStatusResponse>('/push/status');
+  }
+}
+
 // Factory function to create a client from app config
 export function createSettingsApiClient(baseUrl: string, apiKey: string): SettingsApiClient {
   return new SettingsApiClient(baseUrl, apiKey);
+}
+
+// Factory function to create an extended client with push notification support
+export function createExtendedSettingsApiClient(baseUrl: string, apiKey: string): ExtendedSettingsApiClient {
+  return new ExtendedSettingsApiClient(baseUrl, apiKey);
 }
 

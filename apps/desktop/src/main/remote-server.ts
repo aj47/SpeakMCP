@@ -13,6 +13,7 @@ import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
+import { sendMessageNotification, isPushEnabled } from "./push-notification-service"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -476,6 +477,16 @@ export async function startRemoteServer() {
               model,
             },
           })
+
+          // Send push notification if client requested it and tokens are registered
+          const sendPush = body.send_push_notification === true
+          if (sendPush && isPushEnabled()) {
+            const conversationTitle = prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt
+            // Fire and forget - don't block the response
+            sendMessageNotification(result.conversationId, conversationTitle, result.content).catch((err) => {
+              diagnosticsService.logWarning("remote-server", "Failed to send push notification", err)
+            })
+          }
         } catch (error: any) {
           // Send error event
           writeSSE({
@@ -501,6 +512,17 @@ export async function startRemoteServer() {
       const response = toOpenAIChatResponse(result.content, model)
 
       console.log("[remote-server] Chat response:", { conversationId: result.conversationId, responseLength: result.content.length })
+
+      // Send push notification if client requested it and tokens are registered
+      // Client can set send_push_notification: true to request a push when response is ready
+      const sendPush = body.send_push_notification === true
+      if (sendPush && isPushEnabled()) {
+        const conversationTitle = prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt
+        // Fire and forget - don't block the response
+        sendMessageNotification(result.conversationId, conversationTitle, result.content).catch((err) => {
+          diagnosticsService.logWarning("remote-server", "Failed to send push notification", err)
+        })
+      }
 
       return reply.send({
         ...response,
@@ -890,6 +912,109 @@ export async function startRemoteServer() {
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to fetch conversation", error)
       return reply.code(500).send({ error: error?.message || "Failed to fetch conversation" })
+    }
+  })
+
+  // ============================================
+  // Push Notification Endpoints (for mobile app)
+  // ============================================
+
+  // POST /v1/push/register - Register a push notification token
+  fastify.post("/v1/push/register", async (req, reply) => {
+    try {
+      const body = req.body as { token?: string; type?: string; platform?: string; deviceId?: string }
+
+      if (!body.token || typeof body.token !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid token" })
+      }
+
+      if (!body.platform || !["ios", "android"].includes(body.platform)) {
+        return reply.code(400).send({ error: "Invalid platform. Must be 'ios' or 'android'" })
+      }
+
+      const cfg = configStore.get()
+      const existingTokens = cfg.pushNotificationTokens || []
+
+      // Check if token already exists
+      const existingIndex = existingTokens.findIndex(t => t.token === body.token)
+      const newToken = {
+        token: body.token,
+        type: "expo" as const,
+        platform: body.platform as "ios" | "android",
+        registeredAt: Date.now(),
+        deviceId: body.deviceId,
+      }
+
+      let updatedTokens: typeof existingTokens
+      if (existingIndex >= 0) {
+        // Update existing token
+        updatedTokens = [...existingTokens]
+        updatedTokens[existingIndex] = newToken
+        diagnosticsService.logInfo("remote-server", `Updated push notification token for ${body.platform}`)
+      } else {
+        // Add new token
+        updatedTokens = [...existingTokens, newToken]
+        diagnosticsService.logInfo("remote-server", `Registered new push notification token for ${body.platform}`)
+      }
+
+      configStore.save({ ...cfg, pushNotificationTokens: updatedTokens })
+
+      return reply.send({
+        success: true,
+        message: existingIndex >= 0 ? "Token updated" : "Token registered",
+        tokenCount: updatedTokens.length,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to register push token", error)
+      return reply.code(500).send({ error: error?.message || "Failed to register push token" })
+    }
+  })
+
+  // POST /v1/push/unregister - Unregister a push notification token
+  fastify.post("/v1/push/unregister", async (req, reply) => {
+    try {
+      const body = req.body as { token?: string }
+
+      if (!body.token || typeof body.token !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid token" })
+      }
+
+      const cfg = configStore.get()
+      const existingTokens = cfg.pushNotificationTokens || []
+
+      const filteredTokens = existingTokens.filter(t => t.token !== body.token)
+      const removed = existingTokens.length > filteredTokens.length
+
+      if (removed) {
+        configStore.save({ ...cfg, pushNotificationTokens: filteredTokens })
+        diagnosticsService.logInfo("remote-server", "Unregistered push notification token")
+      }
+
+      return reply.send({
+        success: true,
+        message: removed ? "Token unregistered" : "Token not found",
+        tokenCount: filteredTokens.length,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to unregister push token", error)
+      return reply.code(500).send({ error: error?.message || "Failed to unregister push token" })
+    }
+  })
+
+  // GET /v1/push/status - Get push notification status
+  fastify.get("/v1/push/status", async (_req, reply) => {
+    try {
+      const cfg = configStore.get()
+      const tokens = cfg.pushNotificationTokens || []
+
+      return reply.send({
+        enabled: tokens.length > 0,
+        tokenCount: tokens.length,
+        platforms: [...new Set(tokens.map(t => t.platform))],
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get push status", error)
+      return reply.code(500).send({ error: error?.message || "Failed to get push status" })
     }
   })
 

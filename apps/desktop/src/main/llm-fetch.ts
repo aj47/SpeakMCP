@@ -32,6 +32,30 @@ import {
 } from "./langfuse-service"
 
 /**
+ * Build token usage object for Langfuse, only including it when at least one token field is present.
+ * This avoids reporting 0 tokens when the provider doesn't return usage data.
+ */
+function buildTokenUsage(usage?: { inputTokens?: number; outputTokens?: number }): {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+} | undefined {
+  const inputTokens = usage?.inputTokens
+  const outputTokens = usage?.outputTokens
+
+  // Only include usage when at least one token field is present
+  if (inputTokens === undefined && outputTokens === undefined) {
+    return undefined
+  }
+
+  return {
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+  }
+}
+
+/**
  * Sanitize tool name for provider compatibility.
  * Providers require tool names matching pattern: ^[a-zA-Z0-9_-]{1,128}$
  * MCP tool names often include server prefixes like "server:tool_name" and may
@@ -554,11 +578,7 @@ export async function makeLLMCallWithFetch(
           if (generationId) {
             endLLMGeneration(generationId, {
               output: JSON.stringify({ content: text, toolCalls }),
-              usage: {
-                promptTokens: result.usage?.inputTokens,
-                completionTokens: result.usage?.outputTokens,
-                totalTokens: (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0),
-              },
+              usage: buildTokenUsage(result.usage),
             })
           }
 
@@ -605,11 +625,7 @@ export async function makeLLMCallWithFetch(
           if (generationId) {
             endLLMGeneration(generationId, {
               output: JSON.stringify(response),
-              usage: {
-                promptTokens: result.usage?.inputTokens,
-                completionTokens: result.usage?.outputTokens,
-                totalTokens: (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0),
-              },
+              usage: buildTokenUsage(result.usage),
             })
           }
           return response
@@ -624,11 +640,7 @@ export async function makeLLMCallWithFetch(
         if (generationId) {
           endLLMGeneration(generationId, {
             output: cleaned || text,
-            usage: {
-              promptTokens: result.usage?.inputTokens,
-              completionTokens: result.usage?.outputTokens,
-              totalTokens: (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0),
-            },
+            usage: buildTokenUsage(result.usage),
           })
         }
 
@@ -811,11 +823,7 @@ export async function makeTextCompletionWithFetch(
         if (generationId) {
           endLLMGeneration(generationId, {
             output: text,
-            usage: {
-              promptTokens: result.usage?.inputTokens,
-              completionTokens: result.usage?.outputTokens,
-              totalTokens: (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0),
-            },
+            usage: buildTokenUsage(result.usage),
           })
         }
 

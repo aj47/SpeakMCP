@@ -118,8 +118,10 @@ export async function sendPushNotification(payload: PushNotificationPayload): Pr
 
     // Clean up invalid tokens
     if (invalidTokens.length > 0) {
-      const validTokens = tokens.filter((t: PushNotificationToken) => !invalidTokens.includes(t.token))
-      configStore.save({ ...cfg, pushNotificationTokens: validTokens })
+      const validTokens = updatedTokens.filter((t: PushNotificationToken) => !invalidTokens.includes(t.token))
+      // Fetch fresh config to avoid overwriting other concurrent changes
+      const freshCfg = configStore.get()
+      configStore.save({ ...freshCfg, pushNotificationTokens: validTokens })
       diagnosticsService.logInfo("push-service", `Removed ${invalidTokens.length} invalid push tokens`)
     }
 

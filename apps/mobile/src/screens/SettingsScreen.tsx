@@ -319,9 +319,27 @@ export default function SettingsScreen({ navigation }: any) {
         }
       } else {
         await updateNotificationSettings({ enabled: true });
+        // Register token with server since we already have permission
+        if (config.baseUrl && config.apiKey) {
+          try {
+            await PushNotifications.registerToken(config.baseUrl, config.apiKey);
+            console.log('[Settings] Push token registered with server');
+          } catch (regError) {
+            console.warn('[Settings] Failed to register token with server:', regError);
+          }
+        }
       }
     } else {
       await updateNotificationSettings({ enabled: false });
+      // Unregister token from server to stop receiving push notifications
+      if (config.baseUrl && config.apiKey) {
+        try {
+          await PushNotifications.unregisterToken(config.baseUrl, config.apiKey);
+          console.log('[Settings] Push token unregistered from server');
+        } catch (unregError) {
+          console.warn('[Settings] Failed to unregister token from server:', unregError);
+        }
+      }
     }
   };
 

@@ -912,6 +912,20 @@ const toolHandlers: Record<string, ToolHandler> = {
     try {
       const updatedProfile = profileService.updateProfile(profile.id, updates)
 
+      // If this is the currently active profile, sync live config so changes take effect immediately
+      // This mirrors the behavior in switch_profile where configStore is updated with guidelines/systemPrompt
+      const currentProfile = profileService.getCurrentProfile()
+      if (currentProfile && currentProfile.id === profile.id) {
+        const config = configStore.get()
+        const updatedConfig = {
+          ...config,
+          // Only update the fields that were changed
+          ...(updates.guidelines !== undefined && { mcpToolsSystemPrompt: updates.guidelines }),
+          ...(updates.systemPrompt !== undefined && { mcpCustomSystemPrompt: updates.systemPrompt }),
+        }
+        configStore.save(updatedConfig)
+      }
+
       return {
         content: [
           {
@@ -927,6 +941,7 @@ const toolHandlers: Record<string, ToolHandler> = {
               },
               updatedFields: Object.keys(updates),
               message: `Profile '${updatedProfile.name}' updated successfully`,
+              liveConfigSynced: currentProfile?.id === profile.id,
             }, null, 2),
           },
         ],

@@ -2428,6 +2428,17 @@ export class MCPService {
       })
     }
 
+    // Helper to ensure span is ended before returning
+    const endSpanAndReturn = (result: MCPToolResult): MCPToolResult => {
+      if (spanId) {
+        endToolSpan(spanId, {
+          output: result.content,
+          level: result.isError ? "WARNING" : "DEFAULT",
+        })
+      }
+      return result
+    }
+
     try {
       if (isDebugTools()) {
         logTools("Requested tool call", toolCall)
@@ -2457,7 +2468,7 @@ export class MCPService {
           noLink: true,
         })
         if (response !== 0) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2465,7 +2476,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
       }
       // Check if this is a built-in tool first
@@ -2473,7 +2484,7 @@ export class MCPService {
         // Guard against executing built-in tools that are disabled in the profile config
         // This ensures built-in tools (like execute_command) respect the same disabled tools rules as external tools
         if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2481,7 +2492,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         if (isDebugTools()) {
@@ -2492,7 +2503,7 @@ export class MCPService {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })
           }
-          return result
+          return endSpanAndReturn(result)
         }
       }
 
@@ -2520,7 +2531,7 @@ export class MCPService {
         })()
 
         if (isServerDisabledForSession) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2528,13 +2539,13 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
         if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2542,7 +2553,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         const result = await this.executeServerTool(
@@ -2555,7 +2566,7 @@ export class MCPService {
         // Track resource information from tool results
         this.trackResourceFromResult(serverName, result)
 
-        return result
+        return endSpanAndReturn(result)
       }
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
@@ -2587,7 +2598,7 @@ export class MCPService {
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
         // This check applies to BOTH built-in tools and external tools
         if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2595,14 +2606,14 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         // Check if it's a built-in tool
         if (isBuiltinTool(matchingTool.name)) {
           const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
           if (result) {
-            return result
+            return endSpanAndReturn(result)
           }
         }
 
@@ -2620,14 +2631,15 @@ export class MCPService {
         // Track resource information from tool results
         this.trackResourceFromResult(serverName, result)
 
-        return result
+        return endSpanAndReturn(result)
       }
 
       // No matching tools found
       const availableToolNames = allTools
         .map((t) => t.name)
         .join(", ")
-      const result: MCPToolResult = {
+
+      return endSpanAndReturn({
         content: [
           {
             type: "text",
@@ -2635,17 +2647,7 @@ export class MCPService {
           },
         ],
         isError: true,
-      }
-
-      // End Langfuse span with success
-      if (spanId) {
-        endToolSpan(spanId, {
-          output: result.content,
-          level: result.isError ? "WARNING" : "DEFAULT",
-        })
-      }
-
-      return result
+      })
     } catch (error) {
       diagnosticsService.logError(
         "mcp-service",

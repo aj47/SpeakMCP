@@ -509,15 +509,27 @@ export async function makeLLMCallWithFetch(
           })
         }
 
-        const result = await generateText({
-          model,
-          system,
-          messages: convertedMessages,
-          abortSignal: abortController.signal,
-          tools: convertedTools?.tools,
-          // Allow the model to choose whether to use tools or respond with text
-          toolChoice: convertedTools?.tools ? "auto" : undefined,
-        })
+        let result
+        try {
+          result = await generateText({
+            model,
+            system,
+            messages: convertedMessages,
+            abortSignal: abortController.signal,
+            tools: convertedTools?.tools,
+            // Allow the model to choose whether to use tools or respond with text
+            toolChoice: convertedTools?.tools ? "auto" : undefined,
+          })
+        } catch (error) {
+          // End Langfuse generation with error before rethrowing
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: error instanceof Error ? error.message : "generateText failed",
+            })
+          }
+          throw error
+        }
 
         const text = result.text?.trim() || ""
 

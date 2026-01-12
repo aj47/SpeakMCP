@@ -935,6 +935,8 @@ Return ONLY JSON per schema.`,
 
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
+  let wasAborted = false // Track if agent was aborted for observability
+
   while (iteration < maxIterations) {
     iteration++
     currentIterationRef = iteration // Update ref for retry progress callback
@@ -965,6 +967,7 @@ Return ONLY JSON per schema.`,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
+      wasAborted = true
       break
     }
 
@@ -1091,6 +1094,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -1158,6 +1162,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
     } catch (error: any) {
@@ -1178,6 +1183,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
 
@@ -1749,6 +1755,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -1856,6 +1863,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
 
@@ -1901,6 +1909,7 @@ Return ONLY JSON per schema.`,
             finalContent: finalOutput,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
+          wasAborted = true
           break
         }
 
@@ -1973,6 +1982,7 @@ Return ONLY JSON per schema.`,
             finalContent: finalOutput,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
+          wasAborted = true
           break
         }
 
@@ -2030,6 +2040,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -2215,6 +2226,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
               finalContent: finalOutput,
               conversationHistory: formatConversationForProgress(conversationHistory),
             })
+            wasAborted = true
             break
           }
 
@@ -2320,6 +2332,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	            finalContent: finalOutput,
 	            conversationHistory: formatConversationForProgress(conversationHistory),
 	          })
+	          wasAborted = true
 	          break
 	        }
 
@@ -2687,7 +2700,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       output: finalContent,
       metadata: {
         totalIterations: iteration,
-        wasAborted: false,
+        wasAborted,
       },
     })
     // Flush to ensure trace is sent

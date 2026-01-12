@@ -65,6 +65,62 @@ window.electron.ipcRenderer.invoke('getAgentSessions')
 ```
 > All procedures in `apps/desktop/src/main/tipc.ts`
 
+---
+
+## Skills Debugging
+
+Skills are instruction files (`SKILL.md`) that get injected into the system prompt to give agents specialized capabilities.
+
+### Check Active Skills
+```javascript
+// List all skills and their enabled state
+await window.electron.ipcRenderer.invoke('getSkills')
+
+// Get skills enabled for current profile
+await window.electron.ipcRenderer.invoke('getProfileSkillsConfig')
+```
+
+### Skills in LLM Context
+When debug logging is enabled (`-d` or `-dl`), you'll see:
+```
+[DEBUG][LLM] Loading skills for session <id>. enabledSkillIds: [...]
+[DEBUG][LLM] Skills instructions loaded: <N> chars
+```
+
+The skills instructions appear in the system prompt with this structure:
+```
+# Active Agent Skills
+## Skills Installation Directory: ~/.speakmcp/skills/
+## Skill: <name>
+**Skill ID:** `<uuid>`
+<instructions>
+```
+
+### Skills Folder Location
+```javascript
+// Get the skills folder path (for manual inspection)
+// macOS: ~/Library/Application Support/speakmcp/skills/
+await window.electron.ipcRenderer.invoke('openSkillsFolder')
+```
+
+### Creating/Installing Skills
+Skills are loaded from `SKILL.md` files with YAML frontmatter:
+```markdown
+---
+name: my-skill
+description: What this skill does
+---
+
+Instructions in markdown...
+```
+
+### Troubleshooting
+- **Skill not loading**: Check if skill is enabled for the current profile in Settings → Skills
+- **Skills not appearing**: Run `scanSkillsFolder` to re-scan for new skill files
+- **Skill instructions truncated**: Very long skills may be compacted in summarization—keep instructions concise
+
+---
+
 ## Mobile App
 ```bash
 pnpm dev:mobile  # Press 'w' for web → localhost:8081

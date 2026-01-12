@@ -800,7 +800,8 @@ ${skill.instructions}`
       result += `
 ## Active Skills
 
-The following skills are currently enabled:
+The following skills are enabled and provide specialized instructions for specific tasks.
+**IMPORTANT:** Follow each skill's instructions as they are tailored for this environment—use them proactively without needing explicit prompts.
 
 ${skillsContent}
 `
@@ -847,14 +848,13 @@ ${skill.instructions}`
     return `
 # Active Agent Skills
 
-## Skills Installation Directory
-**IMPORTANT**: All skills MUST be installed to this ABSOLUTE path:
-\`${skillsFolder}\`
+The following skills are enabled and provide specialized instructions for specific tasks.
+**IMPORTANT:** Follow each skill's instructions as they are tailored for this environment.
 
-When creating or installing skills, ALWAYS use this exact absolute path. Do NOT use relative paths.
-
-The following skills provide specialized instructions for specific tasks.
-Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
+## Key Information
+- **Skills Directory:** \`${skillsFolder}\`
+- **Execute in Skill Directory:** Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in that skill's working directory
+- **Skills are Context:** These instructions are part of your system context—use them proactively without needing explicit prompts
 
 ${skillsContent}
 `

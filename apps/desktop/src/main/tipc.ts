@@ -263,7 +263,7 @@ async function processWithAgentMode(
 
       // Execute the tool call (approval either not required or was granted)
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig)
+      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig, sessionId)
     }
 
     // Load previous conversation history if continuing a conversation

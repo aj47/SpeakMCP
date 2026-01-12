@@ -424,6 +424,12 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Declare variables that need to be accessible in the finally block for Langfuse tracing
+  let iteration = 0
+  let finalContent = ""
+  let wasAborted = false // Track if agent was aborted for observability
+
+  try {
   // Track context usage info for progress display
   // Declared here so emit() can access it
   let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
@@ -929,13 +935,8 @@ Return ONLY JSON per schema.`,
     conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
-  let iteration = 0
-  let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
-
-  let wasAborted = false // Track if agent was aborted for observability
 
   while (iteration < maxIterations) {
     iteration++
@@ -2694,26 +2695,28 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     })
   }
 
-  // End Langfuse trace for this agent session if enabled
-  if (isLangfuseEnabled()) {
-    endAgentTrace(currentSessionId, {
-      output: finalContent,
-      metadata: {
-        totalIterations: iteration,
-        wasAborted,
-      },
-    })
-    // Flush to ensure trace is sent
-    flushLangfuse().catch(() => {})
-  }
+    return {
+      content: finalContent,
+      conversationHistory,
+      totalIterations: iteration,
+    }
+  } finally {
+    // End Langfuse trace for this agent session if enabled
+    // This is in a finally block to ensure traces are closed even on unexpected exceptions
+    if (isLangfuseEnabled()) {
+      endAgentTrace(currentSessionId, {
+        output: finalContent,
+        metadata: {
+          totalIterations: iteration,
+          wasAborted,
+        },
+      })
+      // Flush to ensure trace is sent
+      flushLangfuse().catch(() => {})
+    }
 
-  // Clean up session state at the end of agent processing
-  agentSessionStateManager.cleanupSession(currentSessionId)
-
-  return {
-    content: finalContent,
-    conversationHistory,
-    totalIterations: iteration,
+    // Clean up session state at the end of agent processing
+    agentSessionStateManager.cleanupSession(currentSessionId)
   }
 }
 

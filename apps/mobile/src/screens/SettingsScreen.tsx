@@ -9,9 +9,8 @@ import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
 import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
-import { useNotifications } from '../store/notifications';
+import { usePushNotifications } from '../lib/pushNotifications';
 import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
-import * as PushNotifications from '../lib/notifications';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -54,13 +53,13 @@ export default function SettingsScreen({ navigation }: any) {
 
   // Push notification state
   const {
-    settings: notificationSettings,
     permissionStatus: notificationPermission,
     isSupported: notificationsSupported,
-    updateSettings: updateNotificationSettings,
-    registerForPushNotifications,
-  } = useNotifications();
-  const [isRequestingNotificationPermission, setIsRequestingNotificationPermission] = useState(false);
+    isRegistered: notificationsRegistered,
+    isLoading: isNotificationLoading,
+    register: registerPush,
+    unregister: unregisterPush,
+  } = usePushNotifications();
 
   // Remote settings state
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -285,57 +284,22 @@ export default function SettingsScreen({ navigation }: any) {
 
   // Handle push notification toggle
   const handleNotificationToggle = async (enabled: boolean) => {
+    if (!config.baseUrl || !config.apiKey) {
+      Alert.alert('Configuration Required', 'Please configure your server connection first.');
+      return;
+    }
+
     if (enabled) {
-      // If enabling and we don't have permission, request it
-      if (notificationPermission !== 'granted') {
-        setIsRequestingNotificationPermission(true);
-        try {
-          const token = await registerForPushNotifications();
-          if (token) {
-            await updateNotificationSettings({ enabled: true });
-            console.log('[Settings] Push notifications enabled with token:', token.token.substring(0, 20) + '...');
-            // Also register with server if API is configured
-            if (config.baseUrl && config.apiKey) {
-              try {
-                await PushNotifications.registerToken(config.baseUrl, config.apiKey);
-                console.log('[Settings] Push token registered with server');
-              } catch (regError) {
-                console.warn('[Settings] Failed to register token with server:', regError);
-              }
-            }
-          } else {
-            Alert.alert(
-              'Permission Required',
-              'Push notifications require permission. Please enable notifications in your device settings.',
-              [{ text: 'OK' }]
-            );
-          }
-        } finally {
-          setIsRequestingNotificationPermission(false);
-        }
-      } else {
-        await updateNotificationSettings({ enabled: true });
-        // Register token with server since we already have permission
-        if (config.baseUrl && config.apiKey) {
-          try {
-            await PushNotifications.registerToken(config.baseUrl, config.apiKey);
-            console.log('[Settings] Push token registered with server');
-          } catch (regError) {
-            console.warn('[Settings] Failed to register token with server:', regError);
-          }
-        }
+      const success = await registerPush(config.baseUrl, config.apiKey);
+      if (!success) {
+        Alert.alert(
+          'Permission Required',
+          'Push notifications require permission. Please enable notifications in your device settings.',
+          [{ text: 'OK' }]
+        );
       }
     } else {
-      await updateNotificationSettings({ enabled: false });
-      // Unregister token from server to stop receiving push notifications
-      if (config.baseUrl && config.apiKey) {
-        try {
-          await PushNotifications.unregisterToken(config.baseUrl, config.apiKey);
-          console.log('[Settings] Push token unregistered from server');
-        } catch (unregError) {
-          console.warn('[Settings] Failed to unregister token from server:', unregError);
-        }
-      }
+      await unregisterPush(config.baseUrl, config.apiKey);
     }
   };
 
@@ -762,11 +726,11 @@ export default function SettingsScreen({ navigation }: any) {
             )}
           </View>
           <Switch
-            value={notificationSettings.enabled && notificationPermission === 'granted'}
+            value={notificationsRegistered}
             onValueChange={handleNotificationToggle}
             trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-            thumbColor={notificationSettings.enabled && notificationPermission === 'granted' ? theme.colors.primaryForeground : theme.colors.background}
-            disabled={!notificationsSupported || isRequestingNotificationPermission}
+            thumbColor={notificationsRegistered ? theme.colors.primaryForeground : theme.colors.background}
+            disabled={!notificationsSupported || isNotificationLoading}
           />
         </View>
         <Text style={styles.helperText}>

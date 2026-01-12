@@ -12,9 +12,11 @@
 
 import { generateText, streamText, tool as aiTool } from "ai"
 import { jsonSchema } from "ai"
+import { randomUUID } from "crypto"
 import {
   createLanguageModel,
   getCurrentProviderId,
+  getCurrentModelName,
   getTranscriptProviderId,
   type ProviderType,
 } from "./ai-sdk-provider"
@@ -23,6 +25,35 @@ import type { LLMToolCallResponse, MCPTool } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
+import {
+  createLLMGeneration,
+  endLLMGeneration,
+  isLangfuseEnabled,
+} from "./langfuse-service"
+
+/**
+ * Build token usage object for Langfuse, only including it when at least one token field is present.
+ * This avoids reporting 0 tokens when the provider doesn't return usage data.
+ */
+function buildTokenUsage(usage?: { inputTokens?: number; outputTokens?: number }): {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+} | undefined {
+  const inputTokens = usage?.inputTokens
+  const outputTokens = usage?.outputTokens
+
+  // Only include usage when at least one token field is present
+  if (inputTokens === undefined && outputTokens === undefined) {
+    return undefined
+  }
+
+  return {
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+  }
+}
 
 /**
  * Sanitize tool name for provider compatibility.
@@ -475,6 +506,8 @@ export async function makeLLMCallWithFetch(
           ? convertMCPToolsToAISDKTools(tools)
           : undefined
 
+        const modelName = getCurrentModelName(effectiveProviderId)
+
         if (isDebugLLM()) {
           logLLM("🚀 AI SDK generateText call", {
             provider: effectiveProviderId,
@@ -485,15 +518,42 @@ export async function makeLLMCallWithFetch(
           })
         }
 
-        const result = await generateText({
-          model,
-          system,
-          messages: convertedMessages,
-          abortSignal: abortController.signal,
-          tools: convertedTools?.tools,
-          // Allow the model to choose whether to use tools or respond with text
-          toolChoice: convertedTools?.tools ? "auto" : undefined,
-        })
+        // Create Langfuse generation if enabled
+        const generationId = isLangfuseEnabled() ? randomUUID() : null
+        if (generationId) {
+          createLLMGeneration(sessionId || null, generationId, {
+            name: "LLM Call",
+            model: modelName,
+            modelParameters: {
+              provider: effectiveProviderId,
+              hasTools: !!convertedTools,
+              toolCount: tools?.length || 0,
+            },
+            input: { system, messages: convertedMessages },
+          })
+        }
+
+        let result
+        try {
+          result = await generateText({
+            model,
+            system,
+            messages: convertedMessages,
+            abortSignal: abortController.signal,
+            tools: convertedTools?.tools,
+            // Allow the model to choose whether to use tools or respond with text
+            toolChoice: convertedTools?.tools ? "auto" : undefined,
+          })
+        } catch (error) {
+          // End Langfuse generation with error before rethrowing
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: error instanceof Error ? error.message : "generateText failed",
+            })
+          }
+          throw error
+        }
 
         const text = result.text?.trim() || ""
 
@@ -514,6 +574,14 @@ export async function makeLLMCallWithFetch(
             arguments: tc.input,
           }))
 
+          // End Langfuse generation with tool calls
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              output: JSON.stringify({ content: text, toolCalls }),
+              usage: buildTokenUsage(result.usage),
+            })
+          }
+
           return {
             content: text || undefined,
             toolCalls,
@@ -523,6 +591,12 @@ export async function makeLLMCallWithFetch(
 
         // No tool calls - process as text response
         if (!text && !result.toolCalls?.length) {
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: "LLM returned empty response",
+            })
+          }
           throw new Error("LLM returned empty response")
         }
 
@@ -547,6 +621,13 @@ export async function makeLLMCallWithFetch(
               name: restoreToolName(tc.name, convertedTools?.nameMap),
             }))
           }
+          // End Langfuse generation with JSON response
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              output: JSON.stringify(response),
+              usage: buildTokenUsage(result.usage),
+            })
+          }
           return response
         }
 
@@ -554,6 +635,14 @@ export async function makeLLMCallWithFetch(
         const hasToolMarkers =
           /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(text)
         const cleaned = text.replace(/<\|[^|]*\|>/g, "").trim()
+
+        // End Langfuse generation with text response
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: cleaned || text,
+            usage: buildTokenUsage(result.usage),
+          })
+        }
 
         if (hasToolMarkers) {
           return { content: cleaned, needsMoreWork: true }
@@ -594,6 +683,19 @@ export async function makeLLMCallWithStreaming(
   const abortController = externalAbortController || createSessionAbortController(sessionId)
   const isInternalController = !externalAbortController
 
+  // Create Langfuse generation if enabled
+  const generationId = isLangfuseEnabled() ? randomUUID() : null
+  const modelName = getCurrentModelName(effectiveProviderId)
+
+  if (generationId) {
+    createLLMGeneration(sessionId || null, generationId, {
+      name: "Streaming LLM Call",
+      model: modelName,
+      modelParameters: { provider: effectiveProviderId },
+      input: { system, messages: convertedMessages },
+    })
+  }
+
   try {
     if (isDebugLLM()) {
       logLLM("🚀 AI SDK streamText call", {
@@ -626,12 +728,26 @@ export async function makeLLMCallWithStreaming(
       }
     }
 
+    // End Langfuse generation
+    if (generationId) {
+      endLLMGeneration(generationId, {
+        output: accumulated,
+      })
+    }
+
     return {
       content: accumulated,
       needsMoreWork: undefined,
       toolCalls: undefined,
     }
   } catch (error: any) {
+    // End Langfuse generation with error
+    if (generationId) {
+      endLLMGeneration(generationId, {
+        level: "ERROR",
+        statusMessage: error?.message || "Streaming LLM call failed",
+      })
+    }
     if (error?.name === "AbortError") {
       throw error
     }
@@ -664,6 +780,19 @@ export async function makeTextCompletionWithFetch(
     async () => {
       const abortController = createSessionAbortController(sessionId)
 
+      // Create Langfuse generation if enabled
+      const generationId = isLangfuseEnabled() ? randomUUID() : null
+      const modelName = getCurrentModelName(effectiveProviderId, "transcript")
+
+      if (generationId) {
+        createLLMGeneration(sessionId || null, generationId, {
+          name: "Text Completion",
+          model: modelName,
+          modelParameters: { provider: effectiveProviderId },
+          input: prompt,
+        })
+      }
+
       try {
         // Check for stop signal before starting
         if (
@@ -688,8 +817,25 @@ export async function makeTextCompletionWithFetch(
           abortSignal: abortController.signal,
         })
 
-        return result.text?.trim() || ""
+        const text = result.text?.trim() || ""
+
+        // End Langfuse generation
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: text,
+            usage: buildTokenUsage(result.usage),
+          })
+        }
+
+        return text
       } catch (error) {
+        // End Langfuse generation with error
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            level: "ERROR",
+            statusMessage: error instanceof Error ? error.message : "Text completion failed",
+          })
+        }
         diagnosticsService.logError("llm-fetch", "Text completion failed", error)
         throw error
       } finally {

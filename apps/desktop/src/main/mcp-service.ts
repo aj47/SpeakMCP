@@ -39,6 +39,13 @@ import { oauthStorage } from "./oauth-storage"
 import { isDebugTools, logTools } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
+import { randomUUID } from "crypto"
+import {
+  createToolSpan,
+  endToolSpan,
+  isLangfuseEnabled,
+  getAgentTrace,
+} from "./langfuse-service"
 
 // Default filesystem MCP server name
 const DEFAULT_FILESYSTEM_SERVER_NAME = "speakmcp-filesystem"
@@ -2408,8 +2415,30 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
-    profileMcpConfig?: ProfileMcpServerConfig
+    profileMcpConfig?: ProfileMcpServerConfig,
+    sessionId?: string // Optional session ID for Langfuse tracing
   ): Promise<MCPToolResult> {
+    // Create Langfuse span for tool call if enabled and we have a trace
+    const spanId = isLangfuseEnabled() && sessionId ? randomUUID() : null
+    if (spanId && sessionId) {
+      createToolSpan(sessionId, spanId, {
+        name: `Tool: ${toolCall.name}`,
+        input: toolCall.arguments as Record<string, unknown>,
+        metadata: { toolName: toolCall.name },
+      })
+    }
+
+    // Helper to ensure span is ended before returning
+    const endSpanAndReturn = (result: MCPToolResult): MCPToolResult => {
+      if (spanId) {
+        endToolSpan(spanId, {
+          output: result.content,
+          level: result.isError ? "WARNING" : "DEFAULT",
+        })
+      }
+      return result
+    }
+
     try {
       if (isDebugTools()) {
         logTools("Requested tool call", toolCall)
@@ -2439,7 +2468,7 @@ export class MCPService {
           noLink: true,
         })
         if (response !== 0) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2447,7 +2476,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
       }
       // Check if this is a built-in tool first
@@ -2455,7 +2484,7 @@ export class MCPService {
         // Guard against executing built-in tools that are disabled in the profile config
         // This ensures built-in tools (like execute_command) respect the same disabled tools rules as external tools
         if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2463,7 +2492,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         if (isDebugTools()) {
@@ -2474,7 +2503,7 @@ export class MCPService {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })
           }
-          return result
+          return endSpanAndReturn(result)
         }
       }
 
@@ -2502,7 +2531,7 @@ export class MCPService {
         })()
 
         if (isServerDisabledForSession) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2510,13 +2539,13 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
         if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2524,7 +2553,7 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         const result = await this.executeServerTool(
@@ -2537,7 +2566,7 @@ export class MCPService {
         // Track resource information from tool results
         this.trackResourceFromResult(serverName, result)
 
-        return result
+        return endSpanAndReturn(result)
       }
 
       // Try to find a matching tool without prefix (fallback for LLM inconsistencies)
@@ -2569,7 +2598,7 @@ export class MCPService {
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
         // This check applies to BOTH built-in tools and external tools
         if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
-          return {
+          return endSpanAndReturn({
             content: [
               {
                 type: "text",
@@ -2577,14 +2606,14 @@ export class MCPService {
               },
             ],
             isError: true,
-          }
+          })
         }
 
         // Check if it's a built-in tool
         if (isBuiltinTool(matchingTool.name)) {
           const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
           if (result) {
-            return result
+            return endSpanAndReturn(result)
           }
         }
 
@@ -2602,14 +2631,15 @@ export class MCPService {
         // Track resource information from tool results
         this.trackResourceFromResult(serverName, result)
 
-        return result
+        return endSpanAndReturn(result)
       }
 
       // No matching tools found
       const availableToolNames = allTools
         .map((t) => t.name)
         .join(", ")
-      const result: MCPToolResult = {
+
+      return endSpanAndReturn({
         content: [
           {
             type: "text",
@@ -2617,15 +2647,21 @@ export class MCPService {
           },
         ],
         isError: true,
-      }
-
-      return result
+      })
     } catch (error) {
       diagnosticsService.logError(
         "mcp-service",
         `Tool execution error for ${toolCall.name}`,
         error,
       )
+
+      // End Langfuse span with error
+      if (spanId) {
+        endToolSpan(spanId, {
+          level: "ERROR",
+          statusMessage: error instanceof Error ? error.message : String(error),
+        })
+      }
 
       return {
         content: [

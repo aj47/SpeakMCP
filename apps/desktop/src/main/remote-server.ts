@@ -294,7 +294,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig)
+      return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig, sessionId)
     }
 
     const agentResult = await processTranscriptWithAgentMode(

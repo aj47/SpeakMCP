@@ -52,6 +52,9 @@ importers:
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
+      langfuse:
+        specifier: ^3.38.6
+        version: 3.38.6
       openai:
         specifier: ^5.10.2
         version: 5.23.2(ws@8.18.3)(zod@3.25.76)
@@ -4473,6 +4476,14 @@ packages:
     resolution: {integrity: sha512-mnIlAEMu4OyEvUNdzco9xpuB9YVcPkQec+QsgycBCtPZvEqWPCDPfbAE4OJMdBBWpZWtpCn1xw9jJYlwjWI5zQ==}
     hasBin: true
 
+  langfuse-core@3.38.6:
+    resolution: {integrity: sha512-EcZXa+DK9FJdi1I30+u19eKjuBJ04du6j2Nybk19KKCuraLczg/ppkTQcGvc4QOk//OAi3qUHrajUuV74RXsBQ==}
+    engines: {node: '>=18'}
+
+  langfuse@3.38.6:
+    resolution: {integrity: sha512-mtwfsNGIYvObRh+NYNGlJQJDiBN+Wr3Hnr++wN25mxuOpSTdXX+JQqVCyAqGL5GD2TAXRZ7COsN42Vmp9krYmg==}
+    engines: {node: '>=18'}
+
   launch-editor@2.12.0:
     resolution: {integrity: sha512-giOHXoOtifjdHqUamwKq6c49GzBdLjvxrd2D+Q4V6uOHopJv7p9VJxikDsQ/CBXZbEITgUqSVHXLTG3VhPP1Dg==}
 
@@ -5037,6 +5048,10 @@ packages:
   music-metadata@11.10.5:
     resolution: {integrity: sha512-G0i86zpL7AARmZx8XEkHBVf7rJMQDFfGEFc1C83//rKHGuaK0gwxmNNeo9mjm4g07KUwoT0s0dW7g5QwZhi+qQ==}
     engines: {node: '>=18'}
+
+  mustache@4.2.0:
+    resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
+    hasBin: true
 
   mz@2.7.0:
     resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
@@ -11774,6 +11789,14 @@ snapshots:
 
   lan-network@0.1.7: {}
 
+  langfuse-core@3.38.6:
+    dependencies:
+      mustache: 4.2.0
+
+  langfuse@3.38.6:
+    dependencies:
+      langfuse-core: 3.38.6
+
   launch-editor@2.12.0:
     dependencies:
       picocolors: 1.1.1
@@ -12621,6 +12644,8 @@ snapshots:
       uint8array-extras: 1.5.0
     transitivePeerDependencies:
       - supports-color
+
+  mustache@4.2.0: {}
 
   mz@2.7.0:
     dependencies:

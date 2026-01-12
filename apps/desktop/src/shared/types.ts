@@ -577,6 +577,13 @@ export type Config = {
   // When enabled, hides sensitive information (phone numbers, QR codes, API keys) for screen sharing
   streamerModeEnabled?: boolean
 
+  // Langfuse Observability Configuration
+  // When enabled, traces all LLM calls, agent sessions, and MCP tool calls
+  langfuseEnabled?: boolean
+  langfusePublicKey?: string
+  langfuseSecretKey?: string
+  langfuseBaseUrl?: string // Default: https://cloud.langfuse.com (or custom self-hosted URL)
+
 }
 
 

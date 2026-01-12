@@ -263,7 +263,7 @@ async function processWithAgentMode(
 
       // Execute the tool call (approval either not required or was granted)
       // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig)
+      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig, sessionId)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -1749,6 +1749,23 @@ export const router = {
         }
       } catch (_e) {
         // lifecycle is best-effort
+      }
+
+      // Reinitialize Langfuse if any Langfuse config fields changed
+      // This ensures config changes take effect without requiring app restart
+      try {
+        const langfuseConfigChanged =
+          (prev as any)?.langfuseEnabled !== (merged as any)?.langfuseEnabled ||
+          (prev as any)?.langfuseSecretKey !== (merged as any)?.langfuseSecretKey ||
+          (prev as any)?.langfusePublicKey !== (merged as any)?.langfusePublicKey ||
+          (prev as any)?.langfuseBaseUrl !== (merged as any)?.langfuseBaseUrl
+
+        if (langfuseConfigChanged) {
+          const { reinitializeLangfuse } = await import("./langfuse-service")
+          reinitializeLangfuse()
+        }
+      } catch (_e) {
+        // Langfuse reinitialization is best-effort
       }
     }),
 

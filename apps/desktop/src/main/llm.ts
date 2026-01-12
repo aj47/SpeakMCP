@@ -17,6 +17,12 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
+import {
+  createAgentTrace,
+  endAgentTrace,
+  isLangfuseEnabled,
+  flushLangfuse,
+} from "./langfuse-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -404,6 +410,26 @@ export async function processTranscriptWithAgentMode(
   // Note: createSession is a no-op if the session already exists, so this is safe for resumed sessions
   agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
 
+  // Create Langfuse trace for this agent session if enabled
+  if (isLangfuseEnabled()) {
+    createAgentTrace(currentSessionId, {
+      name: "Agent Session",
+      metadata: {
+        conversationId: currentConversationId,
+        maxIterations,
+        hasHistory: !!previousConversationHistory?.length,
+        profileId: effectiveProfileSnapshot?.profileId,
+      },
+      input: transcript,
+    })
+  }
+
+  // Declare variables that need to be accessible in the finally block for Langfuse tracing
+  let iteration = 0
+  let finalContent = ""
+  let wasAborted = false // Track if agent was aborted for observability
+
+  try {
   // Track context usage info for progress display
   // Declared here so emit() can access it
   let contextInfoRef: { estTokens: number; maxTokens: number } | undefined = undefined
@@ -909,10 +935,7 @@ Return ONLY JSON per schema.`,
     conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
-  let iteration = 0
-  let finalContent = ""
   let noOpCount = 0 // Track iterations without meaningful progress
-
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
 
   while (iteration < maxIterations) {
@@ -945,6 +968,7 @@ Return ONLY JSON per schema.`,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
 
+      wasAborted = true
       break
     }
 
@@ -1071,6 +1095,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -1138,6 +1163,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
     } catch (error: any) {
@@ -1158,6 +1184,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
 
@@ -1308,6 +1335,15 @@ Return ONLY JSON per schema.`,
         finalContent: "",
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+
+      // End Langfuse trace for early completion
+      if (isLangfuseEnabled()) {
+        endAgentTrace(currentSessionId, {
+          output: "",
+          metadata: { totalIterations: iteration, earlyCompletion: true },
+        })
+        flushLangfuse().catch(() => {})
+      }
 
       return {
         content: "",
@@ -1720,6 +1756,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -1827,6 +1864,7 @@ Return ONLY JSON per schema.`,
           finalContent: finalOutput,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
+        wasAborted = true
         break
       }
 
@@ -1872,6 +1910,7 @@ Return ONLY JSON per schema.`,
             finalContent: finalOutput,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
+          wasAborted = true
           break
         }
 
@@ -1944,6 +1983,7 @@ Return ONLY JSON per schema.`,
             finalContent: finalOutput,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
+          wasAborted = true
           break
         }
 
@@ -2001,6 +2041,7 @@ Return ONLY JSON per schema.`,
         finalContent: finalOutput,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+      wasAborted = true
       break
     }
 
@@ -2186,6 +2227,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
               finalContent: finalOutput,
               conversationHistory: formatConversationForProgress(conversationHistory),
             })
+            wasAborted = true
             break
           }
 
@@ -2291,6 +2333,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	            finalContent: finalOutput,
 	            conversationHistory: formatConversationForProgress(conversationHistory),
 	          })
+	          wasAborted = true
 	          break
 	        }
 
@@ -2652,13 +2695,28 @@ Please try alternative approaches, break down the task into smaller steps, or pr
     })
   }
 
-  // Clean up session state at the end of agent processing
-  agentSessionStateManager.cleanupSession(currentSessionId)
+    return {
+      content: finalContent,
+      conversationHistory,
+      totalIterations: iteration,
+    }
+  } finally {
+    // End Langfuse trace for this agent session if enabled
+    // This is in a finally block to ensure traces are closed even on unexpected exceptions
+    if (isLangfuseEnabled()) {
+      endAgentTrace(currentSessionId, {
+        output: finalContent,
+        metadata: {
+          totalIterations: iteration,
+          wasAborted,
+        },
+      })
+      // Flush to ensure trace is sent
+      flushLangfuse().catch(() => {})
+    }
 
-  return {
-    content: finalContent,
-    conversationHistory,
-    totalIterations: iteration,
+    // Clean up session state at the end of agent processing
+    agentSessionStateManager.cleanupSession(currentSessionId)
   }
 }
 

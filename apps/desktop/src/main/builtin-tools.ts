@@ -896,7 +896,16 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     // Build updates object
     const updates: { name?: string; guidelines?: string; systemPrompt?: string } = {}
-    if (args.name !== undefined) updates.name = (args.name as string).trim()
+    if (args.name !== undefined) {
+      const trimmedName = (args.name as string).trim()
+      if (trimmedName === "") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a non-empty string" }) }],
+          isError: true,
+        }
+      }
+      updates.name = trimmedName
+    }
     if (args.guidelines !== undefined) updates.guidelines = args.guidelines as string
     if (args.systemPrompt !== undefined) updates.systemPrompt = args.systemPrompt as string
 

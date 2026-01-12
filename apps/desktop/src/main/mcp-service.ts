@@ -2932,4 +2932,43 @@ export class MCPService {
   }
 }
 
+/**
+ * Handle WhatsApp MCP server lifecycle when the whatsappEnabled setting changes.
+ * This function manages auto-adding the server config, starting, and stopping the server.
+ *
+ * @param prevEnabled - Previous value of whatsappEnabled setting
+ * @param nextEnabled - New value of whatsappEnabled setting
+ */
+export async function handleWhatsAppToggle(prevEnabled: boolean, nextEnabled: boolean): Promise<void> {
+  if (prevEnabled !== nextEnabled) {
+    const config = configStore.get()
+    const currentMcpConfig = config.mcpConfig || { mcpServers: {} }
+    const hasWhatsappServer = !!currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]
+
+    if (nextEnabled) {
+      // WhatsApp is being enabled
+      if (!hasWhatsappServer) {
+        // Auto-add WhatsApp MCP server config when enabled
+        const updatedMcpConfig: MCPConfig = {
+          ...currentMcpConfig,
+          mcpServers: {
+            ...currentMcpConfig.mcpServers,
+            [WHATSAPP_SERVER_NAME]: {
+              command: "node",
+              args: [getInternalWhatsAppServerPath()],
+              transport: "stdio" as MCPTransportType,
+            },
+          },
+        }
+        configStore.save({ ...config, mcpConfig: updatedMcpConfig })
+      }
+      // Start/restart the WhatsApp server
+      await mcpService.restartServer(WHATSAPP_SERVER_NAME)
+    } else if (!nextEnabled && hasWhatsappServer) {
+      // Stop the WhatsApp server when disabled (but keep config for re-enabling)
+      await mcpService.stopServer(WHATSAPP_SERVER_NAME)
+    }
+  }
+}
+
 export const mcpService = new MCPService()

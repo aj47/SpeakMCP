@@ -5,7 +5,7 @@ import fs from "fs"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
@@ -766,6 +766,7 @@ export async function startRemoteServer() {
         transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
         ttsEnabled: cfg.ttsEnabled ?? true,
+        whatsappEnabled: cfg.whatsappEnabled ?? false,
         // Agent settings
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
       })
@@ -791,6 +792,9 @@ export async function startRemoteServer() {
       }
       if (typeof body.ttsEnabled === "boolean") {
         updates.ttsEnabled = body.ttsEnabled
+      }
+      if (typeof body.whatsappEnabled === "boolean") {
+        updates.whatsappEnabled = body.whatsappEnabled
       }
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
         // Coerce to integer to avoid surprising iteration counts with floats
@@ -830,6 +834,16 @@ export async function startRemoteServer() {
 
       configStore.save({ ...cfg, ...updates })
       diagnosticsService.logInfo("remote-server", `Updated settings: ${Object.keys(updates).join(", ")}`)
+
+      // Trigger WhatsApp MCP server lifecycle if whatsappEnabled changed
+      if (updates.whatsappEnabled !== undefined) {
+        try {
+          const prevEnabled = cfg.whatsappEnabled ?? false
+          await handleWhatsAppToggle(prevEnabled, updates.whatsappEnabled)
+        } catch (_e) {
+          // lifecycle is best-effort
+        }
+      }
 
       return reply.send({
         success: true,

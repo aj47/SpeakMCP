@@ -40,7 +40,6 @@ import {
   shouldCollapseMessage,
   getToolResultsSummary,
   formatToolArguments,
-  formatArgumentsPreview,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -1893,10 +1892,6 @@ export default function ChatScreen({ route, navigation }: any) {
             // isPending is true when there are more tool calls than results (including partial completion)
             const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
 
-            const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
-              ? formatArgumentsPreview(m.toolCalls[0].arguments)
-              : null;
-
             return (
               <View
                 key={i}
@@ -1976,35 +1971,71 @@ export default function ChatScreen({ route, navigation }: any) {
 
                     {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
                     {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
-                      <View style={[
-                        styles.toolExecutionCard,
-                        isPending && styles.toolExecutionPending,
-                        allSuccess && styles.toolExecutionSuccess,
-                        hasErrors && styles.toolExecutionError,
-                      ]}>
-                        {/* Collapsed view - show preview */}
+                      <>
+                        {/* Collapsed view - compact single line per tool */}
                         {!isExpanded && (
-                          <View style={styles.toolExecutionCollapsed}>
-                            {toolPreview && (
-                              <Text style={styles.collapsedToolPreview} numberOfLines={1}>
-                                {toolPreview}
-                              </Text>
-                            )}
-                            {hasToolResults && (
-                              <Text style={[
-                                styles.collapsedToolText,
-                                allSuccess && styles.collapsedToolTextSuccess,
-                                hasErrors && styles.collapsedToolTextError,
-                              ]}>
-                                {getToolResultsSummary(m.toolResults!)}
-                              </Text>
-                            )}
+                          <View style={styles.toolExecutionCollapsedList}>
+                            {m.toolCalls?.map((toolCall, tcIdx) => {
+                              const result = m.toolResults?.[tcIdx];
+                              const tcIsPending = !result;
+                              const tcSuccess = result?.success;
+                              const tcResultSummary = result ? getToolResultsSummary([result]) : null;
+                              return (
+                                <Pressable
+                                  key={tcIdx}
+                                  onPress={() => toggleMessageExpansion(i)}
+                                  style={({ pressed }) => [
+                                    styles.toolCallCompactRow,
+                                    tcIsPending && styles.toolCallCompactPending,
+                                    tcSuccess && styles.toolCallCompactSuccess,
+                                    !tcIsPending && !tcSuccess && styles.toolCallCompactError,
+                                    pressed && styles.toolCallCompactPressed,
+                                  ]}
+                                >
+                                  <Text style={[
+                                    styles.toolCallCompactIcon,
+                                    tcIsPending && styles.toolCallCompactIconPending,
+                                    tcSuccess && styles.toolCallCompactIconSuccess,
+                                    !tcIsPending && !tcSuccess && styles.toolCallCompactIconError,
+                                  ]}>🔧</Text>
+                                  <Text
+                                    style={[
+                                      styles.toolCallCompactName,
+                                      tcIsPending && styles.toolCallCompactNamePending,
+                                      tcSuccess && styles.toolCallCompactNameSuccess,
+                                      !tcIsPending && !tcSuccess && styles.toolCallCompactNameError,
+                                    ]}
+                                    numberOfLines={1}
+                                  >{toolCall.name}</Text>
+                                  <Text style={[
+                                    styles.toolCallCompactStatus,
+                                    tcIsPending && styles.toolCallCompactStatusPending,
+                                    tcSuccess && styles.toolCallCompactStatusSuccess,
+                                    !tcIsPending && !tcSuccess && styles.toolCallCompactStatusError,
+                                  ]}>
+                                    {tcIsPending ? '⏳' : tcSuccess ? '✓' : '✗'}
+                                  </Text>
+                                  {tcResultSummary && (
+                                    <Text
+                                      style={styles.toolCallCompactSummary}
+                                      numberOfLines={1}
+                                    >{tcResultSummary}</Text>
+                                  )}
+                                  <Text style={styles.toolCallCompactChevron}>▶</Text>
+                                </Pressable>
+                              );
+                            })}
                           </View>
                         )}
 
-                        {/* Expanded view - show full details */}
+                        {/* Expanded view - show full details in a card */}
                         {isExpanded && (
-                          <>
+                          <View style={[
+                            styles.toolExecutionCard,
+                            isPending && styles.toolExecutionPending,
+                            allSuccess && styles.toolExecutionSuccess,
+                            hasErrors && styles.toolExecutionError,
+                          ]}>
                             {/* Call Parameters Section - only show if there are toolCalls */}
                             {(m.toolCalls?.length ?? 0) > 0 && (
                               <View style={styles.toolParamsSection}>
@@ -2070,9 +2101,9 @@ export default function ChatScreen({ route, navigation }: any) {
                                 <Text style={styles.toolResponsePendingText}>No responses received</Text>
                               )}
                             </View>
-                          </>
+                          </View>
                         )}
-                      </View>
+                      </>
                     )}
                   </>
                 )}
@@ -2468,23 +2499,7 @@ function createStyles(theme: Theme) {
       color: theme.colors.primary,
       fontWeight: '600',
     },
-    collapsedToolPreview: {
-      fontSize: 10,
-      color: theme.colors.mutedForeground,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      opacity: 0.7,
-      marginBottom: 2,
-    },
-    collapsedToolText: {
-      fontSize: 10,
-      color: theme.colors.mutedForeground,
-    },
-    collapsedToolTextSuccess: {
-      color: theme.colors.success,
-    },
-    collapsedToolTextError: {
-      color: theme.colors.destructive,
-    },
+
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2681,9 +2696,81 @@ function createStyles(theme: Theme) {
       borderLeftColor: hexToRgba(theme.colors.destructive, 0.6),
       backgroundColor: hexToRgba(theme.colors.destructive, 0.03),
     },
-    toolExecutionCollapsed: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
+    toolExecutionCollapsedList: {
+      marginTop: spacing.xs,
+    },
+    toolCallCompactRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 4,
+      paddingHorizontal: spacing.xs,
+      borderRadius: radius.sm,
+      gap: 4,
+    },
+    toolCallCompactPending: {
+      backgroundColor: hexToRgba(theme.colors.info, 0.05),
+    },
+    toolCallCompactSuccess: {
+      backgroundColor: hexToRgba(theme.colors.success, 0.05),
+    },
+    toolCallCompactError: {
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.05),
+    },
+    toolCallCompactPressed: {
+      opacity: 0.7,
+    },
+    toolCallCompactIcon: {
+      fontSize: 10,
+    },
+    toolCallCompactIconPending: {
+      // uses default
+    },
+    toolCallCompactIconSuccess: {
+      // uses default
+    },
+    toolCallCompactIconError: {
+      // uses default
+    },
+    toolCallCompactName: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 11,
+      fontWeight: '500',
+      flexShrink: 1,
+    },
+    toolCallCompactNamePending: {
+      color: theme.colors.info,
+    },
+    toolCallCompactNameSuccess: {
+      color: theme.colors.success,
+    },
+    toolCallCompactNameError: {
+      color: theme.colors.destructive,
+    },
+    toolCallCompactStatus: {
+      fontSize: 10,
+      marginLeft: 2,
+    },
+    toolCallCompactStatusPending: {
+      color: theme.colors.info,
+    },
+    toolCallCompactStatusSuccess: {
+      color: theme.colors.success,
+    },
+    toolCallCompactStatusError: {
+      color: theme.colors.destructive,
+    },
+    toolCallCompactSummary: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+      opacity: 0.6,
+      flex: 1,
+      marginLeft: 4,
+    },
+    toolCallCompactChevron: {
+      fontSize: 8,
+      color: theme.colors.mutedForeground,
+      opacity: 0.4,
+      marginLeft: 'auto',
     },
     toolParamsSection: {
       paddingHorizontal: spacing.sm,

@@ -332,12 +332,14 @@ export async function isEnabled(): Promise<boolean> {
 }
 
 /**
- * Normalize baseUrl by removing trailing /v1 if present to avoid duplication.
+ * Normalize baseUrl by removing trailing /v1 and trailing slashes.
  * The baseUrl may already end with /v1 (OpenAI-compatible format), so we strip it
  * before appending our own /v1/push/* paths.
+ * Also strips trailing slashes to avoid double-slash URLs like //v1/push/register.
  */
 function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/v1\/?$/, '');
+  // First remove /v1 or /v1/ suffix, then remove any remaining trailing slashes
+  return baseUrl.replace(/\/v1\/?$/, '').replace(/\/+$/, '');
 }
 
 /**

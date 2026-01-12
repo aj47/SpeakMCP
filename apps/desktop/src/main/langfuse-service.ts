@@ -82,14 +82,27 @@ export function reinitializeLangfuse(): void {
 
 /**
  * Create a new trace for an agent session
+ *
+ * Langfuse concepts:
+ * - sessionId: Groups multiple traces together (e.g., a conversation thread)
+ * - trace id: Individual trace within a session (e.g., one agent interaction)
+ * - userId: The user who initiated the trace
+ * - tags: Categorization labels for filtering in the Langfuse dashboard
+ * - release: Application version for tracking across releases
+ *
+ * @param traceId - Unique ID for this trace (our internal sessionId)
+ * @param options - Trace configuration options
  */
 export function createAgentTrace(
-  sessionId: string,
+  traceId: string,
   options: {
     name?: string
     userId?: string
+    sessionId?: string  // Langfuse session ID (groups traces together, e.g., conversation ID)
     metadata?: Record<string, unknown>
     input?: string
+    tags?: string[]
+    release?: string
   }
 ): LangfuseTraceClient | null {
   const langfuse = getLangfuse()
@@ -97,13 +110,26 @@ export function createAgentTrace(
 
   try {
     const trace = langfuse.trace({
-      id: sessionId,
+      id: traceId,
       name: options.name || "Agent Session",
       userId: options.userId,
+      sessionId: options.sessionId,  // This groups traces in Langfuse's Sessions view
       metadata: options.metadata,
       input: options.input,
+      tags: options.tags,
+      release: options.release,
     })
-    activeTraces.set(sessionId, trace)
+    activeTraces.set(traceId, trace)
+
+    if (isDebugLLM()) {
+      logLLM("[Langfuse] Created trace", {
+        traceId,
+        sessionId: options.sessionId,
+        name: options.name,
+        hasTags: !!options.tags?.length,
+      })
+    }
+
     return trace
   } catch (error) {
     console.error("[Langfuse] Failed to create trace:", error)

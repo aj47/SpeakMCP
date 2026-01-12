@@ -110,7 +110,8 @@ export async function sendPushNotification(payload: PushNotificationPayload): Pr
         errors.push(errorMsg)
 
         // Track invalid tokens for cleanup
-        if (ticket.details?.error === "DeviceNotRegistered") {
+        // Guard against partial response from Expo API
+        if (ticket.details?.error === "DeviceNotRegistered" && tokens[index]) {
           invalidTokens.push(tokens[index].token)
         }
       }

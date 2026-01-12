@@ -216,13 +216,17 @@ app.whenReady().then(() => {
       await Promise.race([
         mcpService.cleanup(),
         new Promise<void>((_, reject) => {
-          timeoutId = setTimeout(
+          const id = setTimeout(
             () => reject(new Error("MCP cleanup timeout")),
             CLEANUP_TIMEOUT_MS
           )
+          timeoutId = id
           // unref() ensures this timer won't keep the event loop alive
-          // if cleanup finishes quickly
-          timeoutId.unref()
+          // if cleanup finishes quickly (only available in Node.js)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (id && typeof (id as any).unref === "function") {
+            (id as any).unref()
+          }
         }),
       ])
     } catch (error) {

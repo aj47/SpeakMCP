@@ -182,6 +182,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:toggle_whatsapp`,
+    description: "Enable or disable WhatsApp integration. When enabled, allows sending and receiving WhatsApp messages through SpeakMCP.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        enabled: {
+          type: "boolean",
+          description: "Whether to enable (true) or disable (false) WhatsApp integration. If not provided, toggles to the opposite of the current state.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:execute_command`,
     description: "Execute a shell command. If skillId is provided, the command runs in that skill's directory (where SKILL.md is located). This is the primary way for skills to run shell commands, scripts, and automation.",
     inputSchema: {
@@ -201,6 +215,86 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
         },
       },
       required: ["command"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:create_profile`,
+    description: "Create a new profile with specified name and guidelines. New profiles have all MCP servers disabled by default - enable specific servers as needed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "The name for the new profile",
+        },
+        guidelines: {
+          type: "string",
+          description: "The guidelines/instructions for the profile that will guide the assistant's behavior",
+        },
+        systemPrompt: {
+          type: "string",
+          description: "Optional custom system prompt to override the default. If not provided, the default system prompt is used.",
+        },
+      },
+      required: ["name", "guidelines"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:update_profile`,
+    description: "Update an existing profile's content. Cannot update default profiles.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profileIdOrName: {
+          type: "string",
+          description: "The ID or name of the profile to update",
+        },
+        name: {
+          type: "string",
+          description: "New name for the profile (optional)",
+        },
+        guidelines: {
+          type: "string",
+          description: "New guidelines for the profile (optional)",
+        },
+        systemPrompt: {
+          type: "string",
+          description: "New custom system prompt (optional, set to empty string to clear)",
+        },
+      },
+      required: ["profileIdOrName"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:delete_profile`,
+    description: "Delete a profile. Cannot delete default profiles or the currently active profile.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profileIdOrName: {
+          type: "string",
+          description: "The ID or name of the profile to delete",
+        },
+      },
+      required: ["profileIdOrName"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:duplicate_profile`,
+    description: "Create a copy of an existing profile with a new name. The duplicated profile inherits all settings from the source.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sourceProfileIdOrName: {
+          type: "string",
+          description: "The ID or name of the profile to copy",
+        },
+        newName: {
+          type: "string",
+          description: "The name for the new duplicated profile",
+        },
+      },
+      required: ["sourceProfileIdOrName", "newName"],
     },
   },
 ]

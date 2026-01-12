@@ -14,7 +14,7 @@
 
 import { configStore } from "./config"
 import { profileService } from "./profile-service"
-import { mcpService, type MCPTool, type MCPToolResult } from "./mcp-service"
+import { mcpService, type MCPTool, type MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
@@ -522,6 +522,7 @@ const toolHandlers: Record<string, ToolHandler> = {
             verificationEnabled: config.mcpVerifyCompletionEnabled ?? true,
             messageQueueEnabled: config.mcpMessageQueueEnabled ?? true,
             parallelToolExecutionEnabled: config.mcpParallelToolExecution ?? true,
+            whatsappEnabled: config.whatsappEnabled ?? false,
             descriptions: {
               postProcessingEnabled: "When enabled AND a prompt is configured, transcripts are cleaned up and improved using AI",
               postProcessingPromptConfigured: "Whether a post-processing prompt has been configured in settings",
@@ -531,6 +532,7 @@ const toolHandlers: Record<string, ToolHandler> = {
               verificationEnabled: "When enabled, the agent verifies task completion before finishing. Disable for faster responses without verification",
               messageQueueEnabled: "When enabled, users can queue messages while the agent is processing",
               parallelToolExecutionEnabled: "When enabled, multiple tool calls from a single LLM response are executed concurrently",
+              whatsappEnabled: "When enabled, allows sending and receiving WhatsApp messages through SpeakMCP",
             },
           }, null, 2),
         },
@@ -696,6 +698,50 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
+  toggle_whatsapp: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const currentValue = config.whatsappEnabled ?? false
+
+    // Validate enabled parameter if provided (optional)
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Determine new value: use provided value or toggle
+    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
+
+    configStore.save({
+      ...config,
+      whatsappEnabled: enabled,
+    })
+
+    // Trigger WhatsApp MCP server lifecycle changes
+    try {
+      await handleWhatsAppToggle(currentValue, enabled)
+    } catch (_e) {
+      // lifecycle is best-effort
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            setting: "whatsappEnabled",
+            previousValue: currentValue,
+            newValue: enabled,
+            message: `WhatsApp integration has been ${enabled ? "enabled" : "disabled"}.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
   execute_command: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     const { skillsService } = await import("./skills-service")
 
@@ -811,6 +857,435 @@ const toolHandlers: Record<string, ToolHandler> = {
             }, null, 2),
           },
         ],
+        isError: true,
+      }
+    }
+  },
+
+  create_profile: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate required parameters
+    if (typeof args.name !== "string" || args.name.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (typeof args.guidelines !== "string") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "guidelines must be a string" }) }],
+        isError: true,
+      }
+    }
+
+    // Validate optional systemPrompt
+    if (args.systemPrompt !== undefined && typeof args.systemPrompt !== "string") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "systemPrompt must be a string if provided" }) }],
+        isError: true,
+      }
+    }
+
+    const name = args.name.trim()
+    const guidelines = args.guidelines
+    const systemPrompt = args.systemPrompt as string | undefined
+
+    // Check if a profile with the same name already exists (case-insensitive)
+    const profiles = profileService.getProfiles()
+    const existingProfile = profiles.find((p) => p.name.toLowerCase() === name.toLowerCase())
+    if (existingProfile) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `A profile named '${name}' already exists. Profile names must be unique (case-insensitive).`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    try {
+      const profile = profileService.createProfile(name, guidelines, systemPrompt)
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              profile: {
+                id: profile.id,
+                name: profile.name,
+                guidelines: profile.guidelines,
+                systemPrompt: profile.systemPrompt,
+                createdAt: profile.createdAt,
+              },
+              message: `Profile '${profile.name}' created successfully. All MCP servers are disabled by default - use switch_profile to activate it.`,
+            }, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  update_profile: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate required parameter
+    if (typeof args.profileIdOrName !== "string" || args.profileIdOrName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "profileIdOrName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    // Validate optional parameters
+    if (args.name !== undefined && typeof args.name !== "string") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a string if provided" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.guidelines !== undefined && typeof args.guidelines !== "string") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "guidelines must be a string if provided" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.systemPrompt !== undefined && typeof args.systemPrompt !== "string") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "systemPrompt must be a string if provided" }) }],
+        isError: true,
+      }
+    }
+
+    // Check if at least one update field is provided
+    if (args.name === undefined && args.guidelines === undefined && args.systemPrompt === undefined) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "At least one of name, guidelines, or systemPrompt must be provided" }) }],
+        isError: true,
+      }
+    }
+
+    const profileIdOrName = args.profileIdOrName.trim()
+    const profiles = profileService.getProfiles()
+
+    // Find profile by ID or name (case-insensitive for name)
+    const profile = profiles.find(
+      (p) => p.id === profileIdOrName || p.name.toLowerCase() === profileIdOrName.toLowerCase()
+    )
+
+    if (!profile) {
+      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Profile '${profileIdOrName}' not found. Available profiles: ${availableProfiles}`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Build updates object
+    const updates: { name?: string; guidelines?: string; systemPrompt?: string } = {}
+    if (args.name !== undefined) {
+      const trimmedName = (args.name as string).trim()
+      if (trimmedName === "") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a non-empty string" }) }],
+          isError: true,
+        }
+      }
+      // Check if the new name conflicts with an existing profile (case-insensitive, excluding current profile)
+      const existingProfile = profiles.find(
+        (p) => p.id !== profile.id && p.name.toLowerCase() === trimmedName.toLowerCase()
+      )
+      if (existingProfile) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: false,
+                error: `A profile named '${trimmedName}' already exists. Profile names must be unique (case-insensitive).`,
+              }),
+            },
+          ],
+          isError: true,
+        }
+      }
+      updates.name = trimmedName
+    }
+    if (args.guidelines !== undefined) updates.guidelines = args.guidelines as string
+    if (args.systemPrompt !== undefined) updates.systemPrompt = args.systemPrompt as string
+
+    try {
+      const updatedProfile = profileService.updateProfile(profile.id, updates)
+
+      // If this is the currently active profile, sync live config so changes take effect immediately
+      // This mirrors the behavior in switch_profile where configStore is updated with guidelines/systemPrompt
+      const currentProfile = profileService.getCurrentProfile()
+      if (currentProfile && currentProfile.id === profile.id) {
+        const config = configStore.get()
+        const updatedConfig = {
+          ...config,
+          // Only update the fields that were changed
+          ...(updates.guidelines !== undefined && { mcpToolsSystemPrompt: updates.guidelines }),
+          ...(updates.systemPrompt !== undefined && { mcpCustomSystemPrompt: updates.systemPrompt }),
+        }
+        configStore.save(updatedConfig)
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              profile: {
+                id: updatedProfile.id,
+                name: updatedProfile.name,
+                guidelines: updatedProfile.guidelines,
+                systemPrompt: updatedProfile.systemPrompt,
+                updatedAt: updatedProfile.updatedAt,
+              },
+              updatedFields: Object.keys(updates),
+              message: `Profile '${updatedProfile.name}' updated successfully`,
+              liveConfigSynced: currentProfile?.id === profile.id,
+            }, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  delete_profile: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate required parameter
+    if (typeof args.profileIdOrName !== "string" || args.profileIdOrName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "profileIdOrName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const profileIdOrName = args.profileIdOrName.trim()
+    const profiles = profileService.getProfiles()
+
+    // Find profile by ID or name (case-insensitive for name)
+    const profile = profiles.find(
+      (p) => p.id === profileIdOrName || p.name.toLowerCase() === profileIdOrName.toLowerCase()
+    )
+
+    if (!profile) {
+      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Profile '${profileIdOrName}' not found. Available profiles: ${availableProfiles}`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Check if this is the current profile
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile && currentProfile.id === profile.id) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Cannot delete the currently active profile '${profile.name}'. Switch to a different profile first.`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    try {
+      const deleted = profileService.deleteProfile(profile.id)
+
+      if (deleted) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                deletedProfile: {
+                  id: profile.id,
+                  name: profile.name,
+                },
+                message: `Profile '${profile.name}' has been deleted`,
+              }, null, 2),
+            },
+          ],
+          isError: false,
+        }
+      } else {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Failed to delete profile" }) }],
+          isError: true,
+        }
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  duplicate_profile: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate required parameters
+    if (typeof args.sourceProfileIdOrName !== "string" || args.sourceProfileIdOrName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "sourceProfileIdOrName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (typeof args.newName !== "string" || args.newName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "newName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const sourceProfileIdOrName = args.sourceProfileIdOrName.trim()
+    const newName = args.newName.trim()
+    const profiles = profileService.getProfiles()
+
+    // Find source profile by ID or name (case-insensitive for name)
+    const sourceProfile = profiles.find(
+      (p) => p.id === sourceProfileIdOrName || p.name.toLowerCase() === sourceProfileIdOrName.toLowerCase()
+    )
+
+    if (!sourceProfile) {
+      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Source profile '${sourceProfileIdOrName}' not found. Available profiles: ${availableProfiles}`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Check if a profile with newName already exists
+    const existingProfile = profiles.find((p) => p.name.toLowerCase() === newName.toLowerCase())
+    if (existingProfile) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `A profile named '${newName}' already exists`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    try {
+      // Create the new profile with same guidelines and systemPrompt
+      const newProfile = profileService.createProfile(newName, sourceProfile.guidelines, sourceProfile.systemPrompt)
+
+      // Copy MCP server configuration
+      // Note: createProfile() initializes with all servers disabled by default (opt-in mode)
+      // If source has explicit mcpServerConfig, copy it directly
+      // If source has NO mcpServerConfig (legacy "all enabled" behavior), we need to explicitly
+      // set the duplicate to "all enabled" mode to preserve the source behavior
+      if (sourceProfile.mcpServerConfig) {
+        profileService.updateProfileMcpConfig(newProfile.id, sourceProfile.mcpServerConfig)
+      } else {
+        // Legacy profile without mcpServerConfig means "all enabled"
+        // Override the default opt-in config to enable all servers/tools
+        profileService.updateProfileMcpConfig(newProfile.id, {
+          disabledServers: [],
+          disabledTools: [],
+          allServersDisabledByDefault: false,
+          enabledServers: [],
+        })
+      }
+
+      // Copy model configuration if exists
+      if (sourceProfile.modelConfig) {
+        profileService.updateProfileModelConfig(newProfile.id, sourceProfile.modelConfig)
+      }
+
+      // Copy skills configuration if exists
+      if (sourceProfile.skillsConfig) {
+        profileService.updateProfileSkillsConfig(newProfile.id, sourceProfile.skillsConfig)
+      }
+
+      // Get the updated profile with all configurations
+      const duplicatedProfile = profileService.getProfile(newProfile.id)!
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              sourceProfile: {
+                id: sourceProfile.id,
+                name: sourceProfile.name,
+              },
+              newProfile: {
+                id: duplicatedProfile.id,
+                name: duplicatedProfile.name,
+                guidelines: duplicatedProfile.guidelines,
+                systemPrompt: duplicatedProfile.systemPrompt,
+                createdAt: duplicatedProfile.createdAt,
+                hasMcpConfig: !!duplicatedProfile.mcpServerConfig,
+                hasModelConfig: !!duplicatedProfile.modelConfig,
+                hasSkillsConfig: !!duplicatedProfile.skillsConfig,
+              },
+              message: `Profile '${sourceProfile.name}' duplicated as '${duplicatedProfile.name}'`,
+            }, null, 2),
+          },
+        ],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }],
         isError: true,
       }
     }

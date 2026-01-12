@@ -1086,9 +1086,22 @@ const toolHandlers: Record<string, ToolHandler> = {
       // Create the new profile with same guidelines and systemPrompt
       const newProfile = profileService.createProfile(newName, sourceProfile.guidelines, sourceProfile.systemPrompt)
 
-      // Copy MCP server configuration if exists
+      // Copy MCP server configuration
+      // Note: createProfile() initializes with all servers disabled by default (opt-in mode)
+      // If source has explicit mcpServerConfig, copy it directly
+      // If source has NO mcpServerConfig (legacy "all enabled" behavior), we need to explicitly
+      // set the duplicate to "all enabled" mode to preserve the source behavior
       if (sourceProfile.mcpServerConfig) {
         profileService.updateProfileMcpConfig(newProfile.id, sourceProfile.mcpServerConfig)
+      } else {
+        // Legacy profile without mcpServerConfig means "all enabled"
+        // Override the default opt-in config to enable all servers/tools
+        profileService.updateProfileMcpConfig(newProfile.id, {
+          disabledServers: [],
+          disabledTools: [],
+          allServersDisabledByDefault: false,
+          enabledServers: [],
+        })
       }
 
       // Copy model configuration if exists

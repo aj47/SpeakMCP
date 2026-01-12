@@ -11,6 +11,7 @@ import { ConnectionManagerContext, useConnectionManagerProvider } from './src/st
 import { TunnelConnectionContext, useTunnelConnectionProvider } from './src/store/tunnelConnection';
 import { ProfileContext, useProfileProvider } from './src/store/profile';
 import { NotificationContext, useNotificationProvider, NotificationData } from './src/store/notifications';
+import { clearServerBadgeCount } from './src/lib/notifications';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
@@ -154,8 +155,14 @@ function Navigation() {
     if (cfg.ready) {
       // Clear badge when user opens the app
       notificationProvider.clearNotifications();
+      // Also clear badge count on server if connected
+      if (cfg.config.baseUrl && cfg.config.apiKey) {
+        clearServerBadgeCount(cfg.config.baseUrl, cfg.config.apiKey).catch((err) => {
+          console.warn('[App] Failed to clear server badge count:', err);
+        });
+      }
     }
-  }, [cfg.ready, notificationProvider]);
+  }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey, notificationProvider]);
 
   if (!cfg.ready || !sessionStore.ready) {
     return (

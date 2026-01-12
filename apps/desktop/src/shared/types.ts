@@ -589,6 +589,7 @@ export interface PushNotificationToken {
   platform: 'ios' | 'android'
   registeredAt: number
   deviceId?: string
+  badgeCount?: number // Tracks unread notification count for this device
 }
 
 

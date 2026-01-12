@@ -13,7 +13,7 @@ import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
-import { sendMessageNotification, isPushEnabled } from "./push-notification-service"
+import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -1016,6 +1016,24 @@ export async function startRemoteServer() {
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to get push status", error)
       return reply.code(500).send({ error: error?.message || "Failed to get push status" })
+    }
+  })
+
+  // POST /v1/push/clear-badge - Clear badge count for a token (called when mobile app opens)
+  fastify.post("/v1/push/clear-badge", async (req, reply) => {
+    try {
+      const body = req.body as { token?: string }
+
+      if (!body.token || typeof body.token !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid token" })
+      }
+
+      clearBadgeCount(body.token)
+
+      return reply.send({ success: true })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to clear badge count", error)
+      return reply.code(500).send({ error: error?.message || "Failed to clear badge count" })
     }
   })
 

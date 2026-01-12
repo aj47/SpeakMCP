@@ -404,3 +404,34 @@ export async function unregisterToken(baseUrl: string, apiKey: string): Promise<
     return false;
   }
 }
+
+/**
+ * Clear badge count on the server (called when app opens and clears notifications)
+ */
+export async function clearServerBadgeCount(baseUrl: string, apiKey: string): Promise<boolean> {
+  const tokenInfo = await loadStoredPushToken();
+  if (!tokenInfo) {
+    return true; // No token to clear badge for
+  }
+
+  try {
+    const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/push/clear-badge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ token: tokenInfo.token }),
+    });
+
+    if (response.ok) {
+      console.log('[Notifications] Server badge count cleared');
+      return true;
+    }
+    console.error('[Notifications] Failed to clear server badge count:', await response.text());
+    return false;
+  } catch (error) {
+    console.error('[Notifications] Error clearing server badge count:', error);
+    return false;
+  }
+}

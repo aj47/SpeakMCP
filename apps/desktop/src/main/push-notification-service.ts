@@ -56,12 +56,21 @@ export async function sendPushNotification(payload: PushNotificationPayload): Pr
     return { success: true, sent: 0, failed: 0, errors: [] }
   }
 
-  const messages: ExpoPushMessage[] = tokens.map((token: PushNotificationToken) => ({
+  // Increment badge count for each token and save updated counts
+  const updatedTokens = tokens.map((token: PushNotificationToken) => ({
+    ...token,
+    badgeCount: (token.badgeCount ?? 0) + 1,
+  }))
+
+  // Save updated badge counts
+  configStore.save({ ...cfg, pushNotificationTokens: updatedTokens })
+
+  const messages: ExpoPushMessage[] = updatedTokens.map((token: PushNotificationToken) => ({
     to: token.token,
     title: payload.title,
     body: payload.body,
     data: payload.data,
-    badge: payload.badge,
+    badge: token.badgeCount ?? 1, // Use per-token badge count
     sound: payload.sound ?? "default",
     channelId: payload.channelId ?? "default",
     priority: payload.priority ?? "high",
@@ -144,7 +153,7 @@ export async function sendMessageNotification(
       conversationId,
       conversationTitle,
     },
-    badge: 1,
+    // badge is now handled per-token in sendPushNotification
     sound: "default",
     priority: "high",
   })
@@ -157,5 +166,22 @@ export function isPushEnabled(): boolean {
   const cfg = configStore.get()
   const tokens = cfg.pushNotificationTokens || []
   return tokens.length > 0
+}
+
+/**
+ * Clear badge count for a specific token (called when mobile app opens)
+ */
+export function clearBadgeCount(tokenValue: string): void {
+  const cfg = configStore.get()
+  const tokens = cfg.pushNotificationTokens || []
+
+  const updatedTokens = tokens.map((token: PushNotificationToken) =>
+    token.token === tokenValue
+      ? { ...token, badgeCount: 0 }
+      : token
+  )
+
+  configStore.save({ ...cfg, pushNotificationTokens: updatedTokens })
+  diagnosticsService.logInfo("push-service", `Badge count cleared for token: ${tokenValue.substring(0, 20)}...`)
 }
 

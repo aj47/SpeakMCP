@@ -62,6 +62,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/langfuse",
           lazy: () => import("./pages/settings-langfuse"),
         },
+        {
+          path: "settings/dual-model",
+          lazy: () => import("./pages/settings-dual-model"),
+        },
 
       ],
     },

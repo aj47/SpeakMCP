@@ -67,6 +67,11 @@ export const Component = () => {
       href: "/settings/langfuse",
       icon: "i-mingcute-chart-line-line",
     },
+    {
+      text: "Dual-Model",
+      href: "/settings/dual-model",
+      icon: "i-mingcute-brain-2-line",
+    },
   ]
 
   // Route aliases that should highlight the same nav item

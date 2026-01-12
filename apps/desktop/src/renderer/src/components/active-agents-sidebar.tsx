@@ -464,7 +464,7 @@ export function ActiveAgentsSidebar() {
       )}
 
       {/* Past Sessions Section */}
-      <div className="mt-3 border-t pt-2">
+      <div className="mt-3 pt-2">
         <div
           className={cn(
             "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
@@ -492,6 +492,7 @@ export function ActiveAgentsSidebar() {
               : "Past Sessions"}
           >
             <Clock className="h-3.5 w-3.5" />
+            <span>Past</span>
             {conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0 && (
               <span className="text-[10px] text-muted-foreground">
                 {conversationHistoryQuery.data.length}
@@ -527,7 +528,7 @@ export function ActiveAgentsSidebar() {
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search sessions..."
+                  placeholder="Search..."
                   className="h-7 pl-7 text-xs"
                 />
               </div>

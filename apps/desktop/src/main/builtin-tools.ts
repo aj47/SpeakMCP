@@ -688,7 +688,7 @@ const toolHandlers: Record<string, ToolHandler> = {
             setting: "verificationEnabled",
             previousValue: currentValue,
             newValue: enabled,
-            message: `Task completion verification has been ${enabled ? "enabled" : "disabled"}. ${enabled ? "The agent will verify task completion before finishing." : "The agent will respond faster without verification."}`,
+            message: `Task completion verification has been ${enabled ? "enabled" : "disabled"}. ${enabled ? "The agent will verify task completion before finishing." : "The agent will respond faster without verification."} Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
           }, null, 2),
         },
       ],

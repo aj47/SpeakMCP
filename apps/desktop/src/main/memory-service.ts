@@ -16,6 +16,10 @@ function getMemoriesFilePath(): string {
 
 const VALID_IMPORTANCE_VALUES = ["low", "medium", "high", "critical"] as const
 
+function isStringArray(arr: unknown[]): arr is string[] {
+  return arr.every(item => typeof item === "string")
+}
+
 function isValidAgentMemory(item: unknown): item is AgentMemory {
   if (typeof item !== "object" || item === null) {
     return false
@@ -28,7 +32,9 @@ function isValidAgentMemory(item: unknown): item is AgentMemory {
     typeof obj.title === "string" &&
     typeof obj.content === "string" &&
     Array.isArray(obj.keyFindings) &&
+    isStringArray(obj.keyFindings) &&
     Array.isArray(obj.tags) &&
+    isStringArray(obj.tags) &&
     typeof obj.importance === "string" &&
     VALID_IMPORTANCE_VALUES.includes(obj.importance as typeof VALID_IMPORTANCE_VALUES[number])
   )

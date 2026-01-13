@@ -18,6 +18,7 @@ import { mcpService, type MCPTool, type MCPToolResult, handleWhatsAppToggle } fr
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
+import { messageQueueService } from "./message-queue-service"
 import { exec } from "child_process"
 import { promisify } from "util"
 import path from "path"
@@ -390,6 +391,78 @@ const toolHandlers: Record<string, ToolHandler> = {
           text: JSON.stringify({
             agents,
             count: agents.length,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  send_agent_message: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const sessionId = args.sessionId as string
+    const message = args.message as string
+
+    if (!sessionId || !message) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: "sessionId and message are required",
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Get target session
+    const session = agentSessionTracker.getSession(sessionId)
+    if (!session) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Agent session not found: ${sessionId}`,
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Must have a conversation to queue message
+    if (!session.conversationId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: "Target agent session has no linked conversation",
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    // Queue message for the target agent's conversation
+    const queuedMessage = messageQueueService.enqueue(session.conversationId, message)
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            sessionId,
+            conversationId: session.conversationId,
+            queuedMessageId: queuedMessage.id,
+            message: `Message queued for agent session ${sessionId} (${session.conversationTitle})`,
           }, null, 2),
         },
       ],

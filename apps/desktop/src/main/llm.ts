@@ -1283,9 +1283,11 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
+    // Use activeTools (filtered for failures) so context-budget paths like minimal_system_prompt
+    // don't list tools that are no longer callable, which could confuse the LLM
     const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
-      availableTools: uniqueAvailableTools,
+      availableTools: activeTools,
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,

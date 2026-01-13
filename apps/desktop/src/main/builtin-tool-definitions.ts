@@ -94,6 +94,24 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:send_agent_message`,
+    description: "Send a message to another running agent session. The message will be queued and processed by the target agent's conversation. Use list_running_agents first to get session IDs. This enables agent coordination and task delegation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "The session ID of the target agent (get this from list_running_agents)",
+        },
+        message: {
+          type: "string",
+          description: "The message to send to the target agent",
+        },
+      },
+      required: ["sessionId", "message"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:kill_agent`,
     description: "Terminate a specific agent session by its session ID. This will abort any in-flight LLM requests, kill spawned processes, and stop the agent immediately.",
     inputSchema: {
@@ -323,6 +341,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
         },
       },
       required: ["toolName"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:load_skill_instructions`,
+    description: "Load the full instructions for an agent skill. Skills are listed in the system prompt with just name and description. Call this tool to get the complete instructions when you need to use a skill.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skillId: {
+          type: "string",
+          description: "The skill ID to load instructions for. Get skill IDs from the Available Skills section in the system prompt.",
+        },
+      },
+      required: ["skillId"],
     },
   },
 ]

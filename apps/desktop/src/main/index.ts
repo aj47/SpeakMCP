@@ -21,7 +21,7 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
-import { initializeBundledSkills, skillsService } from "./skills-service"
+import { initializeBundledSkills, skillsService, startSkillsFolderWatcher } from "./skills-service"
 import {
   startCloudflareTunnel,
   startNamedCloudflareTunnel,
@@ -153,6 +153,9 @@ app.whenReady().then(() => {
     if (importedSkills.length > 0) {
       logApp(`Imported ${importedSkills.length} skills from skills folder`)
     }
+
+    // Start watching skills folder for changes (auto-refresh without app restart)
+    startSkillsFolderWatcher()
   } catch (error) {
     logApp("Failed to initialize bundled skills:", error)
   }

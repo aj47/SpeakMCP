@@ -611,7 +611,13 @@ export async function makeLLMCallWithFetch(
         const jsonObject = extractJsonObject(text)
         if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
           const response = jsonObject as LLMToolCallResponse
-          if (response.needsMoreWork === undefined && !response.toolCalls) {
+          // Don't force needsMoreWork - let llm.ts heuristics decide
+          // This matches plain text behavior and prevents simple JSON responses
+          // like {"content": "Hello"} from forcing unnecessary iterations
+          // (see issue: JSON vs plain text asymmetry in debugging-agents-langfuse.md)
+
+          // Ensure tool calls always continue (matches native AI SDK behavior)
+          if (response.toolCalls && response.toolCalls.length > 0) {
             response.needsMoreWork = true
           }
           // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement

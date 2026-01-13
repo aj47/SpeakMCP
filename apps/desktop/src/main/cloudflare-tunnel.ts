@@ -193,7 +193,7 @@ export async function startCloudflareTunnel(): Promise<{
   return new Promise<{ success: boolean; url?: string; error?: string }>((resolve) => {
     try {
       // Spawn cloudflared with quick tunnel using resolved path and enhanced environment
-      const proc = spawn(command, ["tunnel", "--url", `http://localhost:${port}`], {
+      const proc = spawn(command, ["tunnel", "--url", `http://127.0.0.1:${port}`], {
         stdio: ["ignore", "pipe", "pipe"],
         env: enhancedEnv as NodeJS.ProcessEnv,
       })
@@ -487,7 +487,7 @@ export async function startNamedCloudflareTunnel(options: {
         "tunnel",
         "--credentials-file", credsPath,
         "run",
-        "--url", `http://localhost:${port}`,
+        "--url", `http://127.0.0.1:${port}`,
         tunnelId,
       ]
 

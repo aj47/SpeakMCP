@@ -168,49 +168,54 @@ app.whenReady().then(() => {
 	          logApp("Remote server started")
 
 	          // Auto-start Cloudflare tunnel if enabled
+	          // Wrapped in try/catch to isolate tunnel errors from remote server startup reporting
 	          if (cfg.cloudflareTunnelAutoStart) {
-	            const cloudflaredInstalled = await checkCloudflaredInstalled()
-	            if (!cloudflaredInstalled) {
-	              logApp("Cloudflare tunnel auto-start skipped: cloudflared not installed")
-	              return
-	            }
-
-	            const tunnelMode = cfg.cloudflareTunnelMode || "quick"
-
-	            if (tunnelMode === "named") {
-	              // For named tunnels, we need tunnel ID and hostname
-	              if (!cfg.cloudflareTunnelId || !cfg.cloudflareTunnelHostname) {
-	                logApp("Cloudflare tunnel auto-start skipped: named tunnel requires tunnel ID and hostname")
+	            try {
+	              const cloudflaredInstalled = await checkCloudflaredInstalled()
+	              if (!cloudflaredInstalled) {
+	                logApp("Cloudflare tunnel auto-start skipped: cloudflared not installed")
 	                return
 	              }
-	              startNamedCloudflareTunnel({
-	                tunnelId: cfg.cloudflareTunnelId,
-	                hostname: cfg.cloudflareTunnelHostname,
-	                credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
-	              })
-	                .then((result) => {
-	                  if (result.success) {
-	                    logApp(`Cloudflare named tunnel started: ${result.url}`)
-	                  } else {
-	                    logApp(`Cloudflare named tunnel failed to start: ${result.error}`)
-	                  }
+
+	              const tunnelMode = cfg.cloudflareTunnelMode || "quick"
+
+	              if (tunnelMode === "named") {
+	                // For named tunnels, we need tunnel ID and hostname
+	                if (!cfg.cloudflareTunnelId || !cfg.cloudflareTunnelHostname) {
+	                  logApp("Cloudflare tunnel auto-start skipped: named tunnel requires tunnel ID and hostname")
+	                  return
+	                }
+	                startNamedCloudflareTunnel({
+	                  tunnelId: cfg.cloudflareTunnelId,
+	                  hostname: cfg.cloudflareTunnelHostname,
+	                  credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
 	                })
-	                .catch((err) =>
-	                  logApp(`Cloudflare named tunnel error: ${err instanceof Error ? err.message : String(err)}`)
-	                )
-	            } else {
-	              // Quick tunnel
-	              startCloudflareTunnel()
-	                .then((result) => {
-	                  if (result.success) {
-	                    logApp(`Cloudflare quick tunnel started: ${result.url}`)
-	                  } else {
-	                    logApp(`Cloudflare quick tunnel failed to start: ${result.error}`)
-	                  }
-	                })
-	                .catch((err) =>
-	                  logApp(`Cloudflare quick tunnel error: ${err instanceof Error ? err.message : String(err)}`)
-	                )
+	                  .then((result) => {
+	                    if (result.success) {
+	                      logApp(`Cloudflare named tunnel started: ${result.url}`)
+	                    } else {
+	                      logApp(`Cloudflare named tunnel failed to start: ${result.error}`)
+	                    }
+	                  })
+	                  .catch((err) =>
+	                    logApp(`Cloudflare named tunnel error: ${err instanceof Error ? err.message : String(err)}`)
+	                  )
+	              } else {
+	                // Quick tunnel
+	                startCloudflareTunnel()
+	                  .then((result) => {
+	                    if (result.success) {
+	                      logApp(`Cloudflare quick tunnel started: ${result.url}`)
+	                    } else {
+	                      logApp(`Cloudflare quick tunnel failed to start: ${result.error}`)
+	                    }
+	                  })
+	                  .catch((err) =>
+	                    logApp(`Cloudflare quick tunnel error: ${err instanceof Error ? err.message : String(err)}`)
+	                  )
+	              }
+	            } catch (err) {
+	              logApp(`Cloudflare tunnel auto-start error: ${err instanceof Error ? err.message : String(err)}`)
 	            }
 	          }
 	        })

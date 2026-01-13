@@ -14,6 +14,26 @@ function getMemoriesFilePath(): string {
   return path.join(app.getPath("userData"), "memories.json")
 }
 
+const VALID_IMPORTANCE_VALUES = ["low", "medium", "high", "critical"] as const
+
+function isValidAgentMemory(item: unknown): item is AgentMemory {
+  if (typeof item !== "object" || item === null) {
+    return false
+  }
+  const obj = item as Record<string, unknown>
+  return (
+    typeof obj.id === "string" &&
+    typeof obj.createdAt === "number" &&
+    typeof obj.updatedAt === "number" &&
+    typeof obj.title === "string" &&
+    typeof obj.content === "string" &&
+    Array.isArray(obj.keyFindings) &&
+    Array.isArray(obj.tags) &&
+    typeof obj.importance === "string" &&
+    VALID_IMPORTANCE_VALUES.includes(obj.importance as typeof VALID_IMPORTANCE_VALUES[number])
+  )
+}
+
 class MemoryService {
   private memories: AgentMemory[] = []
   private initialized = false
@@ -23,7 +43,24 @@ class MemoryService {
     try {
       if (fs.existsSync(filePath)) {
         const data = fs.readFileSync(filePath, "utf-8")
-        this.memories = JSON.parse(data)
+        const parsed: unknown = JSON.parse(data)
+
+        if (!Array.isArray(parsed)) {
+          if (isDebugLLM()) {
+            logLLM("[MemoryService] Warning: memories file is not an array, resetting to empty")
+          }
+          this.memories = []
+          return
+        }
+
+        const validMemories = parsed.filter(isValidAgentMemory)
+        const invalidCount = parsed.length - validMemories.length
+
+        if (invalidCount > 0 && isDebugLLM()) {
+          logLLM(`[MemoryService] Warning: filtered out ${invalidCount} invalid memory entries`)
+        }
+
+        this.memories = validMemories
       }
     } catch (error) {
       if (isDebugLLM()) {
@@ -33,14 +70,16 @@ class MemoryService {
     }
   }
 
-  private async saveToDisk(): Promise<void> {
+  private async saveToDisk(): Promise<boolean> {
     const filePath = getMemoriesFilePath()
     try {
       fs.writeFileSync(filePath, JSON.stringify(this.memories, null, 2), "utf-8")
+      return true
     } catch (error) {
       if (isDebugLLM()) {
         logLLM("[MemoryService] Error saving memories:", error)
       }
+      return false
     }
   }
 
@@ -56,12 +95,25 @@ class MemoryService {
   async saveMemory(memory: AgentMemory): Promise<boolean> {
     await this.initialize()
     const existingIndex = this.memories.findIndex(m => m.id === memory.id)
+    const previousMemory = existingIndex >= 0 ? this.memories[existingIndex] : null
+
     if (existingIndex >= 0) {
       this.memories[existingIndex] = memory
     } else {
       this.memories.push(memory)
     }
-    await this.saveToDisk()
+
+    const success = await this.saveToDisk()
+    if (!success) {
+      // Roll back the in-memory change
+      if (previousMemory) {
+        this.memories[existingIndex] = previousMemory
+      } else {
+        this.memories.pop()
+      }
+      return false
+    }
+
     if (isDebugLLM()) {
       logLLM("[MemoryService] Saved memory:", memory.id)
     }
@@ -149,8 +201,16 @@ class MemoryService {
     if (index < 0) {
       return false
     }
+    const deletedMemory = this.memories[index]
     this.memories.splice(index, 1)
-    await this.saveToDisk()
+
+    const success = await this.saveToDisk()
+    if (!success) {
+      // Roll back: restore the deleted memory at its original position
+      this.memories.splice(index, 0, deletedMemory)
+      return false
+    }
+
     if (isDebugLLM()) {
       logLLM("[MemoryService] Deleted memory:", id)
     }

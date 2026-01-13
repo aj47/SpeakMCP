@@ -1246,13 +1246,103 @@ function notifySkillsFolderChanged(): void {
 }
 
 // File watcher state
-let skillsWatcher: fs.FSWatcher | null = null
+// On Linux, we need multiple watchers since recursive watching is not supported
+let skillsWatchers: fs.FSWatcher[] = []
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 const DEBOUNCE_MS = 500 // Wait 500ms after last change before notifying
 
 /**
+ * Handle a file system change event from any watcher.
+ */
+function handleWatcherEvent(eventType: string, filename: string | null): void {
+  // Only care about SKILL.md files or directory changes
+  if (!filename) return
+
+  const isSkillFile = filename.endsWith("SKILL.md") || filename.endsWith("skill.md") || filename.endsWith(".md")
+  const isDirectory = !filename.includes(".")
+
+  if (isSkillFile || isDirectory) {
+    logApp(`Skills folder changed: ${eventType} ${filename}`)
+
+    // Debounce to avoid multiple rapid notifications
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+    }
+
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null
+      // On Linux, refresh subdirectory watchers when structure changes
+      if (process.platform === "linux" && isDirectory) {
+        refreshLinuxSubdirectoryWatchers()
+      }
+      notifySkillsFolderChanged()
+    }, DEBOUNCE_MS)
+  }
+}
+
+/**
+ * Set up a watcher for a directory and add it to the watchers array.
+ */
+function setupWatcher(dirPath: string): fs.FSWatcher | null {
+  try {
+    const watcher = fs.watch(dirPath, (eventType, filename) => {
+      handleWatcherEvent(eventType, filename)
+    })
+
+    watcher.on("error", (error) => {
+      logApp(`Skills folder watcher error for ${dirPath}:`, error)
+      // Don't stop all watchers on a single error, just log it
+    })
+
+    return watcher
+  } catch (error) {
+    logApp(`Failed to set up watcher for ${dirPath}:`, error)
+    return null
+  }
+}
+
+/**
+ * Refresh subdirectory watchers on Linux.
+ * Called when directory structure changes to pick up new skill folders.
+ */
+function refreshLinuxSubdirectoryWatchers(): void {
+  if (process.platform !== "linux") return
+
+  // Close all existing watchers except the first one (root folder)
+  const rootWatcher = skillsWatchers[0]
+  for (let i = 1; i < skillsWatchers.length; i++) {
+    try {
+      skillsWatchers[i].close()
+    } catch {
+      // Ignore close errors
+    }
+  }
+  skillsWatchers = rootWatcher ? [rootWatcher] : []
+
+  // Re-scan and add watchers for subdirectories
+  try {
+    const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const subDirPath = path.join(skillsFolder, entry.name)
+        const watcher = setupWatcher(subDirPath)
+        if (watcher) {
+          skillsWatchers.push(watcher)
+        }
+      }
+    }
+    logApp(`Linux: Refreshed watchers, now watching ${skillsWatchers.length} directories`)
+  } catch (error) {
+    logApp("Failed to refresh Linux subdirectory watchers:", error)
+  }
+}
+
+/**
  * Start watching the skills folder for changes.
  * Automatically notifies the renderer when new skills are added or modified.
+ *
+ * Note: On Linux, fs.watch({ recursive: true }) is not supported, so we set up
+ * individual watchers for the root folder and each skill subdirectory.
  */
 export function startSkillsFolderWatcher(): void {
   // Ensure folder exists
@@ -1261,40 +1351,48 @@ export function startSkillsFolderWatcher(): void {
   }
 
   // Don't start duplicate watchers
-  if (skillsWatcher) {
+  if (skillsWatchers.length > 0) {
     logApp("Skills folder watcher already running")
     return
   }
 
   try {
-    skillsWatcher = fs.watch(skillsFolder, { recursive: true }, (eventType, filename) => {
-      // Only care about SKILL.md files or directory changes
-      if (!filename) return
+    const isLinux = process.platform === "linux"
 
-      const isSkillFile = filename.endsWith("SKILL.md") || filename.endsWith("skill.md") || filename.endsWith(".md")
-      const isDirectory = !filename.includes(".")
-
-      if (isSkillFile || isDirectory) {
-        logApp(`Skills folder changed: ${eventType} ${filename}`)
-
-        // Debounce to avoid multiple rapid notifications
-        if (debounceTimer) {
-          clearTimeout(debounceTimer)
-        }
-
-        debounceTimer = setTimeout(() => {
-          debounceTimer = null
-          notifySkillsFolderChanged()
-        }, DEBOUNCE_MS)
+    if (isLinux) {
+      // Linux: Set up non-recursive watcher for root folder
+      const rootWatcher = setupWatcher(skillsFolder)
+      if (rootWatcher) {
+        skillsWatchers.push(rootWatcher)
       }
-    })
 
-    skillsWatcher.on("error", (error) => {
-      logApp("Skills folder watcher error:", error)
-      stopSkillsFolderWatcher()
-    })
+      // Also watch each existing skill subdirectory (one level deep)
+      const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const subDirPath = path.join(skillsFolder, entry.name)
+          const watcher = setupWatcher(subDirPath)
+          if (watcher) {
+            skillsWatchers.push(watcher)
+          }
+        }
+      }
 
-    logApp(`Started watching skills folder: ${skillsFolder}`)
+      logApp(`Started watching skills folder (Linux mode): ${skillsFolder} with ${skillsWatchers.length} watchers`)
+    } else {
+      // macOS and Windows: Use recursive watching
+      const watcher = fs.watch(skillsFolder, { recursive: true }, (eventType, filename) => {
+        handleWatcherEvent(eventType, filename)
+      })
+
+      watcher.on("error", (error) => {
+        logApp("Skills folder watcher error:", error)
+        stopSkillsFolderWatcher()
+      })
+
+      skillsWatchers.push(watcher)
+      logApp(`Started watching skills folder: ${skillsFolder}`)
+    }
   } catch (error) {
     logApp("Failed to start skills folder watcher:", error)
   }
@@ -1304,10 +1402,16 @@ export function startSkillsFolderWatcher(): void {
  * Stop watching the skills folder.
  */
 export function stopSkillsFolderWatcher(): void {
-  if (skillsWatcher) {
-    skillsWatcher.close()
-    skillsWatcher = null
-    logApp("Stopped skills folder watcher")
+  for (const watcher of skillsWatchers) {
+    try {
+      watcher.close()
+    } catch {
+      // Ignore close errors
+    }
+  }
+  if (skillsWatchers.length > 0) {
+    logApp(`Stopped ${skillsWatchers.length} skills folder watcher(s)`)
+    skillsWatchers = []
   }
   if (debounceTimer) {
     clearTimeout(debounceTimer)

@@ -71,12 +71,17 @@ export function Component() {
   // Listen for skills folder changes from the main process (file watcher)
   useEffect(() => {
     const unsubscribe = rendererHandlers.skillsFolderChanged.listen(async () => {
-      // Auto-scan and refresh skills when folder changes
-      const importedSkills = await tipcClient.scanSkillsFolder()
-      queryClient.invalidateQueries({ queryKey: ["skills"] })
-      if (importedSkills && importedSkills.length > 0) {
-        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
-        toast.success(`Auto-imported ${importedSkills.length} skill(s)`)
+      try {
+        // Auto-scan and refresh skills when folder changes
+        const importedSkills = await tipcClient.scanSkillsFolder()
+        queryClient.invalidateQueries({ queryKey: ["skills"] })
+        if (importedSkills && importedSkills.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
+          toast.success(`Auto-imported ${importedSkills.length} skill(s)`)
+        }
+      } catch (error) {
+        console.error("Failed to auto-refresh skills:", error)
+        toast.error("Failed to auto-refresh skills")
       }
     })
     return () => unsubscribe()

@@ -584,9 +584,8 @@ export interface ShrinkOptions {
   targetRatio?: number // default 0.7
   lastNMessages?: number // default 3
   summarizeCharThreshold?: number // default 2000
-  sessionId?: string // optional session ID for abort control
+  sessionId?: string // optional session ID for abort control and progress injection
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
-  completedWorkSummary?: string // optional completed work summary to inject when context is shrunk
 }
 
 export interface ShrinkResult {
@@ -756,22 +755,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
         tokens = estimateTokensFromMessages(messages)
         if (isDebugLLM()) logLLM("[Context Budget] Injected session progress summary from summarization service")
       }
-    }
-  }
-
-  // Inject completed work summary if provided (bounded to prevent context bloat)
-  if (opts.completedWorkSummary && opts.completedWorkSummary.trim()) {
-    // Bound the summary to prevent re-bloating the context (same limit as buildContextFromSummaries)
-    const MAX_COMPLETED_WORK_SUMMARY_LENGTH = 2000
-    let boundedSummary = opts.completedWorkSummary.trim()
-    if (boundedSummary.length > MAX_COMPLETED_WORK_SUMMARY_LENGTH) {
-      boundedSummary = boundedSummary.slice(0, MAX_COMPLETED_WORK_SUMMARY_LENGTH - 3) + "..."
-    }
-    const firstUserIdx = messages.findIndex(m => m.role === "user")
-    if (firstUserIdx >= 0 && firstUserIdx < messages.length - 1) {
-      messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: boundedSummary })
-      tokens = estimateTokensFromMessages(messages)
-      if (isDebugLLM()) logLLM("[Context Budget] Injected completed work summary")
     }
   }
 

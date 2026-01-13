@@ -7,7 +7,7 @@ import {
 } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
-import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
+
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
@@ -31,59 +31,6 @@ import {
   type SummarizationInput,
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
-
-/**
- * Use LLM to extract useful context from conversation history
- */
-async function extractContextFromHistory(
-  conversationHistory: Array<{
-    role: "user" | "assistant" | "tool"
-    content: string
-    toolCalls?: MCPToolCall[]
-    toolResults?: MCPToolResult[]
-  }>,
-  config: any,
-): Promise<{
-  resources: Array<{ type: string; id: string }>
-}> {
-  if (conversationHistory.length === 0) {
-    return { resources: [] }
-  }
-
-  // Create a condensed version of the conversation for analysis
-  const conversationText = conversationHistory
-    .map((entry) => {
-      let text = `${entry.role.toUpperCase()}: ${entry.content}`
-
-      if (entry.toolCalls) {
-        text += `\nTOOL_CALLS: ${entry.toolCalls.map((tc) => `${tc.name}(${JSON.stringify(tc.arguments)})`).join(", ")}`
-      }
-
-      if (entry.toolResults) {
-        text += `\nTOOL_RESULTS: ${entry.toolResults.map((tr) => (tr.isError ? "ERROR" : "SUCCESS")).join(", ")}`
-      }
-
-      return text
-    })
-    .join("\n\n")
-
-  const contextExtractionPrompt = `Extract active resource IDs from this conversation:
-
-${conversationText}
-
-Return JSON: {"resources": [{"type": "session|connection|handle|other", "id": "actual_id_value"}]}
-Only include currently active/usable resources.`
-
-  try {
-    const result = await makeStructuredContextExtraction(
-      contextExtractionPrompt,
-      config.mcpToolsProviderId,
-    )
-    return result as { resources: Array<{ type: string; id: string }> }
-  } catch (error) {
-    return { resources: [] }
-  }
-}
 
 /**
  * Clean error message by removing stack traces and noise
@@ -402,20 +349,6 @@ async function executeToolWithRetries(
     retryCount,
     cancelledByKill: false,
   }
-}
-
-/**
- * Represents a completed work item that survives context shrinking.
- * This structure tracks completed work that should never be lost even when
- * the context budget forces message removal.
- */
-interface CompletedWorkItem {
-  stepNumber: number
-  timestamp: number
-  action: string  // Brief description of what was done
-  toolName?: string  // If it was a tool execution
-  result: 'success' | 'failure' | 'partial'
-  summary: string  // Short summary (under 200 chars)
 }
 
 export async function processTranscriptWithAgentMode(
@@ -798,20 +731,6 @@ export async function processTranscriptWithAgentMode(
     relevantMemories, // memories from previous sessions
   )
 
-  // Generic context extraction from chat history - works with any MCP tool
-  const extractRecentContext = (
-    history: Array<{
-      role: string
-      content: string
-      toolCalls?: any[]
-      toolResults?: any[]
-    }>,
-  ) => {
-    // Simply return the recent conversation history - let the LLM understand the context
-    // This is much simpler and works with any MCP tool, not just specific ones
-    return history.slice(-8) // Last 8 messages provide sufficient context
-  }
-
   logLLM(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
   logLLM(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
   if (previousConversationHistory && previousConversationHistory.length > 0) {
@@ -828,11 +747,6 @@ export async function processTranscriptWithAgentMode(
     ...(previousConversationHistory || []),
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
-
-  // Completed work tracking - survives context shrinking
-  // This array tracks completed work that should never be lost even when
-  // the context budget forces message removal. Items are never removed.
-  const completedWork: CompletedWorkItem[] = []
 
   // Track the index where the current user prompt was added
   // This is used to scope tool result checks to only the current turn
@@ -950,53 +864,6 @@ export async function processTranscriptWithAgentMode(
     return union.size === 0 ? 0 : intersection.size / union.size
   }
 
-  /**
-   * Add a completed work item to the tracking array.
-   * This function tracks tool results and assistant responses, creating
-   * a brief summary for each. Items are never removed from this array,
-   * ensuring work history is preserved across context shrinking.
-   */
-  const addCompletedWork = (
-    action: string,
-    result: 'success' | 'failure' | 'partial',
-    summary: string,
-    toolName?: string
-  ): void => {
-    const stepNumber = completedWork.length + 1
-    // Truncate summary to under 200 chars if needed
-    const truncatedSummary = summary.length > 200
-      ? summary.substring(0, 197) + '...'
-      : summary
-
-    completedWork.push({
-      stepNumber,
-      timestamp: Date.now(),
-      action,
-      toolName,
-      result,
-      summary: truncatedSummary,
-    })
-  }
-
-  /**
-   * Get a formatted summary of all completed work.
-   * Returns a bullet-point summary string that can be injected into
-   * the system prompt or context to preserve work history.
-   */
-  const getCompletedWorkSummary = (): string => {
-    if (completedWork.length === 0) {
-      return ''
-    }
-
-    const lines = completedWork.map((item) => {
-      const toolInfo = item.toolName ? ` [${item.toolName}]` : ''
-      const resultIcon = item.result === 'success' ? '✓' : item.result === 'failure' ? '✗' : '◐'
-      return `• Step ${item.stepNumber}${toolInfo}: ${resultIcon} ${item.summary}`
-    })
-
-    return `## Completed Work (preserved across context shrinking)\n${lines.join('\n')}`
-  }
-
   // Helper to map conversation history to LLM messages format (filters empty content)
   const mapConversationToMessages = (
     addSummaryPrompt: boolean = false
@@ -1065,7 +932,6 @@ export async function processTranscriptWithAgentMode(
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
-      completedWorkSummary: getCompletedWorkSummary(),
       onSummarizationProgress: (current, total) => {
         const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
         if (lastThinkingStep) {
@@ -1447,33 +1313,9 @@ Return ONLY JSON per schema.`,
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
-    // Use the base system prompt (or rebuilt prompt if tools were excluded)
-    // This ensures the LLM only sees tools it can actually call
-    let contextAwarePrompt = currentSystemPrompt
-
-    // Add enhanced context instruction using LLM-based context extraction
-    // Recalculate recent context each iteration to include newly added messages
-    const currentSessionHistory = conversationHistory.slice(sessionStartIndex)
-    const recentContext = extractRecentContext(currentSessionHistory)
-
-    if (recentContext.length > 1) {
-      // Use LLM to extract useful context from conversation history
-      // IMPORTANT: Only extract context from the current session's messages to prevent
-      // context leakage between sessions. sessionStartIndex marks where this session began.
-      const contextInfo = await extractContextFromHistory(
-        currentSessionHistory,
-        config,
-      )
-
-      // Only add resource IDs if there are any - LLM can infer context from conversation history
-      if (contextInfo.resources.length > 0) {
-        contextAwarePrompt += `\n\nAVAILABLE RESOURCES:\n${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id}`).join("\n")}`
-      }
-    }
-
     // Build messages for LLM call
     const messages = [
-      { role: "system", content: contextAwarePrompt },
+      { role: "system", content: currentSystemPrompt },
       ...conversationHistory
         .map((entry) => {
           if (entry.role === "tool") {
@@ -1517,7 +1359,6 @@ Return ONLY JSON per schema.`,
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
-      completedWorkSummary: getCompletedWorkSummary(),
       onSummarizationProgress: (current, total, message) => {
         // Update thinking step with summarization progress
         thinkingStep.description = `Summarizing context (${current}/${total})`
@@ -2619,33 +2460,6 @@ Return ONLY JSON per schema.`,
 
       addMessage("tool", toolResultsText, undefined, resultsWithPlaceholders)
 
-      // Track completed work for each tool execution (survives context shrinking)
-      // Note: toolCallsArray and resultsWithPlaceholders have the same order/indices
-      for (let i = 0; i < resultsWithPlaceholders.length; i++) {
-        const result = resultsWithPlaceholders[i]
-        const toolName = toolCallsArray[i]?.name || 'unknown'
-        const contentText = result.content?.map((c) => c.text).join(' ').trim() || ''
-        const resultType: 'success' | 'failure' | 'partial' = result.isError
-          ? 'failure'
-          : contentText.length === 0 || contentText === '[No output]'
-            ? 'partial'
-            : 'success'
-
-        // Create a brief summary from the result content
-        const summary = contentText.length > 0
-          ? contentText
-          : result.isError
-            ? 'Tool execution failed'
-            : 'Tool executed with no output'
-
-        addCompletedWork(
-          `Executed tool: ${toolName}`,
-          resultType,
-          summary,
-          toolName
-        )
-      }
-
       // Emit progress update immediately after adding tool results so UI shows them
       emit({
         currentIteration: iteration,
@@ -2806,7 +2620,6 @@ Return ONLY JSON per schema.`,
           relevantTools: undefined,
           isAgentMode: true,
           sessionId: currentSessionId,
-          completedWorkSummary: getCompletedWorkSummary(),
           onSummarizationProgress: (current, total) => {
             summaryStep.description = `Summarizing for summary generation (${current}/${total})`
             emit({
@@ -3056,7 +2869,6 @@ Return ONLY JSON per schema.`,
           relevantTools: undefined,
           isAgentMode: true,
           sessionId: currentSessionId,
-          completedWorkSummary: getCompletedWorkSummary(),
           onSummarizationProgress: (current, total) => {
             summaryStep.description = `Summarizing for summary generation (${current}/${total})`
             emit({

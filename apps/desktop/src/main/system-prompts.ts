@@ -16,6 +16,7 @@ TOOL RELIABILITY:
 - Work incrementally - verify each step before continuing
 - On failure: read the error, don't retry the same call blindly
 - After 2-3 failures: try a different approach or ask the user
+- STRONGLY RECOMMENDED: When having issues with a tool, use speakmcp-settings:get_tool_schema(toolName) to read the full specification before retrying
 
 SHELL COMMANDS & FILE OPERATIONS:
 - Use speakmcp-settings:execute_command for running shell commands, scripts, file operations, and automation

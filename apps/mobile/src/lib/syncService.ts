@@ -21,12 +21,19 @@ export interface SyncableSession extends Session {
   // Session already has serverConversationId optional field
 }
 
+const VALID_ROLES = ['user', 'assistant', 'tool'] as const;
+
 /**
  * Convert a mobile ChatMessage to server message format
  */
 function toServerMessage(msg: ChatMessage): ServerConversationMessage {
+  // Normalize role to valid values - default to 'user' for legacy/invalid data
+  const role: 'user' | 'assistant' | 'tool' = VALID_ROLES.includes(msg.role as any)
+    ? (msg.role as 'user' | 'assistant' | 'tool')
+    : 'user';
+
   return {
-    role: msg.role as 'user' | 'assistant' | 'tool',
+    role,
     content: msg.content,
     timestamp: msg.timestamp,
     toolCalls: msg.toolCalls,

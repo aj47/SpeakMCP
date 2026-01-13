@@ -907,6 +907,21 @@ export async function startRemoteServer() {
     }
   })
 
+  // Helper function to validate message objects
+  const validateMessages = (messages: Array<{ role: string; content: unknown }>): string | null => {
+    const validRoles = ["user", "assistant", "tool"]
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (!msg.role || !validRoles.includes(msg.role)) {
+        return `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}`
+      }
+      if (typeof msg.content !== "string") {
+        return `Invalid content in message ${i}: expected string`
+      }
+    }
+    return null
+  }
+
   // GET /v1/conversations - List all conversations
   fastify.get("/v1/conversations", async (_req, reply) => {
     try {
@@ -940,15 +955,9 @@ export async function startRemoteServer() {
       }
 
       // Validate each message object
-      const validRoles = ["user", "assistant", "tool"]
-      for (let i = 0; i < body.messages.length; i++) {
-        const msg = body.messages[i]
-        if (!msg.role || !validRoles.includes(msg.role)) {
-          return reply.code(400).send({ error: `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}` })
-        }
-        if (typeof msg.content !== "string") {
-          return reply.code(400).send({ error: `Invalid content in message ${i}: expected string` })
-        }
+      const validationError = validateMessages(body.messages)
+      if (validationError) {
+        return reply.code(400).send({ error: validationError })
       }
 
       const conversationId = conversationService.generateConversationIdPublic()
@@ -965,7 +974,7 @@ export async function startRemoteServer() {
         id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
         role: msg.role,
         content: msg.content,
-        timestamp: msg.timestamp || now,
+        timestamp: msg.timestamp ?? now,
         toolCalls: msg.toolCalls,
         toolResults: msg.toolResults,
       }))
@@ -973,12 +982,12 @@ export async function startRemoteServer() {
       const conversation = {
         id: conversationId,
         title,
-        createdAt: body.createdAt || now,
-        updatedAt: body.updatedAt || now,
+        createdAt: body.createdAt ?? now,
+        updatedAt: body.updatedAt ?? now,
         messages,
       }
 
-      await conversationService.saveConversation(conversation)
+      await conversationService.saveConversation(conversation, true)
       diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} with ${messages.length} messages`)
 
       return reply.code(201).send({
@@ -1041,15 +1050,9 @@ export async function startRemoteServer() {
         }
 
         // Validate each message object
-        const validRoles = ["user", "assistant", "tool"]
-        for (let i = 0; i < body.messages.length; i++) {
-          const msg = body.messages[i]
-          if (!msg.role || !validRoles.includes(msg.role)) {
-            return reply.code(400).send({ error: `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}` })
-          }
-          if (typeof msg.content !== "string") {
-            return reply.code(400).send({ error: `Invalid content in message ${i}: expected string` })
-          }
+        const validationError = validateMessages(body.messages)
+        if (validationError) {
+          return reply.code(400).send({ error: validationError })
         }
 
         const firstMessageContent = body.messages[0]?.content || ""
@@ -1061,7 +1064,7 @@ export async function startRemoteServer() {
           id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
           role: msg.role,
           content: msg.content,
-          timestamp: msg.timestamp || now,
+          timestamp: msg.timestamp ?? now,
           toolCalls: msg.toolCalls,
           toolResults: msg.toolResults,
         }))
@@ -1070,11 +1073,11 @@ export async function startRemoteServer() {
           id: conversationId,
           title,
           createdAt: now,
-          updatedAt: body.updatedAt || now,
+          updatedAt: body.updatedAt ?? now,
           messages,
         }
 
-        await conversationService.saveConversation(conversation)
+        await conversationService.saveConversation(conversation, true)
         diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} via PUT with ${messages.length} messages`)
       } else {
         // Update existing conversation
@@ -1084,30 +1087,24 @@ export async function startRemoteServer() {
 
         if (body.messages && Array.isArray(body.messages)) {
           // Validate each message object
-          const validRoles = ["user", "assistant", "tool"]
-          for (let i = 0; i < body.messages.length; i++) {
-            const msg = body.messages[i]
-            if (!msg.role || !validRoles.includes(msg.role)) {
-              return reply.code(400).send({ error: `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}` })
-            }
-            if (typeof msg.content !== "string") {
-              return reply.code(400).send({ error: `Invalid content in message ${i}: expected string` })
-            }
+          const validationError = validateMessages(body.messages)
+          if (validationError) {
+            return reply.code(400).send({ error: validationError })
           }
 
           conversation.messages = body.messages.map((msg, index) => ({
             id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
             role: msg.role,
             content: msg.content,
-            timestamp: msg.timestamp || now,
+            timestamp: msg.timestamp ?? now,
             toolCalls: msg.toolCalls,
             toolResults: msg.toolResults,
           }))
         }
 
-        conversation.updatedAt = body.updatedAt || now
+        conversation.updatedAt = body.updatedAt ?? now
 
-        await conversationService.saveConversation(conversation)
+        await conversationService.saveConversation(conversation, true)
         diagnosticsService.logInfo("remote-server", `Updated conversation ${conversationId}`)
       }
 

@@ -206,17 +206,19 @@ export interface AgentStepSummary {
   stepNumber: number
   timestamp: number
 
-  // Summary content
-  actionSummary: string      // What the agent just did
-  keyFindings: string[]      // Important data/insights discovered
-  nextSteps?: string         // What the agent plans to do next
-  decisionsMade?: string[]   // Critical choices and reasoning
+  // Summary content - single line, ultra compact
+  actionSummary: string      // What the agent just did (single line)
 
   // Metadata
   importance: "low" | "medium" | "high" | "critical"
   savedToMemory?: boolean
   userNotes?: string
   tags?: string[]
+
+  // Legacy fields (kept for backward compatibility)
+  keyFindings?: string[]
+  nextSteps?: string
+  decisionsMade?: string[]
 }
 
 // Memory entry (saved from summaries)
@@ -234,16 +236,16 @@ export interface AgentMemory {
   conversationId?: string
   conversationTitle?: string
 
-  // Content
+  // Content - single line, ultra compact
   title: string
-  content: string
-  keyFindings: string[]
+  content: string             // Single line memory
 
   // Organization
   tags: string[]
   importance: "low" | "medium" | "high" | "critical"
 
-  // User additions
+  // Legacy/optional fields
+  keyFindings?: string[]      // Deprecated, kept for backward compatibility
   userNotes?: string
 }
 

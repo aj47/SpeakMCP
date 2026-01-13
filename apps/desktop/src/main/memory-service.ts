@@ -25,14 +25,16 @@ function isValidAgentMemory(item: unknown): item is AgentMemory {
     return false
   }
   const obj = item as Record<string, unknown>
+  // keyFindings is now optional for backward compatibility
+  const hasValidKeyFindings = obj.keyFindings === undefined ||
+    (Array.isArray(obj.keyFindings) && isStringArray(obj.keyFindings))
   return (
     typeof obj.id === "string" &&
     typeof obj.createdAt === "number" &&
     typeof obj.updatedAt === "number" &&
     typeof obj.title === "string" &&
     typeof obj.content === "string" &&
-    Array.isArray(obj.keyFindings) &&
-    isStringArray(obj.keyFindings) &&
+    hasValidKeyFindings &&
     Array.isArray(obj.tags) &&
     isStringArray(obj.tags) &&
     typeof obj.importance === "string" &&
@@ -165,7 +167,6 @@ class MemoryService {
       conversationTitle,
       title: title || summary.actionSummary.slice(0, 100),
       content: summary.actionSummary,
-      keyFindings: summary.keyFindings,
       tags: tags || summary.tags || [],
       importance: summary.importance,
       userNotes,
@@ -217,7 +218,6 @@ class MemoryService {
     return all.filter(m =>
       m.title.toLowerCase().includes(lowerQuery) ||
       m.content.toLowerCase().includes(lowerQuery) ||
-      m.keyFindings.some(f => f.toLowerCase().includes(lowerQuery)) ||
       m.tags.some(t => t.toLowerCase().includes(lowerQuery))
     )
   }

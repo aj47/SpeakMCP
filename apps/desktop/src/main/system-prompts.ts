@@ -43,23 +43,8 @@ function formatMemoriesForPrompt(memories: AgentMemory[], maxMemories: number = 
   const selected = sorted.slice(0, maxMemories)
   if (selected.length === 0) return ""
 
-  const lines: string[] = []
-  for (const mem of selected) {
-    lines.push(`### ${mem.title} [${mem.importance}]`)
-    lines.push(mem.content)
-    if (mem.keyFindings.length > 0) {
-      lines.push("Key findings:")
-      for (const finding of mem.keyFindings) {
-        lines.push(`- ${finding}`)
-      }
-    }
-    if (mem.userNotes) {
-      lines.push(`User notes: ${mem.userNotes}`)
-    }
-    lines.push("")
-  }
-
-  return lines.join("\n").trim()
+  // Format as single-line entries for maximum compactness
+  return selected.map(mem => `- ${mem.content}`).join("\n")
 }
 
 export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {

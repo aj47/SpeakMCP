@@ -11,8 +11,6 @@ import {
   XCircle,
   Clock,
   Tag,
-  FileText,
-  Brain,
   Loader2,
 } from "lucide-react"
 import { Button } from "./ui/button"
@@ -123,12 +121,6 @@ function SummaryCard({
           </div>
           
           <p className="text-sm font-medium line-clamp-2">{summary.actionSummary}</p>
-          
-          {!isExpanded && summary.keyFindings.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {summary.keyFindings.length} key finding{summary.keyFindings.length > 1 ? "s" : ""}
-            </p>
-          )}
         </div>
         
         {/* Save button */}
@@ -164,59 +156,6 @@ function SummaryCard({
       {/* Expanded content */}
       {isExpanded && (
         <div className="px-3 pb-3 pt-0 ml-7 space-y-3 border-t">
-          {/* Key Findings */}
-          {summary.keyFindings.length > 0 && (
-            <div className="mt-3">
-              <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
-                <Brain className="h-3 w-3" />
-                Key Findings
-              </h4>
-              <ul className="space-y-1">
-                {summary.keyFindings.map((finding, i) => (
-                  <li
-                    key={i}
-                    className="text-sm text-foreground/90 flex items-start gap-2"
-                  >
-                    <span className="text-primary mt-1">•</span>
-                    {finding}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Next Steps */}
-          {summary.nextSteps && (
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
-                <FileText className="h-3 w-3" />
-                Next Steps
-              </h4>
-              <p className="text-sm text-foreground/90">{summary.nextSteps}</p>
-            </div>
-          )}
-
-          {/* Decisions Made */}
-          {summary.decisionsMade && summary.decisionsMade.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
-                <CheckCircle className="h-3 w-3" />
-                Decisions Made
-              </h4>
-              <ul className="space-y-1">
-                {summary.decisionsMade.map((decision, i) => (
-                  <li
-                    key={i}
-                    className="text-sm text-foreground/90 flex items-start gap-2"
-                  >
-                    <span className="text-green-500 mt-1">✓</span>
-                    {decision}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           {/* Tags */}
           {summary.tags && summary.tags.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">

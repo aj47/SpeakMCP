@@ -317,35 +317,44 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
   },
   {
     name: `${BUILTIN_SERVER_NAME}:save_memory`,
-    description: "Save a memory to the user's memory bank. Memories are persistent notes that help you remember important information across sessions. Use this when the user asks you to remember something, save a note, or when you discover important information worth preserving.",
+    description: "Save a single-line memory note. Memories persist across sessions. Keep content ultra-compact (max 80 chars), skip grammar.",
     inputSchema: {
       type: "object",
       properties: {
-        title: {
-          type: "string",
-          description: "A short, descriptive title for the memory (max 100 characters)",
-        },
         content: {
           type: "string",
-          description: "The main content of the memory - what you want to remember",
-        },
-        keyFindings: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional list of key points or findings to highlight",
-        },
-        tags: {
-          type: "array",
-          items: { type: "string" },
-          description: "Optional tags for categorization (e.g., 'project', 'preference', 'technical')",
+          description: "Single-line memory (max 80 chars). Examples: 'user prefers dark mode', 'uses pnpm not npm', 'api key in .env'",
         },
         importance: {
           type: "string",
           enum: ["low", "medium", "high", "critical"],
-          description: "Importance level of the memory (default: medium)",
+          description: "low=routine, medium=useful, high=discovery, critical=error (default: medium)",
         },
       },
-      required: ["title", "content"],
+      required: ["content"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:list_memories`,
+    description: "List all saved memories for the current profile. Use this to check what's already remembered before saving duplicates, or to find memories to delete.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:delete_memory`,
+    description: "Delete a memory by ID. Use this to remove redundant or outdated memories. Call list_memories first to get IDs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        memoryId: {
+          type: "string",
+          description: "The memory ID to delete (from list_memories)",
+        },
+      },
+      required: ["memoryId"],
     },
   },
   {

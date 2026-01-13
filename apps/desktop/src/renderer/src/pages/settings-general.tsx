@@ -31,8 +31,9 @@ import {
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { ExternalLink } from "lucide-react"
+import { ExternalLink, AlertCircle } from "lucide-react"
 import { useState, useCallback, useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { Config } from "@shared/types"
 import { KeyRecorder } from "@renderer/components/key-recorder"
@@ -46,6 +47,17 @@ export function Component() {
   const navigate = useNavigate()
 
   const saveConfigMutation = useSaveConfigMutation()
+
+  // Check if langfuse package is installed
+  const langfuseInstalledQuery = useQuery({
+    queryKey: ["langfuseInstalled"],
+    queryFn: async () => {
+      return window.electron.ipcRenderer.invoke("isLangfuseInstalled")
+    },
+    staleTime: Infinity, // Only check once per session
+  })
+
+  const isLangfuseInstalled = langfuseInstalledQuery.data ?? true // Default to true while loading
 
   const saveConfig = useCallback(
     (config: Partial<Config>) => {
@@ -880,9 +892,33 @@ export function Component() {
             </div>
           )}
         >
+          {/* Show warning if langfuse package is not installed */}
+          {!isLangfuseInstalled && (
+            <div className="mx-3 mb-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-600 dark:text-amber-400">
+                    Langfuse package not installed
+                  </p>
+                  <p className="text-muted-foreground mt-1">
+                    Langfuse is an optional dependency. To enable observability features, install it by running:
+                  </p>
+                  <code className="mt-2 block bg-muted px-2 py-1 rounded text-xs font-mono">
+                    pnpm add langfuse
+                  </code>
+                  <p className="text-muted-foreground mt-2 text-xs">
+                    After installing, restart the app to enable Langfuse integration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Control label="Enable Langfuse Tracing" className="px-3">
             <Switch
               checked={configQuery.data?.langfuseEnabled ?? false}
+              disabled={!isLangfuseInstalled}
               onCheckedChange={(value) => {
                 saveConfig({ langfuseEnabled: value })
               }}

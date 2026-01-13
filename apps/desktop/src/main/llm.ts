@@ -1002,12 +1002,15 @@ Return ONLY JSON per schema.`,
       checkRepeating?: boolean
       /** Whether to add tool usage nudge after 2 failures */
       nudgeForToolUsage?: boolean
+      /** Index where the current user prompt was added (for scoping tool result checks) */
+      currentPromptIndex?: number
     } = {}
   ): Promise<VerificationHandlerResult> {
     const {
       customNudgePrefix = "Verifier indicates the task is not complete.",
       checkRepeating = true,
       nudgeForToolUsage = false,
+      currentPromptIndex: promptIndex,
     } = options
 
     const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
@@ -1097,7 +1100,10 @@ Return ONLY JSON per schema.`,
 
     // Optional: nudge for tool usage if no tools have been executed
     if (nudgeForToolUsage && newFailCount >= 2) {
-      const hasToolResultsSoFar = toolsExecutedInSession || conversationHistory.some((e) => e.role === "tool")
+      // Scope to current turn if promptIndex is provided, otherwise check entire conversation
+      const hasToolResultsSoFar = promptIndex !== undefined
+        ? toolsExecutedInSession || conversationHistory.slice(promptIndex + 1).some((e) => e.role === "tool")
+        : toolsExecutedInSession || conversationHistory.some((e) => e.role === "tool")
       if (!hasToolResultsSoFar) {
         conversationHistory.push({
           role: "user",
@@ -1145,6 +1151,21 @@ Return ONLY JSON per schema.`,
     if (excludedToolCount > 0 && iteration === 1) {
       // Only log on first iteration after exclusion to avoid spam
       logLLM(`ℹ️ ${excludedToolCount} tool(s) excluded due to repeated failures`)
+    }
+
+    // Rebuild system prompt if tools were excluded to keep LLM's view of tools in sync
+    // This ensures the system prompt lists only the tools that are actually available
+    let currentSystemPrompt = systemPrompt
+    if (excludedToolCount > 0) {
+      currentSystemPrompt = constructSystemPrompt(
+        activeTools,
+        agentModeGuidelines,
+        true,
+        undefined, // relevantTools removed - let LLM decide tool relevance
+        customSystemPrompt, // custom base system prompt from profile snapshot or global config
+        skillsInstructions, // agent skills instructions
+      )
+      logLLM(`[processTranscriptWithAgentMode] Rebuilt system prompt with ${activeTools.length} active tools (excluded ${excludedToolCount})`)
     }
 
     // Check for stop signal (session-specific or global)
@@ -1202,8 +1223,9 @@ Return ONLY JSON per schema.`,
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
-    // Use the base system prompt - let the LLM understand context from conversation history
-    let contextAwarePrompt = systemPrompt
+    // Use the base system prompt (or rebuilt prompt if tools were excluded)
+    // This ensures the LLM only sees tools it can actually call
+    let contextAwarePrompt = currentSystemPrompt
 
     // Add enhanced context instruction using LLM-based context extraction
     // Recalculate recent context each iteration to include newly added messages
@@ -1605,7 +1627,9 @@ Return ONLY JSON per schema.`,
       // Check if there are actionable tools for this request
       // Use activeTools (filtered for failures) to avoid nudging for tools that are excluded
       const hasActionableTools = activeTools.length > 0
-      const hasToolResultsSoFar = toolsExecutedInSession || conversationHistory.some((e) => e.role === "tool")
+      // Scope to current turn using currentPromptIndex to avoid treating a new request
+      // as having tools executed based on tool results from previous conversation turns
+      const hasToolResultsSoFar = toolsExecutedInSession || conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
 
       // Check if the response contains substantive content (a real answer, not a placeholder)
       // If the LLM explicitly sets needsMoreWork=false and provides a real answer,
@@ -1677,6 +1701,7 @@ Return ONLY JSON per schema.`,
           {
             checkRepeating: true,
             nudgeForToolUsage: true, // This path needs tool usage nudges
+            currentPromptIndex, // Scope tool result checks to current turn
           }
         )
         verificationFailCount = result.newFailCount
@@ -1825,6 +1850,7 @@ Return ONLY JSON per schema.`,
             {
               checkRepeating: true,
               nudgeForToolUsage: true, // Nudge for tool usage since we have tools available
+              currentPromptIndex, // Scope tool result checks to current turn
             }
           )
           verificationFailCount = result.newFailCount

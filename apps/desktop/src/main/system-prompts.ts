@@ -128,7 +128,7 @@ export function constructSystemPrompt(
     // Use lightweight format for ALL tools to reduce token usage
     // Full schemas are still available via native function calling
     prompt += `\n\nAVAILABLE MCP SERVERS (${availableTools.length} tools total):\n${formatLightweightToolInfo(availableTools)}`
-    prompt += `\n\nTo discover tools: use list_server_tools(serverName) to see all tools in a server, or get_tool_schema(toolName) for full parameter details.`
+    prompt += `\n\nTo discover tools: use speakmcp-settings:list_server_tools(serverName) to see all tools in a server, or speakmcp-settings:get_tool_schema(toolName) for full parameter details.`
 
     // If relevant tools are identified, show them with full details
     if (

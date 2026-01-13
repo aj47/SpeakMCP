@@ -1336,7 +1336,7 @@ const toolHandlers: Record<string, ToolHandler> = {
           type: "text",
           text: JSON.stringify({
             success: false,
-            error: `Server '${serverName}' not found. Use list_mcp_servers to see available servers.`,
+            error: `Server '${serverName}' not found. Use speakmcp-settings:list_mcp_servers to see available servers.`,
           }, null, 2),
         }],
         isError: true,
@@ -1361,7 +1361,7 @@ const toolHandlers: Record<string, ToolHandler> = {
           serverName,
           tools: toolList,
           count: toolList.length,
-          hint: "Use get_tool_schema to get full parameter details for a specific tool",
+          hint: "Use speakmcp-settings:get_tool_schema to get full parameter details for a specific tool",
         }, null, 2),
       }],
       isError: false,
@@ -1397,7 +1397,7 @@ const toolHandlers: Record<string, ToolHandler> = {
           type: "text",
           text: JSON.stringify({
             success: false,
-            error: `Tool '${toolName}' not found. Use list_server_tools to see available tools for a server.`,
+            error: `Tool '${toolName}' not found. Use speakmcp-settings:list_server_tools to see available tools for a server.`,
             availableTools: allTools.slice(0, 10).map((t) => t.name),
             hint: allTools.length > 10 ? `...and ${allTools.length - 10} more tools` : undefined,
           }, null, 2),

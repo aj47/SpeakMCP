@@ -8,7 +8,7 @@ import {
 import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -872,54 +872,6 @@ export async function processTranscriptWithAgentMode(
     return /^\[(?:Calling tools?|Tool|Tools?):[^\]]+\]$/i.test(trimmed)
   }
 
-  // Helper to detect if agent is repeating the same response (infinite loop)
-  const detectRepeatedResponse = (currentResponse: string): boolean => {
-    // Get last 3 assistant responses (excluding the current one)
-    const assistantResponses = conversationHistory
-      .filter(entry => entry.role === "assistant")
-      .map(entry => entry.content.trim().toLowerCase())
-      .slice(-3)
-
-    // Allow detection with at least 1 previous response (detect loops earlier)
-    if (assistantResponses.length < 1) return false
-
-    const currentTrimmed = currentResponse.trim().toLowerCase()
-    if (currentTrimmed.length === 0) return false
-
-    // Check if current response is very similar to any of the last 2 responses
-    for (const prevResponse of assistantResponses.slice(-2)) {
-      if (prevResponse.length === 0) continue
-
-      // For very short responses (< 5 words), require exact match to avoid false positives
-      // Single-word responses like "yes", "done", "ok" could be legitimately repeated
-      const wordCount = currentTrimmed.split(/\s+/).length
-      if (wordCount < 5) {
-        if (currentTrimmed === prevResponse) {
-          return true
-        }
-        continue
-      }
-
-      // For longer responses, use Jaccard similarity with 80% threshold
-      const similarity = calculateSimilarity(currentTrimmed, prevResponse)
-      if (similarity > 0.8) {
-        return true
-      }
-    }
-
-    return false
-  }
-
-  // Simple similarity calculation (Jaccard similarity on words)
-  const calculateSimilarity = (str1: string, str2: string): number => {
-    const words1 = new Set(str1.split(/\s+/))
-    const words2 = new Set(str2.split(/\s+/))
-
-    const intersection = new Set([...words1].filter(x => words2.has(x)))
-    const union = new Set([...words1, ...words2])
-
-    return union.size === 0 ? 0 : intersection.size / union.size
-  }
 
   // Helper to map conversation history to LLM messages format (filters empty content)
   const mapConversationToMessages = (
@@ -1022,248 +974,6 @@ export async function processTranscriptWithAgentMode(
     return { content: response.content || currentFinalContent, stopped: false }
   }
 
-  // Build compact verification messages (schema-first verifier)
-  const buildVerificationMessages = (finalAssistantText: string, currentVerificationFailCount: number = 0) => {
-    const maxItems = Math.max(1, config.mcpVerifyContextMaxItems || 20)
-    const recent = conversationHistory.slice(-maxItems)
-    const messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = []
-
-    // Track the last assistant content added to avoid duplicates
-    let lastAddedAssistantContent: string | null = null
-
-    messages.push({
-      role: "system",
-      content:
-        `You are a completion verifier. Determine if the user's original request has been adequately addressed.
-
-MARK AS COMPLETE if ANY of these conditions are met:
-1. The request was successfully fulfilled with concrete actions/results
-2. The agent provided a direct, substantive answer (for questions that don't require tools)
-3. The agent correctly identified the request is IMPOSSIBLE and explained why
-4. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed
-5. The agent has made a good-faith attempt and provided useful partial results
-6. The agent explicitly states the task is done (phrases like "I've completed...", "Done!", "Task finished")
-
-IMPORTANT - Do NOT mark as incomplete just because:
-- The response contains polite phrases like "Let me know if you need anything else"
-- The response offers to help with follow-up tasks
-
-MARK AS INCOMPLETE if:
-- The agent stated intent to perform an action (e.g., "Let me try...", "I'll do...", "Now I'll...") but hasn't completed it yet
-- The agent is actively in the middle of a multi-step task with more steps remaining
-- The response is empty or just acknowledges the request without addressing it
-- The original request asked for analysis/information that was NOT provided in the response
-- Tool executions occurred but the agent hasn't reported the results or conclusions yet
-
-CRITICAL: If the user asked a question or requested information, the agent must have ACTUALLY PROVIDED that information to be complete. Just saying "let me check" or "I'll examine" is NOT complete.
-
-Return ONLY JSON per schema.`,
-    })
-    messages.push({ role: "user", content: `Original request:\n${transcript}` })
-    for (const entry of recent) {
-      if (entry.role === "tool") {
-        const text = (entry.content || "").trim()
-        // Add placeholder for empty tool results instead of silently skipping
-        messages.push({ role: "user", content: `[Tool executed] ${text || "[No output]"}` })
-      } else if (entry.role === "user") {
-        // Skip empty user messages
-        const text = (entry.content || "").trim()
-        if (text) {
-          messages.push({ role: "user", content: text })
-        }
-      } else {
-        // Ensure non-empty content for assistant messages (Anthropic API requirement)
-        let content = entry.content
-        if (entry.role === "assistant" && !content?.trim()) {
-          if (entry.toolCalls && entry.toolCalls.length > 0) {
-            const toolNames = entry.toolCalls.map(tc => tc.name).join(", ")
-            content = `[Calling tools: ${toolNames}]`
-          } else {
-            content = "[Processing...]"
-          }
-        }
-        messages.push({ role: entry.role, content })
-        if (entry.role === "assistant") {
-          lastAddedAssistantContent = content
-        }
-      }
-    }
-    // Only add finalAssistantText if it's different from the last assistant message added
-    if (finalAssistantText?.trim() && finalAssistantText.trim() !== lastAddedAssistantContent?.trim()) {
-      messages.push({ role: "assistant", content: finalAssistantText })
-    }
-
-    // Build the JSON request with optional verification attempt note (combined into single message)
-    let jsonRequestContent = "Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary."
-    if (currentVerificationFailCount > 0) {
-      jsonRequestContent += `\n\nNote: This is verification attempt #${currentVerificationFailCount + 1}. If the task appears reasonably complete, please mark as complete to avoid infinite loops.`
-    }
-    messages.push({ role: "user", content: jsonRequestContent })
-
-    return messages
-  }
-
-  // Verification failure limit - after this many failures, force completion
-  const VERIFICATION_FAIL_LIMIT = 5
-
-  /**
-   * Result of running verification and handling the outcome
-   */
-  interface VerificationHandlerResult {
-    /** Whether the loop should continue (verification failed and we should retry) */
-    shouldContinue: boolean
-    /** Whether verification passed or we hit the limit (task is done either way) */
-    isComplete: boolean
-    /** Updated verification failure count */
-    newFailCount: number
-    /** Whether to skip post-verify summary (e.g., when repeating) */
-    skipPostVerifySummary: boolean
-  }
-
-  /**
-   * Centralized verification handler - eliminates duplicated verification logic.
-   *
-   * This function:
-   * 1. Checks for repeated responses (infinite loop detection)
-   * 2. Calls the verifier with retries
-   * 3. Handles verification failure (nudges, hard limits)
-   * 4. Updates the verifyStep status
-   *
-   * @param finalContent - The content to verify
-   * @param verifyStep - The progress step to update
-   * @param currentFailCount - Current verification failure count
-   * @param options - Additional options for specific verification scenarios
-   */
-  async function runVerificationAndHandleResult(
-    finalContent: string,
-    verifyStep: AgentProgressStep,
-    currentFailCount: number,
-    options: {
-      /** Custom nudge message for when verification fails */
-      customNudgePrefix?: string
-      /** Whether to check for repeated responses */
-      checkRepeating?: boolean
-      /** Whether to add tool usage nudge after 2 failures */
-      nudgeForToolUsage?: boolean
-      /** Index where the current user prompt was added (for scoping tool result checks) */
-      currentPromptIndex?: number
-    } = {}
-  ): Promise<VerificationHandlerResult> {
-    const {
-      customNudgePrefix = "Verifier indicates the task is not complete.",
-      checkRepeating = true,
-      nudgeForToolUsage = false,
-      currentPromptIndex: promptIndex,
-    } = options
-
-    const retries = Math.max(0, config.mcpVerifyRetryCount ?? 1)
-    let verified = false
-    let verification: any = null
-    let skipPostVerifySummary = false
-
-    // Check for infinite loop (repeated responses)
-    if (checkRepeating) {
-      const isRepeating = detectRepeatedResponse(finalContent)
-      if (isRepeating) {
-        verified = true
-        // Only skip post-verify summary if we have real content (not just a tool call placeholder)
-        if (!isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0) {
-          skipPostVerifySummary = true
-        }
-        verifyStep.status = "completed"
-        verifyStep.description = "Agent response is repeating - accepting as final"
-        if (isDebugLLM()) {
-          logLLM("Infinite loop detected - treating as complete", {
-            finalContent: finalContent.substring(0, 200),
-            isPlaceholder: isToolCallPlaceholder(finalContent),
-            willGenerateSummary: !skipPostVerifySummary
-          })
-        }
-        return {
-          shouldContinue: false,
-          isComplete: true,
-          newFailCount: 0,
-          skipPostVerifySummary
-        }
-      }
-    }
-
-    // Run verification with retries
-    for (let i = 0; i <= retries; i++) {
-      verification = await verifyCompletionWithFetch(
-        buildVerificationMessages(finalContent, currentFailCount),
-        config.mcpToolsProviderId,
-        currentSessionId // Pass session ID for Langfuse tracing and abort signal handling
-      )
-      if (verification?.isComplete === true) {
-        verified = true
-        break
-      }
-    }
-
-    // Verification passed
-    if (verified) {
-      verifyStep.status = "completed"
-      verifyStep.description = "Verification passed"
-      return {
-        shouldContinue: false,
-        isComplete: true,
-        newFailCount: 0, // Reset on success
-        skipPostVerifySummary
-      }
-    }
-
-    // Verification failed - handle it
-    const newFailCount = currentFailCount + 1
-
-    // Hard limit on verification failures to prevent infinite loops
-    // Check this BEFORE pushing the user nudge to avoid "please continue" message when force-completing
-    if (newFailCount >= VERIFICATION_FAIL_LIMIT) {
-      logLLM(`⚠️ Verification failed ${VERIFICATION_FAIL_LIMIT} times - forcing completion`)
-      verifyStep.status = "completed"
-      verifyStep.description = "Verification limit reached - accepting as complete"
-      return {
-        shouldContinue: false,
-        isComplete: true, // Force complete
-        newFailCount,
-        skipPostVerifySummary
-      }
-    }
-
-    // Only push the nudge message if we're going to continue (not at hard limit)
-    verifyStep.status = "error"
-    verifyStep.description = "Verification failed: continuing to address missing items"
-
-    const missing = (verification?.missingItems || [])
-      .filter((s: string) => s && s.trim())
-      .map((s: string) => `- ${s}`)
-      .join("\n")
-    const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
-    const userNudge = `${customNudgePrefix}\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
-    conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
-
-    // Optional: nudge for tool usage if no tools have been executed
-    if (nudgeForToolUsage && newFailCount >= 2) {
-      // Scope to current turn if promptIndex is provided, otherwise check entire conversation
-      const hasToolResultsSoFar = promptIndex !== undefined
-        ? toolsExecutedInSession || conversationHistory.slice(promptIndex + 1).some((e) => e.role === "tool")
-        : toolsExecutedInSession || conversationHistory.some((e) => e.role === "tool")
-      if (!hasToolResultsSoFar) {
-        conversationHistory.push({
-          role: "user",
-          content: "Important: Do not just state intent. Use the available tools by calling them directly via the native function calling interface to complete the task.",
-          timestamp: Date.now()
-        })
-      }
-    }
-
-    return {
-      shouldContinue: true,
-      isComplete: false,
-      newFailCount,
-      skipPostVerifySummary
-    }
-  }
 
   // Emit initial progress
   emit({
@@ -1274,43 +984,15 @@ Return ONLY JSON per schema.`,
     conversationHistory: formatConversationForProgress(conversationHistory),
   })
 
-  let noOpCount = 0 // Track iterations without meaningful progress
-  let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
-  const toolFailureCount = new Map<string, number>() // Track failures per tool name
-  const MAX_TOOL_FAILURES = 3 // Max times a tool can fail before being excluded
+  // Pi-inspired: Trust the model - no verification counters or artificial limits
 
   while (iteration < maxIterations) {
     iteration++
     currentIterationRef = iteration // Update ref for retry progress callback
 
-    // Filter out tools that have failed too many times - compute at start of iteration
-    // so the same filtered list is used consistently throughout (LLM call + heuristics)
-    const activeTools = uniqueAvailableTools.filter(tool => {
-      const failures = toolFailureCount.get(tool.name) || 0
-      return failures < MAX_TOOL_FAILURES
-    })
-
-    // Log when tools have been excluded
-    const excludedToolCount = uniqueAvailableTools.length - activeTools.length
-    if (excludedToolCount > 0 && iteration === 1) {
-      // Only log on first iteration after exclusion to avoid spam
-      logLLM(`ℹ️ ${excludedToolCount} tool(s) excluded due to repeated failures`)
-    }
-
-    // Rebuild system prompt if tools were excluded to keep LLM's view of tools in sync
-    // This ensures the system prompt lists only the tools that are actually available
-    let currentSystemPrompt = systemPrompt
-    if (excludedToolCount > 0) {
-      currentSystemPrompt = constructSystemPrompt(
-        activeTools,
-        agentModeGuidelines,
-        true,
-        undefined, // relevantTools removed - let LLM decide tool relevance
-        customSystemPrompt, // custom base system prompt from profile snapshot or global config
-        skillsInstructions, // agent skills instructions
-      )
-      logLLM(`[processTranscriptWithAgentMode] Rebuilt system prompt with ${activeTools.length} active tools (excluded ${excludedToolCount})`)
-    }
+    // Pi-inspired: All tools remain available - let the model adapt to failures
+    const activeTools = uniqueAvailableTools
+    const currentSystemPrompt = systemPrompt
 
     // Check for stop signal (session-specific or global)
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1626,56 +1308,9 @@ Return ONLY JSON per schema.`,
     }
 
     // Handle intentional empty completion from LLM (finish_reason='stop')
-    // This is unusual - the model chose to complete without any content
-    // We should verify this is actually complete before accepting it
+    // Pi-inspired: Trust the model when it explicitly signals completion
     if (isIntentionalEmptyCompletion) {
-      logLLM("⚠️ LLM intentionally completed with empty response (finish_reason=stop)")
-      diagnosticsService.logWarning("llm", "LLM completed with empty response in agent mode", {
-        iteration,
-        needsMoreWork: llmResponse.needsMoreWork,
-        message: "Model completed intentionally without content - will verify before accepting"
-      })
-
-      // Run verifier to check if task is actually complete before accepting empty completion
-      if (config.mcpVerifyCompletionEnabled) {
-        const verifyStep = createProgressStep(
-          "thinking",
-          "Verifying empty completion",
-          "Checking if task was actually completed despite empty response",
-          "in_progress",
-        )
-        progressSteps.push(verifyStep)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-
-        // Build verification context from last assistant message with content
-        const lastAssistantContent = conversationHistory
-          .filter(m => m.role === "assistant" && m.content && m.content.trim().length > 0)
-          .pop()?.content || ""
-
-        const result = await runVerificationAndHandleResult(
-          lastAssistantContent,
-          verifyStep,
-          verificationFailCount,
-          {
-            customNudgePrefix: "Your previous response was empty. The task is not complete.",
-            checkRepeating: false, // Empty completions don't need repeat detection
-          }
-        )
-        verificationFailCount = result.newFailCount
-
-        if (result.shouldContinue) {
-          logLLM("⚠️ Empty completion rejected by verifier - nudging LLM to continue")
-          continue
-        }
-
-        logLLM("✅ Empty completion verified - task is actually complete")
-      }
+      logLLM("✅ LLM intentionally completed with empty response (finish_reason=stop) - trusting model")
 
       // Mark thinking step as completed
       thinkingStep.status = "completed"
@@ -1760,8 +1395,8 @@ Return ONLY JSON per schema.`,
     const explicitlyComplete = llmResponse.needsMoreWork === false
 
     if (explicitlyComplete && !hasToolCalls) {
-      // Agent claims completion but provided no toolCalls.
-      // If the content still contains tool-call markers, treat as not complete and nudge for structured toolCalls.
+      // Pi-inspired: Trust the model when it explicitly signals completion
+      // Only nudge if content has invalid tool markers (model confused about interface)
       const contentText = (llmResponse.content || "")
       const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
       if (hasToolMarkers) {
@@ -1770,117 +1405,13 @@ Return ONLY JSON per schema.`,
         continue
       }
 
-      // Check if there are actionable tools for this request
-      // Use activeTools (filtered for failures) to avoid nudging for tools that are excluded
-      const hasActionableTools = activeTools.length > 0
-      // Scope to current turn using currentPromptIndex to avoid treating a new request
-      // as having tools executed based on tool results from previous conversation turns
-      const hasToolResultsSoFar = toolsExecutedInSession || conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
+      // Agent explicitly indicated completion - trust it
+      finalContent = llmResponse.content || ""
 
-      // Check if the response contains substantive content (a real answer, not a placeholder)
-      // If the LLM explicitly sets needsMoreWork=false and provides a real answer,
-      // we should trust it - even if there are tools that could theoretically be used.
-      // This allows the agent to respond directly to simple questions without forcing tool calls.
-      const hasSubstantiveContent = contentText.trim().length >= 1 && !isToolCallPlaceholder(contentText)
-
-      // Only apply aggressive heuristics if:
-      // 1. There are actually relevant tools for this request
-      // 2. No tools have been used yet
-      // 3. The agent's response doesn't contain substantive content (i.e., it's just a placeholder)
-      if (hasActionableTools && !hasToolResultsSoFar && !hasSubstantiveContent) {
-        // If there are actionable tools and no tool results yet, and no real answer provided,
-        // nudge the model to produce structured toolCalls to actually perform the work.
-        // Only add assistant message if non-empty to avoid blank entries
-        if (contentText.trim().length > 0) {
-          conversationHistory.push({ role: "assistant", content: contentText.trim(), timestamp: Date.now() })
-        }
-        conversationHistory.push({
-          role: "user",
-          content:
-            "Before marking complete: please use the available tools to actually perform the steps. Call the tools directly using the native function calling interface.",
-          timestamp: Date.now(),
-        })
-        noOpCount = 0
-        continue
+      // Add to history
+      if (finalContent.trim().length > 0) {
+        addMessage("assistant", finalContent)
       }
-
-      // Agent explicitly indicated completion and one of the following:
-      // - No actionable tools exist for this request (simple Q&A), OR
-      // - Tools were used and work is complete, OR
-      // - Agent provided a substantive direct response (allows direct answers without tool calls)
-      const assistantContent = llmResponse.content || ""
-
-      finalContent = assistantContent
-      // Note: Don't add message here - it will be added in the post-verify section
-      // to avoid duplicate messages (the post-verify section handles all cases:
-      // summary success, summary failure, and skip summary)
-
-      // Optional verification before completing
-      // Track if we should skip post-verify summary
-      // Skip summary when:
-      // 1. Final summary is disabled in config
-      // 2. Agent is repeating itself (with real content)
-      // 3. No tools were called (simple Q&A - nothing to summarize)
-      const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
-      let skipPostVerifySummary = (config.mcpFinalSummaryEnabled === false) || (noToolsCalledYet && !isToolCallPlaceholder(finalContent) && finalContent.trim().length > 0)
-
-      if (config.mcpVerifyCompletionEnabled) {
-        const verifyStep = createProgressStep(
-          "thinking",
-          "Verifying completion",
-          "Checking that the user's request has been achieved",
-          "in_progress",
-        )
-        progressSteps.push(verifyStep)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-
-        const result = await runVerificationAndHandleResult(
-          finalContent,
-          verifyStep,
-          verificationFailCount,
-          {
-            checkRepeating: true,
-            nudgeForToolUsage: true, // This path needs tool usage nudges
-            currentPromptIndex, // Scope tool result checks to current turn
-          }
-        )
-        verificationFailCount = result.newFailCount
-        if (result.skipPostVerifySummary) {
-          skipPostVerifySummary = true
-        }
-
-        if (result.shouldContinue) {
-          noOpCount = 0
-          continue
-        }
-      }
-
-        // Post-verify: produce a concise final summary for the user
-        if (!skipPostVerifySummary) {
-          try {
-            const result = await generatePostVerifySummary(finalContent, false, activeTools)
-            finalContent = result.content
-            if (finalContent.trim().length > 0) {
-              addMessage("assistant", finalContent)
-            }
-          } catch (e) {
-            // If summary generation fails, still add the existing finalContent to history
-            if (finalContent.trim().length > 0) {
-              addMessage("assistant", finalContent)
-            }
-          }
-        } else {
-          // Even when skipping post-verify summary, ensure the final content is in history
-          if (finalContent.trim().length > 0) {
-            addMessage("assistant", finalContent)
-          }
-        }
 
       // Add completion step
       const completionStep = createProgressStep(
@@ -1944,44 +1475,17 @@ Return ONLY JSON per schema.`,
       break
     }
 
-    // Handle no-op iterations (no tool calls and no explicit completion)
-    // Fix for https://github.com/aj47/SpeakMCP/issues/443:
-    // Only terminate when needsMoreWork is EXPLICITLY false, not when undefined.
-    // When LLM returns plain text without tool calls, needsMoreWork will be undefined,
-    // and we should nudge to either use tools or provide a complete answer.
+    // Pi-inspired: Handle responses without tool calls
+    // Trust the model's decision - if it provides content, it's done thinking
     if (!hasToolCalls && !explicitlyComplete) {
-      noOpCount++
-
-      // Check if this is an actionable request that should have executed tools
-      // Use activeTools (filtered for failures) to avoid nudging for excluded tools
-      const isActionableRequest = activeTools.length > 0
       const contentText = llmResponse.content || ""
-
-      // Check if tools have already been executed for THIS user prompt (current turn)
-      // We only look at tool results AFTER currentPromptIndex to avoid treating a new request
-      // as complete based on tool results from previous conversation turns
-      // This fixes the infinite loop when LLM answers after tool execution but doesn't set needsMoreWork=false
-      // Also check toolsExecutedInSession flag which survives context shrinking when drop_middle removes tool results
-      const hasToolResultsInCurrentTurn = toolsExecutedInSession || conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
-      // When tools have been executed in this turn, accept any non-empty response (not just >= 10 chars)
-      // Short answers like "1" or "3 sessions" are valid responses after tool execution
-      const hasSubstantiveResponse = hasToolResultsInCurrentTurn
-        ? contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
-        : contentText.trim().length >= 10 && !isToolCallPlaceholder(contentText)
-
       const trimmedContent = contentText.trim()
 
-      // IMPORTANT: If the LLM provides a substantive response without calling tools,
-      // accept it as complete. This prevents infinite loops for simple Q&A like "hi"
-      // where the LLM just responds without tool calls.
-      // The LLM choosing NOT to use tools is a valid decision - trust it.
-      // We use a lower threshold here (any non-empty response) because short greetings
-      // like "Hi." or "Hello." are valid complete responses to simple greetings.
-      // EXCEPTION: If tools were executed in this turn, we should run verification (handled below).
-      const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
-      if (hasAnyResponse && llmResponse.needsMoreWork !== true && !hasToolResultsInCurrentTurn) {
+      // If model provides any substantive response, trust it as complete
+      // This prevents infinite loops and respects the model's judgment
+      if (trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)) {
         if (isDebugLLM()) {
-          logLLM("Substantive response without tool calls - accepting as complete", {
+          logLLM("Pi-inspired: Accepting response as complete (trusting model)", {
             responseLength: trimmedContent.length,
             responsePreview: trimmedContent.substring(0, 100),
           })
@@ -1999,128 +1503,12 @@ Return ONLY JSON per schema.`,
         break
       }
 
-      // When agent claims it's done (needsMoreWork !== true) and has tool results + substantive response,
-      // determine if the task is complete
-      if (hasToolResultsInCurrentTurn && hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
-        if (config.mcpVerifyCompletionEnabled) {
-          // Use LLM verifier to determine if truly complete
-          if (isDebugLLM()) {
-            logLLM("Agent claims complete - running LLM verifier", {
-              hasToolResults: hasToolResultsInCurrentTurn,
-              responseLength: trimmedContent.length,
-              responsePreview: trimmedContent.substring(0, 100),
-            })
-          }
-
-          // Create a verification step for this path
-          const verifyStep = createProgressStep(
-            "thinking",
-            "Verifying completion",
-            "Checking that the user's request has been achieved",
-            "in_progress",
-          )
-          progressSteps.push(verifyStep)
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: false,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-
-          // Use centralized verification handler (includes loop detection, retries, hard limits)
-          const result = await runVerificationAndHandleResult(
-            contentText,
-            verifyStep,
-            verificationFailCount,
-            {
-              checkRepeating: true,
-              nudgeForToolUsage: true, // Nudge for tool usage since we have tools available
-              currentPromptIndex, // Scope tool result checks to current turn
-            }
-          )
-          verificationFailCount = result.newFailCount
-
-          if (!result.shouldContinue) {
-            // Verification passed or hard limit reached
-            if (isDebugLLM()) {
-              logLLM("Verifier confirmed completion", { isComplete: result.isComplete })
-            }
-            finalContent = contentText
-            addMessage("assistant", contentText)
-            emit({
-              currentIteration: iteration,
-              maxIterations,
-              steps: progressSteps.slice(-3),
-              isComplete: true,
-              finalContent,
-              conversationHistory: formatConversationForProgress(conversationHistory),
-            })
-            break
-          } else {
-            // Verifier says not complete - continue agent loop
-            // The centralized handler already added the nudge message
-            if (isDebugLLM()) {
-              logLLM("Verifier says not complete - continuing agent loop", {
-                responsePreview: trimmedContent.substring(0, 100),
-                failCount: verificationFailCount,
-              })
-            }
-            // Add the partial response to history and continue
-            if (trimmedContent.length > 0) {
-              addMessage("assistant", contentText)
-            }
-            noOpCount = 0
-            continue
-          }
-        } else {
-          // Verification is disabled - complete directly when tools executed + substantive response
-          // This preserves the "tools executed + substantive response" completion behavior from #443
-          if (isDebugLLM()) {
-            logLLM("Completing without verification (disabled) - tools executed with substantive response", {
-              hasToolResults: hasToolResultsInCurrentTurn,
-              responseLength: trimmedContent.length,
-              responsePreview: trimmedContent.substring(0, 100),
-            })
-          }
-          finalContent = contentText
-          addMessage("assistant", contentText)
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: true,
-            finalContent,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-          break
-        }
-      }
-
-      // Nudge the model to either use tools or provide a complete answer.
-      // Only nudge when verification is enabled - when disabled, trust the LLM's decision.
-      // For actionable requests (with relevant tools), nudge immediately.
-      // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
-      // giving the LLM a chance to self-correct.
-      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1))) {
-        // Add nudge to push the agent forward
-        // Only add assistant message if non-empty to avoid blank entries
-        if (contentText.trim().length > 0) {
-          addMessage("assistant", contentText)
-        }
-
-        const nudgeMessage = isActionableRequest
-          ? "You have relevant tools available for this request. Please either call the tools directly using the native function calling interface, or provide a complete answer if the task cannot be accomplished with the available tools."
-          : "Please provide a complete answer to the request. If you need to use tools, call them directly using the native function calling interface."
-
-        addMessage("user", nudgeMessage)
-
-        noOpCount = 0 // Reset counter after nudge
+      // Empty response without explicit completion - model may need more context
+      // Add a gentle nudge only if response is empty
+      if (trimmedContent.length === 0) {
+        addMessage("user", "Please provide a response or use the available tools to complete the task.")
         continue
       }
-    } else {
-      // Reset no-op counter when tools are called
-      noOpCount = 0
     }
 
     // Execute tool calls with enhanced error handling
@@ -2504,100 +1892,22 @@ Return ONLY JSON per schema.`,
     const allToolsSuccessful = toolResults.length > 0 && !hasErrors
 
     if (hasErrors) {
-      // Enhanced error analysis and recovery suggestions
+      // Pi-inspired: Let the model see errors and adapt - no tool exclusion tracking
+      // The model can decide whether to retry, use alternatives, or complete with explanation
       const errorAnalysis = analyzeToolErrors(toolResults)
 
-      // Track per-tool failures
-      for (let i = 0; i < toolResults.length; i++) {
-        const result = toolResults[i]
-        if (result.isError) {
-          // Get the tool name from toolCallsArray by index
-          const toolName = toolCallsArray[i]?.name || "unknown"
-          const currentCount = toolFailureCount.get(toolName) || 0
-          toolFailureCount.set(toolName, currentCount + 1)
-
-          if (currentCount + 1 >= MAX_TOOL_FAILURES) {
-            logLLM(`⚠️ Tool "${toolName}" has failed ${MAX_TOOL_FAILURES} times - will be excluded`)
-          }
-        }
-      }
-
-      // Check for unrecoverable errors that should trigger early completion
-      const hasUnrecoverableError = errorAnalysis.errorTypes?.some(
-        type => type === "permissions" || type === "authentication"
-      )
-      if (hasUnrecoverableError) {
-        // Build list of tools that failed with unrecoverable errors in THIS batch only
-        // (not all historical failures from toolFailureCount, which could mislead the model)
-        const currentUnrecoverableTools: string[] = []
-        for (let i = 0; i < toolResults.length; i++) {
-          const result = toolResults[i]
-          if (result.isError) {
-            const errorText = result.content.map((c) => c.text).join(" ").toLowerCase()
-            if (errorText.includes("permission") || errorText.includes("access") ||
-                errorText.includes("denied") || errorText.includes("authentication") ||
-                errorText.includes("unauthorized") || errorText.includes("forbidden")) {
-              const toolName = toolCallsArray[i]?.name || "unknown"
-              currentUnrecoverableTools.push(toolName)
-            }
-          }
-        }
-
-        if (currentUnrecoverableTools.length > 0) {
-          const failedToolNames = currentUnrecoverableTools.join(", ")
-          logLLM(`⚠️ Unrecoverable errors detected for tools: ${failedToolNames}`)
-          // Add note to conversation so LLM knows to wrap up
-          conversationHistory.push({
-            role: "user",
-            content: `Note: Some tools (${failedToolNames}) have unrecoverable errors (permissions/authentication). Please complete what you can or explain what cannot be done.`,
-            timestamp: Date.now()
-          })
-        }
-      }
-
-      // Add detailed error summary to conversation history for LLM context
+      // Add error summary to conversation history for LLM context
       const errorSummary = `Tool execution errors occurred:
 ${failedTools
   .map((toolName) => {
     const failedResult = toolResults.find((r) => r.isError)
     const errorText =
       failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
-
-    // Check for error patterns and provide generic suggestions
-    let suggestion = ""
-    if (
-      errorText.includes("timeout") ||
-      errorText.includes("connection") ||
-      errorText.includes("network")
-    ) {
-      suggestion = " (Suggestion: Try again or check connectivity)"
-    } else if (
-      errorText.includes("permission") ||
-      errorText.includes("access") ||
-      errorText.includes("denied")
-    ) {
-      suggestion = " (Suggestion: Try a different approach)"
-    } else if (
-      errorText.includes("not found") ||
-      errorText.includes("missing") ||
-      errorText.includes("does not exist")
-    ) {
-      suggestion = " (Suggestion: Verify the resource exists or try alternatives)"
-    } else if (errorText.includes("Expected string, received array")) {
-      suggestion = " (Fix: Parameter type mismatch - check tool schema)"
-    } else if (errorText.includes("Expected array, received string")) {
-      suggestion = " (Fix: Parameter should be an array, not a string)"
-    } else if (errorText.includes("invalid_type")) {
-      suggestion = " (Fix: Check parameter types match tool schema)"
-    }
-
-    return `- ${toolName}: ${errorText}${suggestion}`
+    return `- ${toolName}: ${errorText}`
   })
   .join("\n")}
 
-${errorAnalysis.recoveryStrategy}
-
-Please try alternative approaches, break down the task into smaller steps, or provide manual instructions to the user.`
+${errorAnalysis.recoveryStrategy}`
 
       conversationHistory.push({
         role: "tool",
@@ -2741,97 +2051,11 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       }
 
 
-	      // Optional verification before completing after tools
-	      // Track if we should skip post-verify summary (when agent is repeating itself or disabled)
-	      let skipPostVerifySummary2 = config.mcpFinalSummaryEnabled === false
-
-	      if (config.mcpVerifyCompletionEnabled) {
-	        const verifyStep = createProgressStep(
-	          "thinking",
-	          "Verifying completion",
-	          "Checking that the user's request has been achieved",
-	          "in_progress",
-	        )
-	        progressSteps.push(verifyStep)
-	        emit({
-	          currentIteration: iteration,
-	          maxIterations,
-	          steps: progressSteps.slice(-3),
-	          isComplete: false,
-	          conversationHistory: formatConversationForProgress(conversationHistory),
-	        })
-
-	        const result = await runVerificationAndHandleResult(
-	          finalContent,
-	          verifyStep,
-	          verificationFailCount,
-	          { checkRepeating: true }
-	        )
-	        verificationFailCount = result.newFailCount
-	        if (result.skipPostVerifySummary) {
-	          skipPostVerifySummary2 = true
-	        }
-
-	        // Check if stop was requested during verification
-	        if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
-	          logLLM(`Agent session ${currentSessionId} stopped during verification`)
-	          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
-	          const finalOutput = (finalContent || "") + killNote
-	          conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
-	          emit({
-	            currentIteration: iteration,
-	            maxIterations,
-	            steps: progressSteps.slice(-3),
-	            isComplete: true,
-	            finalContent: finalOutput,
-	            conversationHistory: formatConversationForProgress(conversationHistory),
-	          })
-	          wasAborted = true
-	          break
-	        }
-
-	        if (result.shouldContinue) {
-	          noOpCount = 0
-	          continue
-	        }
-	      }
-
-        // Post-verify: produce a concise final summary for the user
-        if (!skipPostVerifySummary2) {
-          try {
-            const result = await generatePostVerifySummary(finalContent, true, activeTools)
-            if (result.stopped) {
-              const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
-              const finalOutput = (finalContent || "") + killNote
-              conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
-              emit({
-                currentIteration: iteration,
-                maxIterations,
-                steps: progressSteps.slice(-3),
-                isComplete: true,
-                finalContent: finalOutput,
-                conversationHistory: formatConversationForProgress(conversationHistory),
-              })
-              break
-            }
-            finalContent = result.content
-            if (finalContent.trim().length > 0) {
-              conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
-            }
-          } catch (e) {
-            // If summary generation fails, still add the existing finalContent to history
-            // so the mobile client has the complete conversation
-            if (finalContent.trim().length > 0) {
-              conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
-            }
-          }
-        } else {
-          // Even when skipping post-verify summary, ensure the final content is in history
-          // This prevents intermediate messages from disappearing on mobile
-          if (finalContent.trim().length > 0) {
-            conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
-          }
-        }
+      // Pi-inspired: No verification - trust the model's completion signal
+      // Just ensure final content is in history
+      if (finalContent.trim().length > 0) {
+        conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
+      }
 
 
       // Add completion step
@@ -2967,25 +2191,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           })
         }
 
-        // NOTE: Removed duplicate "Post-verify summary" block that was causing empty content issues.
-        // The summary was already generated above - making another LLM call here would cause
-        // the model to return empty content since it already provided a complete response.
-
-        // If there are actionable tools and we haven't executed any tools yet,
-        // skip verification and force the model to produce structured toolCalls instead of intent-only text.
-        const hasAnyToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
-        // Use activeTools (filtered for failures) to avoid nudging for excluded tools
-        const hasActionableTools = activeTools.length > 0
-        if (hasActionableTools && !hasAnyToolResultsSoFar) {
-          conversationHistory.push({
-            role: "user",
-            content:
-              "Before verifying or completing: please use the available tools to actually perform the steps. Call them directly using the native function calling interface.",
-            timestamp: Date.now(),
-          })
-          noOpCount = 0
-          continue
-        }
+        // Pi-inspired: Summary was generated above, trust it
       } else {
         // Agent provided sufficient content, use it as final content
         finalContent = assistantContent
@@ -2996,38 +2202,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         })
       }
 
-
-	      // Optional verification before completing (general stop condition)
-	      if (config.mcpVerifyCompletionEnabled) {
-	        const verifyStep = createProgressStep(
-	          "thinking",
-	          "Verifying completion",
-	          "Checking that the user's request has been achieved",
-	          "in_progress",
-	        )
-	        progressSteps.push(verifyStep)
-	        emit({
-	          currentIteration: iteration,
-	          isComplete: false,
-	          maxIterations,
-	          steps: progressSteps.slice(-3),
-	          conversationHistory: formatConversationForProgress(conversationHistory),
-	        })
-
-	        const result = await runVerificationAndHandleResult(
-	          finalContent,
-	          verifyStep,
-	          verificationFailCount,
-	          { checkRepeating: true }
-	        )
-	        verificationFailCount = result.newFailCount
-
-	        if (result.shouldContinue) {
-	          noOpCount = 0
-	          continue
-	        }
-	      }
-
+      // Pi-inspired: No verification - trust the model when it says needsMoreWork=false
       const completionStep = createProgressStep(
         "completion",
         "Task completed",

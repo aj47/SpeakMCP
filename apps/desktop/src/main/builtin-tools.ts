@@ -1481,10 +1481,32 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
 
+    const memoryId = args.memoryId.trim()
+    const currentProfileId = config.mcpCurrentProfileId
+
     try {
-      const success = await memoryService.deleteMemory(args.memoryId.trim())
+      // Validate memory belongs to current profile before deleting
+      const memory = await memoryService.getMemory(memoryId)
+      if (!memory) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory not found" }) }],
+          isError: true,
+        }
+      }
+
+      // Check profile ownership - only allow deletion if:
+      // 1. Memory belongs to current profile, OR
+      // 2. Memory has no profile (legacy) and no current profile is set
+      if (memory.profileId !== currentProfileId) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Cannot delete memory from different profile" }) }],
+          isError: true,
+        }
+      }
+
+      const success = await memoryService.deleteMemory(memoryId)
       return {
-        content: [{ type: "text", text: JSON.stringify({ success, deleted: args.memoryId }) }],
+        content: [{ type: "text", text: JSON.stringify({ success, deleted: memoryId }) }],
         isError: !success,
       }
     } catch (error) {

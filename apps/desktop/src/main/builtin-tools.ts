@@ -1387,34 +1387,19 @@ const toolHandlers: Record<string, ToolHandler> = {
     const config = configStore.get()
     if (config.memoriesEnabled === false) {
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system is disabled. Enable it in Settings > Models to save memories." }) }],
-        isError: true,
-      }
-    }
-
-    // Validate required parameters
-    if (typeof args.title !== "string" || args.title.trim() === "") {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "title must be a non-empty string" }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
         isError: true,
       }
     }
 
     if (typeof args.content !== "string" || args.content.trim() === "") {
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "content must be a non-empty string" }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "content required" }) }],
         isError: true,
       }
     }
 
-    const title = args.title.trim().slice(0, 100) // Max 100 chars for title
-    const content = args.content.trim()
-    const keyFindings = Array.isArray(args.keyFindings)
-      ? args.keyFindings.filter((k): k is string => typeof k === "string")
-      : []
-    const tags = Array.isArray(args.tags)
-      ? args.tags.filter((t): t is string => typeof t === "string")
-      : []
+    const content = args.content.trim().replace(/[\r\n]+/g, ' ').slice(0, 80) // Max 80 chars, single line
     const importance = (["low", "medium", "high", "critical"].includes(args.importance as string)
       ? args.importance
       : "medium") as "low" | "medium" | "high" | "critical"
@@ -1425,46 +1410,108 @@ const toolHandlers: Record<string, ToolHandler> = {
       profileId: config.mcpCurrentProfileId,
       createdAt: now,
       updatedAt: now,
-      title,
+      title: content.slice(0, 50),
       content,
-      keyFindings,
-      tags,
+      tags: [],
       importance,
     }
 
     try {
       const success = await memoryService.saveMemory(memory)
-
       if (success) {
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                success: true,
-                memory: {
-                  id: memory.id,
-                  title: memory.title,
-                  content: memory.content,
-                  keyFindings: memory.keyFindings,
-                  tags: memory.tags,
-                  importance: memory.importance,
-                },
-                message: `Memory saved successfully: "${title}"`,
-              }, null, 2),
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify({ success: true, id: memory.id, content: memory.content }) }],
           isError: false,
         }
       } else {
         return {
-          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Failed to save memory" }) }],
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Failed to save" }) }],
           isError: true,
         }
       }
     } catch (error) {
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  list_memories: async (_args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
+        isError: true,
+      }
+    }
+
+    try {
+      const profileId = config.mcpCurrentProfileId
+      const memories = profileId
+        ? await memoryService.getMemoriesByProfile(profileId)
+        : await memoryService.getAllMemories()
+
+      const list = memories.map(m => ({ id: m.id, content: m.content, importance: m.importance }))
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: true, count: list.length, memories: list }) }],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  delete_memory: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
+        isError: true,
+      }
+    }
+
+    if (typeof args.memoryId !== "string" || args.memoryId.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryId required" }) }],
+        isError: true,
+      }
+    }
+
+    const memoryId = args.memoryId.trim()
+    const currentProfileId = config.mcpCurrentProfileId
+
+    try {
+      // Validate memory belongs to current profile before deleting
+      const memory = await memoryService.getMemory(memoryId)
+      if (!memory) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory not found" }) }],
+          isError: true,
+        }
+      }
+
+      // Check profile ownership - only allow deletion if:
+      // 1. Memory belongs to current profile, OR
+      // 2. Memory has no profile (legacy) and no current profile is set
+      if (memory.profileId !== currentProfileId) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Cannot delete memory from different profile" }) }],
+          isError: true,
+        }
+      }
+
+      const success = await memoryService.deleteMemory(memoryId)
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success, deleted: memoryId }) }],
+        isError: !success,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
         isError: true,
       }
     }

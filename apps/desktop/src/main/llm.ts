@@ -202,10 +202,14 @@ export async function processTranscriptWithTools(
     const allMemories = currentProfileId
       ? await memoryService.getMemoriesByProfile(currentProfileId)
       : await memoryService.getAllMemories()
-    // Filter to high importance and critical memories, limit to 5 for non-agent mode
-    relevantMemories = allMemories
-      .filter(m => m.importance === 'high' || m.importance === 'critical')
-      .slice(0, 5)
+    // Sort by importance first (critical > high > medium > low), then by recency, before capping
+    const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+    const sortedMemories = [...allMemories].sort((a, b) => {
+      const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
+      if (impDiff !== 0) return impDiff
+      return b.createdAt - a.createdAt // More recent first as tiebreaker
+    })
+    relevantMemories = sortedMemories.slice(0, 10)
     logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context (profile: ${currentProfileId || 'global'})`)
   }
 
@@ -618,12 +622,9 @@ export async function processTranscriptWithAgentMode(
       if (summary) {
         summarizationService.addSummary(summary)
 
-        // Auto-save high/critical importance summaries if enabled
+        // Auto-save all summaries if enabled (no importance threshold)
         // Associate memory with the session's profile for profile-scoped memories
-        // Only auto-save if memories are enabled system-wide
-        if (config.memoriesEnabled !== false &&
-            config.dualModelAutoSaveImportant &&
-            (summary.importance === "high" || summary.importance === "critical")) {
+        if (config.memoriesEnabled !== false && config.dualModelAutoSaveImportant) {
           const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
           const memory = memoryService.createMemoryFromSummary(
             summary,
@@ -636,7 +637,7 @@ export async function processTranscriptWithAgentMode(
           )
           memoryService.saveMemory(memory).catch(err => {
             if (isDebugLLM()) {
-              logLLM("[Dual-Model] Error auto-saving important summary:", err)
+              logLLM("[Dual-Model] Error auto-saving summary:", err)
             }
           })
         }
@@ -754,15 +755,14 @@ export async function processTranscriptWithAgentMode(
     const allMemories = profileIdForMemories
       ? await memoryService.getMemoriesByProfile(profileIdForMemories)
       : await memoryService.getAllMemories()
-    // Include all high/critical importance memories, and some recent medium importance ones
-    relevantMemories = allMemories
-      .filter(m => m.importance === 'high' || m.importance === 'critical')
-      .concat(
-        allMemories
-          .filter(m => m.importance === 'medium')
-          .slice(0, 5)
-      )
-      .slice(0, 15) // Cap at 15 memories to manage context size
+    // Sort by importance first (critical > high > medium > low), then by recency, before capping
+    const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+    const sortedMemories = [...allMemories].sort((a, b) => {
+      const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
+      if (impDiff !== 0) return impDiff
+      return b.createdAt - a.createdAt // More recent first as tiebreaker
+    })
+    relevantMemories = sortedMemories.slice(0, 30) // Cap at 30 for agent mode
     logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total, profile: ${profileIdForMemories || 'global'})`)
   }
 

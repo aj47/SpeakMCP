@@ -94,6 +94,24 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:send_agent_message`,
+    description: "Send a message to another running agent session. The message will be queued and processed by the target agent's conversation. Use list_running_agents first to get session IDs. This enables agent coordination and task delegation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "The session ID of the target agent (get this from list_running_agents)",
+        },
+        message: {
+          type: "string",
+          description: "The message to send to the target agent",
+        },
+      },
+      required: ["sessionId", "message"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:kill_agent`,
     description: "Terminate a specific agent session by its session ID. This will abort any in-flight LLM requests, kill spawned processes, and stop the agent immediately.",
     inputSchema: {
@@ -197,13 +215,13 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
   },
   {
     name: `${BUILTIN_SERVER_NAME}:execute_command`,
-    description: "Execute a shell command. If skillId is provided, the command runs in that skill's directory (where SKILL.md is located). This is the primary way for skills to run shell commands, scripts, and automation.",
+    description: "Execute any shell command. This is the primary tool for file operations, running scripts, and automation. Use for: reading files (cat), writing files (cat/echo with redirection), listing directories (ls), creating directories (mkdir -p), git operations, npm/python/node commands, and any shell command. If skillId is provided, the command runs in that skill's directory.",
     inputSchema: {
       type: "object",
       properties: {
         command: {
           type: "string",
-          description: "The shell command to execute (e.g., './server.sh &', 'npm install', 'npx tsx script.ts')",
+          description: "The shell command to execute. Examples: 'cat file.txt' (read), 'echo content > file.txt' (write), 'ls -la' (list), 'mkdir -p dir' (create dir), 'git status', 'npm install', 'python script.py'",
         },
         skillId: {
           type: "string",
@@ -356,6 +374,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
         },
       },
       required: ["toolName"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:load_skill_instructions`,
+    description: "Load the full instructions for an agent skill. Skills are listed in the system prompt with just name and description. Call this tool to get the complete instructions when you need to use a skill.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skillId: {
+          type: "string",
+          description: "The skill ID to load instructions for. Get skill IDs from the Available Skills section in the system prompt.",
+        },
+      },
+      required: ["skillId"],
     },
   },
 ]

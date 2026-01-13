@@ -11,6 +11,12 @@ TOOL USAGE:
 - If browser tools are available and the task involves web services, use them proactively
 - You can call multiple tools in a single response for efficiency
 
+SHELL COMMANDS & FILE OPERATIONS:
+- Use speakmcp-settings:execute_command for running shell commands, scripts, file operations, and automation
+- For skill-related tasks, pass the skillId to run commands in that skill's directory
+- Common file operations: cat (read), echo/printf with redirection (write), mkdir -p (create dirs), ls (list), rm (delete)
+- Supports any shell command: git, npm, python, curl, etc.
+
 WHEN TO ASK: Multiple valid approaches exist, sensitive/destructive operations, or ambiguous intent
 WHEN TO ACT: Request is clear and tools can accomplish it directly
 
@@ -65,7 +71,16 @@ export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
 
 export const AGENT_MODE_ADDITIONS = `
 
-AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.`
+AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.
+
+AGENT FILE & COMMAND EXECUTION:
+- Use speakmcp-settings:execute_command as your primary tool for shell commands, file I/O, and automation
+- Read files: execute_command with "cat path/to/file"
+- Write files: execute_command with "cat > path/to/file << 'EOF'\n...content...\nEOF" or "echo 'content' > file"
+- List directories: execute_command with "ls -la path/"
+- Create directories: execute_command with "mkdir -p path/to/dir"
+- Run scripts: execute_command with "./script.sh" or "python script.py" etc.
+- For skills: pass skillId to run commands in the skill's directory automatically`
 
 /**
  * Group tools by server and generate a brief description for each server

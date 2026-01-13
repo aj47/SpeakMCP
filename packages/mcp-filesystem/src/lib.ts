@@ -36,7 +36,43 @@ export function expandHome(p: string): string {
 }
 
 /**
- * Validate that a path is within allowed directories
+ * Find the realpath of the nearest existing ancestor of a path.
+ * For a path like /a/b/c/d where /a/b exists but /a/b/c doesn't,
+ * this returns { ancestorRealPath: realpath('/a/b'), remainingPath: 'c/d' }
+ */
+async function findNearestExistingAncestor(
+  absolutePath: string
+): Promise<{ ancestorRealPath: string; remainingPath: string }> {
+  let currentPath = absolutePath
+  const pathParts: string[] = []
+
+  while (currentPath !== path.dirname(currentPath)) {
+    // Prevent infinite loop at root
+    try {
+      const realPath = await fs.realpath(currentPath)
+      // Found an existing path, return it with remaining parts
+      return {
+        ancestorRealPath: realPath,
+        remainingPath: pathParts.reverse().join(path.sep),
+      }
+    } catch {
+      // Path doesn't exist, move up and track this component
+      pathParts.push(path.basename(currentPath))
+      currentPath = path.dirname(currentPath)
+    }
+  }
+
+  // We've reached the root
+  return {
+    ancestorRealPath: currentPath,
+    remainingPath: pathParts.reverse().join(path.sep),
+  }
+}
+
+/**
+ * Validate that a path is within allowed directories.
+ * For non-existent paths, validates against the realpath of the nearest existing ancestor
+ * to prevent symlink-based sandbox escapes.
  */
 export async function validatePath(requestedPath: string): Promise<string> {
   const expanded = expandHome(requestedPath)
@@ -47,8 +83,11 @@ export async function validatePath(requestedPath: string): Promise<string> {
   try {
     realPath = await fs.realpath(absolute)
   } catch {
-    // If path doesn't exist yet, use the absolute path
-    realPath = absolute
+    // Path doesn't exist yet - find nearest existing ancestor and resolve its realpath
+    // This prevents symlink-based escapes where a symlinked parent could resolve
+    // outside the sandbox at write/rename/mkdir time
+    const { ancestorRealPath, remainingPath } = await findNearestExistingAncestor(absolute)
+    realPath = remainingPath ? path.join(ancestorRealPath, remainingPath) : ancestorRealPath
   }
 
   const normalizedPath = normalizePath(realPath)

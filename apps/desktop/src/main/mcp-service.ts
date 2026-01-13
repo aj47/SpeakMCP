@@ -59,8 +59,60 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
   const mcpConfig = config.mcpConfig || { mcpServers: {} }
 
   // Check if our default filesystem server already exists
-  if (mcpConfig.mcpServers[DEFAULT_FILESYSTEM_SERVER_NAME]) {
-    return { config, changed: false }
+  const existingConfig = mcpConfig.mcpServers[DEFAULT_FILESYSTEM_SERVER_NAME]
+  if (existingConfig) {
+    // Check if existing config uses the old npx command and needs migration
+    const needsMigration = existingConfig.command === "npx" &&
+      Array.isArray(existingConfig.args) &&
+      existingConfig.args.some((arg: string) =>
+        typeof arg === "string" && arg.includes("@modelcontextprotocol/server-filesystem")
+      )
+
+    if (!needsMigration) {
+      return { config, changed: false }
+    }
+
+    // Migrate from old npx command to bundled server
+    if (isDebugTools()) {
+      logTools(`Migrating ${DEFAULT_FILESYSTEM_SERVER_NAME} from npx to bundled server`)
+    }
+
+    // Get the skills folder path (preserve from existing args or use default)
+    const skillsFolder = path.join(dataFolder, "skills")
+    if (!existsSync(skillsFolder)) {
+      try {
+        mkdirSync(skillsFolder, { recursive: true })
+      } catch (error) {
+        if (isDebugTools()) {
+          logTools(`Failed to create skills folder at ${skillsFolder}: ${error instanceof Error ? error.message : String(error)}`)
+        }
+        return { config, changed: false }
+      }
+    }
+
+    // Create the migrated config using bundled server
+    const migratedServerConfig: MCPServerConfig = {
+      transport: "stdio" as MCPTransportType,
+      command: "node",
+      args: [getInternalFilesystemServerPath(), skillsFolder],
+    }
+
+    const migratedMcpConfig: MCPConfig = {
+      ...mcpConfig,
+      mcpServers: {
+        ...mcpConfig.mcpServers,
+        [DEFAULT_FILESYSTEM_SERVER_NAME]: migratedServerConfig,
+      },
+    }
+
+    if (isDebugTools()) {
+      logTools(`Migrated ${DEFAULT_FILESYSTEM_SERVER_NAME} to bundled server with path: ${skillsFolder}`)
+    }
+
+    return {
+      config: { ...config, mcpConfig: migratedMcpConfig },
+      changed: true,
+    }
   }
 
   // Ensure the skills folder exists

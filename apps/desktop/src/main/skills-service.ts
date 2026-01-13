@@ -1255,14 +1255,14 @@ const DEBOUNCE_MS = 500 // Wait 500ms after last change before notifying
  * Handle a file system change event from any watcher.
  */
 function handleWatcherEvent(eventType: string, filename: string | null): void {
-  // Only care about SKILL.md files or directory changes
-  if (!filename) return
+  // On some platforms, fs.watch can emit events where filename is null.
+  // Treat this as an "unknown change" and still trigger the refresh.
+  const isUnknownChange = !filename
+  const isSkillFile = filename?.endsWith("SKILL.md") || filename?.endsWith("skill.md") || filename?.endsWith(".md")
+  const isDirectory = filename ? !filename.includes(".") : false
 
-  const isSkillFile = filename.endsWith("SKILL.md") || filename.endsWith("skill.md") || filename.endsWith(".md")
-  const isDirectory = !filename.includes(".")
-
-  if (isSkillFile || isDirectory) {
-    logApp(`Skills folder changed: ${eventType} ${filename}`)
+  if (isUnknownChange || isSkillFile || isDirectory) {
+    logApp(`Skills folder changed: ${eventType} ${filename ?? "(unknown)"}`)
 
     // Debounce to avoid multiple rapid notifications
     if (debounceTimer) {
@@ -1272,7 +1272,7 @@ function handleWatcherEvent(eventType: string, filename: string | null): void {
     debounceTimer = setTimeout(() => {
       debounceTimer = null
       // On Linux, refresh subdirectory watchers when structure changes
-      if (process.platform === "linux" && isDirectory) {
+      if (process.platform === "linux" && (isDirectory || isUnknownChange)) {
         refreshLinuxSubdirectoryWatchers()
       }
       notifySkillsFolderChanged()

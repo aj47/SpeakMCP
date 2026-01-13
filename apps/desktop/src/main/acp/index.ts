@@ -26,5 +26,5 @@ export {
   getAllDelegationsForSession,
   cleanupOldDelegatedRuns
 } from './acp-router-tools'
-export { acpSmartRouter, ACPSmartRouter, type UnifiedAgent, type RoutingDecision } from './acp-smart-router'
+export { acpSmartRouter, ACPSmartRouter } from './acp-smart-router'
 export { acpBackgroundNotifier, ACPBackgroundNotifier } from './acp-background-notifier'

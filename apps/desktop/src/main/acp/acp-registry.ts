@@ -100,18 +100,6 @@ export class ACPRegistry {
   }
 
   /**
-   * Get agents that have a specific capability.
-   * @param capability - The capability to filter by
-   * @returns Array of agent instances with the specified capability
-   * @deprecated Capabilities are no longer used for routing
-   */
-  getAgentsByCapability(capability: string): ACPAgentInstance[] {
-    return this.getAllAgents().filter(agent =>
-      agent.definition.capabilities?.includes(capability) ?? false
-    )
-  }
-
-  /**
    * Get agents that are ready to accept requests.
    * An agent is considered available if its status is 'ready', or 'busy' but still below maxConcurrency.
    * @returns Array of ready agent instances

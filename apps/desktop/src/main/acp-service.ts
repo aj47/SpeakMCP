@@ -774,8 +774,6 @@ class ACPService extends EventEmitter {
   private async handleAgentRequest(agentName: string, request: JsonRpcRequest): Promise<void> {
     const { id, method, params } = request
 
-    console.log(`[ACP handleAgentRequest] method=${method}, id=${id} (type: ${typeof id})`)
-
     try {
       let result: unknown
 
@@ -824,7 +822,6 @@ class ACPService extends EventEmitter {
   ): void {
     const instance = this.agents.get(agentName)
     if (!instance?.process?.stdin) {
-      console.log(`[ACP sendResponse] No process/stdin for agent=${agentName}, id=${id}`)
       return
     }
 
@@ -834,16 +831,8 @@ class ACPService extends EventEmitter {
       ...(error ? { error } : { result: result ?? {} }),
     }
 
-    console.log(`[ACP sendResponse] Sending response to ${agentName}, id=${id}:`, JSON.stringify(response, null, 2))
-
     const message = JSON.stringify(response) + "\n"
-    instance.process.stdin.write(message, (err) => {
-      if (err) {
-        console.log(`[ACP sendResponse] Write error for ${agentName}, id=${id}:`, err)
-      } else {
-        console.log(`[ACP sendResponse] Successfully wrote response to ${agentName}, id=${id}`)
-      }
-    })
+    instance.process.stdin.write(message)
   }
 
   /**
@@ -935,11 +924,7 @@ class ACPService extends EventEmitter {
     })
 
     // Wait for user response
-    console.log(`[ACP Tool Approval] Waiting for user response for approvalId=${approvalId}, speakMcpSessionId=${speakMcpSessionId}`)
-    console.log(`[ACP Tool Approval] pendingToolApprovals before wait:`, toolApprovalManager.getPendingApprovalCount())
     const approved = await promise
-    console.log(`[ACP Tool Approval] User responded: approved=${approved} for approvalId=${approvalId}`)
-    console.log(`[ACP Tool Approval] pendingToolApprovals after response:`, toolApprovalManager.getPendingApprovalCount())
 
     // Emit status update
     this.emit("toolCallUpdate", {

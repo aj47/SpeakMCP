@@ -13,8 +13,6 @@ export interface DiagnosticInfo {
   }
   config: {
     mcpServersCount: number
-    mcpToolsEnabled: boolean
-    mcpAgentModeEnabled: boolean
   }
   mcp: {
     availableTools: number
@@ -130,8 +128,6 @@ class DiagnosticsService {
       },
       config: {
         mcpServersCount: Object.keys(config.mcpConfig?.mcpServers || {}).length,
-        mcpToolsEnabled: true, // MCP tools are now always enabled
-        mcpAgentModeEnabled: true, // Agent mode is now always enabled
       },
       mcp: {
         availableTools: mcpService.getAvailableTools().length,

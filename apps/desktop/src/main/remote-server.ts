@@ -940,6 +940,11 @@ export async function startRemoteServer() {
   // POST /v1/conversations - Create a new conversation from mobile data
   fastify.post("/v1/conversations", async (req, reply) => {
     try {
+      // Validate request body is a valid object
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return reply.code(400).send({ error: "Request body must be a JSON object" })
+      }
+
       const body = req.body as {
         title?: string
         messages: Array<{
@@ -1029,6 +1034,11 @@ export async function startRemoteServer() {
       }
       if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
         return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
+      // Validate request body is a valid object
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return reply.code(400).send({ error: "Request body must be a JSON object" })
       }
 
       const body = req.body as {

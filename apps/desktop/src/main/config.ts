@@ -200,6 +200,7 @@ const getConfig = () => {
     dualModelSummarizationFrequency: "every_response",
     dualModelSummaryDetailLevel: "compact",
     dualModelAutoSaveImportant: false,
+    dualModelInjectMemories: false,
 
   }
 

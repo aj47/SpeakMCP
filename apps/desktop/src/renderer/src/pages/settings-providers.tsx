@@ -988,6 +988,19 @@ export function Component() {
                         onCheckedChange={(checked) => saveConfig({ dualModelAutoSaveImportant: checked })}
                       />
                     </Control>
+                    <Control
+                      label={
+                        <ControlLabel
+                          label="Inject Memories"
+                          tooltip="Automatically include relevant memories in agent context. May increase token usage."
+                        />
+                      }
+                    >
+                      <Switch
+                        checked={config.dualModelInjectMemories ?? false}
+                        onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
+                      />
+                    </Control>
                   </div>
                 </>
               )}

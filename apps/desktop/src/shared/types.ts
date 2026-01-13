@@ -659,6 +659,7 @@ export type Config = {
   dualModelSummarizationFrequency?: "every_response" | "major_steps_only"
   dualModelSummaryDetailLevel?: "compact" | "detailed"
   dualModelAutoSaveImportant?: boolean
+  dualModelInjectMemories?: boolean  // Whether to inject memories into system prompt (default: false)
   dualModelSectionCollapsed?: boolean  // UI state for settings section
 
 }

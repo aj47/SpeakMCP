@@ -193,13 +193,16 @@ export async function processTranscriptWithTools(
     : []
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
-  // Load memories for context (even in non-agent mode, memories can be helpful)
-  const allMemories = await memoryService.getAllMemories()
-  // Filter to high importance and critical memories, limit to 5 for non-agent mode
-  const relevantMemories = allMemories
-    .filter(m => m.importance === 'high' || m.importance === 'critical')
-    .slice(0, 5)
-  logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context`)
+  // Load memories for context (only if dual-model memory injection is enabled)
+  let relevantMemories: AgentMemory[] = []
+  if (config.dualModelEnabled && config.dualModelInjectMemories) {
+    const allMemories = await memoryService.getAllMemories()
+    // Filter to high importance and critical memories, limit to 5 for non-agent mode
+    relevantMemories = allMemories
+      .filter(m => m.importance === 'high' || m.importance === 'critical')
+      .slice(0, 5)
+    logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context`)
+  }
 
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -447,9 +450,6 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
-  // Track step summaries for dual-model mode
-  const stepSummaries: import("../shared/types").AgentStepSummary[] = []
-
   // Declare variables that need to be accessible in the finally block for Langfuse tracing
   let iteration = 0
   let finalContent = ""
@@ -497,9 +497,9 @@ export async function processTranscriptWithAgentMode(
       modelInfo: modelInfoRef,
       // Include profile name from session snapshot for UI display
       profileName,
-      // Dual-model summarization data
-      stepSummaries: stepSummaries.length > 0 ? stepSummaries : undefined,
-      latestSummary: stepSummaries.length > 0 ? stepSummaries[stepSummaries.length - 1] : undefined,
+      // Dual-model summarization data (from service - single source of truth)
+      stepSummaries: summarizationService.getSummaries(currentSessionId),
+      latestSummary: summarizationService.getLatestSummary(currentSessionId),
     }
 
     // Fire and forget - don't await, but catch errors
@@ -609,7 +609,6 @@ export async function processTranscriptWithAgentMode(
     try {
       const summary = await summarizeAgentStep(input)
       if (summary) {
-        stepSummaries.push(summary)
         summarizationService.addSummary(summary)
 
         if (isDebugLLM()) {
@@ -715,19 +714,22 @@ export async function processTranscriptWithAgentMode(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
   logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
 
-  // Load memories for agent context
+  // Load memories for agent context (only if memory injection is enabled)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
-  const allMemories = await memoryService.getAllMemories()
-  // Include all high/critical importance memories, and some recent medium importance ones
-  const relevantMemories = allMemories
-    .filter(m => m.importance === 'high' || m.importance === 'critical')
-    .concat(
-      allMemories
-        .filter(m => m.importance === 'medium')
-        .slice(0, 5)
-    )
-    .slice(0, 15) // Cap at 15 memories to manage context size
-  logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)
+  let relevantMemories: AgentMemory[] = []
+  if (config.dualModelEnabled && config.dualModelInjectMemories) {
+    const allMemories = await memoryService.getAllMemories()
+    // Include all high/critical importance memories, and some recent medium importance ones
+    relevantMemories = allMemories
+      .filter(m => m.importance === 'high' || m.importance === 'critical')
+      .concat(
+        allMemories
+          .filter(m => m.importance === 'medium')
+          .slice(0, 5)
+      )
+      .slice(0, 15) // Cap at 15 memories to manage context size
+    logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)
+  }
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
@@ -1668,12 +1670,16 @@ Return ONLY JSON per schema.`,
           .flatMap(m => m.toolResults || [])
           .slice(-5)
 
-        await generateStepSummary(
+        generateStepSummary(
           iteration,
           lastToolCalls,
           lastToolResults,
           finalContent,
-        )
+        ).catch(err => {
+          if (isDebugLLM()) {
+            logLLM("[Dual-Model] Background summarization error:", err)
+          }
+        })
       }
 
       // Add completion step
@@ -2204,20 +2210,16 @@ Return ONLY JSON per schema.`,
     }
 
     // Generate step summary after tool execution (if dual-model enabled)
-    await generateStepSummary(
+    // Fire-and-forget: summaries are for UI display, not needed for agent's next decision
+    generateStepSummary(
       iteration,
       toolCallsArray,
       toolResults,
       llmResponse.content || undefined,
-    )
-
-    // Emit progress update with new summary
-    emit({
-      currentIteration: iteration,
-      maxIterations,
-      steps: progressSteps.slice(-3),
-      isComplete: false,
-      conversationHistory: formatConversationForProgress(conversationHistory),
+    ).catch(err => {
+      if (isDebugLLM()) {
+        logLLM("[Dual-Model] Background summarization error:", err)
+      }
     })
 
     // Enhanced completion detection with better error handling

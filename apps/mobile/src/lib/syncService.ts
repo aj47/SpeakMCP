@@ -168,19 +168,22 @@ export async function syncConversations(
     }
 
     // Step 3: Pull new server conversations not in local
+    const newSessions: Session[] = [];
     for (const serverItem of serverList) {
       if (!localByServerId.has(serverItem.id)) {
         // Server conversation not in local - pull it
         try {
           const fullConv = await client.getConversation(serverItem.id);
           const newSession = serverConversationToSession(fullConv);
-          updatedSessions.unshift(newSession); // Add to beginning (most recent)
+          newSessions.push(newSession);
           result.pulled++;
         } catch (err: any) {
           result.errors.push(`Failed to pull new ${serverItem.id}: ${err.message}`);
         }
       }
     }
+    // Add all new sessions to the beginning, preserving server order
+    updatedSessions.unshift(...newSessions);
 
   } catch (err: any) {
     result.errors.push(`Sync failed: ${err.message}`);

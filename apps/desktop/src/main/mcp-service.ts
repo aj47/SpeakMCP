@@ -51,20 +51,6 @@ import {
 
 const accessAsync = promisify(access)
 
-// Default timeout for tool execution (20 seconds)
-// Browser automation tools like Playwright may take longer
-const DEFAULT_TOOL_TIMEOUT_MS = 20_000
-
-// Tools that may legitimately take longer
-const LONG_RUNNING_TOOLS = new Set([
-  'playwriter:execute',
-  'browser:screenshot',
-  'browser:navigate',
-])
-
-// Extended timeout for long-running tools (60 seconds)
-const LONG_RUNNING_TOOL_TIMEOUT_MS = 60_000
-
 /**
  * Internal server constants
  * Internal servers are managed by SpeakMCP and should always use bundled paths
@@ -1384,6 +1370,7 @@ export class MCPService {
     // No need for complex session injection logic here
 
     try {
+      const fullToolName = `${serverName}:${toolName}`
       if (isDebugTools()) {
         logTools("Executing tool", {
           serverName,
@@ -1391,31 +1378,12 @@ export class MCPService {
           arguments: processedArguments,
         })
       }
-      // Determine appropriate timeout based on tool type
-      const fullToolName = `${serverName}:${toolName}`
-      const timeoutMs = LONG_RUNNING_TOOLS.has(fullToolName)
-        ? LONG_RUNNING_TOOL_TIMEOUT_MS
-        : DEFAULT_TOOL_TIMEOUT_MS
 
-      // Execute tool with timeout
-      const toolPromise = client.callTool({
+      // Execute tool - no artificial timeout, let MCP server handle its own timing
+      const result = await client.callTool({
         name: toolName,
         arguments: processedArguments,
       })
-
-      let timeoutId: ReturnType<typeof setTimeout>
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error(`Tool ${fullToolName} timed out after ${timeoutMs / 1000}s`))
-        }, timeoutMs)
-      })
-
-      let result: Awaited<typeof toolPromise>
-      try {
-        result = await Promise.race([toolPromise, timeoutPromise])
-      } finally {
-        clearTimeout(timeoutId!)
-      }
 
       if (isDebugTools()) {
         logTools("Tool result", { serverName, toolName, result })

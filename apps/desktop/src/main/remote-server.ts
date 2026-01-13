@@ -1040,6 +1040,18 @@ export async function startRemoteServer() {
           return reply.code(400).send({ error: "Conversation not found and no messages provided to create it" })
         }
 
+        // Validate each message object
+        const validRoles = ["user", "assistant", "tool"]
+        for (let i = 0; i < body.messages.length; i++) {
+          const msg = body.messages[i]
+          if (!msg.role || !validRoles.includes(msg.role)) {
+            return reply.code(400).send({ error: `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}` })
+          }
+          if (typeof msg.content !== "string") {
+            return reply.code(400).send({ error: `Invalid content in message ${i}: expected string` })
+          }
+        }
+
         const firstMessageContent = body.messages[0]?.content || ""
         const title = body.title || (firstMessageContent.length > 50
           ? `${firstMessageContent.slice(0, 50)}...`
@@ -1070,7 +1082,19 @@ export async function startRemoteServer() {
           conversation.title = body.title
         }
 
-        if (body.messages !== undefined) {
+        if (body.messages && Array.isArray(body.messages)) {
+          // Validate each message object
+          const validRoles = ["user", "assistant", "tool"]
+          for (let i = 0; i < body.messages.length; i++) {
+            const msg = body.messages[i]
+            if (!msg.role || !validRoles.includes(msg.role)) {
+              return reply.code(400).send({ error: `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}` })
+            }
+            if (typeof msg.content !== "string") {
+              return reply.code(400).send({ error: `Invalid content in message ${i}: expected string` })
+            }
+          }
+
           conversation.messages = body.messages.map((msg, index) => ({
             id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
             role: msg.role,

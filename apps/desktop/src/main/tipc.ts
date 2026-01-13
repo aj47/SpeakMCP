@@ -3220,7 +3220,23 @@ export const router = {
     }),
 
   // Memory service handlers
-  getAllMemories: t.procedure.action(async () => {
+  // Get all memories - optionally filtered by profile
+  getAllMemories: t.procedure
+    .input<{ profileId?: string }>()
+    .action(async ({ input }) => {
+      const profileId = input?.profileId
+      if (profileId) {
+        return memoryService.getMemoriesByProfile(profileId)
+      }
+      return memoryService.getAllMemories()
+    }),
+
+  // Get memories for the current profile (convenience method)
+  getMemoriesForCurrentProfile: t.procedure.action(async () => {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      return memoryService.getMemoriesByProfile(currentProfile.id)
+    }
     return memoryService.getAllMemories()
   }),
 
@@ -3238,8 +3254,11 @@ export const router = {
       tags?: string[]
       conversationTitle?: string
       conversationId?: string
+      profileId?: string
     }>()
     .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
       const memory = memoryService.createMemoryFromSummary(
         input.summary,
         input.title,
@@ -3247,6 +3266,7 @@ export const router = {
         input.tags,
         input.conversationTitle,
         input.conversationId,
+        profileId,
       )
       const success = await memoryService.saveMemory(memory)
       return { success, memory: success ? memory : null }
@@ -3268,9 +3288,11 @@ export const router = {
     }),
 
   searchMemories: t.procedure
-    .input<{ query: string }>()
+    .input<{ query: string; profileId?: string }>()
     .action(async ({ input }) => {
-      return memoryService.searchMemories(input.query)
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      return memoryService.searchMemories(input.query, profileId)
     }),
 
   // Summarization service handlers

@@ -16,19 +16,20 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentMemory } from "@shared/types"
 import { toast } from "sonner"
-import { 
-  Search, 
-  Trash2, 
-  Brain, 
-  Calendar, 
-  Tag, 
-  ChevronDown, 
+import {
+  Search,
+  Trash2,
+  Brain,
+  Calendar,
+  Tag,
+  ChevronDown,
   ChevronRight,
   Loader2,
   AlertCircle,
   FileText,
   Pencil,
-  X
+  X,
+  User
 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 
@@ -189,13 +190,24 @@ export function Component() {
   const [editTags, setEditTags] = useState("")
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
-  const memoriesQuery = useQuery({
-    queryKey: ["memories"],
+  // Get current profile for display
+  const currentProfileQuery = useQuery({
+    queryKey: ["current-profile"],
     queryFn: async () => {
-      return await tipcClient.getAllMemories()
+      return await tipcClient.getCurrentProfile()
+    },
+  })
+  const currentProfile = currentProfileQuery.data
+
+  // Get memories for the current profile (automatically filtered by profile on the backend)
+  const memoriesQuery = useQuery({
+    queryKey: ["memories", "currentProfile", currentProfile?.id],
+    queryFn: async () => {
+      return await tipcClient.getMemoriesForCurrentProfile()
     },
   })
 
+  // Search also uses the current profile filter on the backend
   const searchMutation = useMutation({
     mutationFn: async (query: string) => {
       if (!query.trim()) return null
@@ -276,9 +288,17 @@ export function Component() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold">Memories</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">Memories</h1>
+            {currentProfile && (
+              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                {currentProfile.name}
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Saved insights and findings from agent sessions
+            Saved insights and findings from agent sessions for this profile
           </p>
         </div>
 

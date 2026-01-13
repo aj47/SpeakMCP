@@ -194,14 +194,18 @@ export async function processTranscriptWithTools(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
   // Load memories for context (works independently of dual-model summarization)
+  // Memories are filtered by current profile
   let relevantMemories: AgentMemory[] = []
   if (config.dualModelInjectMemories) {
-    const allMemories = await memoryService.getAllMemories()
+    const currentProfileId = config.mcpCurrentProfileId
+    const allMemories = currentProfileId
+      ? await memoryService.getMemoriesByProfile(currentProfileId)
+      : await memoryService.getAllMemories()
     // Filter to high importance and critical memories, limit to 5 for non-agent mode
     relevantMemories = allMemories
       .filter(m => m.importance === 'high' || m.importance === 'critical')
       .slice(0, 5)
-    logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context`)
+    logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context (profile: ${currentProfileId || 'global'})`)
   }
 
   const systemPrompt = constructSystemPrompt(
@@ -613,9 +617,19 @@ export async function processTranscriptWithAgentMode(
         summarizationService.addSummary(summary)
 
         // Auto-save high/critical importance summaries if enabled
+        // Associate memory with the session's profile for profile-scoped memories
         if (config.dualModelAutoSaveImportant &&
             (summary.importance === "high" || summary.importance === "critical")) {
-          const memory = memoryService.createMemoryFromSummary(summary)
+          const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
+          const memory = memoryService.createMemoryFromSummary(
+            summary,
+            undefined, // title
+            undefined, // userNotes
+            undefined, // tags
+            undefined, // conversationTitle
+            currentConversationId,
+            profileIdForMemory,
+          )
           memoryService.saveMemory(memory).catch(err => {
             if (isDebugLLM()) {
               logLLM("[Dual-Model] Error auto-saving important summary:", err)
@@ -728,9 +742,13 @@ export async function processTranscriptWithAgentMode(
 
   // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
+  // Memories are filtered by the session's profile
   let relevantMemories: AgentMemory[] = []
   if (config.dualModelInjectMemories) {
-    const allMemories = await memoryService.getAllMemories()
+    const profileIdForMemories = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
+    const allMemories = profileIdForMemories
+      ? await memoryService.getMemoriesByProfile(profileIdForMemories)
+      : await memoryService.getAllMemories()
     // Include all high/critical importance memories, and some recent medium importance ones
     relevantMemories = allMemories
       .filter(m => m.importance === 'high' || m.importance === 'critical')
@@ -740,7 +758,7 @@ export async function processTranscriptWithAgentMode(
           .slice(0, 5)
       )
       .slice(0, 15) // Cap at 15 memories to manage context size
-    logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)
+    logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total, profile: ${profileIdForMemories || 'global'})`)
   }
 
   // Construct system prompt using the new approach

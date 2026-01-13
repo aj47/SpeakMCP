@@ -225,6 +225,10 @@ export interface AgentMemory {
   createdAt: number
   updatedAt: number
 
+  // Profile association - memories are scoped per profile
+  // If undefined, memory is treated as global (legacy support)
+  profileId?: string
+
   // Source info
   sessionId?: string
   conversationId?: string

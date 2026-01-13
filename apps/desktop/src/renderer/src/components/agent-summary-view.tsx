@@ -12,6 +12,7 @@ import {
   Clock,
   Tag,
   Loader2,
+  Brain,
 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"

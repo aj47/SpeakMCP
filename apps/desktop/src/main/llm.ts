@@ -202,8 +202,14 @@ export async function processTranscriptWithTools(
     const allMemories = currentProfileId
       ? await memoryService.getMemoriesByProfile(currentProfileId)
       : await memoryService.getAllMemories()
-    // Load all memories (sorted by importance in formatMemoriesForPrompt), limit for non-agent mode
-    relevantMemories = allMemories.slice(0, 10)
+    // Sort by importance first (critical > high > medium > low), then by recency, before capping
+    const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+    const sortedMemories = [...allMemories].sort((a, b) => {
+      const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
+      if (impDiff !== 0) return impDiff
+      return b.createdAt - a.createdAt // More recent first as tiebreaker
+    })
+    relevantMemories = sortedMemories.slice(0, 10)
     logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context (profile: ${currentProfileId || 'global'})`)
   }
 
@@ -749,8 +755,14 @@ export async function processTranscriptWithAgentMode(
     const allMemories = profileIdForMemories
       ? await memoryService.getMemoriesByProfile(profileIdForMemories)
       : await memoryService.getAllMemories()
-    // Load all memories (sorted by importance in formatMemoriesForPrompt)
-    relevantMemories = allMemories.slice(0, 30) // Cap at 30 for agent mode
+    // Sort by importance first (critical > high > medium > low), then by recency, before capping
+    const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+    const sortedMemories = [...allMemories].sort((a, b) => {
+      const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
+      if (impDiff !== 0) return impDiff
+      return b.createdAt - a.createdAt // More recent first as tiebreaker
+    })
+    relevantMemories = sortedMemories.slice(0, 30) // Cap at 30 for agent mode
     logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total, profile: ${profileIdForMemories || 'global'})`)
   }
 

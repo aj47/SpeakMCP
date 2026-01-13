@@ -44,7 +44,8 @@ function formatMemoriesForPrompt(memories: AgentMemory[], maxMemories: number = 
   if (selected.length === 0) return ""
 
   // Format as single-line entries for maximum compactness
-  return selected.map(mem => `- ${mem.content}`).join("\n")
+  // Normalize any legacy multi-line content to single line
+  return selected.map(mem => `- ${mem.content.replace(/[\r\n]+/g, ' ')}`).join("\n")
 }
 
 export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {

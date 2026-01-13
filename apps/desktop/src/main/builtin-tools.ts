@@ -18,10 +18,12 @@ import { mcpService, type MCPTool, type MCPToolResult, handleWhatsAppToggle } fr
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
 import { emergencyStopAll } from "./emergency-stop"
+import { memoryService } from "./memory-service"
 import { messageQueueService } from "./message-queue-service"
 import { exec } from "child_process"
 import { promisify } from "util"
 import path from "path"
+import type { AgentMemory } from "../shared/types"
 
 const execAsync = promisify(exec)
 
@@ -1371,6 +1373,94 @@ const toolHandlers: Record<string, ToolHandler> = {
           },
         ],
         isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  save_memory: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Check if memories are enabled
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system is disabled. Enable it in Settings > Models to save memories." }) }],
+        isError: true,
+      }
+    }
+
+    // Validate required parameters
+    if (typeof args.title !== "string" || args.title.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "title must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (typeof args.content !== "string" || args.content.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "content must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const title = args.title.trim().slice(0, 100) // Max 100 chars for title
+    const content = args.content.trim()
+    const keyFindings = Array.isArray(args.keyFindings)
+      ? args.keyFindings.filter((k): k is string => typeof k === "string")
+      : []
+    const tags = Array.isArray(args.tags)
+      ? args.tags.filter((t): t is string => typeof t === "string")
+      : []
+    const importance = (["low", "medium", "high", "critical"].includes(args.importance as string)
+      ? args.importance
+      : "medium") as "low" | "medium" | "high" | "critical"
+
+    const now = Date.now()
+    const memory: AgentMemory = {
+      id: `memory_${now}_${Math.random().toString(36).substr(2, 9)}`,
+      profileId: config.mcpCurrentProfileId,
+      createdAt: now,
+      updatedAt: now,
+      title,
+      content,
+      keyFindings,
+      tags,
+      importance,
+    }
+
+    try {
+      const success = await memoryService.saveMemory(memory)
+
+      if (success) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                memory: {
+                  id: memory.id,
+                  title: memory.title,
+                  content: memory.content,
+                  keyFindings: memory.keyFindings,
+                  tags: memory.tags,
+                  importance: memory.importance,
+                },
+                message: `Memory saved successfully: "${title}"`,
+              }, null, 2),
+            },
+          ],
+          isError: false,
+        }
+      } else {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Failed to save memory" }) }],
+          isError: true,
+        }
       }
     } catch (error) {
       return {

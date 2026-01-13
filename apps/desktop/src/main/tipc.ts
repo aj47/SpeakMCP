@@ -377,6 +377,8 @@ async function processWithAgentMode(
   }
 }
 import { diagnosticsService } from "./diagnostics"
+import { memoryService } from "./memory-service"
+import { summarizationService } from "./summarization-service"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
@@ -3225,6 +3227,95 @@ export const router = {
       const { skillsService } = await import("./skills-service")
       const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
       return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+    }),
+
+  // Memory service handlers
+  // Get all memories - optionally filtered by profile
+  getAllMemories: t.procedure
+    .input<{ profileId?: string }>()
+    .action(async ({ input }) => {
+      const profileId = input?.profileId
+      if (profileId) {
+        return memoryService.getMemoriesByProfile(profileId)
+      }
+      return memoryService.getAllMemories()
+    }),
+
+  // Get memories for the current profile (convenience method)
+  getMemoriesForCurrentProfile: t.procedure.action(async () => {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      return memoryService.getMemoriesByProfile(currentProfile.id)
+    }
+    return memoryService.getAllMemories()
+  }),
+
+  getMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.getMemory(input.id)
+    }),
+
+  saveMemoryFromSummary: t.procedure
+    .input<{
+      summary: import("../shared/types").AgentStepSummary
+      title?: string
+      userNotes?: string
+      tags?: string[]
+      conversationTitle?: string
+      conversationId?: string
+      profileId?: string
+    }>()
+    .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      const memory = memoryService.createMemoryFromSummary(
+        input.summary,
+        input.title,
+        input.userNotes,
+        input.tags,
+        input.conversationTitle,
+        input.conversationId,
+        profileId,
+      )
+      const success = await memoryService.saveMemory(memory)
+      return { success, memory: success ? memory : null }
+    }),
+
+  updateMemory: t.procedure
+    .input<{
+      id: string
+      updates: Partial<Omit<import("../shared/types").AgentMemory, "id" | "createdAt">>
+    }>()
+    .action(async ({ input }) => {
+      return memoryService.updateMemory(input.id, input.updates)
+    }),
+
+  deleteMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.deleteMemory(input.id)
+    }),
+
+  searchMemories: t.procedure
+    .input<{ query: string; profileId?: string }>()
+    .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      return memoryService.searchMemories(input.query, profileId)
+    }),
+
+  // Summarization service handlers
+  getSessionSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getSummaries(input.sessionId)
+    }),
+
+  getImportantSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getImportantSummaries(input.sessionId)
     }),
 }
 

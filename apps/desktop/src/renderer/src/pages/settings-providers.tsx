@@ -8,15 +8,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@renderer/components/ui/select"
+import { Switch } from "@renderer/components/ui/switch"
 import {
   useConfigQuery,
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
-import { Config } from "@shared/types"
+import { Config, ModelPreset } from "@shared/types"
 import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
+import { PresetModelSelector } from "@renderer/components/preset-model-selector"
 import { ProfileBadgeCompact } from "@renderer/components/profile-badge"
-import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react"
+import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight, BookOpen } from "lucide-react"
 
 import {
   STT_PROVIDERS,
@@ -32,6 +34,8 @@ import {
   GROQ_TTS_VOICES_ARABIC,
   GEMINI_TTS_MODELS,
   GEMINI_TTS_VOICES,
+  getBuiltInModelPresets,
+  DEFAULT_MODEL_PRESET_ID,
 } from "@shared/index"
 
 // Badge component to show which features are using this provider
@@ -145,7 +149,39 @@ export function Component() {
   const isGroqActive = activeProviders.groq.length > 0
   const isGeminiActive = activeProviders.gemini.length > 0
 
+  // Get all available presets for dual-model selection
+  const allPresets = useMemo(() => {
+    const builtIn = getBuiltInModelPresets()
+    const custom = configQuery.data?.modelPresets || []
+
+    // Merge built-in presets with any saved data
+    const mergedBuiltIn = builtIn.map(preset => {
+      const saved = custom.find(c => c.id === preset.id)
+      if (saved) {
+        return { ...preset, ...saved }
+      }
+      return preset
+    })
+
+    // Add custom (non-built-in) presets
+    const customOnly = custom.filter(c => !c.isBuiltIn)
+    return [...mergedBuiltIn, ...customOnly]
+  }, [configQuery.data?.modelPresets])
+
+  // Get preset by ID helper
+  const getPresetById = (presetId: string | undefined): ModelPreset | undefined => {
+    if (!presetId) return undefined
+    return allPresets.find(p => p.id === presetId)
+  }
+
   if (!configQuery.data) return null
+
+  const config = configQuery.data
+  const dualModelEnabled = config.dualModelEnabled ?? false
+  const strongPresetId = config.dualModelStrongPresetId || config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const weakPresetId = config.dualModelWeakPresetId || config.currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const strongPreset = getPresetById(strongPresetId)
+  const weakPreset = getPresetById(weakPresetId)
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
@@ -240,6 +276,87 @@ export function Component() {
                   Create presets with individual API keys for different providers (OpenRouter, Together AI, etc.)
                 </p>
               </div>
+
+              {/* Summarization Model - shown when dual model is enabled */}
+              {dualModelEnabled && (
+                <div className="px-3 py-3 border-t bg-muted/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BookOpen className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium">Summarization Model</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Faster, cheaper model for summarizing agent steps.
+                  </p>
+                  <div className="space-y-2">
+                    <Control
+                      label={<ControlLabel label="Preset" tooltip="Select which model preset to use for summarization" />}
+                    >
+                      <Select
+                        value={weakPresetId}
+                        onValueChange={(value) => saveConfig({ dualModelWeakPresetId: value })}
+                      >
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allPresets.map((preset) => (
+                            <SelectItem key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Control>
+                    {weakPreset && (
+                      <PresetModelSelector
+                        presetId={weakPresetId}
+                        baseUrl={weakPreset.baseUrl}
+                        apiKey={weakPreset.apiKey}
+                        value={config.dualModelWeakModelName || ""}
+                        onValueChange={(value) => saveConfig({ dualModelWeakModelName: value })}
+                        label="Model"
+                        placeholder="Select model..."
+                      />
+                    )}
+                    <Control
+                      label={<ControlLabel label="Frequency" tooltip="How often to generate summaries" />}
+                    >
+                      <Select
+                        value={config.dualModelSummarizationFrequency || "every_response"}
+                        onValueChange={(value) =>
+                          saveConfig({ dualModelSummarizationFrequency: value as "every_response" | "major_steps_only" })
+                        }
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="every_response">Every Response</SelectItem>
+                          <SelectItem value="major_steps_only">Major Steps Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Control>
+                    <Control
+                      label={<ControlLabel label="Detail Level" tooltip="How detailed the summaries should be" />}
+                    >
+                      <Select
+                        value={config.dualModelSummaryDetailLevel || "compact"}
+                        onValueChange={(value) =>
+                          saveConfig({ dualModelSummaryDetailLevel: value as "compact" | "detailed" })
+                        }
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="compact">Compact</SelectItem>
+                          <SelectItem value="detailed">Detailed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Control>
+                  </div>
+                </div>
+              )}
 
               {/* OpenAI TTS - only shown for native OpenAI preset */}
               <div className="border-t mt-3 pt-3">
@@ -757,6 +874,8 @@ export function Component() {
             )}
           </div>
         )}
+
+
       </div>
     </div>
   )

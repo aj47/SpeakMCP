@@ -62,6 +62,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/langfuse",
           loader: () => redirect("/settings"),
         },
+        {
+          path: "memories",
+          lazy: () => import("./pages/memories"),
+        },
       ],
     },
     {

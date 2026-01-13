@@ -195,6 +195,16 @@ const getConfig = () => {
     langfuseSecretKey: undefined,
     langfuseBaseUrl: undefined, // Uses cloud.langfuse.com by default
 
+    // Dual-Model Agent Mode defaults
+    dualModelEnabled: false,
+    dualModelSummarizationFrequency: "every_response",
+    dualModelSummaryDetailLevel: "compact",
+    dualModelAutoSaveImportant: false,
+    dualModelInjectMemories: false,
+
+    // Memory System defaults - enabled by default for backwards compatibility
+    memoriesEnabled: true,
+
   }
 
   try {

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX, Expand, Shrink } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -16,6 +16,7 @@ import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
+import { AgentSummaryView } from "./agent-summary-view"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -1063,6 +1064,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
   // Expansion state management - preserve across re-renders
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
 
+  // Tab state for Chat/Summary view toggle (only relevant when dual-model is enabled)
+  const [activeTab, setActiveTab] = useState<"chat" | "summary">("chat")
+
   // Get current conversation ID for deep-linking and session focus control
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
@@ -1787,8 +1791,43 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         {/* Collapsible content */}
         {!isCollapsed && (
           <>
-            {/* Message Stream */}
-            <div className="relative flex-1 min-h-0" onClick={(e) => e.stopPropagation()}>
+            {/* Tab toggle for Chat/Summary view - only show when summaries exist */}
+            {(progress.stepSummaries?.length ?? 0) > 0 && (
+              <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/5" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("chat"); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+                    activeTab === "chat"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <MessageSquare className="h-3 w-3" />
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("summary"); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+                    activeTab === "summary"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Brain className="h-3 w-3" />
+                  Summary
+                  <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">
+                    {progress.stepSummaries?.length ?? 0}
+                  </Badge>
+                </button>
+              </div>
+            )}
+
+            {/* Message Stream (Chat Tab) */}
+            <div className={cn("relative flex-1 min-h-0", activeTab !== "chat" && (progress.stepSummaries?.length ?? 0) > 0 && "hidden")} onClick={(e) => e.stopPropagation()}>
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -1861,6 +1900,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Summary View Tab */}
+            {activeTab === "summary" && (progress.stepSummaries?.length ?? 0) > 0 && (
+              <div className="relative flex-1 min-h-0 overflow-y-auto p-3" onClick={(e) => e.stopPropagation()}>
+                <AgentSummaryView
+                  progress={progress}
+                  conversationId={progress.conversationId}
+                />
+              </div>
+            )}
 
             {/* Footer with status info */}
             <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0 flex items-center gap-2">
@@ -2059,8 +2108,43 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
       </div>
 
-      {/* Message Stream - Left-aligned content */}
-      <div className="relative flex-1 min-h-0">
+      {/* Tab toggle for Chat/Summary view - only show when summaries exist */}
+      {(progress.stepSummaries?.length ?? 0) > 0 && (
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("chat"); }}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+              activeTab === "chat"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            Chat
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("summary"); }}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+              activeTab === "summary"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <Brain className="h-3 w-3" />
+            Summary
+            <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">
+              {progress.stepSummaries?.length ?? 0}
+            </Badge>
+          </button>
+        </div>
+      )}
+
+      {/* Message Stream - Left-aligned content (Chat Tab) */}
+      <div className={cn("relative flex-1 min-h-0", activeTab !== "chat" && (progress.stepSummaries?.length ?? 0) > 0 && "hidden")}>
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
@@ -2148,8 +2232,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </div>
           )}
         </div>
-
       </div>
+
+      {/* Summary View Tab */}
+      {activeTab === "summary" && (progress.stepSummaries?.length ?? 0) > 0 && (
+        <div className="relative flex-1 min-h-0 overflow-y-auto p-3" onClick={(e) => e.stopPropagation()}>
+          <AgentSummaryView
+            progress={progress}
+            conversationId={progress.conversationId}
+          />
+        </div>
+      )}
 
       {/* Message Queue Panel - shows queued messages in overlay */}
       {hasQueuedMessages && progress.conversationId && (

@@ -5,7 +5,7 @@ import {
   LLMToolCallResponse,
   MCPToolResult,
 } from "./mcp-service"
-import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
+import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
@@ -23,6 +23,14 @@ import {
   isLangfuseEnabled,
   flushLangfuse,
 } from "./langfuse-service"
+import {
+  isSummarizationEnabled,
+  shouldSummarizeStep,
+  summarizeAgentStep,
+  summarizationService,
+  type SummarizationInput,
+} from "./summarization-service"
+import { memoryService } from "./memory-service"
 
 /**
  * Use LLM to extract useful context from conversation history
@@ -185,6 +193,22 @@ export async function processTranscriptWithTools(
     : []
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
+  // Load memories for context (works independently of dual-model summarization)
+  // Memories are filtered by current profile
+  // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
+  let relevantMemories: AgentMemory[] = []
+  if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
+    const currentProfileId = config.mcpCurrentProfileId
+    const allMemories = currentProfileId
+      ? await memoryService.getMemoriesByProfile(currentProfileId)
+      : await memoryService.getAllMemories()
+    // Filter to high importance and critical memories, limit to 5 for non-agent mode
+    relevantMemories = allMemories
+      .filter(m => m.importance === 'high' || m.importance === 'critical')
+      .slice(0, 5)
+    logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context (profile: ${currentProfileId || 'global'})`)
+  }
+
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
     userGuidelines,
@@ -192,6 +216,7 @@ export async function processTranscriptWithTools(
     undefined,
     config.mcpCustomSystemPrompt,
     skillsInstructions,
+    relevantMemories,
   )
 
   const messages = [
@@ -478,6 +503,9 @@ export async function processTranscriptWithAgentMode(
       modelInfo: modelInfoRef,
       // Include profile name from session snapshot for UI display
       profileName,
+      // Dual-model summarization data (from service - single source of truth)
+      stepSummaries: summarizationService.getSummaries(currentSessionId),
+      latestSummary: summarizationService.getLatestSummary(currentSessionId),
     }
 
     // Fire and forget - don't await, but catch errors
@@ -541,6 +569,95 @@ export async function processTranscriptWithAgentMode(
       logLLM("[saveMessageIncremental] Failed to save message:", error)
       diagnosticsService.logWarning("llm", "Failed to save message incrementally", error)
     }
+  }
+
+  // Helper function to generate a step summary using the weak model (if dual-model enabled)
+  const generateStepSummary = async (
+    stepNumber: number,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[],
+    assistantResponse?: string,
+    isCompletion?: boolean,
+  ) => {
+    if (!isSummarizationEnabled()) {
+      return null
+    }
+
+    const hasToolCalls = !!toolCalls && toolCalls.length > 0
+    const isCompletionStep = isCompletion ?? false
+
+    if (!shouldSummarizeStep(hasToolCalls, isCompletionStep)) {
+      return null
+    }
+
+    const input: SummarizationInput = {
+      sessionId: currentSessionId,
+      stepNumber,
+      toolCalls: toolCalls?.map(tc => ({
+        name: tc.name,
+        arguments: tc.arguments,
+      })),
+      toolResults: toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: Array.isArray(tr.content)
+          ? tr.content.map(c => c.text).join("\n")
+          : String(tr.content || ""),
+        error: tr.isError
+          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
+          : undefined,
+      })),
+      assistantResponse,
+      recentMessages: conversationHistory.slice(-5).map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+    }
+
+    try {
+      const summary = await summarizeAgentStep(input)
+      if (summary) {
+        summarizationService.addSummary(summary)
+
+        // Auto-save high/critical importance summaries if enabled
+        // Associate memory with the session's profile for profile-scoped memories
+        // Only auto-save if memories are enabled system-wide
+        if (config.memoriesEnabled !== false &&
+            config.dualModelAutoSaveImportant &&
+            (summary.importance === "high" || summary.importance === "critical")) {
+          const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
+          const memory = memoryService.createMemoryFromSummary(
+            summary,
+            undefined, // title
+            undefined, // userNotes
+            undefined, // tags
+            undefined, // conversationTitle
+            currentConversationId,
+            profileIdForMemory,
+          )
+          memoryService.saveMemory(memory).catch(err => {
+            if (isDebugLLM()) {
+              logLLM("[Dual-Model] Error auto-saving important summary:", err)
+            }
+          })
+        }
+
+        if (isDebugLLM()) {
+          logLLM("[Dual-Model] Generated step summary:", {
+            stepNumber: summary.stepNumber,
+            importance: summary.importance,
+            actionSummary: summary.actionSummary,
+          })
+        }
+
+        return summary
+      }
+    } catch (error) {
+      if (isDebugLLM()) {
+        logLLM("[Dual-Model] Error generating step summary:", error)
+      }
+    }
+
+    return null
   }
 
   // Helper function to add a message to conversation history AND save it incrementally
@@ -627,6 +744,28 @@ export async function processTranscriptWithAgentMode(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
   logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
 
+  // Load memories for agent context (works independently of dual-model summarization)
+  // Memories provide context from previous sessions - user preferences, past decisions, important learnings
+  // Memories are filtered by the session's profile
+  // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
+  let relevantMemories: AgentMemory[] = []
+  if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
+    const profileIdForMemories = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
+    const allMemories = profileIdForMemories
+      ? await memoryService.getMemoriesByProfile(profileIdForMemories)
+      : await memoryService.getAllMemories()
+    // Include all high/critical importance memories, and some recent medium importance ones
+    relevantMemories = allMemories
+      .filter(m => m.importance === 'high' || m.importance === 'critical')
+      .concat(
+        allMemories
+          .filter(m => m.importance === 'medium')
+          .slice(0, 5)
+      )
+      .slice(0, 15) // Cap at 15 memories to manage context size
+    logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total, profile: ${profileIdForMemories || 'global'})`)
+  }
+
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
     uniqueAvailableTools,
@@ -635,6 +774,7 @@ export async function processTranscriptWithAgentMode(
     undefined, // relevantTools removed - let LLM decide tool relevance
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
     skillsInstructions, // agent skills instructions
+    relevantMemories, // memories from previous sessions
   )
 
   // Generic context extraction from chat history - works with any MCP tool
@@ -833,6 +973,7 @@ export async function processTranscriptWithAgentMode(
       undefined, // relevantTools removed
       customSystemPrompt, // Use session-bound custom system prompt
       skillsInstructions, // agent skills instructions
+      relevantMemories, // memories from previous sessions
     )
 
     const postVerifySummaryMessages = [
@@ -1741,7 +1882,6 @@ Return ONLY JSON per schema.`,
           }
         }
 
-
       // Add completion step
       const completionStep = createProgressStep(
         "completion",
@@ -1751,7 +1891,7 @@ Return ONLY JSON per schema.`,
       )
       progressSteps.push(completionStep)
 
-      // Emit final progress
+      // Emit final progress immediately for UI feedback
       emit({
         currentIteration: iteration,
         maxIterations,
@@ -1760,6 +1900,46 @@ Return ONLY JSON per schema.`,
         finalContent,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+
+      // Generate final completion summary (if dual-model enabled)
+      // Await and emit follow-up to ensure the final summary is included
+      if (isSummarizationEnabled()) {
+        const lastToolCalls = conversationHistory
+          .filter(m => m.toolCalls && m.toolCalls.length > 0)
+          .flatMap(m => m.toolCalls || [])
+          .slice(-5)
+        const lastToolResults = conversationHistory
+          .filter(m => m.toolResults && m.toolResults.length > 0)
+          .flatMap(m => m.toolResults || [])
+          .slice(-5)
+
+        try {
+          const completionSummary = await generateStepSummary(
+            iteration,
+            lastToolCalls,
+            lastToolResults,
+            finalContent,
+            true, // isCompletion: this is the final completion step
+          )
+
+          // If a summary was generated, emit a follow-up progress update
+          // to ensure the UI receives the completion summary
+          if (completionSummary) {
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: true,
+              finalContent,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
+          }
+        } catch (err) {
+          if (isDebugLLM()) {
+            logLLM("[Dual-Model] Completion summarization error:", err)
+          }
+        }
+      }
 
       break
     }
@@ -2306,6 +2486,19 @@ Return ONLY JSON per schema.`,
       })
     }
 
+    // Generate step summary after tool execution (if dual-model enabled)
+    // Fire-and-forget: summaries are for UI display, not needed for agent's next decision
+    generateStepSummary(
+      iteration,
+      toolCallsArray,
+      toolResults,
+      llmResponse.content || undefined,
+    ).catch(err => {
+      if (isDebugLLM()) {
+        logLLM("[Dual-Model] Background summarization error:", err)
+      }
+    })
+
     // Enhanced completion detection with better error handling
     const hasErrors = toolResults.some((result) => result.isError)
     const allToolsSuccessful = toolResults.length > 0 && !hasErrors
@@ -2462,6 +2655,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
+          relevantMemories, // memories from previous sessions
         )
 
         const summaryMessages = [
@@ -2710,6 +2904,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
+          relevantMemories, // memories from previous sessions
         )
 
         const summaryMessages = [

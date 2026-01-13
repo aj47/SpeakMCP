@@ -1,3 +1,5 @@
+import type { AgentMemory } from "../shared/types"
+
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
 
 TOOL USAGE:
@@ -21,6 +23,44 @@ WHEN TO ACT: Request is clear and tools can accomplish it directly
 TONE: Be extremely concise. No preamble or postamble. Prefer 1-3 sentences unless detail is requested.`
 
 export const BASE_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT
+
+/**
+ * Format memories for injection into the system prompt
+ * Prioritizes high importance memories and limits count for context budget
+ */
+function formatMemoriesForPrompt(memories: AgentMemory[], maxMemories: number = 15): string {
+  if (!memories || memories.length === 0) return ""
+
+  // Sort by importance (critical > high > medium > low) then by recency
+  const importanceOrder = { critical: 0, high: 1, medium: 2, low: 3 }
+  const sorted = [...memories].sort((a, b) => {
+    const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
+    if (impDiff !== 0) return impDiff
+    return b.createdAt - a.createdAt // More recent first
+  })
+
+  // Take top N memories
+  const selected = sorted.slice(0, maxMemories)
+  if (selected.length === 0) return ""
+
+  const lines: string[] = []
+  for (const mem of selected) {
+    lines.push(`### ${mem.title} [${mem.importance}]`)
+    lines.push(mem.content)
+    if (mem.keyFindings.length > 0) {
+      lines.push("Key findings:")
+      for (const finding of mem.keyFindings) {
+        lines.push(`- ${finding}`)
+      }
+    }
+    if (mem.userNotes) {
+      lines.push(`User notes: ${mem.userNotes}`)
+    }
+    lines.push("")
+  }
+
+  return lines.join("\n").trim()
+}
 
 export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
   if (customSystemPrompt && customSystemPrompt.trim()) {
@@ -100,6 +140,7 @@ export function constructSystemPrompt(
   }>,
   customSystemPrompt?: string,
   skillsInstructions?: string,
+  memories?: AgentMemory[],
 ): string {
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
 
@@ -111,6 +152,14 @@ export function constructSystemPrompt(
   // Skills are injected early in the prompt so they can influence tool usage behavior
   if (skillsInstructions?.trim()) {
     prompt += `\n\n${skillsInstructions.trim()}`
+  }
+
+  // Add memories if provided (for agent mode context)
+  // Memories are saved insights from previous sessions that help the agent
+  // understand user preferences, past decisions, and important context
+  const formattedMemories = formatMemoriesForPrompt(memories || [])
+  if (formattedMemories) {
+    prompt += `\n\nMEMORIES FROM PREVIOUS SESSIONS:\nThese are important insights and learnings saved from previous interactions. Use them to inform your decisions and provide context-aware assistance.\n\n${formattedMemories}`
   }
 
   // Format full tool info for relevant tools only (when provided)

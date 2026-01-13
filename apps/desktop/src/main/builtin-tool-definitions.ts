@@ -316,6 +316,39 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:save_memory`,
+    description: "Save a memory to the user's memory bank. Memories are persistent notes that help you remember important information across sessions. Use this when the user asks you to remember something, save a note, or when you discover important information worth preserving.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "A short, descriptive title for the memory (max 100 characters)",
+        },
+        content: {
+          type: "string",
+          description: "The main content of the memory - what you want to remember",
+        },
+        keyFindings: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional list of key points or findings to highlight",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional tags for categorization (e.g., 'project', 'preference', 'technical')",
+        },
+        importance: {
+          type: "string",
+          enum: ["low", "medium", "high", "critical"],
+          description: "Importance level of the memory (default: medium)",
+        },
+      },
+      required: ["title", "content"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:list_server_tools`,
     description: "List all tools available from a specific MCP server. Use this to discover what tools a server provides before calling them.",
     inputSchema: {

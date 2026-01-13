@@ -522,11 +522,14 @@ export function useSessions(): SessionStore {
         }
 
         // Add any new sessions from sync that don't exist in current
+        // Collect all new sessions first, then add at once to preserve their relative order
+        const newSessionsToAdd: Session[] = [];
         for (const synced of syncedSessions) {
           if (!seenIds.has(synced.id)) {
-            mergedSessions.unshift(synced); // Add new synced sessions at the beginning
+            newSessionsToAdd.push(synced);
           }
         }
+        mergedSessions.unshift(...newSessionsToAdd);
 
         // Update ref and state
         sessionsRef.current = mergedSessions;

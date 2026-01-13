@@ -912,6 +912,9 @@ export async function startRemoteServer() {
     const validRoles = ["user", "assistant", "tool"]
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i]
+      if (msg === null || msg === undefined || typeof msg !== "object") {
+        return `Invalid message ${i}: expected an object`
+      }
       if (!msg.role || !validRoles.includes(msg.role)) {
         return `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}`
       }
@@ -1083,6 +1086,10 @@ export async function startRemoteServer() {
         // Update existing conversation
         if (body.title !== undefined) {
           conversation.title = body.title
+        }
+
+        if (body.messages !== undefined && !Array.isArray(body.messages)) {
+          return reply.code(400).send({ error: "messages field must be an array" })
         }
 
         if (body.messages && Array.isArray(body.messages)) {

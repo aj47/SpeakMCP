@@ -13,7 +13,6 @@ import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budget"
-import { filterToolsForContext, getRecentToolNames } from "./tool-filter"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
@@ -1497,25 +1496,12 @@ Return ONLY JSON per schema.`,
         .filter(Boolean as any),
     ]
 
-    // Dynamic tool filtering to reduce token overhead
-    // This filters activeTools (already filtered for failures) based on context relevance
-    const recentToolNames = getRecentToolNames(conversationHistory)
-    const filterResult = filterToolsForContext(activeTools, {
-      transcript: transcript,
-      recentToolNames,
-    })
-    const filteredTools = filterResult.tools
-
-    if (filterResult.filtered) {
-      logLLM(`[Tool Filter] Reduced tools from ${filterResult.originalCount} to ${filterResult.filteredCount}`)
-    }
-
     // Apply context budget management before the agent LLM call
-    // Use filteredTools for LLM calls to reduce token overhead
-    // activeTools is still used for failure tracking and other logic
+    // All active tools are sent to the LLM - progressive disclosure tools
+    // (list_server_tools, get_tool_schema) allow the LLM to discover tools dynamically
     const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
-      availableTools: filteredTools,
+      availableTools: activeTools,
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
@@ -1588,9 +1574,7 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      // Use filteredTools for the LLM call to reduce token overhead
-      // activeTools is still used for failure tracking and other logic
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, filteredTools)
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, activeTools)
 
       // Clear streaming state after response is complete
       emit({
@@ -1651,7 +1635,7 @@ Return ONLY JSON per schema.`,
       const errorMessage = (error?.message || String(error)).toLowerCase()
       if (errorMessage.includes("empty") || errorMessage.includes("no text") || errorMessage.includes("no content")) {
         emptyResponseRetryCount++
-        if (emptyResponseRetryCount > MAX_EMPTY_RESPONSE_RETRIES) {
+        if (emptyResponseRetryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
           logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
           diagnosticsService.logError("llm", "Empty response retry limit exceeded", {
             iteration,
@@ -1720,7 +1704,7 @@ Return ONLY JSON per schema.`,
         retryCount: emptyResponseRetryCount,
         limit: MAX_EMPTY_RESPONSE_RETRIES
       })
-      if (emptyResponseRetryCount > MAX_EMPTY_RESPONSE_RETRIES) {
+      if (emptyResponseRetryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
         logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response limit exceeded"

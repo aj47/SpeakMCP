@@ -1403,13 +1403,19 @@ export class MCPService {
         arguments: processedArguments,
       })
 
+      let timeoutId: ReturnType<typeof setTimeout>
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           reject(new Error(`Tool ${fullToolName} timed out after ${timeoutMs / 1000}s`))
         }, timeoutMs)
       })
 
-      const result = await Promise.race([toolPromise, timeoutPromise])
+      let result: Awaited<typeof toolPromise>
+      try {
+        result = await Promise.race([toolPromise, timeoutPromise])
+      } finally {
+        clearTimeout(timeoutId!)
+      }
 
       if (isDebugTools()) {
         logTools("Tool result", { serverName, toolName, result })

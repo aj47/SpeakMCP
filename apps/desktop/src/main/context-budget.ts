@@ -703,6 +703,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
       const firstUserIdx = messages.findIndex(m => m.role === "user")
       if (firstUserIdx >= 0 && firstUserIdx < messages.length - 1) {
         messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: progressSummary })
+        tokens = estimateTokensFromMessages(messages)
         if (isDebugLLM()) logLLM("[Context Budget] Injected session progress summary from summarization service")
       }
     }

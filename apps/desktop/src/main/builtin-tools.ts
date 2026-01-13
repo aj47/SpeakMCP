@@ -1399,7 +1399,7 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
 
-    const content = args.content.trim().slice(0, 80) // Max 80 chars
+    const content = args.content.trim().replace(/[\r\n]+/g, ' ').slice(0, 80) // Max 80 chars, single line
     const importance = (["low", "medium", "high", "critical"].includes(args.importance as string)
       ? args.importance
       : "medium") as "low" | "medium" | "high" | "critical"

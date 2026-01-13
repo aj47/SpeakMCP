@@ -171,7 +171,7 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
       sessionId: input.sessionId,
       stepNumber: input.stepNumber,
       timestamp: Date.now(),
-      actionSummary: String(parsed.actionSummary || "step done").slice(0, 80),
+      actionSummary: String(parsed.actionSummary || "step done").replace(/[\r\n]+/g, ' ').slice(0, 80),
       importance: ["low", "medium", "high", "critical"].includes(parsed.importance)
         ? parsed.importance
         : "medium",
@@ -186,7 +186,7 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
       sessionId: input.sessionId,
       stepNumber: input.stepNumber,
       timestamp: Date.now(),
-      actionSummary: input.assistantResponse?.slice(0, 80) || "step done",
+      actionSummary: (input.assistantResponse?.replace(/[\r\n]+/g, ' ').slice(0, 80)) || "step done",
       importance: "medium",
     }
   }

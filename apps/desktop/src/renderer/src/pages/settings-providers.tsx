@@ -848,7 +848,7 @@ export function Component() {
                       Strong Model (Planning)
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Primary model for reasoning and tool calls. Uses current agent model if not set.
+                      <span className="text-yellow-600 dark:text-yellow-400">(Coming soon)</span> Primary model for reasoning and tool calls. Currently uses your main agent model.
                     </p>
                     <div className="space-y-2">
                       <Control
@@ -857,6 +857,7 @@ export function Component() {
                         <Select
                           value={strongPresetId}
                           onValueChange={(value) => saveConfig({ dualModelStrongPresetId: value })}
+                          disabled
                         >
                           <SelectTrigger className="w-[200px]">
                             <SelectValue />
@@ -881,6 +882,7 @@ export function Component() {
                             value={config.dualModelStrongModelName || ""}
                             onValueChange={(value) => saveConfig({ dualModelStrongModelName: value })}
                             placeholder="Select model..."
+                            disabled
                           />
                         </Control>
                       )}

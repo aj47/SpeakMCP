@@ -596,6 +596,9 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     if (k >= 0) keptSet.add(k)
   }
 
+  // Check if tool results exist before drop_middle for logging
+  const hadToolsBefore = messages.some(m => m.role === "tool")
+
   // Preserve order: system -> first user -> (chronological tail without duplicates)
   const ordered: LLMMessage[] = []
   if (systemIdx >= 0) ordered.push(messages[systemIdx])
@@ -606,6 +609,12 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   messages = ordered
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
+
+  // Log warning if tool results were dropped
+  const toolsDropped = hadToolsBefore && !messages.some(m => m.role === "tool")
+  if (toolsDropped) {
+    console.warn("[Context Budget] Warning: Tool results dropped during context shrinking")
+  }
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })

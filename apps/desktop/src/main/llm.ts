@@ -571,15 +571,16 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[],
     toolResults?: MCPToolResult[],
     assistantResponse?: string,
+    isCompletion?: boolean,
   ) => {
     if (!isSummarizationEnabled()) {
       return null
     }
 
     const hasToolCalls = !!toolCalls && toolCalls.length > 0
-    const isCompletion = false // Will be set to true on final iteration
+    const isCompletionStep = isCompletion ?? false
 
-    if (!shouldSummarizeStep(hasToolCalls, isCompletion)) {
+    if (!shouldSummarizeStep(hasToolCalls, isCompletionStep)) {
       return null
     }
 
@@ -1675,6 +1676,7 @@ Return ONLY JSON per schema.`,
           lastToolCalls,
           lastToolResults,
           finalContent,
+          true, // isCompletion: this is the final completion step
         ).catch(err => {
           if (isDebugLLM()) {
             logLLM("[Dual-Model] Background summarization error:", err)

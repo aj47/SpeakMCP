@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@renderer/components/ui/tabs"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -13,7 +12,6 @@ import { tipcClient } from "@renderer/lib/tipc-client"
 import { AgentProfile, AgentProfileConnectionType, AgentProfileConnection, AgentProfileRole } from "../../../shared/types"
 
 type ConnectionType = AgentProfileConnectionType
-type TabValue = "user-profile" | "delegation-target" | "external-agent"
 
 interface EditingProfile {
   id?: string
@@ -75,51 +73,8 @@ function getProfileRole(profile: AgentProfile): AgentProfileRole {
   return "delegation-target"
 }
 
-/**
- * Get role flags from TabValue for creating profiles.
- */
-function getRoleFlagsFromTab(tab: TabValue): { role: AgentProfileRole; isUserProfile: boolean; isAgentTarget: boolean; connectionType: ConnectionType } {
-  switch (tab) {
-    case "user-profile":
-      return { role: "user-profile", isUserProfile: true, isAgentTarget: false, connectionType: "internal" }
-    case "delegation-target":
-      return { role: "delegation-target", isUserProfile: false, isAgentTarget: true, connectionType: "internal" }
-    case "external-agent":
-      return { role: "external-agent", isUserProfile: false, isAgentTarget: true, connectionType: "acp" }
-  }
-}
-
-// Preset configurations for common ACP agents
-const AGENT_PRESETS: Record<string, Partial<EditingProfile>> = {
-  auggie: {
-    name: "auggie",
-    displayName: "Auggie (Augment Code)",
-    description: "Augment Code's AI coding assistant with native ACP support",
-    capabilities: ["coding", "debugging", "refactoring", "documentation"],
-    connectionType: "acp",
-    connectionCommand: "auggie",
-    connectionArgs: "--acp",
-    enabled: true,
-    isUserProfile: false,
-    isAgentTarget: true,
-  },
-  "claude-code": {
-    name: "claude-code",
-    displayName: "Claude Code",
-    description: "Anthropic's Claude for coding tasks via ACP adapter",
-    capabilities: ["coding", "debugging", "refactoring"],
-    connectionType: "acp",
-    connectionCommand: "claude-code-acp",
-    connectionArgs: "",
-    enabled: true,
-    isUserProfile: false,
-    isAgentTarget: true,
-  },
-}
-
-export function SettingsAgentProfiles() {
+export function SettingsAgentPersonas() {
   const [profiles, setProfiles] = useState<AgentProfile[]>([])
-  const [activeTab, setActiveTab] = useState<TabValue>("user-profile")
   const [editing, setEditing] = useState<EditingProfile | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
@@ -132,17 +87,18 @@ export function SettingsAgentProfiles() {
     setProfiles(result)
   }
 
-  // Filter profiles by role using the helper function
-  const userProfiles = profiles.filter((p) => getProfileRole(p) === "user-profile")
-  const delegationTargets = profiles.filter((p) => getProfileRole(p) === "delegation-target")
-  const externalAgents = profiles.filter((p) => getProfileRole(p) === "external-agent")
+  // Filter profiles to only show agent personas (delegation targets)
+  const agentPersonas = profiles.filter((p) => getProfileRole(p) === "delegation-target")
 
   const handleCreate = () => {
     setIsCreating(true)
-    const roleFlags = getRoleFlagsFromTab(activeTab)
+    // Always create as delegation-target (agent persona)
     setEditing({
       ...emptyProfile,
-      ...roleFlags,
+      role: "delegation-target",
+      isUserProfile: false,
+      isAgentTarget: true,
+      connectionType: "internal",
     })
   }
 
@@ -257,7 +213,7 @@ export function SettingsAgentProfiles() {
       ))}
       {profileList.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
-          No profiles yet. Click "Add Profile" to create one.
+          No personas yet. Click "Add Persona" to create one.
         </div>
       )}
     </div>
@@ -269,29 +225,9 @@ export function SettingsAgentProfiles() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{isCreating ? "Create Profile" : "Edit Profile"}</CardTitle>
+          <CardTitle>{isCreating ? "Create Persona" : "Edit Persona"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isCreating && activeTab === "external-agent" && (
-            <div className="space-y-2 mb-4">
-              <Label>Quick Setup (Optional)</Label>
-              <div className="flex gap-2">
-                {Object.entries(AGENT_PRESETS).map(([key, preset]) => (
-                  <Button
-                    key={key}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditing({ ...emptyProfile, ...preset, role: "external-agent" })}
-                  >
-                    {preset.displayName}
-                  </Button>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Click a preset to auto-fill the form, or configure manually below.
-              </p>
-            </div>
-          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name (slug)</Label>
@@ -455,42 +391,21 @@ export function SettingsAgentProfiles() {
     <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Agent Profiles</h1>
+          <h1 className="text-2xl font-bold">Agent Personas</h1>
           <p className="text-muted-foreground">
-            Manage user profiles, delegation targets, and external agents
+            Configure personas that can be delegated to for specialized tasks
           </p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Profile
+          Add Persona
         </Button>
       </div>
 
-      {editing ? (
-        renderEditForm()
-      ) : (
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="user-profile">User Profiles ({userProfiles.length})</TabsTrigger>
-            <TabsTrigger value="delegation-target">Delegation Targets ({delegationTargets.length})</TabsTrigger>
-            <TabsTrigger value="external-agent">External Agents ({externalAgents.length})</TabsTrigger>
-          </TabsList>
-          <TabsContent value="user-profile">
-            {renderProfileList(userProfiles)}
-          </TabsContent>
-          <TabsContent value="delegation-target">
-            {renderProfileList(delegationTargets)}
-          </TabsContent>
-          <TabsContent value="external-agent">
-            {renderProfileList(externalAgents)}
-          </TabsContent>
-        </Tabs>
-      )}
-
-
+      {editing ? renderEditForm() : renderProfileList(agentPersonas)}
     </div>
   )
 }
 
-export { SettingsAgentProfiles as Component }
+export { SettingsAgentPersonas as Component }
 

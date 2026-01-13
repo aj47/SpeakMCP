@@ -906,14 +906,15 @@ MARK AS COMPLETE if ANY of these conditions are met:
 IMPORTANT - Do NOT mark as incomplete just because:
 - The response contains polite phrases like "Let me know if you need anything else"
 - The response offers to help with follow-up tasks
-- The phrasing includes "I'll" or "Let me" in a closing/polite context
 
-MARK AS INCOMPLETE only if:
-- The agent clearly stated intent to perform an action but NO tool was called AND no result was provided
+MARK AS INCOMPLETE if:
+- The agent stated intent to perform an action (e.g., "Let me try...", "I'll do...", "Now I'll...") but hasn't completed it yet
 - The agent is actively in the middle of a multi-step task with more steps remaining
 - The response is empty or just acknowledges the request without addressing it
+- The original request asked for analysis/information that was NOT provided in the response
+- Tool executions occurred but the agent hasn't reported the results or conclusions yet
 
-When in doubt, mark as COMPLETE - it's better to finish than loop indefinitely.
+CRITICAL: If the user asked a question or requested information, the agent must have ACTUALLY PROVIDED that information to be complete. Just saying "let me check" or "I'll examine" is NOT complete.
 
 Return ONLY JSON per schema.`,
     })
@@ -1050,7 +1051,8 @@ Return ONLY JSON per schema.`,
     for (let i = 0; i <= retries; i++) {
       verification = await verifyCompletionWithFetch(
         buildVerificationMessages(finalContent, currentFailCount),
-        config.mcpToolsProviderId
+        config.mcpToolsProviderId,
+        currentSessionId // Pass session ID for Langfuse tracing and abort signal handling
       )
       if (verification?.isComplete === true) {
         verified = true
@@ -1795,8 +1797,9 @@ Return ONLY JSON per schema.`,
       // The LLM choosing NOT to use tools is a valid decision - trust it.
       // We use a lower threshold here (any non-empty response) because short greetings
       // like "Hi." or "Hello." are valid complete responses to simple greetings.
+      // EXCEPTION: If tools were executed in this turn, we should run verification (handled below).
       const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
-      if (hasAnyResponse && llmResponse.needsMoreWork !== true) {
+      if (hasAnyResponse && llmResponse.needsMoreWork !== true && !hasToolResultsInCurrentTurn) {
         if (isDebugLLM()) {
           logLLM("Substantive response without tool calls - accepting as complete", {
             responseLength: trimmedContent.length,

@@ -879,6 +879,7 @@ export async function verifyCompletionWithFetch(
         }
 
         const model = createLanguageModel(effectiveProviderId)
+        const modelName = getCurrentModelName(effectiveProviderId)
         const { system, messages: convertedMessages } = convertMessages(messages)
 
         if (isDebugLLM()) {
@@ -889,18 +890,60 @@ export async function verifyCompletionWithFetch(
           })
         }
 
-        const result = await generateText({
-          model,
-          system,
-          messages: convertedMessages,
-          abortSignal: abortController.signal,
-        })
+        // Create Langfuse generation if enabled
+        const generationId = isLangfuseEnabled() ? randomUUID() : null
+        if (generationId) {
+          createLLMGeneration(sessionId || null, generationId, {
+            name: "Verification Call",
+            model: modelName,
+            modelParameters: {
+              provider: effectiveProviderId,
+            },
+            input: { system, messages: convertedMessages },
+          })
+        }
+
+        let result
+        try {
+          result = await generateText({
+            model,
+            system,
+            messages: convertedMessages,
+            abortSignal: abortController.signal,
+          })
+        } catch (error) {
+          // End Langfuse generation with error before rethrowing
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: error instanceof Error ? error.message : "verification generateText failed",
+            })
+          }
+          throw error
+        }
 
         const text = result.text?.trim() || ""
         const jsonObject = extractJsonObject(text)
 
         if (jsonObject && typeof jsonObject.isComplete === "boolean") {
+          // End Langfuse generation with success
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              output: JSON.stringify(jsonObject),
+              usage: buildTokenUsage(result.usage),
+            })
+          }
           return jsonObject as CompletionVerification
+        }
+
+        // End Langfuse generation with parse failure
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: text,
+            usage: buildTokenUsage(result.usage),
+            level: "WARNING",
+            statusMessage: "Failed to parse verification response as JSON",
+          })
         }
 
         // Conservative default

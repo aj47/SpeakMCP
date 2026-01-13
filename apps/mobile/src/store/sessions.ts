@@ -317,7 +317,7 @@ export function useSessions(): SessionStore {
     // Pre-compute session messages for consistency
     const sessionMessages = messages.map((m, idx) => ({
       id: generateMessageId(),
-      role: m.role as 'system' | 'user' | 'assistant',
+      role: m.role as 'user' | 'assistant' | 'tool',
       content: m.content || '',
       timestamp: now + idx,
       toolCalls: m.toolCalls,
@@ -367,7 +367,7 @@ export function useSessions(): SessionStore {
     // Pre-compute session messages for consistency
     const sessionMessages = messages.map((m, idx) => ({
       id: generateMessageId(),
-      role: m.role as 'system' | 'user' | 'assistant',
+      role: m.role as 'user' | 'assistant' | 'tool',
       content: m.content || '',
       timestamp: now + idx,
       toolCalls: m.toolCalls,
@@ -484,18 +484,55 @@ export function useSessions(): SessionStore {
     }
 
     setIsSyncing(true);
+
     try {
-      const { result, sessions: syncedSessions } = await syncConversations(client, sessionsRef.current);
+      // Take snapshot before async operations
+      const snapshotSessions = sessionsRef.current;
+      const { result, sessions: syncedSessions } = await syncConversations(client, snapshotSessions);
 
       // Only update if there were actual changes
       if (result.pulled > 0 || result.pushed > 0 || result.updated > 0) {
-        // Update ref synchronously
-        sessionsRef.current = syncedSessions;
-        setSessions(syncedSessions);
+        // Smart merge: preserve any local changes that occurred during sync
+        const currentSessions = sessionsRef.current;
+        const syncedById = new Map(syncedSessions.map(s => [s.id, s]));
+        const snapshotById = new Map(snapshotSessions.map(s => [s.id, s]));
+
+        // Build merged result
+        const mergedSessions: Session[] = [];
+        const seenIds = new Set<string>();
+
+        // First, process current sessions - preserve if modified during sync
+        for (const current of currentSessions) {
+          seenIds.add(current.id);
+          const snapshot = snapshotById.get(current.id);
+          const synced = syncedById.get(current.id);
+
+          // If session was modified locally during sync (updatedAt changed since snapshot), keep current version
+          if (snapshot && current.updatedAt > snapshot.updatedAt) {
+            mergedSessions.push(current);
+          } else if (synced) {
+            // Session wasn't modified during sync, use synced version
+            mergedSessions.push(synced);
+          } else {
+            // Session exists in current but not in synced (e.g., newly created during sync)
+            mergedSessions.push(current);
+          }
+        }
+
+        // Add any new sessions from sync that don't exist in current
+        for (const synced of syncedSessions) {
+          if (!seenIds.has(synced.id)) {
+            mergedSessions.unshift(synced); // Add new synced sessions at the beginning
+          }
+        }
+
+        // Update ref and state
+        sessionsRef.current = mergedSessions;
+        setSessions(mergedSessions);
 
         // Queue async save
         queueSave(async () => {
-          await saveSessions(syncedSessions);
+          await saveSessions(mergedSessions);
         });
       }
 

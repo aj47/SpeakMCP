@@ -399,23 +399,39 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
 
   send_agent_message: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const sessionId = args.sessionId as string
-    const message = args.message as string
-
-    if (!sessionId || !message) {
+    // Validate required parameters with proper type guards
+    if (!args.sessionId || typeof args.sessionId !== "string") {
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify({
               success: false,
-              error: "sessionId and message are required",
+              error: "sessionId is required and must be a string",
             }),
           },
         ],
         isError: true,
       }
     }
+
+    if (!args.message || typeof args.message !== "string") {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: "message is required and must be a string",
+            }),
+          },
+        ],
+        isError: true,
+      }
+    }
+
+    const sessionId = args.sessionId
+    const message = args.message
 
     // Get target session
     const session = agentSessionTracker.getSession(sessionId)

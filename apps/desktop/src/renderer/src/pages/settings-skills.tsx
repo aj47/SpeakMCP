@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@renderer/components/ui/dropdown-menu"
-import { tipcClient } from "@renderer/lib/tipc-client"
+import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentSkill } from "@shared/types"
 import { toast } from "sonner"
@@ -67,6 +67,20 @@ export function Component() {
 
   // Check if a skill is enabled for the current profile
   const isSkillEnabled = (skillId: string) => enabledSkillIds.includes(skillId)
+
+  // Listen for skills folder changes from the main process (file watcher)
+  useEffect(() => {
+    const unsubscribe = rendererHandlers.skillsFolderChanged.listen(async () => {
+      // Auto-scan and refresh skills when folder changes
+      const importedSkills = await tipcClient.scanSkillsFolder()
+      queryClient.invalidateQueries({ queryKey: ["skills"] })
+      if (importedSkills && importedSkills.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
+        toast.success(`Auto-imported ${importedSkills.length} skill(s)`)
+      }
+    })
+    return () => unsubscribe()
+  }, [queryClient, currentProfileId])
 
   const createSkillMutation = useMutation({
     mutationFn: async ({ name, description, instructions }: { name: string; description: string; instructions: string }) => {

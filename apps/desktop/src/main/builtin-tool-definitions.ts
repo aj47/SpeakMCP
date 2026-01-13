@@ -325,6 +325,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
       required: ["toolName"],
     },
   },
+  {
+    name: `${BUILTIN_SERVER_NAME}:load_skill_instructions`,
+    description: "Load the full instructions for an agent skill. Skills are listed in the system prompt with just name and description. Call this tool to get the complete instructions when you need to use a skill.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skillId: {
+          type: "string",
+          description: "The skill ID to load instructions for. Get skill IDs from the Available Skills section in the system prompt.",
+        },
+      },
+      required: ["skillId"],
+    },
+  },
 ]
 
 /**

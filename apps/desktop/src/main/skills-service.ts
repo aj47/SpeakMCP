@@ -6,6 +6,9 @@ import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { exec } from "child_process"
 import { promisify } from "util"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import type { RendererHandlers } from "./renderer-handlers"
+import { WINDOWS } from "./window"
 
 const execAsync = promisify(exec)
 
@@ -829,34 +832,22 @@ ${skillsContent}
       return ""
     }
 
+    // Progressive disclosure: Only show name + description initially
+    // The LLM must call load_skill_instructions to get the full instructions
     const skillsContent = enabledSkills.map(skill => {
-      // Include skill ID and source info for execute_command tool
-      const skillIdInfo = `**Skill ID:** \`${skill.id}\``
-      const sourceInfo = skill.filePath
-        ? (skill.filePath.startsWith("github:")
-            ? `**Source:** GitHub (${skill.filePath})`
-            : `**Source:** Local`)
-        : ""
-
-      return `## Skill: ${skill.name}
-${skillIdInfo}${sourceInfo ? `\n${sourceInfo}` : ""}
-${skill.description ? `*${skill.description}*\n` : ""}
-${skill.instructions}`
-    }).join("\n\n---\n\n")
+      return `- **${skill.name}** (ID: \`${skill.id}\`): ${skill.description || 'No description'}`
+    }).join("\n")
 
     return `
-# Active Agent Skills
+# Available Agent Skills
 
-## Skills Installation Directory
-**IMPORTANT**: All skills MUST be installed to this ABSOLUTE path:
-\`${skillsFolder}\`
-
-When creating or installing skills, ALWAYS use this exact absolute path. Do NOT use relative paths.
-
-The following skills provide specialized instructions for specific tasks.
-Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
+The following skills are available. To use a skill, call \`speakmcp-settings:load_skill_instructions\` with the skill's ID to get the full instructions.
 
 ${skillsContent}
+
+## Skills Installation Directory
+Skills can be installed to: \`${skillsFolder}\`
+Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in that skill's directory.
 `
   }
 
@@ -1236,3 +1227,90 @@ ${skillsContent}
 
 export const skillsService = new SkillsService()
 
+/**
+ * Notify all renderer windows that the skills folder has changed.
+ * This allows the UI to refresh skills without requiring an app restart.
+ */
+function notifySkillsFolderChanged(): void {
+  const windows = [WINDOWS.get("main"), WINDOWS.get("panel")]
+  for (const win of windows) {
+    if (win) {
+      try {
+        const handlers = getRendererHandlers<RendererHandlers>(win.webContents)
+        handlers.skillsFolderChanged?.send()
+      } catch (e) {
+        // Window may not be ready yet, ignore
+      }
+    }
+  }
+}
+
+// File watcher state
+let skillsWatcher: fs.FSWatcher | null = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+const DEBOUNCE_MS = 500 // Wait 500ms after last change before notifying
+
+/**
+ * Start watching the skills folder for changes.
+ * Automatically notifies the renderer when new skills are added or modified.
+ */
+export function startSkillsFolderWatcher(): void {
+  // Ensure folder exists
+  if (!fs.existsSync(skillsFolder)) {
+    fs.mkdirSync(skillsFolder, { recursive: true })
+  }
+
+  // Don't start duplicate watchers
+  if (skillsWatcher) {
+    logApp("Skills folder watcher already running")
+    return
+  }
+
+  try {
+    skillsWatcher = fs.watch(skillsFolder, { recursive: true }, (eventType, filename) => {
+      // Only care about SKILL.md files or directory changes
+      if (!filename) return
+
+      const isSkillFile = filename.endsWith("SKILL.md") || filename.endsWith("skill.md") || filename.endsWith(".md")
+      const isDirectory = !filename.includes(".")
+
+      if (isSkillFile || isDirectory) {
+        logApp(`Skills folder changed: ${eventType} ${filename}`)
+
+        // Debounce to avoid multiple rapid notifications
+        if (debounceTimer) {
+          clearTimeout(debounceTimer)
+        }
+
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null
+          notifySkillsFolderChanged()
+        }, DEBOUNCE_MS)
+      }
+    })
+
+    skillsWatcher.on("error", (error) => {
+      logApp("Skills folder watcher error:", error)
+      stopSkillsFolderWatcher()
+    })
+
+    logApp(`Started watching skills folder: ${skillsFolder}`)
+  } catch (error) {
+    logApp("Failed to start skills folder watcher:", error)
+  }
+}
+
+/**
+ * Stop watching the skills folder.
+ */
+export function stopSkillsFolderWatcher(): void {
+  if (skillsWatcher) {
+    skillsWatcher.close()
+    skillsWatcher = null
+    logApp("Stopped skills folder watcher")
+  }
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+}

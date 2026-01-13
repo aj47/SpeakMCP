@@ -412,14 +412,25 @@ export async function summarizeContent(content: string, sessionId?: string): Pro
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
 
-  const makePrompt = (src: string) => `You will receive output from tools or chat messages. Summarize concisely while PRESERVING:
-- Exact tool names (including prefixes like server:tool_name)
-- Exact parameter names (keys) used in tool arguments
-- Any IDs, file paths, URLs, and key numeric values
-Rules:
-- Do NOT invent values; if a value is very long, indicate it as truncated
-- Keep bullet points or compact JSON-like lines
-- Target <= ${MAX_TOKENS_HINT} tokens
+  const makePrompt = (src: string) => `Summarize tool output or conversation focusing on WHAT WAS LEARNED, not what was executed.
+
+PRESERVE (exact format):
+- Tool names with prefixes: [server:tool_name] - keep this exact format
+- IDs, file paths, URLs, numeric values
+- Key data points and findings
+
+FOCUS ON:
+- What information was discovered or retrieved
+- What elements/data are visible or available
+- What actions succeeded or failed and WHY
+- Key observations that inform next steps
+
+DO NOT:
+- Just say "tool executed successfully" - describe what it returned
+- Lose the [toolName] prefix format
+- Invent or hallucinate values
+
+Target: ~${MAX_TOKENS_HINT} tokens. Be concise but preserve actionable information.
 
 SOURCE:
 ${src}`
@@ -501,45 +512,68 @@ function buildContextFromSummaries(sessionId: string): string | null {
 }
 
 /**
+ * Parse tool name from content that uses format: [toolName] content...
+ * Returns { toolName, content } where content is the part after the tool name prefix
+ */
+function parseToolNameFromContent(content: string): { toolName: string; resultContent: string } {
+  // Match format: [toolName] content... or [toolName] ERROR: content...
+  const match = content.match(/^\[([^\]]+)\]\s*(?:ERROR:\s*)?(.*)$/s)
+  if (match) {
+    return { toolName: match[1], resultContent: match[2] }
+  }
+  return { toolName: 'unknown', resultContent: content }
+}
+
+/**
  * Summarize tool messages that would be dropped during context shrinking.
- * Creates a brief summary of what work was accomplished to preserve context.
+ * Creates semantic summaries preserving tool names and what was learned.
+ * Format: [toolName] brief description of outcome/data
  * @param toolMessages Array of tool messages that would be dropped
- * @returns A summary string under 500 chars
+ * @returns A summary string under 800 chars
  */
 function summarizeToolMessagesForDropping(toolMessages: LLMMessage[]): string {
   if (toolMessages.length === 0) return ""
 
   const summaries: string[] = []
   let totalLength = 0
-  const MAX_SUMMARY_LENGTH = 500
+  const MAX_SUMMARY_LENGTH = 800
 
   for (const msg of toolMessages) {
-    // Parse tool result to extract key info
     const content = msg.content || ""
+    const { toolName, resultContent } = parseToolNameFromContent(content)
 
-    // Try to determine success/failure status
-    const isError = content.toLowerCase().includes("error") ||
-                    content.toLowerCase().includes("failed") ||
-                    content.toLowerCase().includes("exception")
-    const status = isError ? "failed" : "success"
+    // Detect error status from content
+    const isError = content.toLowerCase().includes("[error]") ||
+                    content.toLowerCase().includes("] error:") ||
+                    resultContent.toLowerCase().startsWith("error")
 
-    // Extract a brief description (first 50 chars or first line)
-    let brief = content.split("\n")[0].substring(0, 50)
-    if (content.length > 50) brief += "..."
+    // Extract semantic brief - focus on what was learned/returned
+    let brief: string
+    const firstLine = resultContent.split("\n")[0].trim()
 
-    const entry = `${status}: ${brief}`
+    if (isError) {
+      // For errors, extract the error type/message
+      brief = `FAILED: ${firstLine.substring(0, 60)}`
+    } else if (resultContent.length === 0 || resultContent === "[No output]") {
+      brief = "completed (no output)"
+    } else {
+      // Extract meaningful brief - first 80 chars of first line
+      brief = firstLine.length > 80 ? firstLine.substring(0, 77) + "..." : firstLine
+    }
+
+    const entry = `[${toolName}] ${brief}`
 
     // Check if adding this would exceed limit
     if (totalLength + entry.length + 2 > MAX_SUMMARY_LENGTH) {
-      summaries.push(`... and ${toolMessages.length - summaries.length} more`)
+      summaries.push(`... and ${toolMessages.length - summaries.length} more tool results`)
       break
     }
 
     summaries.push(entry)
-    totalLength += entry.length + 2 // +2 for ", "
+    totalLength += entry.length + 2 // +2 for newline
   }
 
-  return `Previously completed work: [${summaries.join(", ")}]`
+  return `Previously executed tools:\n${summaries.join("\n")}`
 }
 
 export interface ShrinkOptions {
@@ -725,11 +759,17 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     }
   }
 
-  // Inject completed work summary if provided
+  // Inject completed work summary if provided (bounded to prevent context bloat)
   if (opts.completedWorkSummary && opts.completedWorkSummary.trim()) {
+    // Bound the summary to prevent re-bloating the context (same limit as buildContextFromSummaries)
+    const MAX_COMPLETED_WORK_SUMMARY_LENGTH = 2000
+    let boundedSummary = opts.completedWorkSummary.trim()
+    if (boundedSummary.length > MAX_COMPLETED_WORK_SUMMARY_LENGTH) {
+      boundedSummary = boundedSummary.slice(0, MAX_COMPLETED_WORK_SUMMARY_LENGTH - 3) + "..."
+    }
     const firstUserIdx = messages.findIndex(m => m.role === "user")
     if (firstUserIdx >= 0 && firstUserIdx < messages.length - 1) {
-      messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: opts.completedWorkSummary })
+      messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: boundedSummary })
       tokens = estimateTokensFromMessages(messages)
       if (isDebugLLM()) logLLM("[Context Budget] Injected completed work summary")
     }

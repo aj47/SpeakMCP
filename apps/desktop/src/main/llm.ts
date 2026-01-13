@@ -1006,7 +1006,9 @@ export async function processTranscriptWithAgentMode(
         if (entry.role === "tool") {
           const text = (entry.content || "").trim()
           if (!text) return null
-          return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+          // Tool results already contain tool name prefix (format: [toolName] content...)
+          // Just pass through without adding generic "Tool execution results:" wrapper
+          return { role: "user" as const, content: text }
         }
         const content = (entry.content || "").trim()
         if (!content) return null
@@ -1137,8 +1139,9 @@ Return ONLY JSON per schema.`,
     for (const entry of recent) {
       if (entry.role === "tool") {
         const text = (entry.content || "").trim()
-        // Add placeholder for empty tool results instead of silently skipping
-        messages.push({ role: "user", content: `[Tool executed] ${text || "[No output]"}` })
+        // Tool results already contain tool name prefix (format: [toolName] content...)
+        // Pass through directly without adding redundant wrapper
+        messages.push({ role: "user", content: text || "[No tool output]" })
       } else if (entry.role === "user") {
         // Skip empty user messages
         const text = (entry.content || "").trim()
@@ -1476,9 +1479,11 @@ Return ONLY JSON per schema.`,
           if (entry.role === "tool") {
             const text = (entry.content || "").trim()
             if (!text) return null
+            // Tool results already contain tool name prefix (format: [toolName] content...)
+            // Pass through directly without adding redundant wrapper
             return {
               role: "user" as const,
-              content: `Tool execution results:\n${entry.content}`,
+              content: text,
             }
           }
           // For assistant messages, ensure non-empty content
@@ -1739,7 +1744,17 @@ Return ONLY JSON per schema.`,
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
-      addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
+      // Check if recent messages contain truncated content that might be confusing
+      const recentMessages = conversationHistory.slice(-3)
+      const hasTruncatedContent = recentMessages.some(m =>
+        m.content?.includes('[Truncated') ||
+        m.content?.includes('[truncated]') ||
+        m.content?.includes('(truncated')
+      )
+      const retryMessage = hasTruncatedContent
+        ? "Previous request had empty response. The tool output was truncated which may have caused confusion. Please either: (1) try a different approach to get the data you need, (2) work with the partial data available, or (3) summarize your progress so far."
+        : "Previous request had empty response. Please retry or summarize progress."
+      addMessage("user", retryMessage)
       continue
     }
 
@@ -2591,8 +2606,15 @@ Return ONLY JSON per schema.`,
         return result
       })
 
+      // Format tool results with tool name prefix for better context preservation
+      // Format: [toolName] content... or [toolName] ERROR: content...
       const toolResultsText = resultsWithPlaceholders
-        .map((result) => result.content.map((c) => c.text).join("\n"))
+        .map((result, i) => {
+          const toolName = toolCallsArray[i]?.name || 'unknown'
+          const content = result.content.map((c) => c.text).join("\n")
+          const prefix = result.isError ? `[${toolName}] ERROR: ` : `[${toolName}] `
+          return `${prefix}${content}`
+        })
         .join("\n\n")
 
       addMessage("tool", toolResultsText, undefined, resultsWithPlaceholders)

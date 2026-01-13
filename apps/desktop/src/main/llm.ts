@@ -1111,28 +1111,25 @@ export async function processTranscriptWithAgentMode(
     messages.push({
       role: "system",
       content:
-        `You are a completion verifier. Determine if the user's original request has been adequately addressed.
+        `You are a completion verifier. Determine if the user's original request has been FULLY DELIVERED to the user.
 
-MARK AS COMPLETE if ANY of these conditions are met:
-1. The request was successfully fulfilled with concrete actions/results
-2. The agent provided a direct, substantive answer (for questions that don't require tools)
-3. The agent correctly identified the request is IMPOSSIBLE and explained why
-4. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed
-5. The agent has made a good-faith attempt and provided useful partial results
-6. The agent explicitly states the task is done (phrases like "I've completed...", "Done!", "Task finished")
+FIRST, CHECK THESE BLOCKERS (if ANY are true, mark INCOMPLETE):
+- The agent stated intent to do more work (e.g., "Let me...", "I'll...", "Now I'll...", "I'm going to...")
+- The agent's response is a status update rather than a deliverable (e.g., "I've extracted the data" without presenting results)
+- The user asked for information/analysis that was NOT directly provided in the agent's response
+- Tool results exist but the agent hasn't synthesized/presented them to the user
+- The response is empty or just acknowledges the request
 
-IMPORTANT - Do NOT mark as incomplete just because:
-- The response contains polite phrases like "Let me know if you need anything else"
-- The response offers to help with follow-up tasks
+ONLY IF NO BLOCKERS, mark COMPLETE if:
+1. The agent directly answered the user's question or fulfilled their request
+2. The agent explained why the request is impossible and cannot proceed
+3. The agent is asking for clarification needed to proceed
+4. The agent explicitly confirmed completion ("Done", "Here's your summary", "Task complete")
 
-MARK AS INCOMPLETE if:
-- The agent stated intent to perform an action (e.g., "Let me try...", "I'll do...", "Now I'll...") but hasn't completed it yet
-- The agent is actively in the middle of a multi-step task with more steps remaining
-- The response is empty or just acknowledges the request without addressing it
-- The original request asked for analysis/information that was NOT provided in the response
-- Tool executions occurred but the agent hasn't reported the results or conclusions yet
-
-CRITICAL: If the user asked a question or requested information, the agent must have ACTUALLY PROVIDED that information to be complete. Just saying "let me check" or "I'll examine" is NOT complete.
+IMPORTANT - Do NOT mark complete just because:
+- Tools executed successfully (results must be PRESENTED to user)
+- Data was gathered (it must be SUMMARIZED/DELIVERED)
+- The agent made progress (the FINAL deliverable must exist)
 
 Return ONLY JSON per schema.`,
     })

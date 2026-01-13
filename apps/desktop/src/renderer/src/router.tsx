@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom"
+import { createBrowserRouter, redirect } from "react-router-dom"
 
 export const router: ReturnType<typeof createBrowserRouter> =
   createBrowserRouter([
@@ -60,7 +60,7 @@ export const router: ReturnType<typeof createBrowserRouter> =
         },
         {
           path: "settings/langfuse",
-          lazy: () => import("./pages/settings-langfuse"),
+          loader: () => redirect("/settings"),
         },
         {
           path: "memories",

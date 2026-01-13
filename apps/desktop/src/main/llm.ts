@@ -612,6 +612,17 @@ export async function processTranscriptWithAgentMode(
       if (summary) {
         summarizationService.addSummary(summary)
 
+        // Auto-save high/critical importance summaries if enabled
+        if (config.dualModelAutoSaveImportant &&
+            (summary.importance === "high" || summary.importance === "critical")) {
+          const memory = memoryService.createMemoryFromSummary(summary)
+          memoryService.saveMemory(memory).catch(err => {
+            if (isDebugLLM()) {
+              logLLM("[Dual-Model] Error auto-saving important summary:", err)
+            }
+          })
+        }
+
         if (isDebugLLM()) {
           logLLM("[Dual-Model] Generated step summary:", {
             stepNumber: summary.stepNumber,

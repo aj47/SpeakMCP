@@ -939,6 +939,18 @@ export async function startRemoteServer() {
         return reply.code(400).send({ error: "Missing or invalid messages array" })
       }
 
+      // Validate each message object
+      const validRoles = ["user", "assistant", "tool"]
+      for (let i = 0; i < body.messages.length; i++) {
+        const msg = body.messages[i]
+        if (!msg.role || !validRoles.includes(msg.role)) {
+          return reply.code(400).send({ error: `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}` })
+        }
+        if (typeof msg.content !== "string") {
+          return reply.code(400).send({ error: `Invalid content in message ${i}: expected string` })
+        }
+      }
+
       const conversationId = conversationService.generateConversationIdPublic()
       const now = Date.now()
 

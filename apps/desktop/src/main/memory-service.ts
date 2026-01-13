@@ -43,6 +43,8 @@ function isValidAgentMemory(item: unknown): item is AgentMemory {
 class MemoryService {
   private memories: AgentMemory[] = []
   private initialized = false
+  // Serialize write operations to prevent race conditions
+  private writeQueue: Promise<boolean> = Promise.resolve(true)
 
   private async loadFromDisk(): Promise<void> {
     const filePath = getMemoriesFilePath()
@@ -76,7 +78,10 @@ class MemoryService {
     }
   }
 
-  private async saveToDisk(): Promise<boolean> {
+  /**
+   * Internal disk write - should only be called through serializedSaveToDisk
+   */
+  private saveToDiskSync(): boolean {
     const filePath = getMemoriesFilePath()
     try {
       fs.writeFileSync(filePath, JSON.stringify(this.memories, null, 2), "utf-8")
@@ -87,6 +92,20 @@ class MemoryService {
       }
       return false
     }
+  }
+
+  /**
+   * Serialize disk writes to prevent race conditions.
+   * Each write waits for the previous one to complete before executing.
+   */
+  private async saveToDisk(): Promise<boolean> {
+    // Chain this write operation onto the queue
+    const operation = this.writeQueue.then(() => {
+      return this.saveToDiskSync()
+    })
+    // Update the queue to wait for this operation
+    this.writeQueue = operation.catch(() => false)
+    return operation
   }
 
   async initialize(): Promise<void> {

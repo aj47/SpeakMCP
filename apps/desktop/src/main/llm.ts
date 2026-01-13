@@ -86,61 +86,70 @@ Only include currently active/usable resources.`
 }
 
 /**
- * Analyze tool errors and provide generic recovery strategies
+ * Clean error message by removing stack traces and noise
+ */
+function cleanErrorMessage(errorText: string): string {
+  // Remove stack traces (lines starting with "at " after an error)
+  const lines = errorText.split('\n')
+  const cleanedLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // Skip stack trace lines
+    if (trimmed.startsWith('at ')) continue
+    // Skip file path lines
+    if (trimmed.match(/^\s*at\s+.*\.(js|ts|mjs):\d+/)) continue
+    // Skip empty lines in stack traces
+    if (cleanedLines.length > 0 && trimmed === '' && lines.indexOf(line) > 0) {
+      const prevLine = lines[lines.indexOf(line) - 1]?.trim()
+      if (prevLine?.startsWith('at ')) continue
+    }
+    cleanedLines.push(line)
+  }
+
+  let cleaned = cleanedLines.join('\n').trim()
+
+  // Remove duplicate error class names (e.g., "CodeExecutionTimeoutError: Code execution timed out")
+  cleaned = cleaned.replace(/(\w+Error):\s*\1:/g, '$1:')
+
+  // Truncate if still too long
+  if (cleaned.length > 500) {
+    cleaned = cleaned.substring(0, 500) + '...'
+  }
+
+  return cleaned
+}
+
+/**
+ * Analyze tool errors and categorize them
  */
 function analyzeToolErrors(toolResults: MCPToolResult[]): {
-  recoveryStrategy: string
   errorTypes: string[]
 } {
   const errorTypes: string[] = []
   const errorMessages = toolResults
     .filter((r) => r.isError)
-    .map((r) => r.content.map((c) => c.text).join(" "))
+    .map((r) => r.content.map((c) => c.text).join(" ").toLowerCase())
     .join(" ")
 
-  // Categorize error types generically
-  if (
-    errorMessages.includes("timeout") ||
-    errorMessages.includes("connection")
-  ) {
+  // Categorize error types
+  if (errorMessages.includes("timeout")) {
+    errorTypes.push("timeout")
+  }
+  if (errorMessages.includes("connection") || errorMessages.includes("network")) {
     errorTypes.push("connectivity")
   }
-  if (
-    errorMessages.includes("permission") ||
-    errorMessages.includes("access") ||
-    errorMessages.includes("denied")
-  ) {
+  if (errorMessages.includes("permission") || errorMessages.includes("access") || errorMessages.includes("denied")) {
     errorTypes.push("permissions")
   }
-  if (
-    errorMessages.includes("not found") ||
-    errorMessages.includes("does not exist") ||
-    errorMessages.includes("missing")
-  ) {
-    errorTypes.push("resource_missing")
+  if (errorMessages.includes("not found") || errorMessages.includes("does not exist") || errorMessages.includes("missing")) {
+    errorTypes.push("not_found")
+  }
+  if (errorMessages.includes("invalid") || errorMessages.includes("expected")) {
+    errorTypes.push("invalid_params")
   }
 
-  // Generate generic recovery strategy
-  let recoveryStrategy = "RECOVERY STRATEGIES:\n"
-
-  if (errorTypes.includes("connectivity")) {
-    recoveryStrategy +=
-      "- For connectivity issues: Wait a moment and retry, or check if the service is available\n"
-  }
-  if (errorTypes.includes("permissions")) {
-    recoveryStrategy +=
-      "- For permission errors: Try alternative approaches or check access rights\n"
-  }
-  if (errorTypes.includes("resource_missing")) {
-    recoveryStrategy +=
-      "- For missing resources: Verify the resource exists or try creating it first\n"
-  }
-
-  // Always provide generic fallback advice
-  recoveryStrategy +=
-    "- General: Try breaking down the task into smaller steps, use alternative tools, or try a different approach\n"
-
-  return { recoveryStrategy, errorTypes }
+  return { errorTypes }
 }
 
 export async function postProcessTranscript(transcript: string) {
@@ -2697,49 +2706,16 @@ Return ONLY JSON per schema.`,
         }
       }
 
-      // Add detailed error summary to conversation history for LLM context
-      const errorSummary = `Tool execution errors occurred:
-${failedTools
-  .map((toolName) => {
-    const failedResult = toolResults.find((r) => r.isError)
-    const errorText =
-      failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
-
-    // Check for error patterns and provide generic suggestions
-    let suggestion = ""
-    if (
-      errorText.includes("timeout") ||
-      errorText.includes("connection") ||
-      errorText.includes("network")
-    ) {
-      suggestion = " (Suggestion: Try again or check connectivity)"
-    } else if (
-      errorText.includes("permission") ||
-      errorText.includes("access") ||
-      errorText.includes("denied")
-    ) {
-      suggestion = " (Suggestion: Try a different approach)"
-    } else if (
-      errorText.includes("not found") ||
-      errorText.includes("missing") ||
-      errorText.includes("does not exist")
-    ) {
-      suggestion = " (Suggestion: Verify the resource exists or try alternatives)"
-    } else if (errorText.includes("Expected string, received array")) {
-      suggestion = " (Fix: Parameter type mismatch - check tool schema)"
-    } else if (errorText.includes("Expected array, received string")) {
-      suggestion = " (Fix: Parameter should be an array, not a string)"
-    } else if (errorText.includes("invalid_type")) {
-      suggestion = " (Fix: Check parameter types match tool schema)"
-    }
-
-    return `- ${toolName}: ${errorText}${suggestion}`
-  })
-  .join("\n")}
-
-${errorAnalysis.recoveryStrategy}
-
-Please try alternative approaches, break down the task into smaller steps, or provide manual instructions to the user.`
+      // Add clean error summary to conversation history for LLM context
+      const errorSummary = failedTools
+        .map((toolName, idx) => {
+          const failedResult = toolResults.filter((r) => r.isError)[idx]
+          const rawError = failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
+          const cleanedError = cleanErrorMessage(rawError)
+          const failureCount = toolFailureCount.get(toolName) || 1
+          return `TOOL FAILED: ${toolName} (attempt ${failureCount}/${MAX_TOOL_FAILURES})\nError: ${cleanedError}`
+        })
+        .join("\n\n")
 
       conversationHistory.push({
         role: "tool",

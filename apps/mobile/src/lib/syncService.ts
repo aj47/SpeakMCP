@@ -129,11 +129,16 @@ export async function syncConversations(
           } else if (session.updatedAt > serverItem.updatedAt && session.messages.length > 0) {
             // Local is newer - push to server
             try {
-              await client.updateConversation(session.serverConversationId, {
+              const updated = await client.updateConversation(session.serverConversationId, {
                 title: session.title,
                 messages: session.messages.map(toServerMessage),
                 updatedAt: session.updatedAt,
               });
+              // Update local session with server-returned updatedAt to prevent sync oscillation
+              updatedSessions[i] = {
+                ...session,
+                updatedAt: updated.updatedAt,
+              };
               result.updated++;
             } catch (err: any) {
               result.errors.push(`Failed to push ${session.serverConversationId}: ${err.message}`);
@@ -154,10 +159,11 @@ export async function syncConversations(
             updatedAt: session.updatedAt,
           });
           
-          // Update local session with server ID
+          // Update local session with server ID and updatedAt
           updatedSessions[i] = {
             ...session,
             serverConversationId: created.id,
+            updatedAt: created.updatedAt,
           };
           result.pushed++;
         } catch (err: any) {

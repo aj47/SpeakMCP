@@ -215,13 +215,13 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
   },
   {
     name: `${BUILTIN_SERVER_NAME}:execute_command`,
-    description: "Execute a shell command. If skillId is provided, the command runs in that skill's directory (where SKILL.md is located). This is the primary way for skills to run shell commands, scripts, and automation.",
+    description: "Execute any shell command. This is the primary tool for file operations, running scripts, and automation. Use for: reading files (cat), writing files (cat/echo with redirection), listing directories (ls), creating directories (mkdir -p), git operations, npm/python/node commands, and any shell command. If skillId is provided, the command runs in that skill's directory.",
     inputSchema: {
       type: "object",
       properties: {
         command: {
           type: "string",
-          description: "The shell command to execute (e.g., './server.sh &', 'npm install', 'npx tsx script.ts')",
+          description: "The shell command to execute. Examples: 'cat file.txt' (read), 'echo content > file.txt' (write), 'ls -la' (list), 'mkdir -p dir' (create dir), 'git status', 'npm install', 'python script.py'",
         },
         skillId: {
           type: "string",

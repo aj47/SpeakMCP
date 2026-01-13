@@ -47,64 +47,7 @@ import {
   getAgentTrace,
 } from "./langfuse-service"
 
-// Default filesystem MCP server name
-const DEFAULT_FILESYSTEM_SERVER_NAME = "speakmcp-filesystem"
 
-/**
- * Ensure the default filesystem MCP server is configured.
- * This gives the agent access to the SpeakMCP data folder (skills, etc.)
- * Works cross-platform by using Electron's app.getPath("appData")
- */
-function ensureDefaultFilesystemServer(config: Config): { config: Config; changed: boolean } {
-  const mcpConfig = config.mcpConfig || { mcpServers: {} }
-
-  // Check if our default filesystem server already exists
-  if (mcpConfig.mcpServers[DEFAULT_FILESYSTEM_SERVER_NAME]) {
-    return { config, changed: false }
-  }
-
-  // Ensure the skills folder exists
-  const skillsFolder = path.join(dataFolder, "skills")
-  if (!existsSync(skillsFolder)) {
-    try {
-      mkdirSync(skillsFolder, { recursive: true })
-    } catch (error) {
-      // Log error but don't fail MCP initialization - skills folder is optional
-      // This handles edge cases like permissions issues or file existing as non-directory
-      if (isDebugTools()) {
-        logTools(`Failed to create skills folder at ${skillsFolder}: ${error instanceof Error ? error.message : String(error)}`)
-      }
-      // Continue without the filesystem server since we couldn't create the folder
-      return { config, changed: false }
-    }
-  }
-
-  // Create the default filesystem server config pointing to the skills folder only
-  // This scopes access to just the skills folder, not the entire data folder
-  // to reduce accidental exposure of unrelated (potentially sensitive) app data
-  const filesystemServerConfig: MCPServerConfig = {
-    transport: "stdio" as MCPTransportType,
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", skillsFolder],
-  }
-
-  const newMcpConfig: MCPConfig = {
-    ...mcpConfig,
-    mcpServers: {
-      ...mcpConfig.mcpServers,
-      [DEFAULT_FILESYSTEM_SERVER_NAME]: filesystemServerConfig,
-    },
-  }
-
-  if (isDebugTools()) {
-    logTools(`Auto-configured default filesystem server with path: ${skillsFolder}`)
-  }
-
-  return {
-    config: { ...config, mcpConfig: newMcpConfig },
-    changed: true,
-  }
-}
 
 const accessAsync = promisify(access)
 
@@ -479,14 +422,7 @@ export class MCPService {
         this.isInitializing = true
         this.initializationProgress = { current: 0, total: 0 }
 
-        let baseConfig = configStore.get()
-
-        // Ensure default filesystem server is configured (for agent skill management)
-        const { config: configWithFilesystem, changed: filesystemAdded } = ensureDefaultFilesystemServer(baseConfig)
-        if (filesystemAdded) {
-          baseConfig = configWithFilesystem
-          configStore.save(baseConfig)
-        }
+        const baseConfig = configStore.get()
 
         const { normalized: normalizedMcpConfig, changed: mcpConfigChanged } = normalizeMcpConfig(
           baseConfig.mcpConfig || { mcpServers: {} },

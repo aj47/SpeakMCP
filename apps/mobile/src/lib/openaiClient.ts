@@ -28,7 +28,7 @@ export type OnConnectionStatusChange = (state: RecoveryState) => void;
 
 export type ChatMessage = {
   id?: string;
-  role: 'system' | 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];

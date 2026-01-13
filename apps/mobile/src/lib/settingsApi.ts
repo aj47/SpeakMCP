@@ -65,6 +65,47 @@ export interface ModelsResponse {
   models: ModelInfo[];
 }
 
+// Conversation Sync Types
+export interface ServerConversationMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  timestamp?: number;
+  toolCalls?: unknown[];
+  toolResults?: unknown[];
+}
+
+export interface ServerConversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  lastMessage?: string;
+  preview?: string;
+}
+
+export interface ServerConversationFull {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ServerConversationMessage[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateConversationRequest {
+  title?: string;
+  messages: ServerConversationMessage[];
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface UpdateConversationRequest {
+  title?: string;
+  messages?: ServerConversationMessage[];
+  updatedAt?: number;
+}
+
 export interface SettingsUpdate {
   transcriptPostProcessingEnabled?: boolean;
   mcpRequireApprovalBeforeToolCall?: boolean;
@@ -166,6 +207,29 @@ export class SettingsApiClient {
   // Models Management
   async getModels(providerId: 'openai' | 'groq' | 'gemini'): Promise<ModelsResponse> {
     return this.request<ModelsResponse>(`/models/${providerId}`);
+  }
+
+  // Conversation Sync Management
+  async getConversations(): Promise<{ conversations: ServerConversation[] }> {
+    return this.request<{ conversations: ServerConversation[] }>('/conversations');
+  }
+
+  async getConversation(id: string): Promise<ServerConversationFull> {
+    return this.request<ServerConversationFull>(`/conversations/${encodeURIComponent(id)}`);
+  }
+
+  async createConversation(data: CreateConversationRequest): Promise<ServerConversationFull> {
+    return this.request<ServerConversationFull>('/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateConversation(id: string, data: UpdateConversationRequest): Promise<ServerConversationFull> {
+    return this.request<ServerConversationFull>(`/conversations/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 }
 

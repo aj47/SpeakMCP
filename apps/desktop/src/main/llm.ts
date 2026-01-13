@@ -195,8 +195,9 @@ export async function processTranscriptWithTools(
 
   // Load memories for context (works independently of dual-model summarization)
   // Memories are filtered by current profile
+  // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
   let relevantMemories: AgentMemory[] = []
-  if (config.dualModelInjectMemories) {
+  if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
     const currentProfileId = config.mcpCurrentProfileId
     const allMemories = currentProfileId
       ? await memoryService.getMemoriesByProfile(currentProfileId)
@@ -618,7 +619,9 @@ export async function processTranscriptWithAgentMode(
 
         // Auto-save high/critical importance summaries if enabled
         // Associate memory with the session's profile for profile-scoped memories
-        if (config.dualModelAutoSaveImportant &&
+        // Only auto-save if memories are enabled system-wide
+        if (config.memoriesEnabled !== false &&
+            config.dualModelAutoSaveImportant &&
             (summary.importance === "high" || summary.importance === "critical")) {
           const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
           const memory = memoryService.createMemoryFromSummary(
@@ -743,8 +746,9 @@ export async function processTranscriptWithAgentMode(
   // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
   // Memories are filtered by the session's profile
+  // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
   let relevantMemories: AgentMemory[] = []
-  if (config.dualModelInjectMemories) {
+  if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
     const profileIdForMemories = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
     const allMemories = profileIdForMemories
       ? await memoryService.getMemoriesByProfile(profileIdForMemories)

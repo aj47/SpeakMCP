@@ -1294,6 +1294,15 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
 
   save_memory: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Check if memories are enabled
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system is disabled. Enable it in Settings > Models to save memories." }) }],
+        isError: true,
+      }
+    }
+
     // Validate required parameters
     if (typeof args.title !== "string" || args.title.trim() === "") {
       return {

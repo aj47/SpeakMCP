@@ -202,6 +202,9 @@ const getConfig = () => {
     dualModelAutoSaveImportant: false,
     dualModelInjectMemories: false,
 
+    // Memory System defaults - enabled by default for backwards compatibility
+    memoriesEnabled: true,
+
   }
 
   try {

@@ -666,6 +666,9 @@ export type Config = {
   dualModelInjectMemories?: boolean  // Whether to inject memories into system prompt (default: false)
   dualModelSectionCollapsed?: boolean  // UI state for settings section
 
+  // Memory System Configuration
+  memoriesEnabled?: boolean  // When false, disables all memory features (save_memory tool, injection, auto-save, UI)
+
 }
 
 

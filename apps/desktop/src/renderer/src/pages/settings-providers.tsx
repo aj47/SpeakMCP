@@ -820,15 +820,50 @@ export function Component() {
             <div id="dual-model-content" className="divide-y border-t">
               <div className="px-3 py-2 bg-muted/30 border-b">
                 <p className="text-xs text-muted-foreground">
-                  Use a weaker model to summarize agent steps for the UI and memory storage.
+                  Configure agent summarization and memory features.
                 </p>
               </div>
 
+              {/* Memory System */}
+              <Control
+                label={
+                  <ControlLabel
+                    label="Enable Memory System"
+                    tooltip="When disabled, all memory features are turned off: the save_memory tool, memory injection, auto-save, and the Memories page."
+                  />
+                }
+                className="px-3"
+              >
+                <Switch
+                  checked={config.memoriesEnabled !== false}
+                  onCheckedChange={(checked) => saveConfig({ memoriesEnabled: checked })}
+                />
+              </Control>
+
+              {/* Show memory sub-options only when memories are enabled */}
+              {config.memoriesEnabled !== false && (
+                <Control
+                  label={
+                    <ControlLabel
+                      label="Inject Memories"
+                      tooltip="Include saved memories in agent context. Requires memory system to be enabled."
+                    />
+                  }
+                  className="px-3 pl-6"
+                >
+                  <Switch
+                    checked={config.dualModelInjectMemories ?? false}
+                    onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
+                  />
+                </Control>
+              )}
+
+              {/* Summarization */}
               <Control
                 label={
                   <ControlLabel
                     label="Enable Summarization"
-                    tooltip="When enabled, a separate model will generate summaries of each agent step"
+                    tooltip="When enabled, a separate model will generate summaries of each agent step for the UI"
                   />
                 }
                 className="px-3"
@@ -836,21 +871,6 @@ export function Component() {
                 <Switch
                   checked={dualModelEnabled}
                   onCheckedChange={(checked) => saveConfig({ dualModelEnabled: checked })}
-                />
-              </Control>
-
-              <Control
-                label={
-                  <ControlLabel
-                    label="Inject Memories"
-                    tooltip="Include saved memories in agent context. Works independently of summarization."
-                  />
-                }
-                className="px-3"
-              >
-                <Switch
-                  checked={config.dualModelInjectMemories ?? false}
-                  onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
                 />
               </Control>
 
@@ -992,19 +1012,21 @@ export function Component() {
                         </SelectContent>
                       </Select>
                     </Control>
-                    <Control
-                      label={
-                        <ControlLabel
-                          label="Auto-save Important"
-                          tooltip="Automatically save high and critical importance summaries to memory"
+                    {config.memoriesEnabled !== false && (
+                      <Control
+                        label={
+                          <ControlLabel
+                            label="Auto-save Important"
+                            tooltip="Automatically save high and critical importance summaries to memory. Requires memory system to be enabled."
+                          />
+                        }
+                      >
+                        <Switch
+                          checked={config.dualModelAutoSaveImportant ?? false}
+                          onCheckedChange={(checked) => saveConfig({ dualModelAutoSaveImportant: checked })}
                         />
-                      }
-                    >
-                      <Switch
-                        checked={config.dualModelAutoSaveImportant ?? false}
-                        onCheckedChange={(checked) => saveConfig({ dualModelAutoSaveImportant: checked })}
-                      />
-                    </Control>
+                      </Control>
+                    )}
                   </div>
                 </>
               )}

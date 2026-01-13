@@ -24,7 +24,7 @@ SpeakMCP integrates with [Langfuse](https://langfuse.com/) to provide comprehens
    - Copy your **Secret Key** (`sk-lf-...`)
 
 3. **Configure in SpeakMCP**
-   - Open Settings → Langfuse
+   - Open Settings → General (scroll to the bottom)
    - Toggle "Enable Langfuse Tracing" on
    - Enter your Public Key
    - Enter your Secret Key

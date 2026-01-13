@@ -1,6 +1,7 @@
 import { acpSmartRouter } from './acp/acp-smart-router'
 import { acpService } from './acp-service'
 import { getInternalAgentInfo } from './acp/internal-agent'
+import { agentProfileService } from './agent-profile-service'
 import type { AgentMemory } from "../shared/types"
 
 export const DEFAULT_SYSTEM_PROMPT = `You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved.
@@ -159,6 +160,37 @@ INTERNAL AGENT: Use \`delegate_to_agent\` with \`agentName: "internal"\` to spaw
 `.trim()
 }
 
+/**
+ * Generate prompt addition for available agent personas (delegation-targets).
+ * These are internal personas that can be delegated to via delegate_to_agent.
+ * Similar format to tools/skills for easy discoverability.
+ */
+export function getAgentPersonasPromptAddition(): string {
+  // Get enabled delegation-target profiles
+  const delegationTargets = agentProfileService.getByRole('delegation-target')
+    .filter(p => p.enabled)
+
+  if (delegationTargets.length === 0) {
+    return ''
+  }
+
+  // Format personas in a compact, discoverable format similar to tools/skills
+  const personasList = delegationTargets.map(p => {
+    const capabilities = p.capabilities?.length
+      ? ` [${p.capabilities.join(', ')}]`
+      : ''
+    return `- **${p.name}**: ${p.description || p.displayName || 'No description'}${capabilities}`
+  }).join('\n')
+
+  return `
+AVAILABLE AGENT PERSONAS (${delegationTargets.length}):
+${personasList}
+
+To delegate: \`delegate_to_agent(agentName: "persona_name", task: "...")\`
+When user mentions a persona by name (e.g., "ask joker...", "have coder..."), delegate to that persona.
+`.trim()
+}
+
 export function constructSystemPrompt(
   availableTools: Array<{
     name: string
@@ -186,6 +218,12 @@ export function constructSystemPrompt(
     const acpPromptAddition = getACPRoutingPromptAddition()
     if (acpPromptAddition) {
       prompt += '\n\n' + acpPromptAddition
+    }
+
+    // Add agent personas (delegation-targets) in a discoverable format
+    const personasAddition = getAgentPersonasPromptAddition()
+    if (personasAddition) {
+      prompt += '\n\n' + personasAddition
     }
 
     // Add internal sub-session instructions (always available in agent mode)

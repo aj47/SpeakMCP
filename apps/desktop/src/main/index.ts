@@ -22,6 +22,11 @@ import { diagnosticsService } from "./diagnostics"
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
 import { initializeBundledSkills, skillsService } from "./skills-service"
+import {
+  startCloudflareTunnel,
+  startNamedCloudflareTunnel,
+  checkCloudflaredInstalled,
+} from "./cloudflare-tunnel"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -156,7 +161,56 @@ app.whenReady().then(() => {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
 	      startRemoteServer()
-	        .then(() => logApp("Remote server started"))
+	        .then(async () => {
+	          logApp("Remote server started")
+
+	          // Auto-start Cloudflare tunnel if enabled
+	          if (cfg.cloudflareTunnelAutoStart) {
+	            const cloudflaredInstalled = await checkCloudflaredInstalled()
+	            if (!cloudflaredInstalled) {
+	              logApp("Cloudflare tunnel auto-start skipped: cloudflared not installed")
+	              return
+	            }
+
+	            const tunnelMode = cfg.cloudflareTunnelMode || "quick"
+
+	            if (tunnelMode === "named") {
+	              // For named tunnels, we need tunnel ID and hostname
+	              if (!cfg.cloudflareTunnelId || !cfg.cloudflareTunnelHostname) {
+	                logApp("Cloudflare tunnel auto-start skipped: named tunnel requires tunnel ID and hostname")
+	                return
+	              }
+	              startNamedCloudflareTunnel({
+	                tunnelId: cfg.cloudflareTunnelId,
+	                hostname: cfg.cloudflareTunnelHostname,
+	                credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
+	              })
+	                .then((result) => {
+	                  if (result.success) {
+	                    logApp(`Cloudflare named tunnel started: ${result.url}`)
+	                  } else {
+	                    logApp(`Cloudflare named tunnel failed to start: ${result.error}`)
+	                  }
+	                })
+	                .catch((err) =>
+	                  logApp(`Cloudflare named tunnel error: ${err instanceof Error ? err.message : String(err)}`)
+	                )
+	            } else {
+	              // Quick tunnel
+	              startCloudflareTunnel()
+	                .then((result) => {
+	                  if (result.success) {
+	                    logApp(`Cloudflare quick tunnel started: ${result.url}`)
+	                  } else {
+	                    logApp(`Cloudflare quick tunnel failed to start: ${result.error}`)
+	                  }
+	                })
+	                .catch((err) =>
+	                  logApp(`Cloudflare quick tunnel error: ${err instanceof Error ? err.message : String(err)}`)
+	                )
+	            }
+	          }
+	        })
 	        .catch((err) =>
 	          logApp(
 	            `Remote server failed to start: ${err instanceof Error ? err.message : String(err)}`,

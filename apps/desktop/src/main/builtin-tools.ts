@@ -1528,6 +1528,55 @@ const toolHandlers: Record<string, ToolHandler> = {
       isError: false,
     }
   },
+
+  load_skill_instructions: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate skillId parameter
+    if (typeof args.skillId !== "string" || args.skillId.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "skillId must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const skillId = args.skillId.trim()
+    const { skillsService } = await import("./skills-service")
+    const skill = skillsService.getSkill(skillId)
+
+    if (!skill) {
+      // Try to find by name as fallback
+      const allSkills = skillsService.getSkills()
+      const skillByName = allSkills.find(s => s.name.toLowerCase() === skillId.toLowerCase())
+
+      if (skillByName) {
+        return {
+          content: [{
+            type: "text",
+            text: `# ${skillByName.name}\n\n${skillByName.instructions}`,
+          }],
+          isError: false,
+        }
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `Skill '${skillId}' not found. Check the Available Skills section in the system prompt for valid skill IDs.`,
+          }),
+        }],
+        isError: true,
+      }
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `# ${skill.name}\n\n${skill.instructions}`,
+      }],
+      isError: false,
+    }
+  },
 }
 
 /**

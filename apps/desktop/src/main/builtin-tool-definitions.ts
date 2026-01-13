@@ -94,6 +94,24 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:send_agent_message`,
+    description: "Send a message to another running agent session. The message will be queued and processed by the target agent's conversation. Use list_running_agents first to get session IDs. This enables agent coordination and task delegation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "The session ID of the target agent (get this from list_running_agents)",
+        },
+        message: {
+          type: "string",
+          description: "The message to send to the target agent",
+        },
+      },
+      required: ["sessionId", "message"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:kill_agent`,
     description: "Terminate a specific agent session by its session ID. This will abort any in-flight LLM requests, kill spawned processes, and stop the agent immediately.",
     inputSchema: {

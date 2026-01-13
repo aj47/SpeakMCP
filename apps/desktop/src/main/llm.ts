@@ -7,7 +7,7 @@ import {
 } from "./mcp-service"
 import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
-import { makeStructuredContextExtraction, ContextExtractionResponse } from "./structured-output"
+
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
@@ -33,114 +33,70 @@ import {
 import { memoryService } from "./memory-service"
 
 /**
- * Use LLM to extract useful context from conversation history
+ * Clean error message by removing stack traces and noise
  */
-async function extractContextFromHistory(
-  conversationHistory: Array<{
-    role: "user" | "assistant" | "tool"
-    content: string
-    toolCalls?: MCPToolCall[]
-    toolResults?: MCPToolResult[]
-  }>,
-  config: any,
-): Promise<{
-  resources: Array<{ type: string; id: string }>
-}> {
-  if (conversationHistory.length === 0) {
-    return { resources: [] }
+function cleanErrorMessage(errorText: string): string {
+  // Remove stack traces (lines starting with "at " after an error)
+  const lines = errorText.split('\n')
+  const cleanedLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // Skip stack trace lines
+    if (trimmed.startsWith('at ')) continue
+    // Skip file path lines
+    if (trimmed.match(/^\s*at\s+.*\.(js|ts|mjs):\d+/)) continue
+    // Skip empty lines in stack traces
+    if (cleanedLines.length > 0 && trimmed === '' && lines.indexOf(line) > 0) {
+      const prevLine = lines[lines.indexOf(line) - 1]?.trim()
+      if (prevLine?.startsWith('at ')) continue
+    }
+    cleanedLines.push(line)
   }
 
-  // Create a condensed version of the conversation for analysis
-  const conversationText = conversationHistory
-    .map((entry) => {
-      let text = `${entry.role.toUpperCase()}: ${entry.content}`
+  let cleaned = cleanedLines.join('\n').trim()
 
-      if (entry.toolCalls) {
-        text += `\nTOOL_CALLS: ${entry.toolCalls.map((tc) => `${tc.name}(${JSON.stringify(tc.arguments)})`).join(", ")}`
-      }
+  // Remove duplicate error class names (e.g., "CodeExecutionTimeoutError: Code execution timed out")
+  cleaned = cleaned.replace(/(\w+Error):\s*\1:/g, '$1:')
 
-      if (entry.toolResults) {
-        text += `\nTOOL_RESULTS: ${entry.toolResults.map((tr) => (tr.isError ? "ERROR" : "SUCCESS")).join(", ")}`
-      }
-
-      return text
-    })
-    .join("\n\n")
-
-  const contextExtractionPrompt = `Extract active resource IDs from this conversation:
-
-${conversationText}
-
-Return JSON: {"resources": [{"type": "session|connection|handle|other", "id": "actual_id_value"}]}
-Only include currently active/usable resources.`
-
-  try {
-    const result = await makeStructuredContextExtraction(
-      contextExtractionPrompt,
-      config.mcpToolsProviderId,
-    )
-    return result as { resources: Array<{ type: string; id: string }> }
-  } catch (error) {
-    return { resources: [] }
+  // Truncate if still too long
+  if (cleaned.length > 500) {
+    cleaned = cleaned.substring(0, 500) + '...'
   }
+
+  return cleaned
 }
 
 /**
- * Analyze tool errors and provide generic recovery strategies
+ * Analyze tool errors and categorize them
  */
 function analyzeToolErrors(toolResults: MCPToolResult[]): {
-  recoveryStrategy: string
   errorTypes: string[]
 } {
   const errorTypes: string[] = []
   const errorMessages = toolResults
     .filter((r) => r.isError)
-    .map((r) => r.content.map((c) => c.text).join(" "))
+    .map((r) => r.content.map((c) => c.text).join(" ").toLowerCase())
     .join(" ")
 
-  // Categorize error types generically
-  if (
-    errorMessages.includes("timeout") ||
-    errorMessages.includes("connection")
-  ) {
+  // Categorize error types
+  if (errorMessages.includes("timeout")) {
+    errorTypes.push("timeout")
+  }
+  if (errorMessages.includes("connection") || errorMessages.includes("network")) {
     errorTypes.push("connectivity")
   }
-  if (
-    errorMessages.includes("permission") ||
-    errorMessages.includes("access") ||
-    errorMessages.includes("denied")
-  ) {
+  if (errorMessages.includes("permission") || errorMessages.includes("access") || errorMessages.includes("denied")) {
     errorTypes.push("permissions")
   }
-  if (
-    errorMessages.includes("not found") ||
-    errorMessages.includes("does not exist") ||
-    errorMessages.includes("missing")
-  ) {
-    errorTypes.push("resource_missing")
+  if (errorMessages.includes("not found") || errorMessages.includes("does not exist") || errorMessages.includes("missing")) {
+    errorTypes.push("not_found")
+  }
+  if (errorMessages.includes("invalid") || errorMessages.includes("expected")) {
+    errorTypes.push("invalid_params")
   }
 
-  // Generate generic recovery strategy
-  let recoveryStrategy = "RECOVERY STRATEGIES:\n"
-
-  if (errorTypes.includes("connectivity")) {
-    recoveryStrategy +=
-      "- For connectivity issues: Wait a moment and retry, or check if the service is available\n"
-  }
-  if (errorTypes.includes("permissions")) {
-    recoveryStrategy +=
-      "- For permission errors: Try alternative approaches or check access rights\n"
-  }
-  if (errorTypes.includes("resource_missing")) {
-    recoveryStrategy +=
-      "- For missing resources: Verify the resource exists or try creating it first\n"
-  }
-
-  // Always provide generic fallback advice
-  recoveryStrategy +=
-    "- General: Try breaking down the task into smaller steps, use alternative tools, or try a different approach\n"
-
-  return { recoveryStrategy, errorTypes }
+  return { errorTypes }
 }
 
 export async function postProcessTranscript(transcript: string) {
@@ -399,8 +355,6 @@ async function executeToolWithRetries(
     cancelledByKill: false,
   }
 }
-
-
 
 export async function processTranscriptWithAgentMode(
   transcript: string,
@@ -789,20 +743,6 @@ export async function processTranscriptWithAgentMode(
     relevantMemories, // memories from previous sessions
   )
 
-  // Generic context extraction from chat history - works with any MCP tool
-  const extractRecentContext = (
-    history: Array<{
-      role: string
-      content: string
-      toolCalls?: any[]
-      toolResults?: any[]
-    }>,
-  ) => {
-    // Simply return the recent conversation history - let the LLM understand the context
-    // This is much simpler and works with any MCP tool, not just specific ones
-    return history.slice(-8) // Last 8 messages provide sufficient context
-  }
-
   logLLM(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
   logLLM(`[llm.ts processTranscriptWithAgentMode] previousConversationHistory length: ${previousConversationHistory?.length || 0}`)
   if (previousConversationHistory && previousConversationHistory.length > 0) {
@@ -839,6 +779,9 @@ export async function processTranscriptWithAgentMode(
       logLLM("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
     })
   }
+
+  // Track empty response retries to prevent infinite loops
+  let emptyResponseRetryCount = 0
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
   const formatConversationForProgress = (
@@ -942,7 +885,9 @@ export async function processTranscriptWithAgentMode(
         if (entry.role === "tool") {
           const text = (entry.content || "").trim()
           if (!text) return null
-          return { role: "user" as const, content: `Tool execution results:\n${entry.content}` }
+          // Tool results already contain tool name prefix (format: [toolName] content...)
+          // Just pass through without adding generic "Tool execution results:" wrapper
+          return { role: "user" as const, content: text }
         }
         const content = (entry.content || "").trim()
         if (!content) return null
@@ -1047,28 +992,25 @@ export async function processTranscriptWithAgentMode(
     messages.push({
       role: "system",
       content:
-        `You are a completion verifier. Determine if the user's original request has been adequately addressed.
+        `You are a completion verifier. Determine if the user's original request has been FULLY DELIVERED to the user.
 
-MARK AS COMPLETE if ANY of these conditions are met:
-1. The request was successfully fulfilled with concrete actions/results
-2. The agent provided a direct, substantive answer (for questions that don't require tools)
-3. The agent correctly identified the request is IMPOSSIBLE and explained why
-4. The agent is asking for CLARIFICATION or MORE INFORMATION needed to proceed
-5. The agent has made a good-faith attempt and provided useful partial results
-6. The agent explicitly states the task is done (phrases like "I've completed...", "Done!", "Task finished")
+FIRST, CHECK THESE BLOCKERS (if ANY are true, mark INCOMPLETE):
+- The agent stated intent to do more work (e.g., "Let me...", "I'll...", "Now I'll...", "I'm going to...")
+- The agent's response is a status update rather than a deliverable (e.g., "I've extracted the data" without presenting results)
+- The user asked for information/analysis that was NOT directly provided in the agent's response
+- Tool results exist but the agent hasn't synthesized/presented them to the user
+- The response is empty or just acknowledges the request
 
-IMPORTANT - Do NOT mark as incomplete just because:
-- The response contains polite phrases like "Let me know if you need anything else"
-- The response offers to help with follow-up tasks
+ONLY IF NO BLOCKERS, mark COMPLETE if:
+1. The agent directly answered the user's question or fulfilled their request
+2. The agent explained why the request is impossible and cannot proceed
+3. The agent is asking for clarification needed to proceed
+4. The agent explicitly confirmed completion ("Done", "Here's your summary", "Task complete")
 
-MARK AS INCOMPLETE if:
-- The agent stated intent to perform an action (e.g., "Let me try...", "I'll do...", "Now I'll...") but hasn't completed it yet
-- The agent is actively in the middle of a multi-step task with more steps remaining
-- The response is empty or just acknowledges the request without addressing it
-- The original request asked for analysis/information that was NOT provided in the response
-- Tool executions occurred but the agent hasn't reported the results or conclusions yet
-
-CRITICAL: If the user asked a question or requested information, the agent must have ACTUALLY PROVIDED that information to be complete. Just saying "let me check" or "I'll examine" is NOT complete.
+IMPORTANT - Do NOT mark complete just because:
+- Tools executed successfully (results must be PRESENTED to user)
+- Data was gathered (it must be SUMMARIZED/DELIVERED)
+- The agent made progress (the FINAL deliverable must exist)
 
 Return ONLY JSON per schema.`,
     })
@@ -1076,8 +1018,9 @@ Return ONLY JSON per schema.`,
     for (const entry of recent) {
       if (entry.role === "tool") {
         const text = (entry.content || "").trim()
-        // Add placeholder for empty tool results instead of silently skipping
-        messages.push({ role: "user", content: `[Tool executed] ${text || "[No output]"}` })
+        // Tool results already contain tool name prefix (format: [toolName] content...)
+        // Pass through directly without adding redundant wrapper
+        messages.push({ role: "user", content: text || "[No tool output]" })
       } else if (entry.role === "user") {
         // Skip empty user messages
         const text = (entry.content || "").trim()
@@ -1118,6 +1061,9 @@ Return ONLY JSON per schema.`,
 
   // Verification failure limit - after this many failures, force completion
   const VERIFICATION_FAIL_LIMIT = 5
+
+  // Empty response retry limit - after this many retries, break to prevent infinite loops
+  const MAX_EMPTY_RESPONSE_RETRIES = 3
 
   /**
    * Result of running verification and handling the outcome
@@ -1380,41 +1326,19 @@ Return ONLY JSON per schema.`,
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
-    // Use the base system prompt (or rebuilt prompt if tools were excluded)
-    // This ensures the LLM only sees tools it can actually call
-    let contextAwarePrompt = currentSystemPrompt
-
-    // Add enhanced context instruction using LLM-based context extraction
-    // Recalculate recent context each iteration to include newly added messages
-    const currentSessionHistory = conversationHistory.slice(sessionStartIndex)
-    const recentContext = extractRecentContext(currentSessionHistory)
-
-    if (recentContext.length > 1) {
-      // Use LLM to extract useful context from conversation history
-      // IMPORTANT: Only extract context from the current session's messages to prevent
-      // context leakage between sessions. sessionStartIndex marks where this session began.
-      const contextInfo = await extractContextFromHistory(
-        currentSessionHistory,
-        config,
-      )
-
-      // Only add resource IDs if there are any - LLM can infer context from conversation history
-      if (contextInfo.resources.length > 0) {
-        contextAwarePrompt += `\n\nAVAILABLE RESOURCES:\n${contextInfo.resources.map((r) => `- ${r.type.toUpperCase()}: ${r.id}`).join("\n")}`
-      }
-    }
-
     // Build messages for LLM call
     const messages = [
-      { role: "system", content: contextAwarePrompt },
+      { role: "system", content: currentSystemPrompt },
       ...conversationHistory
         .map((entry) => {
           if (entry.role === "tool") {
             const text = (entry.content || "").trim()
             if (!text) return null
+            // Tool results already contain tool name prefix (format: [toolName] content...)
+            // Pass through directly without adding redundant wrapper
             return {
               role: "user" as const,
-              content: `Tool execution results:\n${entry.content}`,
+              content: text,
             }
           }
           // For assistant messages, ensure non-empty content
@@ -1440,8 +1364,8 @@ Return ONLY JSON per schema.`,
     ]
 
     // Apply context budget management before the agent LLM call
-    // Use activeTools (filtered for failures) so context-budget paths like minimal_system_prompt
-    // don't list tools that are no longer callable, which could confuse the LLM
+    // All active tools are sent to the LLM - progressive disclosure tools
+    // (list_server_tools, get_tool_schema) allow the LLM to discover tools dynamically
     const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
       availableTools: activeTools,
@@ -1517,7 +1441,6 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      // activeTools is already computed at the start of each iteration
       llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, activeTools)
 
       // Clear streaming state after response is complete
@@ -1578,6 +1501,28 @@ Return ONLY JSON per schema.`,
       // Handle empty response errors - retry with guidance
       const errorMessage = (error?.message || String(error)).toLowerCase()
       if (errorMessage.includes("empty") || errorMessage.includes("no text") || errorMessage.includes("no content")) {
+        emptyResponseRetryCount++
+        if (emptyResponseRetryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
+          logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
+          diagnosticsService.logError("llm", "Empty response retry limit exceeded", {
+            iteration,
+            retryCount: emptyResponseRetryCount,
+            limit: MAX_EMPTY_RESPONSE_RETRIES
+          })
+          thinkingStep.status = "error"
+          thinkingStep.description = "Empty response limit exceeded"
+          const emptyResponseFinalContent = "I encountered repeated empty responses and couldn't complete the task. Please try again."
+          conversationHistory.push({ role: "assistant", content: emptyResponseFinalContent, timestamp: Date.now() })
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent: emptyResponseFinalContent,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        }
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response. Retrying..."
         emit({
@@ -1608,7 +1553,8 @@ Return ONLY JSON per schema.`,
     const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === "" && !hasValidToolCalls
 
     if (!llmResponse || (!hasValidContent && !hasValidToolCalls && !isIntentionalEmptyCompletion)) {
-      logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
+      emptyResponseRetryCount++
+      logLLM(`❌ LLM null/empty response on iteration ${iteration} (retry ${emptyResponseRetryCount}/${MAX_EMPTY_RESPONSE_RETRIES})`)
       logLLM("Response details:", {
         hasResponse: !!llmResponse,
         responseType: typeof llmResponse,
@@ -1623,8 +1569,26 @@ Return ONLY JSON per schema.`,
       diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", {
         iteration,
         response: llmResponse,
-        message: "LLM response has neither content nor toolCalls"
+        message: "LLM response has neither content nor toolCalls",
+        retryCount: emptyResponseRetryCount,
+        limit: MAX_EMPTY_RESPONSE_RETRIES
       })
+      if (emptyResponseRetryCount >= MAX_EMPTY_RESPONSE_RETRIES) {
+        logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
+        thinkingStep.status = "error"
+        thinkingStep.description = "Empty response limit exceeded"
+        const emptyResponseFinalContent = "I encountered repeated empty responses and couldn't complete the task. Please try again."
+        conversationHistory.push({ role: "assistant", content: emptyResponseFinalContent, timestamp: Date.now() })
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: emptyResponseFinalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
       thinkingStep.status = "error"
       thinkingStep.description = "Invalid response. Retrying..."
       emit({
@@ -1634,9 +1598,22 @@ Return ONLY JSON per schema.`,
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
-      addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
+      // Check if recent messages contain truncated content that might be confusing
+      const recentMessages = conversationHistory.slice(-3)
+      const hasTruncatedContent = recentMessages.some(m =>
+        m.content?.includes('[Truncated') ||
+        m.content?.includes('[truncated]') ||
+        m.content?.includes('(truncated')
+      )
+      const retryMessage = hasTruncatedContent
+        ? "Previous request had empty response. The tool output was truncated which may have caused confusion. Please either: (1) try a different approach to get the data you need, (2) work with the partial data available, or (3) summarize your progress so far."
+        : "Previous request had empty response. Please retry or summarize progress."
+      addMessage("user", retryMessage)
       continue
     }
+
+    // Reset empty response counter on successful response
+    emptyResponseRetryCount = 0
 
     // Handle intentional empty completion from LLM (finish_reason='stop')
     // This is unusual - the model chose to complete without any content
@@ -2483,8 +2460,15 @@ Return ONLY JSON per schema.`,
         return result
       })
 
+      // Format tool results with tool name prefix for better context preservation
+      // Format: [toolName] content... or [toolName] ERROR: content...
       const toolResultsText = resultsWithPlaceholders
-        .map((result) => result.content.map((c) => c.text).join("\n"))
+        .map((result, i) => {
+          const toolName = toolCallsArray[i]?.name || 'unknown'
+          const content = result.content.map((c) => c.text).join("\n")
+          const prefix = result.isError ? `[${toolName}] ERROR: ` : `[${toolName}] `
+          return `${prefix}${content}`
+        })
         .join("\n\n")
 
       addMessage("tool", toolResultsText, undefined, resultsWithPlaceholders)
@@ -2568,49 +2552,16 @@ Return ONLY JSON per schema.`,
         }
       }
 
-      // Add detailed error summary to conversation history for LLM context
-      const errorSummary = `Tool execution errors occurred:
-${failedTools
-  .map((toolName) => {
-    const failedResult = toolResults.find((r) => r.isError)
-    const errorText =
-      failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
-
-    // Check for error patterns and provide generic suggestions
-    let suggestion = ""
-    if (
-      errorText.includes("timeout") ||
-      errorText.includes("connection") ||
-      errorText.includes("network")
-    ) {
-      suggestion = " (Suggestion: Try again or check connectivity)"
-    } else if (
-      errorText.includes("permission") ||
-      errorText.includes("access") ||
-      errorText.includes("denied")
-    ) {
-      suggestion = " (Suggestion: Try a different approach)"
-    } else if (
-      errorText.includes("not found") ||
-      errorText.includes("missing") ||
-      errorText.includes("does not exist")
-    ) {
-      suggestion = " (Suggestion: Verify the resource exists or try alternatives)"
-    } else if (errorText.includes("Expected string, received array")) {
-      suggestion = " (Fix: Parameter type mismatch - check tool schema)"
-    } else if (errorText.includes("Expected array, received string")) {
-      suggestion = " (Fix: Parameter should be an array, not a string)"
-    } else if (errorText.includes("invalid_type")) {
-      suggestion = " (Fix: Check parameter types match tool schema)"
-    }
-
-    return `- ${toolName}: ${errorText}${suggestion}`
-  })
-  .join("\n")}
-
-${errorAnalysis.recoveryStrategy}
-
-Please try alternative approaches, break down the task into smaller steps, or provide manual instructions to the user.`
+      // Add clean error summary to conversation history for LLM context
+      const errorSummary = failedTools
+        .map((toolName, idx) => {
+          const failedResult = toolResults.filter((r) => r.isError)[idx]
+          const rawError = failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
+          const cleanedError = cleanErrorMessage(rawError)
+          const failureCount = toolFailureCount.get(toolName) || 1
+          return `TOOL FAILED: ${toolName} (attempt ${failureCount}/${MAX_TOOL_FAILURES})\nError: ${cleanedError}`
+        })
+        .join("\n\n")
 
       conversationHistory.push({
         role: "tool",
@@ -3242,12 +3193,18 @@ async function makeLLMCall(
       try {
         result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
       } finally {
-        // Abort streaming request - we have the real response (or error) now
-        // This saves bandwidth/tokens by closing the SSE connection immediately
+        // Signal streaming to stop IMMEDIATELY
         streamingAborted = true
         streamingAbortController.abort()
 
-        // Unregister the streaming abort controller since we're done with it
+        // Wait briefly for streaming to acknowledge the abort (prevents race)
+        // This ensures streaming callbacks don't fire after we return
+        await Promise.race([
+          streamingPromise,
+          new Promise(resolve => setTimeout(resolve, 100))  // 100ms max wait
+        ]).catch(() => {}) // Ignore any errors
+
+        // Unregister after streaming has stopped
         if (sessionId) {
           agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
         }

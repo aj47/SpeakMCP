@@ -45,11 +45,13 @@ function toServerMessage(msg: ChatMessage): ServerConversationMessage {
  * Convert a server message to mobile ChatMessage format
  */
 function fromServerMessage(msg: ServerConversationMessage, index: number): ChatMessage {
+  // Use nullish coalescing (??) so that timestamp=0 is not treated as "missing"
+  const ts = msg.timestamp ?? Date.now();
   return {
-    id: `msg_${msg.timestamp || Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `msg_${ts}_${index}_${Math.random().toString(36).substr(2, 9)}`,
     role: msg.role,
     content: msg.content,
-    timestamp: msg.timestamp || Date.now(),
+    timestamp: ts,
     toolCalls: msg.toolCalls as any,
     toolResults: msg.toolResults as any,
   };

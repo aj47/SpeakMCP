@@ -907,6 +907,194 @@ export async function startRemoteServer() {
     }
   })
 
+  // GET /v1/conversations - List all conversations
+  fastify.get("/v1/conversations", async (_req, reply) => {
+    try {
+      const conversations = await conversationService.getConversationHistory()
+      diagnosticsService.logInfo("remote-server", `Listed ${conversations.length} conversations`)
+      return reply.send({ conversations })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to list conversations", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list conversations" })
+    }
+  })
+
+  // POST /v1/conversations - Create a new conversation from mobile data
+  fastify.post("/v1/conversations", async (req, reply) => {
+    try {
+      const body = req.body as {
+        title?: string
+        messages: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          timestamp?: number
+          toolCalls?: Array<{ name: string; arguments: any }>
+          toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        }>
+        createdAt?: number
+        updatedAt?: number
+      }
+
+      if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+        return reply.code(400).send({ error: "Missing or invalid messages array" })
+      }
+
+      const conversationId = conversationService.generateConversationIdPublic()
+      const now = Date.now()
+
+      // Generate title from first message if not provided
+      const firstMessageContent = body.messages[0]?.content || ""
+      const title = body.title || (firstMessageContent.length > 50
+        ? `${firstMessageContent.slice(0, 50)}...`
+        : firstMessageContent || "New Conversation")
+
+      // Convert input messages to ConversationMessage format with IDs
+      const messages = body.messages.map((msg, index) => ({
+        id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp || now,
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+      }))
+
+      const conversation = {
+        id: conversationId,
+        title,
+        createdAt: body.createdAt || now,
+        updatedAt: body.updatedAt || now,
+        messages,
+      }
+
+      await conversationService.saveConversation(conversation)
+      diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} with ${messages.length} messages`)
+
+      return reply.code(201).send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to create conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to create conversation" })
+    }
+  })
+
+  // PUT /v1/conversations/:id - Update an existing conversation
+  fastify.put("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      // Validate conversation ID format to prevent path traversal attacks
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
+      const body = req.body as {
+        title?: string
+        messages?: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          timestamp?: number
+          toolCalls?: Array<{ name: string; arguments: any }>
+          toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        }>
+        updatedAt?: number
+      }
+
+      const now = Date.now()
+      let conversation = await conversationService.loadConversation(conversationId)
+
+      if (!conversation) {
+        // Create new conversation with the provided ID
+        if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+          return reply.code(400).send({ error: "Conversation not found and no messages provided to create it" })
+        }
+
+        const firstMessageContent = body.messages[0]?.content || ""
+        const title = body.title || (firstMessageContent.length > 50
+          ? `${firstMessageContent.slice(0, 50)}...`
+          : firstMessageContent || "New Conversation")
+
+        const messages = body.messages.map((msg, index) => ({
+          id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp || now,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        }))
+
+        conversation = {
+          id: conversationId,
+          title,
+          createdAt: now,
+          updatedAt: body.updatedAt || now,
+          messages,
+        }
+
+        await conversationService.saveConversation(conversation)
+        diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} via PUT with ${messages.length} messages`)
+      } else {
+        // Update existing conversation
+        if (body.title !== undefined) {
+          conversation.title = body.title
+        }
+
+        if (body.messages !== undefined) {
+          conversation.messages = body.messages.map((msg, index) => ({
+            id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp || now,
+            toolCalls: msg.toolCalls,
+            toolResults: msg.toolResults,
+          }))
+        }
+
+        conversation.updatedAt = body.updatedAt || now
+
+        await conversationService.saveConversation(conversation)
+        diagnosticsService.logInfo("remote-server", `Updated conversation ${conversationId}`)
+      }
+
+      return reply.send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to update conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to update conversation" })
+    }
+  })
+
   // Kill switch endpoint - emergency stop all agent sessions
   fastify.post("/v1/emergency-stop", async (_req, reply) => {
     console.log("[KILLSWITCH] /v1/emergency-stop endpoint called")

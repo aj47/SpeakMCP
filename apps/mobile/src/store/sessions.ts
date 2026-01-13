@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, SessionListItem, generateSessionId, generateMessageId, generateSessionTitle, sessionToListItem } from '../types/session';
 import { ChatMessage } from '../lib/openaiClient';
+import { SettingsApiClient } from '../lib/settingsApi';
+import { syncConversations, SyncResult } from '../lib/syncService';
 
 const SESSIONS_KEY = 'chat_sessions_v1';
 const CURRENT_SESSION_KEY = 'current_session_id_v1';
@@ -30,6 +32,11 @@ export interface SessionStore {
   setServerConversationId: (serverConversationId: string) => Promise<void>;
   setServerConversationIdForSession: (sessionId: string, serverConversationId: string) => Promise<void>;
   getServerConversationId: () => string | undefined;
+
+  // Sync with server
+  syncWithServer: (client: SettingsApiClient) => Promise<SyncResult>;
+  isSyncing: boolean;
+  lastSyncResult: SyncResult | null;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -466,6 +473,48 @@ export function useSessions(): SessionStore {
     return session?.serverConversationId;
   }, [getCurrentSession]);
 
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
+
+  // Sync sessions with server
+  const syncWithServer = useCallback(async (client: SettingsApiClient): Promise<SyncResult> => {
+    if (isSyncing) {
+      return { pulled: 0, pushed: 0, updated: 0, errors: ['Sync already in progress'] };
+    }
+
+    setIsSyncing(true);
+    try {
+      const { result, sessions: syncedSessions } = await syncConversations(client, sessionsRef.current);
+
+      // Only update if there were actual changes
+      if (result.pulled > 0 || result.pushed > 0 || result.updated > 0) {
+        // Update ref synchronously
+        sessionsRef.current = syncedSessions;
+        setSessions(syncedSessions);
+
+        // Queue async save
+        queueSave(async () => {
+          await saveSessions(syncedSessions);
+        });
+      }
+
+      setLastSyncResult(result);
+      return result;
+    } catch (err: any) {
+      const errorResult: SyncResult = {
+        pulled: 0,
+        pushed: 0,
+        updated: 0,
+        errors: [err.message || 'Unknown sync error'],
+      };
+      setLastSyncResult(errorResult);
+      return errorResult;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, queueSave]);
+
   return {
     sessions,
     currentSessionId,
@@ -483,6 +532,9 @@ export function useSessions(): SessionStore {
     setServerConversationId,
     setServerConversationIdForSession,
     getServerConversationId,
+    syncWithServer,
+    isSyncing,
+    lastSyncResult,
   };
 }
 

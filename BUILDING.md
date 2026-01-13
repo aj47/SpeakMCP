@@ -43,9 +43,11 @@ export CSC_NAME="Your Name (TEAMID)"
 **Required variables for signed builds:**
 ```bash
 export CSC_NAME="Your Name (TEAMID)"              # For app signing
-export APPLE_DEVELOPER_ID="Your Name (TEAMID)"    # For Rust binary signing  
-export ENABLE_HARDENED_RUNTIME=true               # Required for notarization
+export APPLE_DEVELOPER_ID="Your Name (TEAMID)"    # For Rust binary signing
+# DISABLE_HARDENED_RUNTIME=true                   # Set only to disable for development
 ```
+
+> **Note:** Hardened runtime is now enabled by default for all builds. You only need to set `DISABLE_HARDENED_RUNTIME=true` if you want to disable it for development purposes.
 
 **Additional variables for notarization (recommended for public distribution):**
 ```bash
@@ -94,7 +96,6 @@ For a complete signed build (replace with your actual name and team ID):
 cd apps/desktop && \
 export CSC_NAME="Your Name (TEAMID)" && \
 export APPLE_DEVELOPER_ID="Your Name (TEAMID)" && \
-export ENABLE_HARDENED_RUNTIME=true && \
 pnpm run build-rs && \
 npx electron-vite build && \
 npx electron-builder --mac --config electron-builder.config.cjs --publish=never

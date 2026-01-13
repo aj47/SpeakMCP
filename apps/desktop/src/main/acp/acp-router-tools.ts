@@ -460,7 +460,6 @@ export function getInternalAgentConfig(): import('../../shared/types').ACPAgentC
     name: internalInfo.name,
     displayName: internalInfo.displayName,
     description: internalInfo.description,
-    capabilities: internalInfo.capabilities,
     enabled,
     isInternal: true,
     connection: { type: 'internal' },
@@ -480,14 +479,9 @@ export async function handleListAvailableAgents(args: {
 }): Promise<object> {
   try {
     // Get all enabled agent targets from the unified agent profile service
-    let agentTargets = agentProfileService.getEnabledAgentTargets();
+    const agentTargets = agentProfileService.getEnabledAgentTargets();
 
-    // If capability filter is provided, filter by it
-    if (args.capability) {
-      agentTargets = agentTargets.filter(
-        (agent) => agent.capabilities?.includes(args.capability!) ?? false
-      );
-    }
+    // Note: capability filter parameter is deprecated and ignored
 
     // Get runtime status from acpService (for external agents)
     const agentStatuses = acpService.getAgents();
@@ -503,7 +497,6 @@ export async function handleListAvailableAgents(args: {
           name: agent.name,
           displayName: agent.displayName,
           description: agent.description || '',
-          capabilities: agent.capabilities || [],
           connectionType: agent.connection.type,
           status: 'ready' as const,
           error: undefined,
@@ -518,7 +511,6 @@ export async function handleListAvailableAgents(args: {
         name: agent.name,
         displayName: agent.displayName,
         description: agent.description || '',
-        capabilities: agent.capabilities || [],
         connectionType: agent.connection.type,
         status: runtime?.status || (agent.connection.type === 'remote' ? 'ready' : 'stopped'),
         error: runtime?.error,
@@ -535,15 +527,7 @@ export async function handleListAvailableAgents(args: {
       (a) => a.name !== 'internal' && !agentTargetNames.has(a.name)
     );
 
-    // Filter legacy ACP agents by capability if specified
-    let filteredLegacyAcpAgents = legacyAcpAgents;
-    if (args.capability) {
-      filteredLegacyAcpAgents = legacyAcpAgents.filter(
-        (agent) => agent.capabilities?.includes(args.capability!) ?? false
-      );
-    }
-
-    const formattedLegacyAcpAgents = filteredLegacyAcpAgents
+    const formattedLegacyAcpAgents = legacyAcpAgents
       .filter((agent) => agent.enabled !== false)
       .map((agent) => {
         const runtime = statusMap.get(agent.name);
@@ -551,7 +535,6 @@ export async function handleListAvailableAgents(args: {
           name: agent.name,
           displayName: agent.displayName,
           description: agent.description || '',
-          capabilities: agent.capabilities || [],
           connectionType: agent.connection.type,
           status: runtime?.status || 'stopped',
           error: runtime?.error,

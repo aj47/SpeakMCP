@@ -43,7 +43,6 @@ const mockConfig = {
       name: "test-agent",
       displayName: "Test Agent",
       description: "A test ACP agent",
-      capabilities: ["testing"],
       enabled: true,
       autoSpawn: false,
       connection: {

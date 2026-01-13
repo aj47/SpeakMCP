@@ -3231,7 +3231,7 @@ export const router = {
         description?: string
         systemPrompt?: string
         guidelines?: string
-        capabilities?: string[]
+
         properties?: Record<string, string>
         modelConfig?: import("@shared/types").ProfileModelConfig
         toolConfig?: import("@shared/types").AgentProfileToolConfig
@@ -3285,12 +3285,6 @@ export const router = {
     .action(async ({ input }) => {
       agentProfileService.setCurrentProfile(input.id)
       return { success: true }
-    }),
-
-  getAgentProfilesByCapability: t.procedure
-    .input<{ capability: string }>()
-    .action(async ({ input }) => {
-      return agentProfileService.getByCapability(input.capability)
     }),
 
   getAgentProfilesByRole: t.procedure

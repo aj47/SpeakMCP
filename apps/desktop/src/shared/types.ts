@@ -574,8 +574,6 @@ export type Persona = {
   systemPrompt: string
   /** Additional guidelines for the persona */
   guidelines: string
-  /** List of capabilities this persona has */
-  capabilities: string[]
   /**
    * Dynamic properties for this persona.
    * Exposed in the system prompt as "Property Name: Value" format.
@@ -701,8 +699,6 @@ export type AgentProfile = {
   systemPrompt?: string
   /** Additional guidelines for the agent */
   guidelines?: string
-  /** Capability tags for routing (e.g., "coding", "research", "data-analysis") */
-  capabilities?: string[]
   /** Dynamic properties exposed in system prompt */
   properties?: Record<string, string>
 
@@ -774,7 +770,6 @@ export function profileToAgentProfile(profile: Profile): AgentProfile {
     description: undefined,
     systemPrompt: profile.systemPrompt,
     guidelines: profile.guidelines,
-    capabilities: undefined,
     properties: undefined,
     modelConfig: profile.modelConfig,
     toolConfig: profile.mcpServerConfig ? {
@@ -813,7 +808,6 @@ export function personaToAgentProfile(persona: Persona): AgentProfile {
     description: persona.description,
     systemPrompt: persona.systemPrompt,
     guidelines: persona.guidelines,
-    capabilities: persona.capabilities,
     properties: persona.properties,
     modelConfig: persona.profileModelConfig,
     toolConfig: {
@@ -856,7 +850,6 @@ export function acpAgentConfigToAgentProfile(config: ACPAgentConfig): AgentProfi
     name: config.name,
     displayName: config.displayName,
     description: config.description,
-    capabilities: config.capabilities,
     connection: {
       type: connectionType,
       command: config.connection.command,
@@ -898,8 +891,6 @@ export interface ACPAgentConfig {
   displayName: string
   // Description of what the agent does
   description?: string
-  // Agent capabilities (e.g., "coding", "debugging", "refactoring")
-  capabilities?: string[]
   // Whether to auto-spawn this agent on app startup
   autoSpawn?: boolean
   // Whether this agent is enabled

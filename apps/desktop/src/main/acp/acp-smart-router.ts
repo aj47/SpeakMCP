@@ -24,7 +24,6 @@ type ACPAgentForDelegationPrompt = {
     name: ACPAgentDefinition['name']
     displayName?: ACPAgentDefinition['displayName'] | undefined
     description?: ACPAgentDefinition['description'] | undefined
-    capabilities: ACPAgentDefinition['capabilities']
   }
 }
 
@@ -38,8 +37,6 @@ export interface UnifiedAgent {
   displayName: string
   /** Agent description */
   description?: string
-  /** List of capabilities/skills */
-  capabilities: string[]
   /** Base URL for the agent */
   baseUrl?: string
 }
@@ -279,7 +276,6 @@ export class ACPSmartRouter {
       name: agent.definition.name,
       displayName: agent.definition.displayName || agent.definition.name,
       description: agent.definition.description,
-      capabilities: agent.definition.capabilities,
       baseUrl: agent.definition.baseUrl,
     }
   }
@@ -297,25 +293,11 @@ export class ACPSmartRouter {
    *
    * @param requiredCapabilities - List of capabilities needed for the task
    * @returns Array of unified agents sorted by match score (best first)
+   * @deprecated Capabilities are no longer used for routing - returns all agents
    */
   findMatchingUnifiedAgents(requiredCapabilities: string[]): UnifiedAgent[] {
-    const allAgents = this.getAllUnifiedAgents()
-
-    if (requiredCapabilities.length === 0) {
-      return allAgents
-    }
-
-    // Score each agent based on capability overlap
-    const scoredAgents = allAgents.map(agent => {
-      const matchScore = this.matchCapability(requiredCapabilities, agent.capabilities)
-      return { agent, matchScore }
-    })
-
-    // Sort by match score (highest first) and filter out zero matches
-    return scoredAgents
-      .filter(({ matchScore }) => matchScore > 0)
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .map(({ agent }) => agent)
+    // Capabilities removed - just return all agents
+    return this.getAllUnifiedAgents()
   }
 
   /**
@@ -358,200 +340,41 @@ export class ACPSmartRouter {
    *
    * @param requiredCapabilities - List of capabilities needed for the task
    * @returns Array of agent instances sorted by match score (best first)
+   * @deprecated Capabilities are no longer used for routing - returns all ready agents
    */
   findMatchingAgents(requiredCapabilities: string[]): ACPAgentInstance[] {
-    const readyAgents = acpRegistry.getReadyAgents()
-
-    if (requiredCapabilities.length === 0) {
-      return readyAgents
-    }
-
-    // Score each agent based on capability overlap
-    const scoredAgents = readyAgents.map(agent => {
-      const agentCapabilities = agent.definition.capabilities
-      const matchScore = this.matchCapability(requiredCapabilities, agentCapabilities)
-      return { agent, matchScore }
-    })
-
-    // Sort by match score (highest first) and filter out zero matches
-    return scoredAgents
-      .filter(({ matchScore }) => matchScore > 0)
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .map(({ agent }) => agent)
+    // Capabilities removed - just return all ready agents
+    return acpRegistry.getReadyAgents()
   }
 
   /**
    * Calculate overlap score between required capabilities and agent capabilities.
-   *
-   * @param taskCapabilities - Capabilities required by the task
-   * @param agentCapabilities - Capabilities the agent provides
-   * @returns Score from 0 (no match) to 1 (perfect match)
-   *
-   * @example
-   * ```typescript
-   * const score = acpSmartRouter.matchCapability(['research', 'writing'], ['research', 'analysis'])
-   * // Returns: 0.5 (1 out of 2 capabilities matched)
-   * ```
+   * @deprecated Capabilities are no longer used for routing
    */
-  matchCapability(taskCapabilities: string[], agentCapabilities: string[]): number {
-    if (taskCapabilities.length === 0) {
-      return agentCapabilities.length > 0 ? 0.5 : 0
-    }
-
-    const matchedCount = taskCapabilities.filter(tc =>
-      agentCapabilities.some(ac =>
-        ac.toLowerCase() === tc.toLowerCase() ||
-        ac.toLowerCase().includes(tc.toLowerCase()) ||
-        tc.toLowerCase().includes(ac.toLowerCase())
-      )
-    ).length
-
-    return matchedCount / taskCapabilities.length
+  matchCapability(taskCapabilities: string[], agentCapabilities?: string[]): number {
+    // Capabilities removed - always return 0.5 (neutral score)
+    return 0.5
   }
 
   /**
    * Suggest whether a task should be delegated to a sub-agent.
-   * Analyzes the task and finds matching agents to provide a routing decision.
-   *
-   * @param task - The task description to evaluate
-   * @returns Routing decision with suggested agents if delegation is recommended
-   *
-   * @example
-   * ```typescript
-   * const decision = acpSmartRouter.suggestDelegation("Research competitor pricing and create a summary report")
-   * if (decision.shouldDelegate) {
-   *   console.log(`Suggested agents: ${decision.suggestedAgents?.map(a => a.agentName).join(', ')}`)
-   * }
-   * ```
+   * @deprecated Capability-based routing removed - returns false (no delegation suggested)
    */
   suggestDelegation(task: string): RoutingDecision {
-    const analysis = this.analyzeTask(task)
-
-    // Simple tasks with no special capabilities don't need delegation
-    if (analysis.taskType === 'simple' && analysis.requiredCapabilities.length === 0) {
-      return {
-        shouldDelegate: false,
-        reason: 'Task is simple and does not require specialized capabilities.',
-      }
-    }
-
-    // Find matching agents
-    const matchingAgents = this.findMatchingAgents(analysis.requiredCapabilities)
-
-    // No matching agents available
-    if (matchingAgents.length === 0) {
-      if (analysis.requiredCapabilities.length > 0) {
-        return {
-          shouldDelegate: false,
-          reason: `No available agents match the required capabilities: ${analysis.requiredCapabilities.join(', ')}`,
-        }
-      }
-      return {
-        shouldDelegate: false,
-        reason: 'No specialized agents are currently available.',
-      }
-    }
-
-    // Build suggested agents with confidence scores
-    const suggestedAgents = matchingAgents.map(agent => {
-      const agentCapabilities = agent.definition.capabilities
-      const matchedCapabilities = analysis.requiredCapabilities.filter(rc =>
-        agentCapabilities.some(ac =>
-          ac.toLowerCase().includes(rc.toLowerCase()) ||
-          rc.toLowerCase().includes(ac.toLowerCase())
-        )
-      )
-
-      const confidence = this.matchCapability(analysis.requiredCapabilities, agentCapabilities)
-
-      return {
-        agentName: agent.definition.name,
-        confidence,
-        matchedCapabilities,
-        suggestedTask: task, // Could be refined to extract relevant portion
-      }
-    })
-
-    // Determine if delegation is worthwhile
-    const bestMatch = suggestedAgents[0]
-    const shouldDelegate = bestMatch.confidence >= 0.3 || analysis.taskType !== 'simple'
-
     return {
-      shouldDelegate,
-      reason: shouldDelegate
-        ? `Task matches ${bestMatch.matchedCapabilities.length} capabilities of available agents. ` +
-          `Best match: ${bestMatch.agentName} (${Math.round(bestMatch.confidence * 100)}% confidence).`
-        : 'Available agents do not sufficiently match the task requirements.',
-      suggestedAgents: shouldDelegate ? suggestedAgents : undefined,
+      shouldDelegate: false,
+      reason: 'Capability-based routing has been deprecated. Use LLM-based routing instead.',
     }
   }
 
   /**
    * Suggest delegation considering all available agents (unified routing).
-   * This is the preferred method for new code.
-   *
-   * @param task - The task description to evaluate
-   * @returns Routing decision with suggested agents
+   * @deprecated Capability-based routing removed - returns false (no delegation suggested)
    */
   suggestUnifiedDelegation(task: string): RoutingDecision {
-    const analysis = this.analyzeTask(task)
-
-    // Simple tasks with no special capabilities don't need delegation
-    if (analysis.taskType === 'simple' && analysis.requiredCapabilities.length === 0) {
-      return {
-        shouldDelegate: false,
-        reason: 'Task is simple and does not require specialized capabilities.',
-      }
-    }
-
-    // Find matching agents
-    const matchingAgents = this.findMatchingUnifiedAgents(analysis.requiredCapabilities)
-
-    // No matching agents available
-    if (matchingAgents.length === 0) {
-      if (analysis.requiredCapabilities.length > 0) {
-        return {
-          shouldDelegate: false,
-          reason: `No available agents match the required capabilities: ${analysis.requiredCapabilities.join(', ')}`,
-        }
-      }
-      return {
-        shouldDelegate: false,
-        reason: 'No specialized agents are currently available.',
-      }
-    }
-
-    // Build suggested agents with confidence scores
-    const suggestedAgents = matchingAgents.map(agent => {
-      const matchedCapabilities = analysis.requiredCapabilities.filter(rc =>
-        agent.capabilities.some(ac =>
-          ac.toLowerCase().includes(rc.toLowerCase()) ||
-          rc.toLowerCase().includes(ac.toLowerCase())
-        )
-      )
-
-      const confidence = this.matchCapability(analysis.requiredCapabilities, agent.capabilities)
-
-      return {
-        agentName: agent.name,
-        confidence,
-        matchedCapabilities,
-        suggestedTask: task,
-        baseUrl: agent.baseUrl,
-      }
-    })
-
-    // Determine if delegation is worthwhile
-    const bestMatch = suggestedAgents[0]
-    const shouldDelegate = bestMatch.confidence >= 0.3 || analysis.taskType !== 'simple'
-
     return {
-      shouldDelegate,
-      reason: shouldDelegate
-        ? `Task matches ${bestMatch.matchedCapabilities.length} capabilities of available agents. ` +
-          `Best match: ${bestMatch.agentName} (${Math.round(bestMatch.confidence * 100)}% confidence).`
-        : 'Available agents do not sufficiently match the task requirements.',
-      suggestedAgents: shouldDelegate ? suggestedAgents : undefined,
+      shouldDelegate: false,
+      reason: 'Capability-based routing has been deprecated. Use LLM-based routing instead.',
     }
   }
 
@@ -577,12 +400,7 @@ export class ACPSmartRouter {
 
     const agentDescriptions = availableAgents.map(agent => {
       const def = agent.definition
-      const capabilities = def.capabilities.length > 0
-        ? `Capabilities: ${def.capabilities.join(', ')}`
-        : 'General purpose agent'
-
-      return `- **${def.displayName || def.name}**: ${def.description || 'No description available'}
-  ${capabilities}`
+      return `- **${def.displayName || def.name}**: ${def.description || 'No description available'}`
     }).join('\n')
 
     return `

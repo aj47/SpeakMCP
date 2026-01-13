@@ -20,7 +20,6 @@ interface EditingProfile {
   description: string
   systemPrompt: string
   guidelines: string
-  capabilities: string[]
   connectionType: ConnectionType
   connectionCommand?: string
   connectionArgs?: string
@@ -38,7 +37,6 @@ const emptyProfile: EditingProfile = {
   description: "",
   systemPrompt: "",
   guidelines: "",
-  capabilities: [],
   connectionType: "internal",
   enabled: true,
   role: "delegation-target",
@@ -112,7 +110,6 @@ export function SettingsAgentPersonas() {
       description: profile.description ?? "",
       systemPrompt: profile.systemPrompt ?? "",
       guidelines: profile.guidelines ?? "",
-      capabilities: profile.capabilities ?? [],
       connectionType: profile.connection.type,
       connectionCommand: profile.connection.command,
       connectionArgs: profile.connection.args?.join(" "),
@@ -141,7 +138,6 @@ export function SettingsAgentPersonas() {
       description: editing.description || undefined,
       systemPrompt: editing.systemPrompt || undefined,
       guidelines: editing.guidelines || undefined,
-      capabilities: editing.capabilities.length > 0 ? editing.capabilities : undefined,
       connection,
       enabled: editing.enabled,
       role: editing.role,
@@ -204,9 +200,6 @@ export function SettingsAgentPersonas() {
           <CardContent>
             <div className="flex gap-2 flex-wrap">
               <Badge variant="outline">{profile.connection.type}</Badge>
-              {profile.capabilities?.map((cap) => (
-                <Badge key={cap} variant="secondary">{cap}</Badge>
-              ))}
             </div>
           </CardContent>
         </Card>
@@ -336,19 +329,6 @@ export function SettingsAgentPersonas() {
               </div>
             </>
           )}
-
-          <div className="space-y-2">
-            <Label htmlFor="capabilities">Capabilities (comma-separated)</Label>
-            <Input
-              id="capabilities"
-              value={editing.capabilities.join(", ")}
-              onChange={(e) => setEditing({
-                ...editing,
-                capabilities: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
-              })}
-              placeholder="e.g., coding, research, data-analysis"
-            />
-          </div>
 
           <div className="flex items-center gap-4">
             <div className="flex items-center space-x-2">

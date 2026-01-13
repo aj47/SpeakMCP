@@ -34,7 +34,6 @@ export function configToDefinition(config: ACPAgentConfig): ACPAgentDefinition {
     name: config.name,
     displayName: config.displayName ?? config.name,
     description: config.description ?? '',
-    capabilities: config.capabilities ?? [],
     baseUrl,
     spawnConfig,
   }
@@ -104,10 +103,11 @@ export class ACPRegistry {
    * Get agents that have a specific capability.
    * @param capability - The capability to filter by
    * @returns Array of agent instances with the specified capability
+   * @deprecated Capabilities are no longer used for routing
    */
   getAgentsByCapability(capability: string): ACPAgentInstance[] {
     return this.getAllAgents().filter(agent =>
-      agent.definition.capabilities.includes(capability)
+      agent.definition.capabilities?.includes(capability) ?? false
     )
   }
 

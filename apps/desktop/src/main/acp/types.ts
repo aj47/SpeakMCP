@@ -14,8 +14,8 @@ export interface ACPAgentDefinition {
   displayName: string;
   /** Description of what the agent does */
   description: string;
-  /** Capability tags like "research", "coding", "analysis" */
-  capabilities: string[];
+  /** Capability tags (optional - may come from ACP protocol handshake) */
+  capabilities?: string[];
   /** ACP server URL for this agent */
   baseUrl: string;
   /** Configuration for spawning the agent process */

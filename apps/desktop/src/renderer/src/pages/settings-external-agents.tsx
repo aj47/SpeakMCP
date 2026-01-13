@@ -17,7 +17,6 @@ interface EditingProfile {
   name: string
   displayName: string
   description: string
-  capabilities: string[]
   connectionType: ConnectionType
   connectionCommand?: string
   connectionArgs?: string
@@ -28,7 +27,7 @@ interface EditingProfile {
 }
 
 const emptyProfile: EditingProfile = {
-  name: "", displayName: "", description: "", capabilities: [],
+  name: "", displayName: "", description: "",
   connectionType: "acp", enabled: true, role: "external-agent",
 }
 
@@ -36,13 +35,11 @@ const AGENT_PRESETS: Record<string, Partial<EditingProfile>> = {
   auggie: {
     name: "auggie", displayName: "Auggie (Augment Code)",
     description: "Augment Code's AI coding assistant with native ACP support",
-    capabilities: ["coding", "debugging", "refactoring", "documentation"],
     connectionType: "acp", connectionCommand: "auggie", connectionArgs: "--acp", enabled: true,
   },
   "claude-code": {
     name: "claude-code", displayName: "Claude Code",
     description: "Anthropic's Claude for coding tasks via ACP adapter",
-    capabilities: ["coding", "debugging", "refactoring"],
     connectionType: "acp", connectionCommand: "claude-code-acp", connectionArgs: "", enabled: true,
   },
 }
@@ -71,7 +68,7 @@ export function SettingsExternalAgents() {
     setIsCreating(false)
     setEditing({
       id: profile.id, name: profile.name, displayName: profile.displayName,
-      description: profile.description ?? "", capabilities: profile.capabilities ?? [],
+      description: profile.description ?? "",
       connectionType: profile.connection.type, connectionCommand: profile.connection.command,
       connectionArgs: profile.connection.args?.join(" "), connectionBaseUrl: profile.connection.baseUrl,
       enabled: profile.enabled, role: "external-agent", autoSpawn: profile.autoSpawn,
@@ -86,7 +83,6 @@ export function SettingsExternalAgents() {
     const profileData = {
       name: editing.name, displayName: editing.displayName,
       description: editing.description || undefined,
-      capabilities: editing.capabilities.length > 0 ? editing.capabilities : undefined,
       connection, enabled: editing.enabled, role: "external-agent" as const,
       isUserProfile: false, isAgentTarget: true, autoSpawn: editing.autoSpawn,
     }
@@ -120,7 +116,6 @@ export function SettingsExternalAgents() {
           <CardContent>
             <div className="flex gap-2 flex-wrap">
               <Badge variant="outline">{profile.connection.type}</Badge>
-              {profile.capabilities?.map((cap) => <Badge key={cap} variant="secondary">{cap}</Badge>)}
             </div>
           </CardContent>
         </Card>
@@ -193,10 +188,7 @@ export function SettingsExternalAgents() {
               <Input id="baseUrl" value={editing.connectionBaseUrl ?? ""} onChange={(e) => setEditing({ ...editing, connectionBaseUrl: e.target.value })} placeholder="e.g., http://localhost:8000" />
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="capabilities">Capabilities (comma-separated)</Label>
-            <Input id="capabilities" value={editing.capabilities.join(", ")} onChange={(e) => setEditing({ ...editing, capabilities: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} placeholder="e.g., coding, research" />
-          </div>
+
           <div className="flex items-center gap-4">
             <div className="flex items-center space-x-2">
               <Switch id="enabled" checked={editing.enabled} onCheckedChange={(v) => setEditing({ ...editing, enabled: v })} />

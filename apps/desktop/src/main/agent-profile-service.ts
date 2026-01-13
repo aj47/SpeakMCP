@@ -71,7 +71,6 @@ const DEFAULT_PROFILES: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">[] =
     description: "Handles general tasks when no specialized agent matches",
     systemPrompt: "You are a helpful general assistant. Answer questions clearly and assist with a wide variety of tasks.",
     guidelines: "Be helpful, clear, and concise. If you don't know something, say so.",
-    capabilities: ["general", "chat", "help"],
     toolConfig: {
       enabledServers: [],
       disabledTools: [],
@@ -425,15 +424,6 @@ class AgentProfileService {
     }
   }
 
-  /**
-   * Get profiles by capability.
-   */
-  getByCapability(capability: string): AgentProfile[] {
-    return this.getAll().filter((p) =>
-      p.capabilities?.includes(capability) && p.enabled
-    )
-  }
-
   // ============================================================================
   // Conversation State (for stateful agents)
   // ============================================================================
@@ -540,7 +530,6 @@ class AgentProfileService {
       name: profile.name,
       displayName: profile.displayName,
       description: profile.description ?? "",
-      capabilities: profile.capabilities ?? [],
       baseUrl,
       spawnConfig,
     }

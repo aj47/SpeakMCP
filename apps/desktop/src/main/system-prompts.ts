@@ -143,7 +143,6 @@ export function getACPRoutingPromptAddition(): string {
       name: a.config.name,
       displayName: a.config.displayName,
       description: a.config.description || '',
-      capabilities: a.config.capabilities || [],
     },
     status: 'ready' as const,
     activeRuns: 0,
@@ -183,10 +182,7 @@ export function getAgentPersonasPromptAddition(): string {
 
   // Format personas in a compact, discoverable format similar to tools/skills
   const personasList = delegationTargets.map(p => {
-    const capabilities = p.capabilities?.length
-      ? ` [${p.capabilities.join(', ')}]`
-      : ''
-    return `- **${p.name}**: ${p.description || p.displayName || 'No description'}${capabilities}`
+    return `- **${p.name}**: ${p.description || p.displayName || 'No description'}`
   }).join('\n')
 
   return `

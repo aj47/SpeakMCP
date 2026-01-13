@@ -1795,7 +1795,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             {(progress.stepSummaries?.length ?? 0) > 0 && (
               <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/5" onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={() => setActiveTab("chat")}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("chat"); }}
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
                     activeTab === "chat"
@@ -1807,7 +1808,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   Chat
                 </button>
                 <button
-                  onClick={() => setActiveTab("summary")}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("summary"); }}
                   className={cn(
                     "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
                     activeTab === "summary"
@@ -2110,7 +2112,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       {(progress.stepSummaries?.length ?? 0) > 0 && (
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/5" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={(e) => { e.stopPropagation(); setActiveTab("chat"); }}
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("chat"); }}
             className={cn(
               "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
               activeTab === "chat"
@@ -2122,7 +2125,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             Chat
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); setActiveTab("summary"); }}
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("summary"); }}
             className={cn(
               "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
               activeTab === "summary"

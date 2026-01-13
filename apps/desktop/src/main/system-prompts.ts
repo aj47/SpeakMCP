@@ -22,7 +22,7 @@ export const BASE_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT
  * Format memories for injection into the system prompt
  * Prioritizes high importance memories and limits count for context budget
  */
-function formatMemoriesForPrompt(memories: AgentMemory[], maxMemories: number = 10): string {
+function formatMemoriesForPrompt(memories: AgentMemory[], maxMemories: number = 15): string {
   if (!memories || memories.length === 0) return ""
 
   // Sort by importance (critical > high > medium > low) then by recency

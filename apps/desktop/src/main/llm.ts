@@ -740,16 +740,27 @@ export async function processTranscriptWithAgentMode(
       .map(entry => entry.content.trim().toLowerCase())
       .slice(-3)
 
-    if (assistantResponses.length < 2) return false
+    // Allow detection with at least 1 previous response (detect loops earlier)
+    if (assistantResponses.length < 1) return false
 
     const currentTrimmed = currentResponse.trim().toLowerCase()
+    if (currentTrimmed.length === 0) return false
 
     // Check if current response is very similar to any of the last 2 responses
-    // Using a simple similarity check: if 80% of the content matches
     for (const prevResponse of assistantResponses.slice(-2)) {
-      if (prevResponse.length === 0 || currentTrimmed.length === 0) continue
+      if (prevResponse.length === 0) continue
 
-      // Simple similarity: check if responses are nearly identical
+      // For very short responses (< 5 words), require exact match to avoid false positives
+      // Single-word responses like "yes", "done", "ok" could be legitimately repeated
+      const wordCount = currentTrimmed.split(/\s+/).length
+      if (wordCount < 5) {
+        if (currentTrimmed === prevResponse) {
+          return true
+        }
+        continue
+      }
+
+      // For longer responses, use Jaccard similarity with 80% threshold
       const similarity = calculateSimilarity(currentTrimmed, prevResponse)
       if (similarity > 0.8) {
         return true
@@ -902,12 +913,21 @@ When in doubt, mark as COMPLETE - it's better to finish than loop indefinitely.
 Return ONLY JSON per schema.`,
     })
     messages.push({ role: "user", content: `Original request:\n${transcript}` })
+
+    // Track the last assistant content added to avoid duplicates
+    let lastAddedAssistantContent: string | null = null
+
     for (const entry of recent) {
       if (entry.role === "tool") {
         const text = (entry.content || "").trim()
-        if (text) messages.push({ role: "user", content: `Tool results:\n${text}` })
+        // Add placeholder for empty tool results so verifier knows tool was executed
+        if (text) {
+          messages.push({ role: "user", content: `[Tool executed] Results:\n${text}` })
+        } else {
+          messages.push({ role: "user", content: `[Tool executed] (no output returned)` })
+        }
       } else {
-        // Ensure non-empty content for assistant messages (Anthropic API requirement)
+        // Ensure non-empty content for all messages
         let content = entry.content
         if (entry.role === "assistant" && !content?.trim()) {
           if (entry.toolCalls && entry.toolCalls.length > 0) {
@@ -916,25 +936,35 @@ Return ONLY JSON per schema.`,
           } else {
             content = "[Processing...]"
           }
+        } else if (entry.role === "user" && !content?.trim()) {
+          // Skip empty user messages to avoid API errors
+          continue
         }
-        messages.push({ role: entry.role, content })
+        if (content?.trim()) {
+          messages.push({ role: entry.role, content })
+          if (entry.role === "assistant") {
+            lastAddedAssistantContent = content
+          }
+        }
       }
     }
-    if (finalAssistantText?.trim()) {
+
+    // Only add finalAssistantText if it's different from the last assistant message added
+    // This prevents duplicate messages in the verification context
+    if (finalAssistantText?.trim() && finalAssistantText.trim() !== lastAddedAssistantContent?.trim()) {
       messages.push({ role: "assistant", content: finalAssistantText })
+    }
+
+    // Build the JSON request with optional verification attempt note (combined into single message)
+    let jsonRequestContent = "Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary."
+    if (currentVerificationFailCount > 0) {
+      jsonRequestContent += `\n\nNote: This is verification attempt #${currentVerificationFailCount + 1}. If the task appears reasonably complete, please mark as complete to avoid infinite loops.`
     }
     messages.push({
       role: "user",
-      content:
-        "Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary.",
+      content: jsonRequestContent,
     })
-    // If we've already failed verification, tell the verifier
-    if (currentVerificationFailCount > 0) {
-      messages.push({
-        role: "user",
-        content: `Note: This is verification attempt #${currentVerificationFailCount + 1}. If the task appears reasonably complete, please mark as complete to avoid infinite loops.`
-      })
-    }
+
     return messages
   }
 
@@ -1766,15 +1796,38 @@ Return ONLY JSON per schema.`,
             })
           }
 
-          // Run verification to check if this is truly complete
-          const verification = await verifyCompletionWithFetch(
-            buildVerificationMessages(contentText, verificationFailCount),
-            config.mcpToolsProviderId
+          // Create a verification step for this path
+          const verifyStep = createProgressStep(
+            "thinking",
+            "Verifying completion",
+            "Checking that the user's request has been achieved",
+            "in_progress",
           )
+          progressSteps.push(verifyStep)
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
 
-          if (verification?.isComplete === true) {
+          // Use centralized verification handler (includes loop detection, retries, hard limits)
+          const result = await runVerificationAndHandleResult(
+            contentText,
+            verifyStep,
+            verificationFailCount,
+            {
+              checkRepeating: true,
+              nudgeForToolUsage: true, // Nudge for tool usage since we have tools available
+            }
+          )
+          verificationFailCount = result.newFailCount
+
+          if (!result.shouldContinue) {
+            // Verification passed or hard limit reached
             if (isDebugLLM()) {
-              logLLM("Verifier confirmed completion", { verification })
+              logLLM("Verifier confirmed completion", { isComplete: result.isComplete })
             }
             finalContent = contentText
             addMessage("assistant", contentText)
@@ -1788,20 +1841,18 @@ Return ONLY JSON per schema.`,
             })
             break
           } else {
-            // Verifier says not complete - agent intends to continue
+            // Verifier says not complete - continue agent loop
+            // The centralized handler already added the nudge message
             if (isDebugLLM()) {
               logLLM("Verifier says not complete - continuing agent loop", {
-                verification,
                 responsePreview: trimmedContent.substring(0, 100),
+                failCount: verificationFailCount,
               })
             }
             // Add the partial response to history and continue
             if (trimmedContent.length > 0) {
               addMessage("assistant", contentText)
             }
-            // Reset noOpCount since the agent is actively working (just not calling tools)
-            // noOpCount was already incremented at the top of the !hasToolCalls block,
-            // but this shouldn't count as a no-op since the verifier confirms ongoing work
             noOpCount = 0
             continue
           }
@@ -2433,7 +2484,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 
 	      // Optional verification before completing after tools
 	      // Track if we should skip post-verify summary (when agent is repeating itself or disabled)
-	      let skipPostVerifySummary2 = config.mcpFinalSummaryEnabled === false
+	      let skipPostVerifySummary = config.mcpFinalSummaryEnabled === false
 
 	      if (config.mcpVerifyCompletionEnabled) {
 	        const verifyStep = createProgressStep(
@@ -2455,11 +2506,14 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          finalContent,
 	          verifyStep,
 	          verificationFailCount,
-	          { checkRepeating: true }
+	          {
+	            checkRepeating: true,
+	            nudgeForToolUsage: true, // Consistent with other verification paths
+	          }
 	        )
 	        verificationFailCount = result.newFailCount
 	        if (result.skipPostVerifySummary) {
-	          skipPostVerifySummary2 = true
+	          skipPostVerifySummary = true
 	        }
 
 	        // Check if stop was requested during verification
@@ -2467,7 +2521,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          logLLM(`Agent session ${currentSessionId} stopped during verification`)
 	          const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
 	          const finalOutput = (finalContent || "") + killNote
-	          conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
+	          addMessage("assistant", finalOutput)
 	          emit({
 	            currentIteration: iteration,
 	            maxIterations,
@@ -2487,13 +2541,13 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	      }
 
         // Post-verify: produce a concise final summary for the user
-        if (!skipPostVerifySummary2) {
+        if (!skipPostVerifySummary) {
           try {
             const result = await generatePostVerifySummary(finalContent, true)
             if (result.stopped) {
               const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
               const finalOutput = (finalContent || "") + killNote
-              conversationHistory.push({ role: "assistant", content: finalOutput, timestamp: Date.now() })
+              addMessage("assistant", finalOutput)
               emit({
                 currentIteration: iteration,
                 maxIterations,
@@ -2506,20 +2560,20 @@ Please try alternative approaches, break down the task into smaller steps, or pr
             }
             finalContent = result.content
             if (finalContent.trim().length > 0) {
-              conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
+              addMessage("assistant", finalContent)
             }
           } catch (e) {
             // If summary generation fails, still add the existing finalContent to history
             // so the mobile client has the complete conversation
             if (finalContent.trim().length > 0) {
-              conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
+              addMessage("assistant", finalContent)
             }
           }
         } else {
           // Even when skipping post-verify summary, ensure the final content is in history
           // This prevents intermediate messages from disappearing on mobile
           if (finalContent.trim().length > 0) {
-            conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
+            addMessage("assistant", finalContent)
           }
         }
 
@@ -2677,15 +2731,15 @@ Please try alternative approaches, break down the task into smaller steps, or pr
       } else {
         // Agent provided sufficient content, use it as final content
         finalContent = assistantContent
-        conversationHistory.push({
-          role: "assistant",
-          content: finalContent,
-          timestamp: Date.now(),
-        })
+        // Note: Don't add message here - it will be added in the post-verify section
+        // to avoid duplicate messages (consistent with other verification paths)
       }
 
 
 	      // Optional verification before completing (general stop condition)
+	      // Track if we should skip post-verify summary
+	      let skipPostVerifySummary = config.mcpFinalSummaryEnabled === false
+
 	      if (config.mcpVerifyCompletionEnabled) {
 	        const verifyStep = createProgressStep(
 	          "thinking",
@@ -2706,13 +2760,40 @@ Please try alternative approaches, break down the task into smaller steps, or pr
 	          finalContent,
 	          verifyStep,
 	          verificationFailCount,
-	          { checkRepeating: true }
+	          {
+	            checkRepeating: true,
+	            nudgeForToolUsage: true, // Consistent with other verification paths
+	          }
 	        )
 	        verificationFailCount = result.newFailCount
+	        if (result.skipPostVerifySummary) {
+	          skipPostVerifySummary = true
+	        }
 
 	        if (result.shouldContinue) {
 	          noOpCount = 0
 	          continue
+	        }
+	      }
+
+	      // Post-verify: produce a concise final summary for the user (consistent with other paths)
+	      if (!skipPostVerifySummary) {
+	        try {
+	          const result = await generatePostVerifySummary(finalContent)
+	          finalContent = result.content
+	          if (finalContent.trim().length > 0) {
+	            addMessage("assistant", finalContent)
+	          }
+	        } catch (e) {
+	          // If summary generation fails, keep the existing finalContent
+	          if (finalContent.trim().length > 0) {
+	            addMessage("assistant", finalContent)
+	          }
+	        }
+	      } else {
+	        // Even when skipping post-verify summary, ensure the final content is in history
+	        if (finalContent.trim().length > 0) {
+	          addMessage("assistant", finalContent)
 	        }
 	      }
 

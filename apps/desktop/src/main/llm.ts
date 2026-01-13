@@ -1067,20 +1067,10 @@ Return ONLY JSON per schema.`,
     }
 
     // Verification failed - handle it
-    verifyStep.status = "error"
-    verifyStep.description = "Verification failed: continuing to address missing items"
-
-    const missing = (verification?.missingItems || [])
-      .filter((s: string) => s && s.trim())
-      .map((s: string) => `- ${s}`)
-      .join("\n")
-    const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
-    const userNudge = `${customNudgePrefix}\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
-    conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
-
     const newFailCount = currentFailCount + 1
 
     // Hard limit on verification failures to prevent infinite loops
+    // Check this BEFORE pushing the user nudge to avoid "please continue" message when force-completing
     if (newFailCount >= VERIFICATION_FAIL_LIMIT) {
       logLLM(`⚠️ Verification failed ${VERIFICATION_FAIL_LIMIT} times - forcing completion`)
       verifyStep.status = "completed"
@@ -1092,6 +1082,18 @@ Return ONLY JSON per schema.`,
         skipPostVerifySummary
       }
     }
+
+    // Only push the nudge message if we're going to continue (not at hard limit)
+    verifyStep.status = "error"
+    verifyStep.description = "Verification failed: continuing to address missing items"
+
+    const missing = (verification?.missingItems || [])
+      .filter((s: string) => s && s.trim())
+      .map((s: string) => `- ${s}`)
+      .join("\n")
+    const reason = verification?.reason ? `Reason: ${verification.reason}` : ""
+    const userNudge = `${customNudgePrefix}\n${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nPlease continue and complete the remaining work.`
+    conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
 
     // Optional: nudge for tool usage if no tools have been executed
     if (nudgeForToolUsage && newFailCount >= 2) {
@@ -1130,6 +1132,20 @@ Return ONLY JSON per schema.`,
   while (iteration < maxIterations) {
     iteration++
     currentIterationRef = iteration // Update ref for retry progress callback
+
+    // Filter out tools that have failed too many times - compute at start of iteration
+    // so the same filtered list is used consistently throughout (LLM call + heuristics)
+    const activeTools = uniqueAvailableTools.filter(tool => {
+      const failures = toolFailureCount.get(tool.name) || 0
+      return failures < MAX_TOOL_FAILURES
+    })
+
+    // Log when tools have been excluded
+    const excludedToolCount = uniqueAvailableTools.length - activeTools.length
+    if (excludedToolCount > 0 && iteration === 1) {
+      // Only log on first iteration after exclusion to avoid spam
+      logLLM(`ℹ️ ${excludedToolCount} tool(s) excluded due to repeated failures`)
+    }
 
     // Check for stop signal (session-specific or global)
     if (agentSessionStateManager.shouldStopSession(currentSessionId)) {
@@ -1320,12 +1336,7 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      // Filter out tools that have failed too many times
-      const activeTools = uniqueAvailableTools.filter(tool => {
-        const failures = toolFailureCount.get(tool.name) || 0
-        return failures < MAX_TOOL_FAILURES
-      })
-
+      // activeTools is already computed at the start of each iteration
       llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, activeTools)
 
       // Clear streaming state after response is complete
@@ -1592,7 +1603,8 @@ Return ONLY JSON per schema.`,
       }
 
       // Check if there are actionable tools for this request
-      const hasActionableTools = uniqueAvailableTools.length > 0
+      // Use activeTools (filtered for failures) to avoid nudging for tools that are excluded
+      const hasActionableTools = activeTools.length > 0
       const hasToolResultsSoFar = toolsExecutedInSession || conversationHistory.some((e) => e.role === "tool")
 
       // Check if the response contains substantive content (a real answer, not a placeholder)
@@ -1731,7 +1743,8 @@ Return ONLY JSON per schema.`,
       noOpCount++
 
       // Check if this is an actionable request that should have executed tools
-      const isActionableRequest = uniqueAvailableTools.length > 0
+      // Use activeTools (filtered for failures) to avoid nudging for excluded tools
+      const isActionableRequest = activeTools.length > 0
       const contentText = llmResponse.content || ""
 
       // Check if tools have already been executed for THIS user prompt (current turn)
@@ -2278,15 +2291,33 @@ Return ONLY JSON per schema.`,
       const hasUnrecoverableError = errorAnalysis.errorTypes?.some(
         type => type === "permissions" || type === "authentication"
       )
-      if (hasUnrecoverableError && toolFailureCount.size > 0) {
-        const failedToolNames = Array.from(toolFailureCount.keys()).join(", ")
-        logLLM(`⚠️ Unrecoverable errors detected for tools: ${failedToolNames}`)
-        // Add note to conversation so LLM knows to wrap up
-        conversationHistory.push({
-          role: "user",
-          content: `Note: Some tools (${failedToolNames}) have unrecoverable errors (permissions/authentication). Please complete what you can or explain what cannot be done.`,
-          timestamp: Date.now()
-        })
+      if (hasUnrecoverableError) {
+        // Build list of tools that failed with unrecoverable errors in THIS batch only
+        // (not all historical failures from toolFailureCount, which could mislead the model)
+        const currentUnrecoverableTools: string[] = []
+        for (let i = 0; i < toolResults.length; i++) {
+          const result = toolResults[i]
+          if (result.isError) {
+            const errorText = result.content.map((c) => c.text).join(" ").toLowerCase()
+            if (errorText.includes("permission") || errorText.includes("access") ||
+                errorText.includes("denied") || errorText.includes("authentication") ||
+                errorText.includes("unauthorized") || errorText.includes("forbidden")) {
+              const toolName = toolCallsArray[i]?.name || "unknown"
+              currentUnrecoverableTools.push(toolName)
+            }
+          }
+        }
+
+        if (currentUnrecoverableTools.length > 0) {
+          const failedToolNames = currentUnrecoverableTools.join(", ")
+          logLLM(`⚠️ Unrecoverable errors detected for tools: ${failedToolNames}`)
+          // Add note to conversation so LLM knows to wrap up
+          conversationHistory.push({
+            role: "user",
+            content: `Note: Some tools (${failedToolNames}) have unrecoverable errors (permissions/authentication). Please complete what you can or explain what cannot be done.`,
+            timestamp: Date.now()
+          })
+        }
       }
 
       // Add detailed error summary to conversation history for LLM context
@@ -2706,7 +2737,8 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         // If there are actionable tools and we haven't executed any tools yet,
         // skip verification and force the model to produce structured toolCalls instead of intent-only text.
         const hasAnyToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
-        const hasActionableTools = uniqueAvailableTools.length > 0
+        // Use activeTools (filtered for failures) to avoid nudging for excluded tools
+        const hasActionableTools = activeTools.length > 0
         if (hasActionableTools && !hasAnyToolResultsSoFar) {
           conversationHistory.push({
             role: "user",

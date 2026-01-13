@@ -211,22 +211,22 @@ export class SettingsApiClient {
 
   // Conversation Sync Management
   async getConversations(): Promise<{ conversations: ServerConversation[] }> {
-    return this.request<{ conversations: ServerConversation[] }>('/v1/conversations');
+    return this.request<{ conversations: ServerConversation[] }>('/conversations');
   }
 
   async getConversation(id: string): Promise<ServerConversationFull> {
-    return this.request<ServerConversationFull>(`/v1/conversations/${encodeURIComponent(id)}`);
+    return this.request<ServerConversationFull>(`/conversations/${encodeURIComponent(id)}`);
   }
 
   async createConversation(data: CreateConversationRequest): Promise<ServerConversationFull> {
-    return this.request<ServerConversationFull>('/v1/conversations', {
+    return this.request<ServerConversationFull>('/conversations', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async updateConversation(id: string, data: UpdateConversationRequest): Promise<ServerConversationFull> {
-    return this.request<ServerConversationFull>(`/v1/conversations/${encodeURIComponent(id)}`, {
+    return this.request<ServerConversationFull>(`/conversations/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });

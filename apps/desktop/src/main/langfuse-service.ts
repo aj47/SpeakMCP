@@ -1,21 +1,28 @@
 /**
  * Langfuse Service
  * Provides observability and monitoring for LLM calls and agent operations.
- * 
+ *
  * Key features:
  * - LLM call tracing with token counts and costs
  * - Agent session traces
  * - MCP tool call instrumentation
  * - Optional/configurable (won't block functionality if not configured)
+ * - Langfuse is an OPTIONAL dependency - this module handles its absence gracefully
  */
 
-import { Langfuse } from "langfuse"
-import type { LangfuseTraceClient, LangfuseSpanClient, LangfuseGenerationClient } from "langfuse"
 import { configStore } from "./config"
 import { isDebugLLM, logLLM } from "./debug"
+import {
+  Langfuse,
+  isInstalled,
+  type LangfuseInstance,
+  type LangfuseTraceClient,
+  type LangfuseSpanClient,
+  type LangfuseGenerationClient,
+} from "./langfuse-loader"
 
 // Singleton Langfuse instance
-let langfuseInstance: Langfuse | null = null
+let langfuseInstance: LangfuseInstance | null = null
 
 // Active traces and spans for linking
 const activeTraces = new Map<string, LangfuseTraceClient>()
@@ -23,9 +30,21 @@ const activeSpans = new Map<string, LangfuseSpanClient>()
 const activeGenerations = new Map<string, LangfuseGenerationClient>()
 
 /**
- * Check if Langfuse is enabled and configured
+ * Check if Langfuse package is installed and available
+ */
+export function isLangfuseInstalled(): boolean {
+  return isInstalled
+}
+
+/**
+ * Check if Langfuse is enabled and configured.
+ * Returns false if:
+ * - langfuse package is not installed
+ * - langfuseEnabled is false in config
+ * - API keys are not configured
  */
 export function isLangfuseEnabled(): boolean {
+  if (!isInstalled) return false
   const config = configStore.get()
   return !!(config.langfuseEnabled && config.langfuseSecretKey && config.langfusePublicKey)
 }
@@ -33,8 +52,8 @@ export function isLangfuseEnabled(): boolean {
 /**
  * Get or create the Langfuse instance
  */
-export function getLangfuse(): Langfuse | null {
-  if (!isLangfuseEnabled()) {
+export function getLangfuse(): LangfuseInstance | null {
+  if (!isLangfuseEnabled() || !Langfuse) {
     return null
   }
 

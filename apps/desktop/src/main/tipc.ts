@@ -1769,6 +1769,16 @@ export const router = {
       }
     }),
 
+  // Check if langfuse package is installed (for UI to show install instructions)
+  isLangfuseInstalled: t.procedure.action(async () => {
+    try {
+      const { isLangfuseInstalled } = await import("./langfuse-service")
+      return isLangfuseInstalled()
+    } catch {
+      return false
+    }
+  }),
+
   recordEvent: t.procedure
     .input<{ type: "start" | "end"; mcpMode?: boolean }>()
     .action(async ({ input }) => {

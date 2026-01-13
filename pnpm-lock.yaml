@@ -286,6 +286,28 @@ importers:
         specifier: ~5.9.2
         version: 5.9.3
 
+  packages/mcp-filesystem:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.0.0
+        version: 1.25.1(hono@4.11.1)(zod@3.25.76)
+      minimatch:
+        specifier: ^10.0.0
+        version: 10.1.1
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.27
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   packages/mcp-whatsapp:
     dependencies:
       '@modelcontextprotocol/sdk':

@@ -56,6 +56,11 @@ module.exports = {
         filter: ["**/*"]
       },
       {
+        from: "../../packages/mcp-filesystem/dist",
+        to: "mcp-filesystem/dist",
+        filter: ["**/*"]
+      },
+      {
         from: "resources/bundled-skills",
         to: "bundled-skills",
         filter: ["**/*"]
@@ -79,6 +84,11 @@ module.exports = {
       {
         from: "../../packages/mcp-whatsapp/dist",
         to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "../../packages/mcp-filesystem/dist",
+        to: "mcp-filesystem/dist",
         filter: ["**/*"]
       },
       {
@@ -240,6 +250,11 @@ module.exports = {
       {
         from: "../../packages/mcp-whatsapp/dist",
         to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "../../packages/mcp-filesystem/dist",
+        to: "mcp-filesystem/dist",
         filter: ["**/*"]
       },
       {

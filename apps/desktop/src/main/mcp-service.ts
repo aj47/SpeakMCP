@@ -84,8 +84,8 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
   // to reduce accidental exposure of unrelated (potentially sensitive) app data
   const filesystemServerConfig: MCPServerConfig = {
     transport: "stdio" as MCPTransportType,
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", skillsFolder],
+    command: "node",
+    args: [getInternalFilesystemServerPath(), skillsFolder],
   }
 
   const newMcpConfig: MCPConfig = {
@@ -147,11 +147,26 @@ export function getInternalWhatsAppServerPath(): string {
 }
 
 /**
+ * Get path for the internal filesystem MCP server
+ */
+export function getInternalFilesystemServerPath(): string {
+  if (process.env.NODE_ENV === "development" || process.env.ELECTRON_RENDERER_URL) {
+    // Development: use paths relative to the monorepo root
+    const monorepoRoot = path.resolve(app.getAppPath(), "../..")
+    return path.join(monorepoRoot, "packages/mcp-filesystem/dist/index.js")
+  } else {
+    // Production: use paths relative to app resources (bundled in extraResources)
+    const resourcesDir = process.resourcesPath || app.getAppPath()
+    return path.join(resourcesDir, "mcp-filesystem/dist/index.js")
+  }
+}
+
+/**
  * Check if a server is an internally-managed server
  * Internal servers have their paths managed by SpeakMCP, not user config
  */
 export function isInternalServer(serverName: string): boolean {
-  return serverName === WHATSAPP_SERVER_NAME
+  return serverName === WHATSAPP_SERVER_NAME || serverName === DEFAULT_FILESYSTEM_SERVER_NAME
 }
 
 export interface MCPTool {

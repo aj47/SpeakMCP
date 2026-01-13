@@ -468,6 +468,9 @@ ${src}`
  * This allows the LLM to know what work was accomplished even if messages were dropped
  */
 function buildContextFromSummaries(sessionId: string): string | null {
+  const MAX_ACTION_SUMMARY_LENGTH = 150
+  const MAX_TOTAL_SUMMARY_LENGTH = 2000
+
   const summaries = summarizationService.getSummaries(sessionId)
   if (summaries.length === 0) return null
 
@@ -479,10 +482,22 @@ function buildContextFromSummaries(sessionId: string): string | null {
 
   const lines = toInclude.map(s => {
     const status = s.importance === "critical" ? "⚠️" : "✓"
-    return `${status} Step ${s.stepNumber}: ${s.actionSummary}`
+    // Truncate actionSummary if it exceeds max length
+    const truncatedSummary =
+      s.actionSummary.length > MAX_ACTION_SUMMARY_LENGTH
+        ? s.actionSummary.slice(0, MAX_ACTION_SUMMARY_LENGTH - 3) + "..."
+        : s.actionSummary
+    return `${status} Step ${s.stepNumber}: ${truncatedSummary}`
   })
 
-  return `[Session Progress Summary]\n${lines.join("\n")}`
+  const result = `[Session Progress Summary]\n${lines.join("\n")}`
+
+  // Truncate total summary if it exceeds max length
+  if (result.length > MAX_TOTAL_SUMMARY_LENGTH) {
+    return result.slice(0, MAX_TOTAL_SUMMARY_LENGTH - 3) + "..."
+  }
+
+  return result
 }
 
 /**
@@ -537,6 +552,7 @@ export interface ShrinkOptions {
   summarizeCharThreshold?: number // default 2000
   sessionId?: string // optional session ID for abort control
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
+  completedWorkSummary?: string // optional completed work summary to inject when context is shrunk
 }
 
 export interface ShrinkResult {
@@ -706,6 +722,16 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
         tokens = estimateTokensFromMessages(messages)
         if (isDebugLLM()) logLLM("[Context Budget] Injected session progress summary from summarization service")
       }
+    }
+  }
+
+  // Inject completed work summary if provided
+  if (opts.completedWorkSummary && opts.completedWorkSummary.trim()) {
+    const firstUserIdx = messages.findIndex(m => m.role === "user")
+    if (firstUserIdx >= 0 && firstUserIdx < messages.length - 1) {
+      messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: opts.completedWorkSummary })
+      tokens = estimateTokensFromMessages(messages)
+      if (isDebugLLM()) logLLM("[Context Budget] Injected completed work summary")
     }
   }
 

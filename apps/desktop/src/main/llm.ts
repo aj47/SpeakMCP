@@ -1054,6 +1054,7 @@ export async function processTranscriptWithAgentMode(
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
+      completedWorkSummary: getCompletedWorkSummary(),
       onSummarizationProgress: (current, total) => {
         const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
         if (lastThinkingStep) {
@@ -1505,6 +1506,7 @@ Return ONLY JSON per schema.`,
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
+      completedWorkSummary: getCompletedWorkSummary(),
       onSummarizationProgress: (current, total, message) => {
         // Update thinking step with summarization progress
         thinkingStep.description = `Summarizing context (${current}/${total})`
@@ -1644,12 +1646,14 @@ Return ONLY JSON per schema.`,
           })
           thinkingStep.status = "error"
           thinkingStep.description = "Empty response limit exceeded"
+          const emptyResponseFinalContent = "I encountered repeated empty responses and couldn't complete the task. Please try again."
+          conversationHistory.push({ role: "assistant", content: emptyResponseFinalContent, timestamp: Date.now() })
           emit({
             currentIteration: iteration,
             maxIterations,
             steps: progressSteps.slice(-3),
             isComplete: true,
-            finalContent: "I encountered repeated empty responses and couldn't complete the task. Please try again.",
+            finalContent: emptyResponseFinalContent,
             conversationHistory: formatConversationForProgress(conversationHistory),
           })
           break
@@ -1708,12 +1712,14 @@ Return ONLY JSON per schema.`,
         logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response limit exceeded"
+        const emptyResponseFinalContent = "I encountered repeated empty responses and couldn't complete the task. Please try again."
+        conversationHistory.push({ role: "assistant", content: emptyResponseFinalContent, timestamp: Date.now() })
         emit({
           currentIteration: iteration,
           maxIterations,
           steps: progressSteps.slice(-3),
           isComplete: true,
-          finalContent: "I encountered repeated empty responses and couldn't complete the task. Please try again.",
+          finalContent: emptyResponseFinalContent,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
         break
@@ -2805,6 +2811,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: undefined,
           isAgentMode: true,
           sessionId: currentSessionId,
+          completedWorkSummary: getCompletedWorkSummary(),
           onSummarizationProgress: (current, total) => {
             summaryStep.description = `Summarizing for summary generation (${current}/${total})`
             emit({
@@ -3054,6 +3061,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           relevantTools: undefined,
           isAgentMode: true,
           sessionId: currentSessionId,
+          completedWorkSummary: getCompletedWorkSummary(),
           onSummarizationProgress: (current, total) => {
             summaryStep.description = `Summarizing for summary generation (${current}/${total})`
             emit({

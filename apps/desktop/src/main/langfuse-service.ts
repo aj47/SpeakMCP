@@ -12,23 +12,17 @@
 
 import { configStore } from "./config"
 import { isDebugLLM, logLLM } from "./debug"
+import {
+  Langfuse,
+  isInstalled,
+  type LangfuseInstance,
+  type LangfuseTraceClient,
+  type LangfuseSpanClient,
+  type LangfuseGenerationClient,
+} from "./langfuse-loader"
 
-// Langfuse types - we use 'any' since langfuse is optional and types may not exist
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LangfuseClass = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LangfuseTraceClient = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LangfuseSpanClient = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LangfuseGenerationClient = any
-
-// Cached Langfuse class - null if not loaded, undefined if not yet checked
-let LangfuseClass: LangfuseClass | null = undefined
 // Singleton Langfuse instance
-let langfuseInstance: LangfuseClass | null = null
-// Track whether we've attempted to load langfuse and it's unavailable
-let langfuseUnavailable = false
+let langfuseInstance: LangfuseInstance | null = null
 
 // Active traces and spans for linking
 const activeTraces = new Map<string, LangfuseTraceClient>()
@@ -36,49 +30,10 @@ const activeSpans = new Map<string, LangfuseSpanClient>()
 const activeGenerations = new Map<string, LangfuseGenerationClient>()
 
 /**
- * Attempt to load the Langfuse module dynamically.
- * Returns true if the module is available, false otherwise.
- */
-function loadLangfuseModule(): boolean {
-  if (langfuseUnavailable) return false
-  if (LangfuseClass !== undefined && LangfuseClass !== null) return true
-
-  try {
-    // Dynamic require to handle optional dependency
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const langfuseModule = require("langfuse")
-    LangfuseClass = langfuseModule.Langfuse
-
-    // Verify that the Langfuse export is actually defined
-    if (!LangfuseClass) {
-      LangfuseClass = null
-      langfuseUnavailable = true
-      if (isDebugLLM()) {
-        logLLM("[Langfuse] Module loaded but Langfuse export is missing - observability features disabled")
-      }
-      return false
-    }
-
-    if (isDebugLLM()) {
-      logLLM("[Langfuse] Module loaded successfully")
-    }
-    return true
-  } catch (_error) {
-    // Langfuse package is not installed - this is expected
-    LangfuseClass = null
-    langfuseUnavailable = true
-    if (isDebugLLM()) {
-      logLLM("[Langfuse] Module not installed - observability features disabled")
-    }
-    return false
-  }
-}
-
-/**
  * Check if Langfuse package is installed and available
  */
 export function isLangfuseInstalled(): boolean {
-  return loadLangfuseModule()
+  return isInstalled
 }
 
 /**
@@ -89,10 +44,7 @@ export function isLangfuseInstalled(): boolean {
  * - API keys are not configured
  */
 export function isLangfuseEnabled(): boolean {
-  // First check if the package is installed
-  if (!loadLangfuseModule()) {
-    return false
-  }
+  if (!isInstalled) return false
   const config = configStore.get()
   return !!(config.langfuseEnabled && config.langfuseSecretKey && config.langfusePublicKey)
 }
@@ -100,8 +52,8 @@ export function isLangfuseEnabled(): boolean {
 /**
  * Get or create the Langfuse instance
  */
-export function getLangfuse(): LangfuseClass | null {
-  if (!isLangfuseEnabled()) {
+export function getLangfuse(): LangfuseInstance | null {
+  if (!isLangfuseEnabled() || !Langfuse) {
     return null
   }
 
@@ -109,15 +61,10 @@ export function getLangfuse(): LangfuseClass | null {
     return langfuseInstance
   }
 
-  // Double-check module is loaded (should already be from isLangfuseEnabled)
-  if (!LangfuseClass) {
-    return null
-  }
-
   const config = configStore.get()
 
   try {
-    langfuseInstance = new LangfuseClass({
+    langfuseInstance = new Langfuse({
       secretKey: config.langfuseSecretKey!,
       publicKey: config.langfusePublicKey!,
       baseUrl: config.langfuseBaseUrl || "https://cloud.langfuse.com",

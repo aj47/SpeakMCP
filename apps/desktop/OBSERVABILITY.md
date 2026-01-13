@@ -8,7 +8,7 @@ SpeakMCP integrates with [Langfuse](https://langfuse.com/) to provide comprehens
 
 ### Installation (Optional)
 
-Langfuse is not installed by default. To enable Langfuse observability features:
+Langfuse is included as an optional dependency. While it may be installed automatically, the app works perfectly without it. To enable Langfuse observability features:
 
 ```bash
 pnpm add langfuse

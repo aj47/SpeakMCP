@@ -48,6 +48,17 @@ function loadLangfuseModule(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const langfuseModule = require("langfuse")
     LangfuseClass = langfuseModule.Langfuse
+
+    // Verify that the Langfuse export is actually defined
+    if (!LangfuseClass) {
+      LangfuseClass = null
+      langfuseUnavailable = true
+      if (isDebugLLM()) {
+        logLLM("[Langfuse] Module loaded but Langfuse export is missing - observability features disabled")
+      }
+      return false
+    }
+
     if (isDebugLLM()) {
       logLLM("[Langfuse] Module loaded successfully")
     }

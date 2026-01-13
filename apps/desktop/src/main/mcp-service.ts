@@ -68,13 +68,23 @@ function ensureDefaultFilesystemServer(config: Config): { config: Config; change
         typeof arg === "string" && arg.includes("@modelcontextprotocol/server-filesystem")
       )
 
-    if (!needsMigration) {
+    // Check if existing node config has stale script path (dev/prod mismatch)
+    const expectedScriptPath = getInternalFilesystemServerPath()
+    const currentScriptPath = Array.isArray(existingConfig.args) ? existingConfig.args[0] : null
+    const hasStaleScriptPath = existingConfig.command === "node" &&
+      currentScriptPath !== expectedScriptPath
+
+    if (!needsMigration && !hasStaleScriptPath) {
       return { config, changed: false }
     }
 
-    // Migrate from old npx command to bundled server
+    // Log what kind of update we're doing
     if (isDebugTools()) {
-      logTools(`Migrating ${DEFAULT_FILESYSTEM_SERVER_NAME} from npx to bundled server`)
+      if (needsMigration) {
+        logTools(`Migrating ${DEFAULT_FILESYSTEM_SERVER_NAME} from npx to bundled server`)
+      } else if (hasStaleScriptPath) {
+        logTools(`Updating ${DEFAULT_FILESYSTEM_SERVER_NAME} script path from ${currentScriptPath} to ${expectedScriptPath}`)
+      }
     }
 
     // Get the skills folder path (preserve from existing args or use default)

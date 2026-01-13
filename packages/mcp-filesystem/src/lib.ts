@@ -33,7 +33,8 @@ export function normalizePath(p: string): string {
 export function expandHome(p: string): string {
   if (p.startsWith("~/") || p === "~") {
     const home = process.env.HOME || process.env.USERPROFILE || ""
-    return path.join(home, p.slice(1))
+    // For "~" return home, for "~/foo" slice off "~/" (2 chars) and join
+    return p === "~" ? home : path.join(home, p.slice(2))
   }
   return p
 }

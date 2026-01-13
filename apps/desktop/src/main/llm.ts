@@ -220,6 +220,7 @@ export async function processTranscriptWithTools(
     undefined,
     config.mcpCustomSystemPrompt,
     skillsInstructions,
+    undefined, // personaProperties - not used in non-agent mode
     relevantMemories,
   )
 
@@ -438,6 +439,9 @@ export async function processTranscriptWithAgentMode(
   // Create session state for this agent run with profile snapshot for isolation
   // Note: createSession is a no-op if the session already exists, so this is safe for resumed sessions
   agentSessionStateManager.createSession(currentSessionId, effectiveProfileSnapshot)
+
+  // Track step summaries for dual-model mode
+  const stepSummaries: import("../shared/types").AgentStepSummary[] = []
 
   // Create Langfuse trace for this agent session if enabled
   // - traceId: unique ID for this trace (our agent session ID)
@@ -735,6 +739,10 @@ export async function processTranscriptWithAgentMode(
   // even if the global profile is changed during session execution
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
+  // Get skills instructions from profile snapshot (typically set by personas)
+  const personaSkillsInstructions = effectiveProfileSnapshot?.skillsInstructions
+  // Get persona properties from profile snapshot (dynamic key-value pairs)
+  const personaProperties = effectiveProfileSnapshot?.personaProperties
 
   // Load enabled agent skills instructions for the current profile
   // Skills provide specialized instructions that improve AI performance on specific tasks
@@ -742,8 +750,11 @@ export async function processTranscriptWithAgentMode(
   const { skillsService } = await import("./skills-service")
   const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
   logLLM(`[processTranscriptWithAgentMode] Loading skills for session ${currentSessionId}. enabledSkillIds: [${enabledSkillIds.join(', ')}]`)
-  const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
-  logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
+  const profileSkillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+  logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${profileSkillsInstructions ? `${profileSkillsInstructions.length} chars` : 'none'}`)
+
+  // Combine persona-level and profile-level skills instructions
+  const skillsInstructions = [personaSkillsInstructions, profileSkillsInstructions].filter(Boolean).join('\n\n') || undefined
 
   // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
@@ -774,6 +785,7 @@ export async function processTranscriptWithAgentMode(
     undefined, // relevantTools removed - let LLM decide tool relevance
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
     skillsInstructions, // agent skills instructions
+    personaProperties, // dynamic persona properties
     relevantMemories, // memories from previous sessions
   )
 
@@ -973,6 +985,7 @@ export async function processTranscriptWithAgentMode(
       undefined, // relevantTools removed
       customSystemPrompt, // Use session-bound custom system prompt
       skillsInstructions, // agent skills instructions
+      personaProperties, // dynamic persona properties
       relevantMemories, // memories from previous sessions
     )
 
@@ -2655,6 +2668,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
+          personaProperties, // dynamic persona properties
           relevantMemories, // memories from previous sessions
         )
 
@@ -2904,6 +2918,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
+          personaProperties, // dynamic persona properties
           relevantMemories, // memories from previous sessions
         )
 

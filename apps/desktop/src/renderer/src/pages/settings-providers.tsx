@@ -18,7 +18,7 @@ import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
 import { PresetModelSelector } from "@renderer/components/preset-model-selector"
 import { ProfileBadgeCompact } from "@renderer/components/profile-badge"
-import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight, BookOpen } from "lucide-react"
+import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight, Brain, Zap, BookOpen, Settings2 } from "lucide-react"
 
 import {
   STT_PROVIDERS,
@@ -875,7 +875,224 @@ export function Component() {
           </div>
         )}
 
+        {/* Dual-Model Agent Mode Section */}
+        <div className={`rounded-lg border ${dualModelEnabled ? 'border-primary/30 bg-primary/5' : ''}`}>
+          <button
+            type="button"
+            className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+            onClick={() => saveConfig({ dualModelSectionCollapsed: !config.dualModelSectionCollapsed })}
+            aria-expanded={!config.dualModelSectionCollapsed}
+            aria-controls="dual-model-content"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              {config.dualModelSectionCollapsed ? (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+              <Brain className="h-4 w-4" />
+              Dual-Model Summarization
+              {dualModelEnabled && (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              )}
+            </span>
+          </button>
+          {!config.dualModelSectionCollapsed && (
+            <div id="dual-model-content" className="divide-y border-t">
+              <div className="px-3 py-2 bg-muted/30 border-b">
+                <p className="text-xs text-muted-foreground">
+                  Use a weaker model to summarize agent steps for the UI and memory storage.
+                </p>
+              </div>
 
+              <Control
+                label={
+                  <ControlLabel
+                    label="Enable Summarization"
+                    tooltip="When enabled, a separate model will generate summaries of each agent step"
+                  />
+                }
+                className="px-3"
+              >
+                <Switch
+                  checked={dualModelEnabled}
+                  onCheckedChange={(checked) => saveConfig({ dualModelEnabled: checked })}
+                />
+              </Control>
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Inject Memories"
+                    tooltip="Include saved memories in agent context. Works independently of summarization."
+                  />
+                }
+                className="px-3"
+              >
+                <Switch
+                  checked={config.dualModelInjectMemories ?? false}
+                  onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
+                />
+              </Control>
+
+              {dualModelEnabled && (
+                <>
+                  {/* Strong Model Configuration */}
+                  <div className="px-3 py-3 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Zap className="h-4 w-4 text-yellow-500" />
+                      Strong Model (Planning)
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Primary model for reasoning and tool calls. Uses current agent model if not set.
+                    </p>
+                    <div className="space-y-2">
+                      <Control
+                        label={<ControlLabel label="Preset" tooltip="Select which model preset to use" />}
+                      >
+                        <Select
+                          value={strongPresetId}
+                          onValueChange={(value) => saveConfig({ dualModelStrongPresetId: value })}
+
+                        >
+                          <SelectTrigger className="w-[200px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allPresets.map((preset) => (
+                              <SelectItem key={preset.id} value={preset.id}>
+                                {preset.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Control>
+                      {strongPreset && (
+                        <Control
+                          label={<ControlLabel label="Model" tooltip="Select the model" />}
+                        >
+                          <PresetModelSelector
+                            presetId={strongPresetId}
+                            baseUrl={strongPreset.baseUrl}
+                            apiKey={strongPreset.apiKey}
+                            value={config.dualModelStrongModelName || ""}
+                            onValueChange={(value) => saveConfig({ dualModelStrongModelName: value })}
+                            label="Strong Model"
+                            placeholder="Select model..."
+                          />
+                        </Control>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Weak Model Configuration */}
+                  <div className="px-3 py-3 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <BookOpen className="h-4 w-4 text-blue-500" />
+                      Weak Model (Summarization)
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Faster, cheaper model for summarizing agent steps.
+                    </p>
+                    <div className="space-y-2">
+                      <Control
+                        label={<ControlLabel label="Preset" tooltip="Select which model preset to use" />}
+                      >
+                        <Select
+                          value={weakPresetId}
+                          onValueChange={(value) => saveConfig({ dualModelWeakPresetId: value })}
+                        >
+                          <SelectTrigger className="w-[200px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allPresets.map((preset) => (
+                              <SelectItem key={preset.id} value={preset.id}>
+                                {preset.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Control>
+                      {weakPreset && (
+                        <Control
+                          label={<ControlLabel label="Model" tooltip="Select the model" />}
+                        >
+                          <PresetModelSelector
+                            presetId={weakPresetId}
+                            baseUrl={weakPreset.baseUrl}
+                            apiKey={weakPreset.apiKey}
+                            value={config.dualModelWeakModelName || ""}
+                            onValueChange={(value) => saveConfig({ dualModelWeakModelName: value })}
+                            label="Weak Model"
+                            placeholder="Select model..."
+                          />
+                        </Control>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Summarization Settings */}
+                  <div className="px-3 py-3 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Settings2 className="h-4 w-4" />
+                      Summarization Settings
+                    </div>
+                    <Control
+                      label={<ControlLabel label="Frequency" tooltip="How often to generate summaries" />}
+                    >
+                      <Select
+                        value={config.dualModelSummarizationFrequency || "every_response"}
+                        onValueChange={(value) =>
+                          saveConfig({ dualModelSummarizationFrequency: value as "every_response" | "major_steps_only" })
+                        }
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="every_response">Every Response</SelectItem>
+                          <SelectItem value="major_steps_only">Major Steps Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Control>
+                    <Control
+                      label={<ControlLabel label="Detail Level" tooltip="How detailed the summaries should be" />}
+                    >
+                      <Select
+                        value={config.dualModelSummaryDetailLevel || "compact"}
+                        onValueChange={(value) =>
+                          saveConfig({ dualModelSummaryDetailLevel: value as "compact" | "detailed" })
+                        }
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="compact">Compact</SelectItem>
+                          <SelectItem value="detailed">Detailed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Control>
+                    <Control
+                      label={
+                        <ControlLabel
+                          label="Auto-save Important"
+                          tooltip="Automatically save high and critical importance summaries to memory"
+                        />
+                      }
+                    >
+                      <Switch
+                        checked={config.dualModelAutoSaveImportant ?? false}
+                        onCheckedChange={(checked) => saveConfig({ dualModelAutoSaveImportant: checked })}
+                      />
+                    </Control>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

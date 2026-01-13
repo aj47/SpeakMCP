@@ -36,7 +36,7 @@ import { diagnosticsService } from "./diagnostics"
 import { state, agentProcessManager } from "./state"
 import { OAuthClient } from "./oauth-client"
 import { oauthStorage } from "./oauth-storage"
-import { isDebugTools, logTools } from "./debug"
+import { isDebugTools, logTools, logMCP } from "./debug"
 import { app, dialog } from "electron"
 import { builtinTools, executeBuiltinTool, isBuiltinTool, BUILTIN_SERVER_NAME } from "./builtin-tools"
 import { randomUUID } from "crypto"
@@ -1377,9 +1377,22 @@ export class MCPService {
           arguments: processedArguments,
         })
       }
+
+      // Log complete MCP request
+      logMCP("REQUEST", serverName, {
+        tool: toolName,
+        arguments: processedArguments,
+      })
+
       const result = await client.callTool({
         name: toolName,
         arguments: processedArguments,
+      })
+
+      // Log complete MCP response
+      logMCP("RESPONSE", serverName, {
+        tool: toolName,
+        result: result,
       })
 
       if (isDebugTools()) {
@@ -1455,10 +1468,26 @@ export class MCPService {
                   correctedArgs,
                 })
               }
+
+              // Log retry MCP request
+              logMCP("REQUEST", serverName, {
+                tool: toolName,
+                arguments: correctedArgs,
+                retry: true,
+              })
+
               const retryResult = await client.callTool({
                 name: toolName,
                 arguments: correctedArgs,
               })
+
+              // Log retry MCP response
+              logMCP("RESPONSE", serverName, {
+                tool: toolName,
+                result: retryResult,
+                retry: true,
+              })
+
               if (isDebugTools()) {
                 logTools("Retry result", { serverName, toolName, retryResult })
               }
@@ -1582,7 +1611,7 @@ export class MCPService {
       return allTools.filter((tool) => !this.disabledTools.has(tool.name))
     }
 
-    const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools } = profileMcpConfig
+    const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools, enabledBuiltinTools } = profileMcpConfig
 
     // Determine which servers are enabled for this profile
     const config = configStore.get()
@@ -1615,8 +1644,15 @@ export class MCPService {
       return !profileDisabledServers.has(serverName)
     })
 
-    // Combine with built-in tools and filter by disabled tools
-    const allTools = [...enabledExternalTools, ...builtinTools]
+    // Filter builtin tools based on enabledBuiltinTools whitelist (if specified)
+    // When enabledBuiltinTools is set, only those builtin tools are available
+    // When undefined, all builtin tools are available (default behavior)
+    const filteredBuiltinTools = enabledBuiltinTools
+      ? builtinTools.filter((tool) => enabledBuiltinTools.includes(tool.name))
+      : builtinTools
+
+    // Combine with filtered built-in tools and filter by disabled tools
+    const allTools = [...enabledExternalTools, ...filteredBuiltinTools]
     return allTools.filter((tool) => !profileDisabledTools.has(tool.name))
   }
 
@@ -2351,8 +2387,8 @@ export class MCPService {
     toolCall: MCPToolCall,
     onProgress?: (message: string) => void,
     skipApprovalCheck: boolean = false,
-    profileMcpConfig?: ProfileMcpServerConfig,
-    sessionId?: string // Optional session ID for Langfuse tracing
+    sessionId?: string,
+    profileMcpConfig?: ProfileMcpServerConfig
   ): Promise<MCPToolResult> {
     // Create Langfuse span for tool call if enabled and we have a trace
     const spanId = isLangfuseEnabled() && sessionId ? randomUUID() : null
@@ -2434,7 +2470,7 @@ export class MCPService {
         if (isDebugTools()) {
           logTools("Executing built-in tool", { name: toolCall.name, arguments: toolCall.arguments })
         }
-        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {})
+        const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {}, sessionId)
         if (result) {
           if (isDebugTools()) {
             logTools("Built-in tool result", { name: toolCall.name, result })

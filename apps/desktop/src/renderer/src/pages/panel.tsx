@@ -9,7 +9,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
-import { logUI } from "@renderer/lib/debug"
 import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
@@ -461,7 +460,6 @@ export function Component() {
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen((data) => {
       // Reset any previous pending state to ensure textarea is enabled
-      logUI('[Panel] showTextInput received: resetting text input mutations and enabling textarea')
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
@@ -615,7 +613,6 @@ export function Component() {
       targetMode = "agent"
       // When switching to agent mode, stop any ongoing recording
       if (recordingRef.current) {
-        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false

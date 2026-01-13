@@ -59,6 +59,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           lazy: () => import("./pages/settings-whatsapp"),
         },
         {
+          path: "settings/agent-profiles",
+          lazy: () => import("./pages/settings-agent-profiles"),
+        },
+        {
           path: "settings/langfuse",
           loader: () => redirect("/settings"),
         },

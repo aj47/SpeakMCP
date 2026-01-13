@@ -133,6 +133,24 @@ function MemoryCard({
             <p className="text-sm whitespace-pre-wrap">{memory.content}</p>
           </div>
 
+          {/* Key Findings */}
+          {memory.keyFindings.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                <Brain className="h-3 w-3" />
+                Key Findings
+              </h4>
+              <ul className="space-y-1">
+                {memory.keyFindings.map((finding, i) => (
+                  <li key={i} className="text-sm flex items-start gap-2">
+                    <span className="text-primary mt-1">•</span>
+                    {finding}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Tags */}
           {memory.tags.length > 0 && (
             <div>

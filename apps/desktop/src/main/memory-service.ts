@@ -25,16 +25,14 @@ function isValidAgentMemory(item: unknown): item is AgentMemory {
     return false
   }
   const obj = item as Record<string, unknown>
-  // keyFindings is now optional for backward compatibility
-  const hasValidKeyFindings = obj.keyFindings === undefined ||
-    (Array.isArray(obj.keyFindings) && isStringArray(obj.keyFindings))
   return (
     typeof obj.id === "string" &&
     typeof obj.createdAt === "number" &&
     typeof obj.updatedAt === "number" &&
     typeof obj.title === "string" &&
     typeof obj.content === "string" &&
-    hasValidKeyFindings &&
+    Array.isArray(obj.keyFindings) &&
+    isStringArray(obj.keyFindings) &&
     Array.isArray(obj.tags) &&
     isStringArray(obj.tags) &&
     typeof obj.importance === "string" &&
@@ -45,8 +43,6 @@ function isValidAgentMemory(item: unknown): item is AgentMemory {
 class MemoryService {
   private memories: AgentMemory[] = []
   private initialized = false
-  // Serialize write operations to prevent race conditions
-  private writeQueue: Promise<boolean> = Promise.resolve(true)
 
   private async loadFromDisk(): Promise<void> {
     const filePath = getMemoriesFilePath()
@@ -80,10 +76,7 @@ class MemoryService {
     }
   }
 
-  /**
-   * Internal disk write - should only be called through serializedSaveToDisk
-   */
-  private saveToDiskSync(): boolean {
+  private async saveToDisk(): Promise<boolean> {
     const filePath = getMemoriesFilePath()
     try {
       fs.writeFileSync(filePath, JSON.stringify(this.memories, null, 2), "utf-8")
@@ -94,20 +87,6 @@ class MemoryService {
       }
       return false
     }
-  }
-
-  /**
-   * Serialize disk writes to prevent race conditions.
-   * Each write waits for the previous one to complete before executing.
-   */
-  private async saveToDisk(): Promise<boolean> {
-    // Chain this write operation onto the queue
-    const operation = this.writeQueue.then(() => {
-      return this.saveToDiskSync()
-    })
-    // Update the queue to wait for this operation
-    this.writeQueue = operation.catch(() => false)
-    return operation
   }
 
   async initialize(): Promise<void> {
@@ -167,6 +146,7 @@ class MemoryService {
       conversationTitle,
       title: title || summary.actionSummary.slice(0, 100),
       content: summary.actionSummary,
+      keyFindings: summary.keyFindings,
       tags: tags || summary.tags || [],
       importance: summary.importance,
       userNotes,
@@ -218,6 +198,7 @@ class MemoryService {
     return all.filter(m =>
       m.title.toLowerCase().includes(lowerQuery) ||
       m.content.toLowerCase().includes(lowerQuery) ||
+      (m.keyFindings ?? []).some(f => f.toLowerCase().includes(lowerQuery)) ||
       m.tags.some(t => t.toLowerCase().includes(lowerQuery))
     )
   }

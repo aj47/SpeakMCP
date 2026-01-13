@@ -21,6 +21,8 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
+import { acpService } from "./acp-service"
+import { agentProfileService } from "./agent-profile-service"
 import { initializeBundledSkills, skillsService, startSkillsFolderWatcher } from "./skills-service"
 import {
   startCloudflareTunnel,
@@ -104,8 +106,11 @@ app.whenReady().then(() => {
 
   if (accessibilityGranted) {
     // Check if onboarding has been completed
+    // Skip for existing users who have already configured models (pre-onboarding installs)
     const cfg = configStore.get()
-    const needsOnboarding = !cfg.onboardingCompleted
+    const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+    const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+    const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
     if (needsOnboarding) {
       createMainWindow({ url: "/onboarding" })
@@ -140,6 +145,26 @@ app.whenReady().then(() => {
         error
       )
       logApp("Failed to initialize MCP service on startup:", error)
+    })
+
+  // Initialize ACP service (spawns auto-start agents)
+  acpService
+    .initialize()
+    .then(() => {
+      logApp("ACP service initialized successfully")
+
+      // Sync agent profiles to ACP registry (unified service - preferred)
+      try {
+        agentProfileService.syncAgentProfilesToACPRegistry()
+        logApp("Agent profiles synced to ACP registry")
+      } catch (error) {
+        logApp("Failed to sync agent profiles to ACP registry:", error)
+      }
+
+
+    })
+    .catch((error) => {
+      logApp("Failed to initialize ACP service:", error)
     })
 
   // Initialize bundled skills (copy from app resources to App Data if needed)
@@ -239,8 +264,11 @@ app.whenReady().then(() => {
     if (accessibilityGranted) {
       if (!WINDOWS.get("main")) {
         // Check if onboarding has been completed
+        // Skip for existing users who have already configured models (pre-onboarding installs)
         const cfg = configStore.get()
-        const needsOnboarding = !cfg.onboardingCompleted
+        const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+        const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+        const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
         if (needsOnboarding) {
           createMainWindow({ url: "/onboarding" })
@@ -261,6 +289,11 @@ app.whenReady().then(() => {
 
   app.on("before-quit", async (event) => {
     makePanelWindowClosable()
+
+    // Shutdown ACP agents gracefully
+    acpService.shutdown().catch((error) => {
+      console.error('[App] Error shutting down ACP service:', error)
+    })
 
     // Prevent re-entry during cleanup
     if (isCleaningUp) {

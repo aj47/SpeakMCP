@@ -44,6 +44,11 @@ export const Component = () => {
       icon: "i-mingcute-book-2-line",
     }] : []),
     {
+      text: "Memories",
+      href: "/memories",
+      icon: "i-mingcute-book-2-line",
+    },
+    {
       text: "Profile",
       href: "/settings/tools",
       icon: "i-mingcute-user-setting-line",
@@ -69,6 +74,11 @@ export const Component = () => {
       href: "/settings/whatsapp",
       icon: "i-mingcute-message-4-line",
     }] : []),
+    {
+      text: "Agent Profiles",
+      href: "/settings/agent-profiles",
+      icon: "i-mingcute-group-line",
+    },
   ]
 
   // Route aliases that should highlight the same nav item

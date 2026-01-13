@@ -124,6 +124,7 @@ nvm use 20      # If using nvm
 | Native Binary | Rust | Keyboard monitoring, text injection |
 | MCP Client | TypeScript | Model Context Protocol with OAuth 2.1 |
 | AI Providers | OpenAI, Groq, Gemini | Speech recognition, LLM, TTS |
+| Multi-Agent | ACP | Task delegation to specialized sub-agents |
 
 ## Contributing
 

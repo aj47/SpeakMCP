@@ -4,6 +4,18 @@
 
 SpeakMCP integrates with [Langfuse](https://langfuse.com/) to provide comprehensive observability and monitoring for all LLM calls and agent operations.
 
+> **Note**: Langfuse is an **optional dependency**. If you don't need observability features, you don't need to install it. The app works perfectly fine without it.
+
+### Installation (Optional)
+
+Langfuse is not installed by default. To enable Langfuse observability features:
+
+```bash
+pnpm add langfuse
+```
+
+After installing, restart the app and the Langfuse settings will become available.
+
 ### What Gets Traced
 
 | Component | What's Captured |

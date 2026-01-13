@@ -1,21 +1,34 @@
 /**
  * Langfuse Service
  * Provides observability and monitoring for LLM calls and agent operations.
- * 
+ *
  * Key features:
  * - LLM call tracing with token counts and costs
  * - Agent session traces
  * - MCP tool call instrumentation
  * - Optional/configurable (won't block functionality if not configured)
+ * - Langfuse is an OPTIONAL dependency - this module handles its absence gracefully
  */
 
-import { Langfuse } from "langfuse"
-import type { LangfuseTraceClient, LangfuseSpanClient, LangfuseGenerationClient } from "langfuse"
 import { configStore } from "./config"
 import { isDebugLLM, logLLM } from "./debug"
 
+// Langfuse types - we use 'any' since langfuse is optional and types may not exist
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LangfuseClass = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LangfuseTraceClient = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LangfuseSpanClient = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LangfuseGenerationClient = any
+
+// Cached Langfuse class - null if not loaded, undefined if not yet checked
+let LangfuseClass: LangfuseClass | null = undefined
 // Singleton Langfuse instance
-let langfuseInstance: Langfuse | null = null
+let langfuseInstance: LangfuseClass | null = null
+// Track whether we've attempted to load langfuse and it's unavailable
+let langfuseUnavailable = false
 
 // Active traces and spans for linking
 const activeTraces = new Map<string, LangfuseTraceClient>()
@@ -23,9 +36,52 @@ const activeSpans = new Map<string, LangfuseSpanClient>()
 const activeGenerations = new Map<string, LangfuseGenerationClient>()
 
 /**
- * Check if Langfuse is enabled and configured
+ * Attempt to load the Langfuse module dynamically.
+ * Returns true if the module is available, false otherwise.
+ */
+function loadLangfuseModule(): boolean {
+  if (langfuseUnavailable) return false
+  if (LangfuseClass !== undefined && LangfuseClass !== null) return true
+
+  try {
+    // Dynamic require to handle optional dependency
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const langfuseModule = require("langfuse")
+    LangfuseClass = langfuseModule.Langfuse
+    if (isDebugLLM()) {
+      logLLM("[Langfuse] Module loaded successfully")
+    }
+    return true
+  } catch (_error) {
+    // Langfuse package is not installed - this is expected
+    LangfuseClass = null
+    langfuseUnavailable = true
+    if (isDebugLLM()) {
+      logLLM("[Langfuse] Module not installed - observability features disabled")
+    }
+    return false
+  }
+}
+
+/**
+ * Check if Langfuse package is installed and available
+ */
+export function isLangfuseInstalled(): boolean {
+  return loadLangfuseModule()
+}
+
+/**
+ * Check if Langfuse is enabled and configured.
+ * Returns false if:
+ * - langfuse package is not installed
+ * - langfuseEnabled is false in config
+ * - API keys are not configured
  */
 export function isLangfuseEnabled(): boolean {
+  // First check if the package is installed
+  if (!loadLangfuseModule()) {
+    return false
+  }
   const config = configStore.get()
   return !!(config.langfuseEnabled && config.langfuseSecretKey && config.langfusePublicKey)
 }
@@ -33,7 +89,7 @@ export function isLangfuseEnabled(): boolean {
 /**
  * Get or create the Langfuse instance
  */
-export function getLangfuse(): Langfuse | null {
+export function getLangfuse(): LangfuseClass | null {
   if (!isLangfuseEnabled()) {
     return null
   }
@@ -42,10 +98,15 @@ export function getLangfuse(): Langfuse | null {
     return langfuseInstance
   }
 
+  // Double-check module is loaded (should already be from isLangfuseEnabled)
+  if (!LangfuseClass) {
+    return null
+  }
+
   const config = configStore.get()
 
   try {
-    langfuseInstance = new Langfuse({
+    langfuseInstance = new LangfuseClass({
       secretKey: config.langfuseSecretKey!,
       publicKey: config.langfusePublicKey!,
       baseUrl: config.langfuseBaseUrl || "https://cloud.langfuse.com",

@@ -37,6 +37,7 @@ import {
   preprocessTextForTTS,
   shouldCollapseMessage,
   formatToolArguments,
+  getToolResultsSummary,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -1932,12 +1933,16 @@ export default function ChatScreen({ route, navigation }: any) {
                       isExpanded || !shouldCollapse ? (
                         <MarkdownRenderer content={m.content} />
                       ) : (
-                        <Text
-                          style={{ color: theme.colors.foreground, fontSize: 13, lineHeight: 18 }}
-                          numberOfLines={1}
-                        >
-                          {m.content}
-                        </Text>
+                        // Only show collapsed content preview if there are NO tool calls
+                        // Tool calls have their own compact summary row, so don't duplicate
+                        !((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                          <Text
+                            style={{ color: theme.colors.foreground, fontSize: 13, lineHeight: 18 }}
+                            numberOfLines={1}
+                          >
+                            {m.content}
+                          </Text>
+                        )
                       )
                     ) : null}
 
@@ -1981,6 +1986,15 @@ export default function ChatScreen({ route, navigation }: any) {
                             ]}>
                               {isPending ? '⏳' : allSuccess ? '✓' : '✗'}
                             </Text>
+                            {/* Result preview - show truncated result content like desktop */}
+                            {!isPending && m.toolResults && m.toolResults.length > 0 && (
+                              <Text
+                                style={styles.toolCallCompactPreview}
+                                numberOfLines={1}
+                              >
+                                {getToolResultsSummary(m.toolResults)}
+                              </Text>
+                            )}
                             <Text style={styles.toolCallCompactChevron}>▶</Text>
                           </Pressable>
                         )}
@@ -2627,10 +2641,10 @@ function createStyles(theme: Theme) {
       backgroundColor: hexToRgba(theme.colors.info, 0.05),
     },
     toolCallCompactSuccess: {
-      backgroundColor: hexToRgba(theme.colors.success, 0.05),
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.03),
     },
     toolCallCompactError: {
-      backgroundColor: hexToRgba(theme.colors.destructive, 0.05),
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.03),
     },
     toolCallCompactPressed: {
       opacity: 0.7,
@@ -2642,10 +2656,10 @@ function createStyles(theme: Theme) {
       // uses default
     },
     toolCallCompactIconSuccess: {
-      // uses default
+      color: theme.colors.mutedForeground,
     },
     toolCallCompactIconError: {
-      // uses default
+      color: theme.colors.mutedForeground,
     },
     toolCallCompactName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
@@ -2657,10 +2671,10 @@ function createStyles(theme: Theme) {
       color: theme.colors.info,
     },
     toolCallCompactNameSuccess: {
-      color: theme.colors.success,
+      color: theme.colors.mutedForeground,
     },
     toolCallCompactNameError: {
-      color: theme.colors.destructive,
+      color: theme.colors.mutedForeground,
     },
     toolCallCompactStatus: {
       fontSize: 9,
@@ -2670,16 +2684,23 @@ function createStyles(theme: Theme) {
       color: theme.colors.info,
     },
     toolCallCompactStatusSuccess: {
-      color: theme.colors.success,
+      color: theme.colors.mutedForeground,
     },
     toolCallCompactStatusError: {
-      color: theme.colors.destructive,
+      color: theme.colors.mutedForeground,
     },
     toolCallCompactChevron: {
       fontSize: 8,
       color: theme.colors.mutedForeground,
       opacity: 0.4,
       marginLeft: 'auto',
+    },
+    toolCallCompactPreview: {
+      fontSize: 9,
+      color: theme.colors.mutedForeground,
+      opacity: 0.6,
+      flex: 1,
+      marginLeft: 2,
     },
     toolParamsSection: {
       paddingHorizontal: spacing.xs,

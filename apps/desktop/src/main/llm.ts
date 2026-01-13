@@ -808,7 +808,8 @@ export async function processTranscriptWithAgentMode(
   // Helper to generate post-verify summary (consolidates duplicate logic)
   const generatePostVerifySummary = async (
     currentFinalContent: string,
-    checkForStop: boolean = false
+    checkForStop: boolean = false,
+    activeToolsList: MCPTool[] = uniqueAvailableTools
   ): Promise<{ content: string; stopped: boolean }> => {
     const postVerifySummaryStep = createProgressStep(
       "thinking",
@@ -826,7 +827,7 @@ export async function processTranscriptWithAgentMode(
     })
 
     const postVerifySystemPrompt = constructSystemPrompt(
-      uniqueAvailableTools,
+      activeToolsList,
       agentModeGuidelines, // Use session-bound guidelines
       true,
       undefined, // relevantTools removed
@@ -841,7 +842,7 @@ export async function processTranscriptWithAgentMode(
 
     const { messages: shrunkMessages, estTokensAfter: verifyEstTokens, maxTokens: verifyMaxTokens } = await shrinkMessagesForLLM({
       messages: postVerifySummaryMessages as any,
-      availableTools: uniqueAvailableTools,
+      availableTools: activeToolsList,
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
@@ -1720,7 +1721,7 @@ Return ONLY JSON per schema.`,
         // Post-verify: produce a concise final summary for the user
         if (!skipPostVerifySummary) {
           try {
-            const result = await generatePostVerifySummary(finalContent)
+            const result = await generatePostVerifySummary(finalContent, false, activeTools)
             finalContent = result.content
             if (finalContent.trim().length > 0) {
               addMessage("assistant", finalContent)
@@ -2271,16 +2272,26 @@ Return ONLY JSON per schema.`,
     // The UI will handle display and truncation as needed
     const processedToolResults = toolResults
 
-    const meaningfulResults = processedToolResults.filter((r) =>
-      r.isError || (r.content?.map((c) => c.text).join("").trim().length > 0),
-    )
+    // Always add a tool message if any tools were executed, even if results are empty
+    // This ensures the verifier sees tool execution evidence in conversationHistory
+    if (processedToolResults.length > 0) {
+      // For each result, use "[No output]" if the content is empty and not an error
+      const resultsWithPlaceholders = processedToolResults.map((result) => {
+        const contentText = result.content?.map((c) => c.text).join("").trim() || ""
+        if (!result.isError && contentText.length === 0) {
+          return {
+            ...result,
+            content: [{ type: "text" as const, text: "[No output]" }],
+          }
+        }
+        return result
+      })
 
-    if (meaningfulResults.length > 0) {
-      const toolResultsText = meaningfulResults
+      const toolResultsText = resultsWithPlaceholders
         .map((result) => result.content.map((c) => c.text).join("\n"))
         .join("\n\n")
 
-      addMessage("tool", toolResultsText, undefined, meaningfulResults)
+      addMessage("tool", toolResultsText, undefined, resultsWithPlaceholders)
 
       // Emit progress update immediately after adding tool results so UI shows them
       emit({
@@ -2591,7 +2602,7 @@ Please try alternative approaches, break down the task into smaller steps, or pr
         // Post-verify: produce a concise final summary for the user
         if (!skipPostVerifySummary2) {
           try {
-            const result = await generatePostVerifySummary(finalContent, true)
+            const result = await generatePostVerifySummary(finalContent, true, activeTools)
             if (result.stopped) {
               const killNote = "\n\n(Agent mode was stopped by emergency kill switch)"
               const finalOutput = (finalContent || "") + killNote

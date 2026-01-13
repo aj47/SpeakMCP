@@ -44,11 +44,6 @@ export const Component = () => {
       icon: "i-mingcute-book-2-line",
     }] : []),
     {
-      text: "Memories",
-      href: "/memories",
-      icon: "i-mingcute-book-2-line",
-    },
-    {
       text: "Profile",
       href: "/settings/tools",
       icon: "i-mingcute-user-setting-line",

@@ -330,6 +330,34 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
       required: ["title", "content"],
     },
   },
+  {
+    name: `${BUILTIN_SERVER_NAME}:list_server_tools`,
+    description: "List all tools available from a specific MCP server. Use this to discover what tools a server provides before calling them.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        serverName: {
+          type: "string",
+          description: "The name of the MCP server to list tools from (e.g., 'github', 'filesystem'). Use list_mcp_servers first to see available servers.",
+        },
+      },
+      required: ["serverName"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:get_tool_schema`,
+    description: "Get the full JSON schema for a specific tool, including all parameter details. Use this when you need to know the exact parameters to pass to a tool.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        toolName: {
+          type: "string",
+          description: "The full tool name including server prefix (e.g., 'github:create_issue', 'filesystem:read_file')",
+        },
+      },
+      required: ["toolName"],
+    },
+  },
 ]
 
 /**

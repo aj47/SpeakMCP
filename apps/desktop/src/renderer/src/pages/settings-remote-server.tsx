@@ -379,6 +379,15 @@ export function Component() {
                   </Select>
                 </Control>
 
+                <Control label={<ControlLabel label="Auto-Start Tunnel" tooltip="Automatically start the Cloudflare Tunnel when the application launches (requires Remote Server to be enabled)" />} className="px-3">
+                  <Switch
+                    checked={cfg?.cloudflareTunnelAutoStart ?? false}
+                    onCheckedChange={(value) => {
+                      saveConfig({ cloudflareTunnelAutoStart: value })
+                    }}
+                  />
+                </Control>
+
                 {/* Named Tunnel Configuration */}
                 {tunnelMode === "named" && (
                   <>

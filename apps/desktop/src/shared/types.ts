@@ -557,6 +557,8 @@ export type Config = {
   // Cloudflare Tunnel Configuration
   // Tunnel mode: "quick" for random URLs (no account required), "named" for persistent URLs (requires account)
   cloudflareTunnelMode?: "quick" | "named"
+  // Auto-start tunnel on app startup (requires remote server to be enabled)
+  cloudflareTunnelAutoStart?: boolean
   // Named tunnel configuration (for persistent URLs)
   cloudflareTunnelId?: string // The tunnel UUID (e.g., "abc123-def456-...")
   cloudflareTunnelName?: string // Human-readable tunnel name

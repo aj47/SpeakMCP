@@ -1385,10 +1385,30 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     // If not found, try matching just the tool name part (without server prefix)
     if (!tool && !toolName.includes(":")) {
-      tool = allTools.find((t) => {
+      // Find ALL matching tools to detect ambiguity
+      const matchingTools = allTools.filter((t) => {
         const shortName = t.name.includes(":") ? t.name.split(":")[1] : t.name
         return shortName === toolName
       })
+
+      if (matchingTools.length > 1) {
+        // Ambiguous match - multiple servers have a tool with this name
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Ambiguous tool name '${toolName}' - found in multiple servers. Please use the fully-qualified name.`,
+              matchingTools: matchingTools.map((t) => t.name),
+              hint: "Use one of the fully-qualified tool names listed above (e.g., 'server:tool_name')",
+            }, null, 2),
+          }],
+          isError: true,
+        }
+      }
+
+      // Single match - use it
+      tool = matchingTools[0]
     }
 
     if (!tool) {

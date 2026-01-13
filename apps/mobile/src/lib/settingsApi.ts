@@ -67,7 +67,7 @@ export interface ModelsResponse {
 
 // Conversation Sync Types
 export interface ServerConversationMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   timestamp?: number;
   toolCalls?: unknown[];

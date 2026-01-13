@@ -26,7 +26,7 @@ export interface SyncableSession extends Session {
  */
 function toServerMessage(msg: ChatMessage): ServerConversationMessage {
   return {
-    role: msg.role as 'user' | 'assistant' | 'system',
+    role: msg.role as 'user' | 'assistant' | 'tool',
     content: msg.content,
     timestamp: msg.timestamp,
     toolCalls: msg.toolCalls,

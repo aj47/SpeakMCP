@@ -2,7 +2,7 @@ import type { ToolCall, ToolResult } from '@speakmcp/shared';
 
 export interface ChatMessage {
   id: string;
-  role: 'system' | 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   timestamp: number;
   toolCalls?: ToolCall[];

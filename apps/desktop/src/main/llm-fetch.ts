@@ -197,9 +197,34 @@ function calculateBackoffDelay(
 }
 
 /**
+ * Check if an error is an empty response error.
+ * Empty responses should fail fast without backoff since they typically indicate:
+ * - API endpoint issues
+ * - Authentication problems
+ * - Malformed requests
+ * These won't resolve by waiting, so exponential backoff wastes time.
+ * See: https://github.com/aj47/SpeakMCP/issues/964
+ */
+function isEmptyResponseError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    return (
+      message.includes("empty response") ||
+      message.includes("empty content") ||
+      message.includes("no text") ||
+      message.includes("no content")
+    )
+  }
+  return false
+}
+
+/**
  * Check if an error is retryable.
  * Uses AI SDK structured error fields (statusCode, isRetryable) when available,
  * with fallback to message-based detection for consistency across providers.
+ *
+ * NOTE: Empty response errors are handled separately - they retry immediately
+ * without backoff (see withRetry function).
  */
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
@@ -211,15 +236,21 @@ function isRetryableError(error: unknown): boolean {
       return false
     }
 
+    // Empty response errors are retryable but WITHOUT backoff
+    // They are handled specially in withRetry - return true here so they're not rejected outright
+    if (isEmptyResponseError(error)) {
+      return true
+    }
+
     // Check for AI SDK structured error fields (AI_APICallError, etc.)
     // These errors have statusCode and isRetryable properties
     const errorWithStatus = error as { statusCode?: number; isRetryable?: boolean; status?: number }
-    
+
     // If the error has an explicit isRetryable flag, use it
     if (typeof errorWithStatus.isRetryable === "boolean") {
       return errorWithStatus.isRetryable
     }
-    
+
     // Check for statusCode or status field (AI SDK errors use statusCode)
     const statusCode = errorWithStatus.statusCode ?? errorWithStatus.status
     if (typeof statusCode === "number") {
@@ -241,7 +272,8 @@ function isRetryableError(error: unknown): boolean {
       }
     }
 
-    // Fallback: message-based detection for errors without structured fields
+    // Fallback: message-based detection for transient network issues
+    // NOTE: empty response/content removed - handled separately without backoff
     const message = error.message.toLowerCase()
     return (
       message.includes("rate limit") ||
@@ -252,9 +284,7 @@ function isRetryableError(error: unknown): boolean {
       message.includes("504") ||
       message.includes("timeout") ||
       message.includes("network") ||
-      message.includes("connection") ||
-      message.includes("empty response") ||
-      message.includes("empty content")
+      message.includes("connection")
     )
   }
   return false
@@ -335,13 +365,17 @@ async function withRetry<T>(
         throw error
       }
 
+      // Check for empty response errors - these skip backoff entirely
+      // See: https://github.com/aj47/SpeakMCP/issues/964
+      const isEmptyResponse = isEmptyResponseError(error)
+
       // Check for rate limit (429) using structured error fields when available
       let isRateLimit = false
       if (error instanceof Error) {
         // Check for AI SDK structured error fields (AI_APICallError, etc.)
         const errorWithStatus = error as { statusCode?: number; status?: number }
         const statusCode = errorWithStatus.statusCode ?? errorWithStatus.status
-        
+
         if (typeof statusCode === "number" && statusCode === 429) {
           isRateLimit = true
         } else {
@@ -352,14 +386,35 @@ async function withRetry<T>(
       }
 
       // Rate limits retry indefinitely, other errors respect the limit
+      // Empty response errors also respect the limit but skip backoff
       if (!isRateLimit && attempt >= maxRetries) {
         diagnosticsService.logError(
           "llm-fetch",
           "API call failed after all retries",
-          { attempts: attempt + 1, error }
+          { attempts: attempt + 1, error, isEmptyResponse }
         )
         clearRetryStatus()
         throw lastError
+      }
+
+      // Empty response errors retry immediately without backoff
+      // These typically indicate API/auth issues that won't resolve by waiting
+      if (isEmptyResponse) {
+        logLLM(
+          `⚡ Empty response - retrying immediately (attempt ${attempt + 1}/${maxRetries + 1})`
+        )
+        if (options.onRetryProgress) {
+          options.onRetryProgress({
+            isRetrying: true,
+            attempt: attempt + 1,
+            maxAttempts: maxRetries + 1,
+            delaySeconds: 0,
+            reason: "Empty response - retrying immediately",
+            startedAt: Date.now(),
+          })
+        }
+        attempt++
+        continue
       }
 
       const delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)

@@ -11,6 +11,13 @@ TOOL USAGE:
 - If browser tools are available and the task involves web services, use them proactively
 - You can call multiple tools in a single response for efficiency
 
+TOOL RELIABILITY:
+- Check tool schemas to discover optional parameters before use
+- Work incrementally - verify each step before continuing
+- On failure: read the error, don't retry the same call blindly
+- After 2-3 failures: try a different approach or ask the user
+- STRONGLY RECOMMENDED: When having issues with a tool, use speakmcp-settings:get_tool_schema(toolName) to read the full specification before retrying
+
 SHELL COMMANDS & FILE OPERATIONS:
 - Use speakmcp-settings:execute_command for running shell commands, scripts, file operations, and automation
 - For skill-related tasks, pass the skillId to run commands in that skill's directory

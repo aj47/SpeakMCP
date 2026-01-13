@@ -1370,6 +1370,7 @@ export class MCPService {
     // No need for complex session injection logic here
 
     try {
+      const fullToolName = `${serverName}:${toolName}`
       if (isDebugTools()) {
         logTools("Executing tool", {
           serverName,
@@ -1377,6 +1378,8 @@ export class MCPService {
           arguments: processedArguments,
         })
       }
+
+      // Execute tool - no artificial timeout, let MCP server handle its own timing
       const result = await client.callTool({
         name: toolName,
         arguments: processedArguments,
@@ -1486,6 +1489,18 @@ export class MCPService {
               // Retry failed, will fall through to error return
             }
           }
+        }
+      }
+
+      if (error instanceof Error && error.message.includes('timed out')) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Tool timeout: ${serverName}:${toolName} did not complete within the time limit. Consider breaking the task into smaller steps.`,
+            },
+          ],
+          isError: true,
         }
       }
 

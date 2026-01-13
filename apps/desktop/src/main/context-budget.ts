@@ -3,6 +3,7 @@ import { isDebugLLM, logLLM } from "./debug"
 import { makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructMinimalSystemPrompt } from "./system-prompts"
 import { agentSessionStateManager } from "./state"
+import { summarizationService } from "./summarization-service"
 
 export type LLMMessage = { role: string; content: string }
 
@@ -411,14 +412,25 @@ export async function summarizeContent(content: string, sessionId?: string): Pro
   const MAX_TOKENS_HINT = 400 // soft guidance via prompt only
   const CHUNK_SIZE = 16000 // ~4k tokens per chunk (roughly)
 
-  const makePrompt = (src: string) => `You will receive output from tools or chat messages. Summarize concisely while PRESERVING:
-- Exact tool names (including prefixes like server:tool_name)
-- Exact parameter names (keys) used in tool arguments
-- Any IDs, file paths, URLs, and key numeric values
-Rules:
-- Do NOT invent values; if a value is very long, indicate it as truncated
-- Keep bullet points or compact JSON-like lines
-- Target <= ${MAX_TOKENS_HINT} tokens
+  const makePrompt = (src: string) => `Summarize tool output or conversation focusing on WHAT WAS LEARNED, not what was executed.
+
+PRESERVE (exact format):
+- Tool names with prefixes: [server:tool_name] - keep this exact format
+- IDs, file paths, URLs, numeric values
+- Key data points and findings
+
+FOCUS ON:
+- What information was discovered or retrieved
+- What elements/data are visible or available
+- What actions succeeded or failed and WHY
+- Key observations that inform next steps
+
+DO NOT:
+- Just say "tool executed successfully" - describe what it returned
+- Lose the [toolName] prefix format
+- Invent or hallucinate values
+
+Target: ~${MAX_TOKENS_HINT} tokens. Be concise but preserve actionable information.
 
 SOURCE:
 ${src}`
@@ -462,6 +474,108 @@ ${src}`
   return combined
 }
 
+/**
+ * Build a context summary from stored session summaries
+ * This allows the LLM to know what work was accomplished even if messages were dropped
+ */
+function buildContextFromSummaries(sessionId: string): string | null {
+  const MAX_ACTION_SUMMARY_LENGTH = 150
+  const MAX_TOTAL_SUMMARY_LENGTH = 2000
+
+  const summaries = summarizationService.getSummaries(sessionId)
+  if (summaries.length === 0) return null
+
+  // Get important summaries
+  const important = summarizationService.getImportantSummaries(sessionId)
+  const toInclude = important.length > 0 ? important : summaries.slice(-5)
+
+  if (toInclude.length === 0) return null
+
+  const lines = toInclude.map(s => {
+    const status = s.importance === "critical" ? "⚠️" : "✓"
+    // Truncate actionSummary if it exceeds max length
+    const truncatedSummary =
+      s.actionSummary.length > MAX_ACTION_SUMMARY_LENGTH
+        ? s.actionSummary.slice(0, MAX_ACTION_SUMMARY_LENGTH - 3) + "..."
+        : s.actionSummary
+    return `${status} Step ${s.stepNumber}: ${truncatedSummary}`
+  })
+
+  const result = `[Session Progress Summary]\n${lines.join("\n")}`
+
+  // Truncate total summary if it exceeds max length
+  if (result.length > MAX_TOTAL_SUMMARY_LENGTH) {
+    return result.slice(0, MAX_TOTAL_SUMMARY_LENGTH - 3) + "..."
+  }
+
+  return result
+}
+
+/**
+ * Parse tool name from content that uses format: [toolName] content...
+ * Returns { toolName, content } where content is the part after the tool name prefix
+ */
+function parseToolNameFromContent(content: string): { toolName: string; resultContent: string } {
+  // Match format: [toolName] content... or [toolName] ERROR: content...
+  const match = content.match(/^\[([^\]]+)\]\s*(?:ERROR:\s*)?(.*)$/s)
+  if (match) {
+    return { toolName: match[1], resultContent: match[2] }
+  }
+  return { toolName: 'unknown', resultContent: content }
+}
+
+/**
+ * Summarize tool messages that would be dropped during context shrinking.
+ * Creates semantic summaries preserving tool names and what was learned.
+ * Format: [toolName] brief description of outcome/data
+ * @param toolMessages Array of tool messages that would be dropped
+ * @returns A summary string under 800 chars
+ */
+function summarizeToolMessagesForDropping(toolMessages: LLMMessage[]): string {
+  if (toolMessages.length === 0) return ""
+
+  const summaries: string[] = []
+  let totalLength = 0
+  const MAX_SUMMARY_LENGTH = 800
+
+  for (const msg of toolMessages) {
+    const content = msg.content || ""
+    const { toolName, resultContent } = parseToolNameFromContent(content)
+
+    // Detect error status from content
+    const isError = content.toLowerCase().includes("[error]") ||
+                    content.toLowerCase().includes("] error:") ||
+                    resultContent.toLowerCase().startsWith("error")
+
+    // Extract semantic brief - focus on what was learned/returned
+    let brief: string
+    const firstLine = resultContent.split("\n")[0].trim()
+
+    if (isError) {
+      // For errors, extract the error type/message
+      brief = `FAILED: ${firstLine.substring(0, 60)}`
+    } else if (resultContent.length === 0 || resultContent === "[No output]") {
+      brief = "completed (no output)"
+    } else {
+      // Extract meaningful brief - first 80 chars of first line
+      brief = firstLine.length > 80 ? firstLine.substring(0, 77) + "..." : firstLine
+    }
+
+    const entry = `[${toolName}] ${brief}`
+
+    // Check if adding this would exceed limit
+    if (totalLength + entry.length + 2 > MAX_SUMMARY_LENGTH) {
+      summaries.push(`... and ${toolMessages.length - summaries.length} more tool results`)
+      break
+    }
+
+    summaries.push(entry)
+    totalLength += entry.length + 2 // +2 for newline
+  }
+
+  return `Previously executed tools:\n${summaries.join("\n")}`
+}
+
 export interface ShrinkOptions {
   messages: LLMMessage[]
   availableTools?: Array<{ name: string; description?: string; inputSchema?: any }>
@@ -470,7 +584,7 @@ export interface ShrinkOptions {
   targetRatio?: number // default 0.7
   lastNMessages?: number // default 3
   summarizeCharThreshold?: number // default 2000
-  sessionId?: string // optional session ID for abort control
+  sessionId?: string // optional session ID for abort control and progress injection
   onSummarizationProgress?: (current: number, total: number, message: string) => void // callback for progress updates
 }
 
@@ -480,6 +594,7 @@ export interface ShrinkResult {
   estTokensBefore: number
   estTokensAfter: number
   maxTokens: number
+  toolResultsSummarized?: boolean
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkResult> {
@@ -596,13 +711,32 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     if (k >= 0) keptSet.add(k)
   }
 
-  // Check if tool results exist before drop_middle for logging
-  const hadToolsBefore = messages.some(m => m.role === "tool")
+  // Find tool messages that would be dropped (not in keptSet)
+  const toolMessagesToBeDropped: LLMMessage[] = []
+  for (let i = 0; i < messages.length; i++) {
+    if (!keptSet.has(i) && messages[i].role === "tool") {
+      toolMessagesToBeDropped.push(messages[i])
+    }
+  }
 
-  // Preserve order: system -> first user -> (chronological tail without duplicates)
+  // Summarize tool messages before dropping them
+  let toolResultsSummarized = false
+  let toolSummaryMessage: LLMMessage | null = null
+  if (toolMessagesToBeDropped.length > 0) {
+    const summary = summarizeToolMessagesForDropping(toolMessagesToBeDropped)
+    if (summary) {
+      toolSummaryMessage = { role: "assistant", content: summary }
+      toolResultsSummarized = true
+      logLLM(`[Context Budget] Summarized ${toolMessagesToBeDropped.length} tool results before drop_middle`)
+    }
+  }
+
+  // Preserve order: system -> first user -> tool summary (if any) -> (chronological tail without duplicates)
   const ordered: LLMMessage[] = []
   if (systemIdx >= 0) ordered.push(messages[systemIdx])
   if (firstUserIdx >= 0 && firstUserIdx !== systemIdx) ordered.push(messages[firstUserIdx])
+  // Insert tool summary right after first user message
+  if (toolSummaryMessage) ordered.push(toolSummaryMessage)
   for (let k = baseLen - effectiveLastN; k < baseLen; k++) {
     if (k >= 0 && k !== systemIdx && k !== firstUserIdx) ordered.push(messages[k])
   }
@@ -610,15 +744,23 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
 
-  // Log warning if tool results were dropped
-  const toolsDropped = hadToolsBefore && !messages.some(m => m.role === "tool")
-  if (toolsDropped) {
-    console.warn("[Context Budget] Warning: Tool results dropped during context shrinking")
+  // If we dropped tools, try to inject session progress from summaries
+  if (toolResultsSummarized && opts.sessionId) {
+    const progressSummary = buildContextFromSummaries(opts.sessionId)
+    if (progressSummary) {
+      // Find first user message and inject progress after it
+      const firstUserIdx = messages.findIndex(m => m.role === "user")
+      if (firstUserIdx >= 0 && firstUserIdx < messages.length - 1) {
+        messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: progressSummary })
+        tokens = estimateTokensFromMessages(messages)
+        if (isDebugLLM()) logLLM("[Context Budget] Injected session progress summary from summarization service")
+      }
+    }
   }
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
   }
 
   // Tier 3: Minimal system prompt
@@ -638,6 +780,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
 }
 

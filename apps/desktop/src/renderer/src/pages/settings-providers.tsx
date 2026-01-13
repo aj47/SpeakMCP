@@ -839,6 +839,21 @@ export function Component() {
                 />
               </Control>
 
+              <Control
+                label={
+                  <ControlLabel
+                    label="Inject Memories"
+                    tooltip="Include saved memories in agent context. Works independently of summarization."
+                  />
+                }
+                className="px-3"
+              >
+                <Switch
+                  checked={config.dualModelInjectMemories ?? false}
+                  onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
+                />
+              </Control>
+
               {dualModelEnabled && (
                 <>
                   {/* Strong Model Configuration */}
@@ -988,19 +1003,6 @@ export function Component() {
                       <Switch
                         checked={config.dualModelAutoSaveImportant ?? false}
                         onCheckedChange={(checked) => saveConfig({ dualModelAutoSaveImportant: checked })}
-                      />
-                    </Control>
-                    <Control
-                      label={
-                        <ControlLabel
-                          label="Inject Memories"
-                          tooltip="Automatically include relevant memories in agent context. May increase token usage."
-                        />
-                      }
-                    >
-                      <Switch
-                        checked={config.dualModelInjectMemories ?? false}
-                        onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
                       />
                     </Control>
                   </div>

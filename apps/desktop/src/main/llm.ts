@@ -193,9 +193,9 @@ export async function processTranscriptWithTools(
     : []
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
-  // Load memories for context (only if dual-model memory injection is enabled)
+  // Load memories for context (works independently of dual-model summarization)
   let relevantMemories: AgentMemory[] = []
-  if (config.dualModelEnabled && config.dualModelInjectMemories) {
+  if (config.dualModelInjectMemories) {
     const allMemories = await memoryService.getAllMemories()
     // Filter to high importance and critical memories, limit to 5 for non-agent mode
     relevantMemories = allMemories
@@ -726,10 +726,10 @@ export async function processTranscriptWithAgentMode(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
   logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${skillsInstructions ? `${skillsInstructions.length} chars` : 'none'}`)
 
-  // Load memories for agent context (only if memory injection is enabled)
+  // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
   let relevantMemories: AgentMemory[] = []
-  if (config.dualModelEnabled && config.dualModelInjectMemories) {
+  if (config.dualModelInjectMemories) {
     const allMemories = await memoryService.getAllMemories()
     // Include all high/critical importance memories, and some recent medium importance ones
     relevantMemories = allMemories

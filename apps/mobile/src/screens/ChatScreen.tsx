@@ -1999,7 +1999,7 @@ export default function ChatScreen({ route, navigation }: any) {
                           </Pressable>
                         )}
 
-                        {/* Expanded view - show full details in a card */}
+                        {/* Expanded view - each tool call with its own params + result */}
                         {isExpanded && (
                           <View style={[
                             styles.toolExecutionCard,
@@ -2007,71 +2007,61 @@ export default function ChatScreen({ route, navigation }: any) {
                             allSuccess && styles.toolExecutionSuccess,
                             hasErrors && styles.toolExecutionError,
                           ]}>
-                            {/* Call Parameters Section - only show if there are toolCalls */}
-                            {(m.toolCalls?.length ?? 0) > 0 && (
-                              <View style={styles.toolParamsSection}>
-                                <Text style={styles.toolParamsSectionTitle}>Call Parameters</Text>
-                                {m.toolCalls!.map((toolCall, idx) => (
-                                  <View key={idx} style={styles.toolCallCard}>
-                                    <Text style={styles.toolName}>{toolCall.name}</Text>
-                                    {toolCall.arguments && (
+                            {m.toolCalls?.map((toolCall, idx) => {
+                              const result = m.toolResults?.[idx];
+                              const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
+                              return (
+                                <View key={idx} style={styles.toolCallSection}>
+                                  {/* Tool name heading */}
+                                  <Text style={styles.toolName}>{toolCall.name}</Text>
+
+                                  {/* Parameters */}
+                                  {toolCall.arguments && (
+                                    <View style={styles.toolParamsSection}>
                                       <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
                                         <Text style={styles.toolParamsCode}>
                                           {formatToolArguments(toolCall.arguments)}
                                         </Text>
                                       </ScrollView>
-                                    )}
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-
-                            {/* Response Section */}
-                            <View style={[
-                              styles.toolResponseSection,
-                              isPending && styles.toolResponsePending,
-                              allSuccess && styles.toolResponseSuccess,
-                              hasErrors && styles.toolResponseError,
-                            ]}>
-                              <Text style={styles.toolResponseSectionTitle}>Response</Text>
-                              {/* Show any received results first, even if more are pending */}
-                              {(m.toolResults ?? []).map((result, idx) => (
-                                <View key={idx} style={styles.toolResultItem}>
-                                  <View style={styles.toolResultHeader}>
-                                    <Text style={[
-                                      styles.toolResultBadge,
-                                      result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
-                                    ]}>
-                                      {result.success ? '✅ Success' : '❌ Error'}
-                                    </Text>
-                                    <Text style={styles.toolResultCharCount}>
-                                      {(result.content?.length || 0).toLocaleString()} chars
-                                    </Text>
-                                  </View>
-                                  <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
-                                    <Text style={styles.toolResultCode}>
-                                      {result.content || 'No content returned'}
-                                    </Text>
-                                  </ScrollView>
-                                  {result.error && (
-                                    <View style={styles.toolResultErrorSection}>
-                                      <Text style={styles.toolResultErrorLabel}>Error:</Text>
-                                      <Text style={styles.toolResultErrorText}>{result.error}</Text>
                                     </View>
                                   )}
+
+                                  {/* Result for this specific tool call */}
+                                  {result ? (
+                                    <View style={styles.toolResultItem}>
+                                      <View style={styles.toolResultHeader}>
+                                        <Text style={[
+                                          styles.toolResultBadge,
+                                          result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                                        ]}>
+                                          {result.success ? '✅ OK' : '❌ Error'}
+                                        </Text>
+                                        <Text style={styles.toolResultCharCount}>
+                                          {(result.content?.length || 0).toLocaleString()} chars
+                                        </Text>
+                                      </View>
+                                      <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
+                                        <Text style={styles.toolResultCode}>
+                                          {result.content || 'No content returned'}
+                                        </Text>
+                                      </ScrollView>
+                                      {result.error && (
+                                        <View style={styles.toolResultErrorSection}>
+                                          <Text style={styles.toolResultErrorLabel}>Error:</Text>
+                                          <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                  ) : isResultPending ? (
+                                    <Text style={styles.toolResponsePendingText}>⏳ Waiting...</Text>
+                                  ) : null}
                                 </View>
-                              ))}
-                              {/* Show waiting indicator if more tool calls are pending */}
-                              {isPending && (
-                                <Text style={styles.toolResponsePendingText}>
-                                  ⏳ Waiting for {toolCallCount - toolResultCount} more response{toolCallCount - toolResultCount > 1 ? 's' : ''}...
-                                </Text>
-                              )}
-                              {/* Show message if no results yet at all */}
-                              {toolResultCount === 0 && !isPending && (
-                                <Text style={styles.toolResponsePendingText}>No responses received</Text>
-                              )}
-                            </View>
+                              );
+                            })}
+                            {/* Show message if no tool calls */}
+                            {(m.toolCalls?.length ?? 0) === 0 && (
+                              <Text style={styles.toolResponsePendingText}>No tool calls</Text>
+                            )}
                           </View>
                         )}
                       </>
@@ -2718,6 +2708,12 @@ function createStyles(theme: Theme) {
       borderRadius: radius.sm,
       padding: 3,
       marginBottom: 2,
+    },
+    toolCallSection: {
+      marginBottom: spacing.xs,
+      paddingBottom: spacing.xs,
+      borderBottomWidth: 0.5,
+      borderBottomColor: hexToRgba(theme.colors.mutedForeground, 0.15),
     },
     toolName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',

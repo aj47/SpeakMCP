@@ -18,10 +18,13 @@ export function getAllowedDirectories(): string[] {
 }
 
 /**
- * Normalize a path for consistent comparison across platforms
+ * Normalize a path for consistent comparison across platforms.
+ * Only lowercases on Windows where filesystem is case-insensitive.
  */
 export function normalizePath(p: string): string {
-  return path.normalize(p).toLowerCase()
+  const normalized = path.normalize(p)
+  // Only lowercase on Windows where filesystem is case-insensitive
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 /**

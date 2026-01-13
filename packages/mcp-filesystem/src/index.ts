@@ -267,14 +267,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { path: filePath, head, tail } = args as { path: string; head?: number; tail?: number }
         const validPath = await validatePath(filePath)
 
-        if (head && tail) {
+        // Validate head/tail parameters if provided
+        if (head !== undefined && (!Number.isInteger(head) || head <= 0)) {
+          throw new Error("'head' must be a positive integer")
+        }
+        if (tail !== undefined && (!Number.isInteger(tail) || tail <= 0)) {
+          throw new Error("'tail' must be a positive integer")
+        }
+
+        if (head !== undefined && tail !== undefined) {
           throw new Error("Cannot specify both head and tail")
         }
 
         let content: string
-        if (tail) {
+        if (tail !== undefined) {
           content = await tailFile(validPath, tail)
-        } else if (head) {
+        } else if (head !== undefined) {
           content = await headFile(validPath, head)
         } else {
           content = await readFileContent(validPath)

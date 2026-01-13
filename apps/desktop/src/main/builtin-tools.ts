@@ -1290,6 +1290,155 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
   },
+
+  list_server_tools: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate serverName parameter
+    if (typeof args.serverName !== "string" || args.serverName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "serverName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const serverName = args.serverName.trim()
+    const allTools = mcpService.getAvailableTools()
+
+    // Filter tools by server name
+    const serverTools = allTools.filter((tool) => {
+      const toolServerName = tool.name.includes(":") ? tool.name.split(":")[0] : "unknown"
+      return toolServerName === serverName
+    })
+
+    if (serverTools.length === 0) {
+      // Check if the server exists but has no tools
+      const serverStatus = mcpService.getServerStatus()
+      if (serverStatus[serverName]) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              serverName,
+              connected: serverStatus[serverName].connected,
+              tools: [],
+              count: 0,
+              message: serverStatus[serverName].connected
+                ? "Server is connected but has no tools available"
+                : "Server is not connected",
+            }, null, 2),
+          }],
+          isError: false,
+        }
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `Server '${serverName}' not found. Use speakmcp-settings:list_mcp_servers to see available servers.`,
+          }, null, 2),
+        }],
+        isError: true,
+      }
+    }
+
+    // Return tools with brief descriptions (no full schemas)
+    const toolList = serverTools.map((tool) => {
+      const toolName = tool.name.includes(":") ? tool.name.split(":")[1] : tool.name
+      return {
+        name: tool.name,
+        shortName: toolName,
+        description: tool.description,
+      }
+    })
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          serverName,
+          tools: toolList,
+          count: toolList.length,
+          hint: "Use speakmcp-settings:get_tool_schema to get full parameter details for a specific tool",
+        }, null, 2),
+      }],
+      isError: false,
+    }
+  },
+
+  get_tool_schema: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate toolName parameter
+    if (typeof args.toolName !== "string" || args.toolName.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "toolName must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const toolName = args.toolName.trim()
+    const allTools = mcpService.getAvailableTools()
+
+    // Find the tool (try exact match first, then partial match)
+    let tool = allTools.find((t) => t.name === toolName)
+
+    // If not found, try matching just the tool name part (without server prefix)
+    if (!tool && !toolName.includes(":")) {
+      // Find ALL matching tools to detect ambiguity
+      const matchingTools = allTools.filter((t) => {
+        const shortName = t.name.includes(":") ? t.name.split(":")[1] : t.name
+        return shortName === toolName
+      })
+
+      if (matchingTools.length > 1) {
+        // Ambiguous match - multiple servers have a tool with this name
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `Ambiguous tool name '${toolName}' - found in multiple servers. Please use the fully-qualified name.`,
+              matchingTools: matchingTools.map((t) => t.name),
+              hint: "Use one of the fully-qualified tool names listed above (e.g., 'server:tool_name')",
+            }, null, 2),
+          }],
+          isError: true,
+        }
+      }
+
+      // Single match - use it
+      tool = matchingTools[0]
+    }
+
+    if (!tool) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `Tool '${toolName}' not found. Use speakmcp-settings:list_server_tools to see available tools for a server.`,
+            availableTools: allTools.slice(0, 10).map((t) => t.name),
+            hint: allTools.length > 10 ? `...and ${allTools.length - 10} more tools` : undefined,
+          }, null, 2),
+        }],
+        isError: true,
+      }
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        }, null, 2),
+      }],
+      isError: false,
+    }
+  },
 }
 
 /**

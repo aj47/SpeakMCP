@@ -27,6 +27,49 @@ export const AGENT_MODE_ADDITIONS = `
 
 AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.`
 
+/**
+ * Group tools by server and generate a brief description for each server
+ */
+function getServerSummaries(
+  tools: Array<{ name: string; description: string; inputSchema?: any }>,
+): Array<{ serverName: string; toolCount: number; toolNames: string[] }> {
+  const serverMap = new Map<string, string[]>()
+
+  for (const tool of tools) {
+    const serverName = tool.name.includes(":") ? tool.name.split(":")[0] : "unknown"
+    const toolName = tool.name.includes(":") ? tool.name.split(":")[1] : tool.name
+    if (!serverMap.has(serverName)) {
+      serverMap.set(serverName, [])
+    }
+    serverMap.get(serverName)!.push(toolName)
+  }
+
+  return Array.from(serverMap.entries()).map(([serverName, toolNames]) => ({
+    serverName,
+    toolCount: toolNames.length,
+    toolNames,
+  }))
+}
+
+/**
+ * Format tools in a lightweight, server-centric way
+ * Shows server names with brief tool listings to reduce token usage
+ */
+function formatLightweightToolInfo(
+  tools: Array<{ name: string; description: string; inputSchema?: any }>,
+): string {
+  const serverSummaries = getServerSummaries(tools)
+
+  return serverSummaries
+    .map((server) => {
+      // Show server name and list tools briefly
+      const toolList = server.toolNames.slice(0, 5).join(", ")
+      const moreCount = server.toolNames.length > 5 ? ` +${server.toolNames.length - 5} more` : ""
+      return `- ${server.serverName}: ${toolList}${moreCount}`
+    })
+    .join("\n")
+}
+
 export function constructSystemPrompt(
   availableTools: Array<{
     name: string
@@ -55,7 +98,8 @@ export function constructSystemPrompt(
     prompt += `\n\n${skillsInstructions.trim()}`
   }
 
-  const formatToolInfo = (
+  // Format full tool info for relevant tools only (when provided)
+  const formatFullToolInfo = (
     tools: Array<{ name: string; description: string; inputSchema?: any }>,
   ) => {
     return tools
@@ -81,14 +125,18 @@ export function constructSystemPrompt(
   }
 
   if (availableTools.length > 0) {
-    prompt += `\n\nAVAILABLE TOOLS:\n${formatToolInfo(availableTools)}`
+    // Use lightweight format for ALL tools to reduce token usage
+    // Full schemas are still available via native function calling
+    prompt += `\n\nAVAILABLE MCP SERVERS (${availableTools.length} tools total):\n${formatLightweightToolInfo(availableTools)}`
+    prompt += `\n\nTo discover tools: use speakmcp-settings:list_server_tools(serverName) to see all tools in a server, or speakmcp-settings:get_tool_schema(toolName) for full parameter details.`
 
+    // If relevant tools are identified, show them with full details
     if (
       relevantTools &&
       relevantTools.length > 0 &&
       relevantTools.length < availableTools.length
     ) {
-      prompt += `\n\nMOST RELEVANT TOOLS FOR THIS REQUEST:\n${formatToolInfo(relevantTools)}`
+      prompt += `\n\nMOST RELEVANT TOOLS FOR THIS REQUEST:\n${formatFullToolInfo(relevantTools)}`
     }
   } else {
     prompt += `\n\nNo tools are currently available.`

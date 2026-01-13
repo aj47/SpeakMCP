@@ -339,6 +339,20 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
       required: ["skillId"],
     },
   },
+  {
+    name: `${BUILTIN_SERVER_NAME}:read_media_file`,
+    description: "Read an image or audio file and return it as base64-encoded data. Use this to load media files for multimodal LLM processing. Supports common image formats (png, jpg, gif, webp, svg) and audio formats (mp3, wav, ogg, flac).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Absolute path to the media file to read",
+        },
+      },
+      required: ["path"],
+    },
+  },
 ]
 
 /**

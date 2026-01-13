@@ -1488,6 +1488,96 @@ const toolHandlers: Record<string, ToolHandler> = {
       isError: false,
     }
   },
+
+  read_media_file: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const fs = await import("fs/promises")
+    const nodePath = await import("path")
+
+    // Validate required path parameter
+    if (typeof args.path !== "string" || args.path.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "path must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    const filePath = args.path.trim()
+
+    // MIME type mapping for supported media files
+    const mimeTypes: Record<string, string> = {
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".bmp": "image/bmp",
+      ".svg": "image/svg+xml",
+      ".mp3": "audio/mpeg",
+      ".wav": "audio/wav",
+      ".ogg": "audio/ogg",
+      ".flac": "audio/flac",
+    }
+
+    const ext = nodePath.extname(filePath).toLowerCase()
+    const mimeType = mimeTypes[ext]
+
+    if (!mimeType) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `Unsupported file type: ${ext}`,
+            supportedTypes: Object.keys(mimeTypes),
+          }),
+        }],
+        isError: true,
+      }
+    }
+
+    try {
+      const buffer = await fs.readFile(filePath)
+      const base64Data = buffer.toString("base64")
+
+      // Return in MCP-compatible format for multimodal content
+      if (mimeType.startsWith("image/")) {
+        return {
+          content: [{
+            type: "image" as const,
+            data: base64Data,
+            mimeType,
+          } as any],
+          isError: false,
+        }
+      } else {
+        // Audio or other binary
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              path: filePath,
+              mimeType,
+              data: base64Data,
+              size: buffer.length,
+            }),
+          }],
+          isError: false,
+        }
+      }
+    } catch (error: any) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: error.code === "ENOENT" ? `File not found: ${filePath}` : error.message,
+          }),
+        }],
+        isError: true,
+      }
+    }
+  },
 }
 
 /**

@@ -475,14 +475,16 @@ export function useSessions(): SessionStore {
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false); // Non-state lock to guarantee mutual exclusion
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
 
   // Sync sessions with server
   const syncWithServer = useCallback(async (client: SettingsApiClient): Promise<SyncResult> => {
-    if (isSyncing) {
+    // Use ref for synchronous check to prevent race conditions between rapid invocations
+    if (isSyncingRef.current) {
       return { pulled: 0, pushed: 0, updated: 0, errors: ['Sync already in progress'] };
     }
-
+    isSyncingRef.current = true;
     setIsSyncing(true);
 
     try {
@@ -548,9 +550,10 @@ export function useSessions(): SessionStore {
       setLastSyncResult(errorResult);
       return errorResult;
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [isSyncing, queueSave]);
+  }, [queueSave]);
 
   return {
     sessions,

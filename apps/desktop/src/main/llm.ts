@@ -740,16 +740,27 @@ export async function processTranscriptWithAgentMode(
       .map(entry => entry.content.trim().toLowerCase())
       .slice(-3)
 
-    if (assistantResponses.length < 2) return false
+    // Allow detection with at least 1 previous response (detect loops earlier)
+    if (assistantResponses.length < 1) return false
 
     const currentTrimmed = currentResponse.trim().toLowerCase()
+    if (currentTrimmed.length === 0) return false
 
     // Check if current response is very similar to any of the last 2 responses
-    // Using a simple similarity check: if 80% of the content matches
     for (const prevResponse of assistantResponses.slice(-2)) {
-      if (prevResponse.length === 0 || currentTrimmed.length === 0) continue
+      if (prevResponse.length === 0) continue
 
-      // Simple similarity: check if responses are nearly identical
+      // For very short responses (< 5 words), require exact match to avoid false positives
+      // Single-word responses like "yes", "done", "ok" could be legitimately repeated
+      const wordCount = currentTrimmed.split(/\s+/).length
+      if (wordCount < 5) {
+        if (currentTrimmed === prevResponse) {
+          return true
+        }
+        continue
+      }
+
+      // For longer responses, use Jaccard similarity with 80% threshold
       const similarity = calculateSimilarity(currentTrimmed, prevResponse)
       if (similarity > 0.8) {
         return true
@@ -874,6 +885,10 @@ export async function processTranscriptWithAgentMode(
     const maxItems = Math.max(1, config.mcpVerifyContextMaxItems || 20)
     const recent = conversationHistory.slice(-maxItems)
     const messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = []
+
+    // Track the last assistant content added to avoid duplicates
+    let lastAddedAssistantContent: string | null = null
+
     messages.push({
       role: "system",
       content:
@@ -905,7 +920,14 @@ Return ONLY JSON per schema.`,
     for (const entry of recent) {
       if (entry.role === "tool") {
         const text = (entry.content || "").trim()
-        if (text) messages.push({ role: "user", content: `Tool results:\n${text}` })
+        // Add placeholder for empty tool results instead of silently skipping
+        messages.push({ role: "user", content: `[Tool executed] ${text || "[No output]"}` })
+      } else if (entry.role === "user") {
+        // Skip empty user messages
+        const text = (entry.content || "").trim()
+        if (text) {
+          messages.push({ role: "user", content: text })
+        }
       } else {
         // Ensure non-empty content for assistant messages (Anthropic API requirement)
         let content = entry.content
@@ -918,23 +940,23 @@ Return ONLY JSON per schema.`,
           }
         }
         messages.push({ role: entry.role, content })
+        if (entry.role === "assistant") {
+          lastAddedAssistantContent = content
+        }
       }
     }
-    if (finalAssistantText?.trim()) {
+    // Only add finalAssistantText if it's different from the last assistant message added
+    if (finalAssistantText?.trim() && finalAssistantText.trim() !== lastAddedAssistantContent?.trim()) {
       messages.push({ role: "assistant", content: finalAssistantText })
     }
-    messages.push({
-      role: "user",
-      content:
-        "Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary.",
-    })
-    // If we've already failed verification, tell the verifier
+
+    // Build the JSON request with optional verification attempt note (combined into single message)
+    let jsonRequestContent = "Return a JSON object with fields: isComplete (boolean), confidence (0..1), missingItems (string[]), reason (string). No extra commentary."
     if (currentVerificationFailCount > 0) {
-      messages.push({
-        role: "user",
-        content: `Note: This is verification attempt #${currentVerificationFailCount + 1}. If the task appears reasonably complete, please mark as complete to avoid infinite loops.`
-      })
+      jsonRequestContent += `\n\nNote: This is verification attempt #${currentVerificationFailCount + 1}. If the task appears reasonably complete, please mark as complete to avoid infinite loops.`
     }
+    messages.push({ role: "user", content: jsonRequestContent })
+
     return messages
   }
 
@@ -1766,15 +1788,38 @@ Return ONLY JSON per schema.`,
             })
           }
 
-          // Run verification to check if this is truly complete
-          const verification = await verifyCompletionWithFetch(
-            buildVerificationMessages(contentText, verificationFailCount),
-            config.mcpToolsProviderId
+          // Create a verification step for this path
+          const verifyStep = createProgressStep(
+            "thinking",
+            "Verifying completion",
+            "Checking that the user's request has been achieved",
+            "in_progress",
           )
+          progressSteps.push(verifyStep)
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
 
-          if (verification?.isComplete === true) {
+          // Use centralized verification handler (includes loop detection, retries, hard limits)
+          const result = await runVerificationAndHandleResult(
+            contentText,
+            verifyStep,
+            verificationFailCount,
+            {
+              checkRepeating: true,
+              nudgeForToolUsage: true, // Nudge for tool usage since we have tools available
+            }
+          )
+          verificationFailCount = result.newFailCount
+
+          if (!result.shouldContinue) {
+            // Verification passed or hard limit reached
             if (isDebugLLM()) {
-              logLLM("Verifier confirmed completion", { verification })
+              logLLM("Verifier confirmed completion", { isComplete: result.isComplete })
             }
             finalContent = contentText
             addMessage("assistant", contentText)
@@ -1788,20 +1833,18 @@ Return ONLY JSON per schema.`,
             })
             break
           } else {
-            // Verifier says not complete - agent intends to continue
+            // Verifier says not complete - continue agent loop
+            // The centralized handler already added the nudge message
             if (isDebugLLM()) {
               logLLM("Verifier says not complete - continuing agent loop", {
-                verification,
                 responsePreview: trimmedContent.substring(0, 100),
+                failCount: verificationFailCount,
               })
             }
             // Add the partial response to history and continue
             if (trimmedContent.length > 0) {
               addMessage("assistant", contentText)
             }
-            // Reset noOpCount since the agent is actively working (just not calling tools)
-            // noOpCount was already incremented at the top of the !hasToolCalls block,
-            // but this shouldn't count as a no-op since the verifier confirms ongoing work
             noOpCount = 0
             continue
           }

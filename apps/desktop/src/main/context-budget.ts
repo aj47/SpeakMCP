@@ -3,6 +3,7 @@ import { isDebugLLM, logLLM } from "./debug"
 import { makeTextCompletionWithFetch } from "./llm-fetch"
 import { constructMinimalSystemPrompt } from "./system-prompts"
 import { agentSessionStateManager } from "./state"
+import { summarizationService } from "./summarization-service"
 
 export type LLMMessage = { role: string; content: string }
 
@@ -462,6 +463,70 @@ ${src}`
   return combined
 }
 
+/**
+ * Build a context summary from stored session summaries
+ * This allows the LLM to know what work was accomplished even if messages were dropped
+ */
+function buildContextFromSummaries(sessionId: string): string | null {
+  const summaries = summarizationService.getSummaries(sessionId)
+  if (summaries.length === 0) return null
+
+  // Get important summaries
+  const important = summarizationService.getImportantSummaries(sessionId)
+  const toInclude = important.length > 0 ? important : summaries.slice(-5)
+
+  if (toInclude.length === 0) return null
+
+  const lines = toInclude.map(s => {
+    const status = s.importance === "critical" ? "⚠️" : "✓"
+    return `${status} Step ${s.stepNumber}: ${s.actionSummary}`
+  })
+
+  return `[Session Progress Summary]\n${lines.join("\n")}`
+}
+
+/**
+ * Summarize tool messages that would be dropped during context shrinking.
+ * Creates a brief summary of what work was accomplished to preserve context.
+ * @param toolMessages Array of tool messages that would be dropped
+ * @returns A summary string under 500 chars
+ */
+function summarizeToolMessagesForDropping(toolMessages: LLMMessage[]): string {
+  if (toolMessages.length === 0) return ""
+
+  const summaries: string[] = []
+  let totalLength = 0
+  const MAX_SUMMARY_LENGTH = 500
+
+  for (const msg of toolMessages) {
+    // Parse tool result to extract key info
+    const content = msg.content || ""
+
+    // Try to determine success/failure status
+    const isError = content.toLowerCase().includes("error") ||
+                    content.toLowerCase().includes("failed") ||
+                    content.toLowerCase().includes("exception")
+    const status = isError ? "failed" : "success"
+
+    // Extract a brief description (first 50 chars or first line)
+    let brief = content.split("\n")[0].substring(0, 50)
+    if (content.length > 50) brief += "..."
+
+    const entry = `${status}: ${brief}`
+
+    // Check if adding this would exceed limit
+    if (totalLength + entry.length + 2 > MAX_SUMMARY_LENGTH) {
+      summaries.push(`... and ${toolMessages.length - summaries.length} more`)
+      break
+    }
+
+    summaries.push(entry)
+    totalLength += entry.length + 2 // +2 for ", "
+  }
+
+  return `Previously completed work: [${summaries.join(", ")}]`
+}
+
 export interface ShrinkOptions {
   messages: LLMMessage[]
   availableTools?: Array<{ name: string; description?: string; inputSchema?: any }>
@@ -480,6 +545,7 @@ export interface ShrinkResult {
   estTokensBefore: number
   estTokensAfter: number
   maxTokens: number
+  toolResultsSummarized?: boolean
 }
 
 export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkResult> {
@@ -596,13 +662,32 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     if (k >= 0) keptSet.add(k)
   }
 
-  // Check if tool results exist before drop_middle for logging
-  const hadToolsBefore = messages.some(m => m.role === "tool")
+  // Find tool messages that would be dropped (not in keptSet)
+  const toolMessagesToBeDropped: LLMMessage[] = []
+  for (let i = 0; i < messages.length; i++) {
+    if (!keptSet.has(i) && messages[i].role === "tool") {
+      toolMessagesToBeDropped.push(messages[i])
+    }
+  }
 
-  // Preserve order: system -> first user -> (chronological tail without duplicates)
+  // Summarize tool messages before dropping them
+  let toolResultsSummarized = false
+  let toolSummaryMessage: LLMMessage | null = null
+  if (toolMessagesToBeDropped.length > 0) {
+    const summary = summarizeToolMessagesForDropping(toolMessagesToBeDropped)
+    if (summary) {
+      toolSummaryMessage = { role: "assistant", content: summary }
+      toolResultsSummarized = true
+      logLLM(`[Context Budget] Summarized ${toolMessagesToBeDropped.length} tool results before drop_middle`)
+    }
+  }
+
+  // Preserve order: system -> first user -> tool summary (if any) -> (chronological tail without duplicates)
   const ordered: LLMMessage[] = []
   if (systemIdx >= 0) ordered.push(messages[systemIdx])
   if (firstUserIdx >= 0 && firstUserIdx !== systemIdx) ordered.push(messages[firstUserIdx])
+  // Insert tool summary right after first user message
+  if (toolSummaryMessage) ordered.push(toolSummaryMessage)
   for (let k = baseLen - effectiveLastN; k < baseLen; k++) {
     if (k >= 0 && k !== systemIdx && k !== firstUserIdx) ordered.push(messages[k])
   }
@@ -610,15 +695,22 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   applied.push("drop_middle")
   tokens = estimateTokensFromMessages(messages)
 
-  // Log warning if tool results were dropped
-  const toolsDropped = hadToolsBefore && !messages.some(m => m.role === "tool")
-  if (toolsDropped) {
-    console.warn("[Context Budget] Warning: Tool results dropped during context shrinking")
+  // If we dropped tools, try to inject session progress from summaries
+  if (toolResultsSummarized && opts.sessionId) {
+    const progressSummary = buildContextFromSummaries(opts.sessionId)
+    if (progressSummary) {
+      // Find first user message and inject progress after it
+      const firstUserIdx = messages.findIndex(m => m.role === "user")
+      if (firstUserIdx >= 0 && firstUserIdx < messages.length - 1) {
+        messages.splice(firstUserIdx + 1, 0, { role: "assistant", content: progressSummary })
+        if (isDebugLLM()) logLLM("[Context Budget] Injected session progress summary from summarization service")
+      }
+    }
   }
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
   }
 
   // Tier 3: Minimal system prompt
@@ -638,6 +730,6 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
 }
 

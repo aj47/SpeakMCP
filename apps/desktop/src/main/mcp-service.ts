@@ -51,6 +51,20 @@ import {
 
 const accessAsync = promisify(access)
 
+// Default timeout for tool execution (20 seconds)
+// Browser automation tools like Playwright may take longer
+const DEFAULT_TOOL_TIMEOUT_MS = 20_000
+
+// Tools that may legitimately take longer
+const LONG_RUNNING_TOOLS = new Set([
+  'playwriter:execute',
+  'browser:screenshot',
+  'browser:navigate',
+])
+
+// Extended timeout for long-running tools (60 seconds)
+const LONG_RUNNING_TOOL_TIMEOUT_MS = 60_000
+
 /**
  * Internal server constants
  * Internal servers are managed by SpeakMCP and should always use bundled paths
@@ -1377,10 +1391,25 @@ export class MCPService {
           arguments: processedArguments,
         })
       }
-      const result = await client.callTool({
+      // Determine appropriate timeout based on tool type
+      const fullToolName = `${serverName}:${toolName}`
+      const timeoutMs = LONG_RUNNING_TOOLS.has(fullToolName)
+        ? LONG_RUNNING_TOOL_TIMEOUT_MS
+        : DEFAULT_TOOL_TIMEOUT_MS
+
+      // Execute tool with timeout
+      const toolPromise = client.callTool({
         name: toolName,
         arguments: processedArguments,
       })
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Tool ${fullToolName} timed out after ${timeoutMs / 1000}s`))
+        }, timeoutMs)
+      })
+
+      const result = await Promise.race([toolPromise, timeoutPromise])
 
       if (isDebugTools()) {
         logTools("Tool result", { serverName, toolName, result })
@@ -1486,6 +1515,18 @@ export class MCPService {
               // Retry failed, will fall through to error return
             }
           }
+        }
+      }
+
+      if (error instanceof Error && error.message.includes('timed out')) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Tool timeout: ${serverName}:${toolName} did not complete within the time limit. Consider breaking the task into smaller steps.`,
+            },
+          ],
+          isError: true,
         }
       }
 

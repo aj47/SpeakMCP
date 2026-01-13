@@ -13,6 +13,7 @@ import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
 import { shrinkMessagesForLLM, estimateTokensFromMessages } from "./context-budget"
+import { filterToolsForContext, getRecentToolNames } from "./tool-filter"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
@@ -395,7 +396,19 @@ async function executeToolWithRetries(
   }
 }
 
-
+/**
+ * Represents a completed work item that survives context shrinking.
+ * This structure tracks completed work that should never be lost even when
+ * the context budget forces message removal.
+ */
+interface CompletedWorkItem {
+  stepNumber: number
+  timestamp: number
+  action: string  // Brief description of what was done
+  toolName?: string  // If it was a tool execution
+  result: 'success' | 'failure' | 'partial'
+  summary: string  // Short summary (under 200 chars)
+}
 
 export async function processTranscriptWithAgentMode(
   transcript: string,
@@ -808,6 +821,11 @@ export async function processTranscriptWithAgentMode(
     { role: "user", content: transcript, timestamp: Date.now() },
   ]
 
+  // Completed work tracking - survives context shrinking
+  // This array tracks completed work that should never be lost even when
+  // the context budget forces message removal. Items are never removed.
+  const completedWork: CompletedWorkItem[] = []
+
   // Track the index where the current user prompt was added
   // This is used to scope tool result checks to only the current turn
   const currentPromptIndex = previousConversationHistory?.length || 0
@@ -827,6 +845,9 @@ export async function processTranscriptWithAgentMode(
       logLLM("[processTranscriptWithAgentMode] Failed to save initial user message:", err)
     })
   }
+
+  // Track empty response retries to prevent infinite loops
+  let emptyResponseRetryCount = 0
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
   const formatConversationForProgress = (
@@ -919,6 +940,53 @@ export async function processTranscriptWithAgentMode(
     const union = new Set([...words1, ...words2])
 
     return union.size === 0 ? 0 : intersection.size / union.size
+  }
+
+  /**
+   * Add a completed work item to the tracking array.
+   * This function tracks tool results and assistant responses, creating
+   * a brief summary for each. Items are never removed from this array,
+   * ensuring work history is preserved across context shrinking.
+   */
+  const addCompletedWork = (
+    action: string,
+    result: 'success' | 'failure' | 'partial',
+    summary: string,
+    toolName?: string
+  ): void => {
+    const stepNumber = completedWork.length + 1
+    // Truncate summary to under 200 chars if needed
+    const truncatedSummary = summary.length > 200
+      ? summary.substring(0, 197) + '...'
+      : summary
+
+    completedWork.push({
+      stepNumber,
+      timestamp: Date.now(),
+      action,
+      toolName,
+      result,
+      summary: truncatedSummary,
+    })
+  }
+
+  /**
+   * Get a formatted summary of all completed work.
+   * Returns a bullet-point summary string that can be injected into
+   * the system prompt or context to preserve work history.
+   */
+  const getCompletedWorkSummary = (): string => {
+    if (completedWork.length === 0) {
+      return ''
+    }
+
+    const lines = completedWork.map((item) => {
+      const toolInfo = item.toolName ? ` [${item.toolName}]` : ''
+      const resultIcon = item.result === 'success' ? '✓' : item.result === 'failure' ? '✗' : '◐'
+      return `• Step ${item.stepNumber}${toolInfo}: ${resultIcon} ${item.summary}`
+    })
+
+    return `## Completed Work (preserved across context shrinking)\n${lines.join('\n')}`
   }
 
   // Helper to map conversation history to LLM messages format (filters empty content)
@@ -1105,6 +1173,9 @@ Return ONLY JSON per schema.`,
 
   // Verification failure limit - after this many failures, force completion
   const VERIFICATION_FAIL_LIMIT = 5
+
+  // Empty response retry limit - after this many retries, break to prevent infinite loops
+  const MAX_EMPTY_RESPONSE_RETRIES = 3
 
   /**
    * Result of running verification and handling the outcome
@@ -1426,12 +1497,25 @@ Return ONLY JSON per schema.`,
         .filter(Boolean as any),
     ]
 
+    // Dynamic tool filtering to reduce token overhead
+    // This filters activeTools (already filtered for failures) based on context relevance
+    const recentToolNames = getRecentToolNames(conversationHistory)
+    const filterResult = filterToolsForContext(activeTools, {
+      transcript: transcript,
+      recentToolNames,
+    })
+    const filteredTools = filterResult.tools
+
+    if (filterResult.filtered) {
+      logLLM(`[Tool Filter] Reduced tools from ${filterResult.originalCount} to ${filterResult.filteredCount}`)
+    }
+
     // Apply context budget management before the agent LLM call
-    // Use activeTools (filtered for failures) so context-budget paths like minimal_system_prompt
-    // don't list tools that are no longer callable, which could confuse the LLM
+    // Use filteredTools for LLM calls to reduce token overhead
+    // activeTools is still used for failure tracking and other logic
     const { messages: shrunkMessages, estTokensAfter, maxTokens: maxContextTokens } = await shrinkMessagesForLLM({
       messages: messages as any,
-      availableTools: activeTools,
+      availableTools: filteredTools,
       relevantTools: undefined,
       isAgentMode: true,
       sessionId: currentSessionId,
@@ -1504,8 +1588,9 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      // activeTools is already computed at the start of each iteration
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, activeTools)
+      // Use filteredTools for the LLM call to reduce token overhead
+      // activeTools is still used for failure tracking and other logic
+      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, filteredTools)
 
       // Clear streaming state after response is complete
       emit({
@@ -1565,6 +1650,26 @@ Return ONLY JSON per schema.`,
       // Handle empty response errors - retry with guidance
       const errorMessage = (error?.message || String(error)).toLowerCase()
       if (errorMessage.includes("empty") || errorMessage.includes("no text") || errorMessage.includes("no content")) {
+        emptyResponseRetryCount++
+        if (emptyResponseRetryCount > MAX_EMPTY_RESPONSE_RETRIES) {
+          logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
+          diagnosticsService.logError("llm", "Empty response retry limit exceeded", {
+            iteration,
+            retryCount: emptyResponseRetryCount,
+            limit: MAX_EMPTY_RESPONSE_RETRIES
+          })
+          thinkingStep.status = "error"
+          thinkingStep.description = "Empty response limit exceeded"
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent: "I encountered repeated empty responses and couldn't complete the task. Please try again.",
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        }
         thinkingStep.status = "error"
         thinkingStep.description = "Empty response. Retrying..."
         emit({
@@ -1595,7 +1700,8 @@ Return ONLY JSON per schema.`,
     const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === "" && !hasValidToolCalls
 
     if (!llmResponse || (!hasValidContent && !hasValidToolCalls && !isIntentionalEmptyCompletion)) {
-      logLLM(`❌ LLM null/empty response on iteration ${iteration}`)
+      emptyResponseRetryCount++
+      logLLM(`❌ LLM null/empty response on iteration ${iteration} (retry ${emptyResponseRetryCount}/${MAX_EMPTY_RESPONSE_RETRIES})`)
       logLLM("Response details:", {
         hasResponse: !!llmResponse,
         responseType: typeof llmResponse,
@@ -1610,8 +1716,24 @@ Return ONLY JSON per schema.`,
       diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", {
         iteration,
         response: llmResponse,
-        message: "LLM response has neither content nor toolCalls"
+        message: "LLM response has neither content nor toolCalls",
+        retryCount: emptyResponseRetryCount,
+        limit: MAX_EMPTY_RESPONSE_RETRIES
       })
+      if (emptyResponseRetryCount > MAX_EMPTY_RESPONSE_RETRIES) {
+        logLLM(`❌ Empty response retry limit exceeded (${MAX_EMPTY_RESPONSE_RETRIES} retries)`)
+        thinkingStep.status = "error"
+        thinkingStep.description = "Empty response limit exceeded"
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent: "I encountered repeated empty responses and couldn't complete the task. Please try again.",
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
       thinkingStep.status = "error"
       thinkingStep.description = "Invalid response. Retrying..."
       emit({
@@ -1624,6 +1746,9 @@ Return ONLY JSON per schema.`,
       addMessage("user", "Previous request had invalid response. Please retry or summarize progress.")
       continue
     }
+
+    // Reset empty response counter on successful response
+    emptyResponseRetryCount = 0
 
     // Handle intentional empty completion from LLM (finish_reason='stop')
     // This is unusual - the model chose to complete without any content
@@ -2476,6 +2601,33 @@ Return ONLY JSON per schema.`,
 
       addMessage("tool", toolResultsText, undefined, resultsWithPlaceholders)
 
+      // Track completed work for each tool execution (survives context shrinking)
+      // Note: toolCallsArray and resultsWithPlaceholders have the same order/indices
+      for (let i = 0; i < resultsWithPlaceholders.length; i++) {
+        const result = resultsWithPlaceholders[i]
+        const toolName = toolCallsArray[i]?.name || 'unknown'
+        const contentText = result.content?.map((c) => c.text).join(' ').trim() || ''
+        const resultType: 'success' | 'failure' | 'partial' = result.isError
+          ? 'failure'
+          : contentText.length === 0 || contentText === '[No output]'
+            ? 'partial'
+            : 'success'
+
+        // Create a brief summary from the result content
+        const summary = contentText.length > 0
+          ? contentText
+          : result.isError
+            ? 'Tool execution failed'
+            : 'Tool executed with no output'
+
+        addCompletedWork(
+          `Executed tool: ${toolName}`,
+          resultType,
+          summary,
+          toolName
+        )
+      }
+
       // Emit progress update immediately after adding tool results so UI shows them
       emit({
         currentIteration: iteration,
@@ -3227,12 +3379,18 @@ async function makeLLMCall(
       try {
         result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
       } finally {
-        // Abort streaming request - we have the real response (or error) now
-        // This saves bandwidth/tokens by closing the SSE connection immediately
+        // Signal streaming to stop IMMEDIATELY
         streamingAborted = true
         streamingAbortController.abort()
 
-        // Unregister the streaming abort controller since we're done with it
+        // Wait briefly for streaming to acknowledge the abort (prevents race)
+        // This ensures streaming callbacks don't fire after we return
+        await Promise.race([
+          streamingPromise,
+          new Promise(resolve => setTimeout(resolve, 100))  // 100ms max wait
+        ]).catch(() => {}) // Ignore any errors
+
+        // Unregister after streaming has stopped
         if (sessionId) {
           agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
         }

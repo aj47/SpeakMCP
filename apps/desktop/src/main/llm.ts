@@ -1671,7 +1671,27 @@ Return ONLY JSON per schema.`,
           }
         }
 
+      // Add completion step
+      const completionStep = createProgressStep(
+        "completion",
+        "Task completed",
+        "Successfully completed the requested task",
+        "completed",
+      )
+      progressSteps.push(completionStep)
+
+      // Emit final progress immediately for UI feedback
+      emit({
+        currentIteration: iteration,
+        maxIterations,
+        steps: progressSteps.slice(-3),
+        isComplete: true,
+        finalContent,
+        conversationHistory: formatConversationForProgress(conversationHistory),
+      })
+
       // Generate final completion summary (if dual-model enabled)
+      // Await and emit follow-up to ensure the final summary is included
       if (isSummarizationEnabled()) {
         const lastToolCalls = conversationHistory
           .filter(m => m.toolCalls && m.toolCalls.length > 0)
@@ -1682,37 +1702,33 @@ Return ONLY JSON per schema.`,
           .flatMap(m => m.toolResults || [])
           .slice(-5)
 
-        generateStepSummary(
-          iteration,
-          lastToolCalls,
-          lastToolResults,
-          finalContent,
-          true, // isCompletion: this is the final completion step
-        ).catch(err => {
-          if (isDebugLLM()) {
-            logLLM("[Dual-Model] Background summarization error:", err)
+        try {
+          const completionSummary = await generateStepSummary(
+            iteration,
+            lastToolCalls,
+            lastToolResults,
+            finalContent,
+            true, // isCompletion: this is the final completion step
+          )
+
+          // If a summary was generated, emit a follow-up progress update
+          // to ensure the UI receives the completion summary
+          if (completionSummary) {
+            emit({
+              currentIteration: iteration,
+              maxIterations,
+              steps: progressSteps.slice(-3),
+              isComplete: true,
+              finalContent,
+              conversationHistory: formatConversationForProgress(conversationHistory),
+            })
           }
-        })
+        } catch (err) {
+          if (isDebugLLM()) {
+            logLLM("[Dual-Model] Completion summarization error:", err)
+          }
+        }
       }
-
-      // Add completion step
-      const completionStep = createProgressStep(
-        "completion",
-        "Task completed",
-        "Successfully completed the requested task",
-        "completed",
-      )
-      progressSteps.push(completionStep)
-
-      // Emit final progress
-      emit({
-        currentIteration: iteration,
-        maxIterations,
-        steps: progressSteps.slice(-3),
-        isComplete: true,
-        finalContent,
-        conversationHistory: formatConversationForProgress(conversationHistory),
-      })
 
       break
     }

@@ -883,7 +883,7 @@ export function Component() {
                       Strong Model (Planning)
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      <span className="text-yellow-600 dark:text-yellow-400">(Coming soon)</span> Primary model for reasoning and tool calls. Currently uses your main agent model.
+                      <span className="text-yellow-600 dark:text-yellow-400">(Coming soon)</span> Primary model for reasoning and tool calls. This setting is not yet functional — the agent currently uses your Agent Model settings above.
                     </p>
                     <div className="space-y-2">
                       <Control

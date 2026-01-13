@@ -1333,6 +1333,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     const now = Date.now()
     const memory: AgentMemory = {
       id: `memory_${now}_${Math.random().toString(36).substr(2, 9)}`,
+      profileId: config.mcpCurrentProfileId,
       createdAt: now,
       updatedAt: now,
       title,

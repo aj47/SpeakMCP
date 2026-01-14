@@ -63,3 +63,7 @@ apps/mobile/ios/.xcode.env.local
 apps/mobile/ios/build/
 *.ipa
 release/
+
+# Test artifacts
+trace-session*.json
+apps/desktop/tmp/

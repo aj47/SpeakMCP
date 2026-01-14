@@ -3634,6 +3634,33 @@ export const router = {
       return memoryService.deleteMemory(input.id)
     }),
 
+  deleteMultipleMemories: t.procedure
+    .input<{ ids: string[] }>()
+    .action(async ({ input }) => {
+      const profileId = profileService.getCurrentProfile()?.id
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteMultipleMemories(input.ids, profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
+    }),
+
+  deleteAllMemories: t.procedure
+    .action(async () => {
+      const profileId = profileService.getCurrentProfile()?.id
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteAllMemories(profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
+    }),
+
   searchMemories: t.procedure
     .input<{ query: string; profileId?: string }>()
     .action(async ({ input }) => {

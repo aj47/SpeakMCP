@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Badge } from "@renderer/components/ui/badge"
@@ -29,7 +29,10 @@ import {
   FileText,
   Pencil,
   X,
-  User
+  User,
+  CheckSquare,
+  Square,
+  MinusSquare,
 } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 
@@ -40,14 +43,18 @@ const importanceColors = {
   critical: "bg-red-500/20 text-red-600 dark:text-red-400",
 }
 
-function MemoryCard({ 
-  memory, 
+function MemoryCard({
+  memory,
   onDelete,
   onEdit,
-}: { 
+  isSelected,
+  onToggleSelect,
+}: {
   memory: AgentMemory
   onDelete: (id: string) => void
   onEdit: (memory: AgentMemory) => void
+  isSelected: boolean
+  onToggleSelect: (id: string) => void
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
   
@@ -64,12 +71,26 @@ function MemoryCard({
       "rounded-lg border bg-card transition-all duration-200 hover:bg-accent/5",
       memory.importance === "critical" && "border-red-500/50",
       memory.importance === "high" && "border-orange-500/50",
+      isSelected && "ring-2 ring-primary/50",
     )}>
       {/* Header */}
-      <div 
+      <div
         className="flex items-start gap-3 p-4 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
+        <button
+          className="mt-0.5 text-muted-foreground hover:text-foreground"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect(memory.id)
+          }}
+        >
+          {isSelected ? (
+            <CheckSquare className="h-4 w-4 text-primary" />
+          ) : (
+            <Square className="h-4 w-4" />
+          )}
+        </button>
         <button className="mt-0.5 text-muted-foreground hover:text-foreground">
           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
@@ -189,6 +210,9 @@ export function Component() {
   const [editNotes, setEditNotes] = useState("")
   const [editTags, setEditTags] = useState("")
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
 
   // Get current profile for display
   const currentProfileQuery = useQuery({
@@ -198,6 +222,11 @@ export function Component() {
     },
   })
   const currentProfile = currentProfileQuery.data
+
+  // Clear selection when filters or profile change to avoid deleting non-visible items
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [searchQuery, importanceFilter, currentProfile?.id])
 
   // Get memories for the current profile (automatically filtered by profile on the backend)
   const memoriesQuery = useQuery({
@@ -243,6 +272,36 @@ export function Component() {
     },
   })
 
+  const deleteMultipleMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return await tipcClient.deleteMultipleMemories({ ids })
+    },
+    onSuccess: (deletedCount) => {
+      queryClient.invalidateQueries({ queryKey: ["memories"] })
+      toast.success(`Deleted ${deletedCount} memories`)
+      setSelectedIds(new Set())
+      setBulkDeleteConfirm(false)
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete: ${error.message}`)
+    },
+  })
+
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.deleteAllMemories()
+    },
+    onSuccess: (deletedCount) => {
+      queryClient.invalidateQueries({ queryKey: ["memories"] })
+      toast.success(`Deleted ${deletedCount} memories`)
+      setSelectedIds(new Set())
+      setDeleteAllConfirm(false)
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete: ${error.message}`)
+    },
+  })
+
   const memories = memoriesQuery.data || []
   const searchResults = searchMutation.data
   const displayMemories = searchResults ?? memories
@@ -279,9 +338,41 @@ export function Component() {
     })
   }
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  // Calculate how many of the currently visible (filtered) memories are selected
+  const filteredIds = new Set(filteredMemories.map(m => m.id))
+  const visibleSelectedCount = [...selectedIds].filter(id => filteredIds.has(id)).length
+
+  const handleSelectAll = () => {
+    if (visibleSelectedCount === filteredMemories.length && filteredMemories.length > 0) {
+      // Deselect only the visible ones, keep any non-visible selections
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        filteredMemories.forEach(m => next.delete(m.id))
+        return next
+      })
+    } else {
+      // Add all visible to selection (keeps existing non-visible selections)
+      setSelectedIds(prev => new Set([...prev, ...filteredMemories.map(m => m.id)]))
+    }
+  }
+
   // Stats
   const criticalCount = memories.filter(m => m.importance === "critical").length
   const highCount = memories.filter(m => m.importance === "high").length
+  const allSelected = filteredMemories.length > 0 && visibleSelectedCount === filteredMemories.length
+  const someSelected = visibleSelectedCount > 0 && visibleSelectedCount < filteredMemories.length
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
@@ -356,6 +447,54 @@ export function Component() {
           </div>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {filteredMemories.length > 0 && (
+          <div className="flex items-center gap-3 py-2 px-3 bg-muted/50 rounded-lg">
+            <button
+              className="text-muted-foreground hover:text-foreground"
+              onClick={handleSelectAll}
+            >
+              {allSelected ? (
+                <CheckSquare className="h-4 w-4 text-primary" />
+              ) : someSelected ? (
+                <MinusSquare className="h-4 w-4 text-primary" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+            </button>
+            <span className="text-sm text-muted-foreground">
+              {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+            </span>
+            <div className="flex-1" />
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBulkDeleteConfirm(true)}
+                disabled={deleteMultipleMutation.isPending}
+              >
+                {deleteMultipleMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Delete Selected ({selectedIds.size})
+              </Button>
+            )}
+            {memories.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteAllConfirm(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete All
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Memory List */}
         {memoriesQuery.isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -379,6 +518,8 @@ export function Component() {
                 memory={memory}
                 onDelete={(id) => setDeleteConfirmId(id)}
                 onEdit={handleEdit}
+                isSelected={selectedIds.has(memory.id)}
+                onToggleSelect={handleToggleSelect}
               />
             ))}
           </div>
@@ -448,6 +589,62 @@ export function Component() {
             >
               {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Delete {visibleSelectedCount} Memories
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {visibleSelectedCount} selected memories? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMultipleMutation.mutate([...selectedIds].filter(id => filteredIds.has(id)))}
+              disabled={deleteMultipleMutation.isPending}
+            >
+              {deleteMultipleMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Delete {visibleSelectedCount} Memories
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={deleteAllConfirm} onOpenChange={setDeleteAllConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Delete All Memories
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete ALL {memories.length} memories? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAllConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteAllMutation.mutate()}
+              disabled={deleteAllMutation.isPending}
+            >
+              {deleteAllMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Delete All Memories
             </Button>
           </DialogFooter>
         </DialogContent>

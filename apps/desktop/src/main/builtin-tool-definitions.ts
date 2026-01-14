@@ -367,6 +367,35 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:delete_multiple_memories`,
+    description: "Delete multiple memories by their IDs in a single operation. More efficient than calling delete_memory repeatedly. Call list_memories first to get IDs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        memoryIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of memory IDs to delete (from list_memories)",
+        },
+      },
+      required: ["memoryIds"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:delete_all_memories`,
+    description: "Delete ALL memories for the current profile. Use with caution - this cannot be undone. Consider using delete_multiple_memories for selective deletion.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        confirm: {
+          type: "boolean",
+          description: "Must be set to true to confirm deletion of all memories",
+        },
+      },
+      required: ["confirm"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:list_server_tools`,
     description: "List all tools available from a specific MCP server. Use this to discover what tools a server provides before calling them.",
     inputSchema: {

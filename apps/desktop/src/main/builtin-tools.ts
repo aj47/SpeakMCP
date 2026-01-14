@@ -1518,6 +1518,120 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
+  delete_multiple_memories: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
+        isError: true,
+      }
+    }
+
+    if (!Array.isArray(args.memoryIds) || args.memoryIds.length === 0) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryIds must be a non-empty array of strings" }) }],
+        isError: true,
+      }
+    }
+
+    // Validate all IDs are strings, tracking ignored entries
+    const memoryIds: string[] = []
+    const ignoredIds: unknown[] = []
+    for (const id of args.memoryIds) {
+      if (typeof id === "string" && id.trim() !== "") {
+        memoryIds.push(id)
+      } else {
+        ignoredIds.push(id)
+      }
+    }
+    if (memoryIds.length === 0) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryIds must contain valid string IDs" }) }],
+        isError: true,
+      }
+    }
+
+    const currentProfileId = config.mcpCurrentProfileId
+    if (!currentProfileId) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "No profile selected" }) }],
+        isError: true,
+      }
+    }
+
+    try {
+      const result = await memoryService.deleteMultipleMemories(memoryIds, currentProfileId)
+      if (result.error) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: result.error }) }],
+          isError: true,
+        }
+      }
+      const response: { success: true; deletedCount: number; requestedCount: number; ignoredIds?: unknown[] } = {
+        success: true,
+        deletedCount: result.deletedCount,
+        requestedCount: args.memoryIds.length,
+      }
+      if (ignoredIds.length > 0) {
+        response.ignoredIds = ignoredIds
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(response) }],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  delete_all_memories: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
+        isError: true,
+      }
+    }
+
+    // Require explicit confirmation
+    if (args.confirm !== true) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Must set confirm: true to delete all memories" }) }],
+        isError: true,
+      }
+    }
+
+    const currentProfileId = config.mcpCurrentProfileId
+    if (!currentProfileId) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "No profile selected" }) }],
+        isError: true,
+      }
+    }
+
+    try {
+      const result = await memoryService.deleteAllMemories(currentProfileId)
+      if (result.error) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: result.error }) }],
+          isError: true,
+        }
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount: result.deletedCount, message: "All memories deleted for current profile" }) }],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
   list_server_tools: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     // Validate serverName parameter
     if (typeof args.serverName !== "string" || args.serverName.trim() === "") {

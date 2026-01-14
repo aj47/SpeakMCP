@@ -1,5 +1,5 @@
 /**
- * TypeScript types and interfaces for the ACP (Agent Communication Protocol) multi-agent router system.
+ * TypeScript types and interfaces for the ACP (Agent Client Protocol) multi-agent router system.
  */
 
 import type { ChildProcess } from 'child_process';

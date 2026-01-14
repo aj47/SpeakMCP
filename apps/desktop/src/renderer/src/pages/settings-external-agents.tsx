@@ -164,7 +164,7 @@ export function SettingsExternalAgents() {
             <Select value={editing.connectionType} onValueChange={(v: ConnectionType) => setEditing({ ...editing, connectionType: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="acp">ACP (Agent Communication Protocol)</SelectItem>
+                <SelectItem value="acp">ACP (Agent Client Protocol)</SelectItem>
                 <SelectItem value="stdio">Stdio (process spawn)</SelectItem>
                 <SelectItem value="remote">Remote (HTTP endpoint)</SelectItem>
               </SelectContent>

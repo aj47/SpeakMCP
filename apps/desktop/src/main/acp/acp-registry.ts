@@ -40,7 +40,7 @@ export function configToDefinition(config: ACPAgentConfig): ACPAgentDefinition {
 }
 
 /**
- * Registry for managing ACP (Agent Communication Protocol) agents.
+ * Registry for managing ACP (Agent Client Protocol) agents.
  * Provides methods for registering, unregistering, querying, and managing agent lifecycle.
  */
 export class ACPRegistry {

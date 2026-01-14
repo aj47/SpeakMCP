@@ -1,8 +1,8 @@
 /**
- * ACP (Agent Communication Protocol) Module
+ * ACP (Agent Client Protocol) Module
  *
  * This module provides the infrastructure for delegating tasks to external AI agents
- * via the Agent Communication Protocol (Zed ACP) for user-to-agent interaction.
+ * via the Agent Client Protocol (Zed ACP) for user-to-agent interaction.
  */
 
 // Re-export all types

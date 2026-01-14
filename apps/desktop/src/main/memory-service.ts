@@ -241,6 +241,80 @@ class MemoryService {
     }
     return true
   }
+
+  /**
+   * Delete multiple memories by IDs.
+   * @param ids Array of memory IDs to delete
+   * @param profileId If provided, only delete memories belonging to this profile
+   * @returns Number of deleted memories
+   */
+  async deleteMultipleMemories(ids: string[], profileId?: string): Promise<number> {
+    await this.initialize()
+
+    const originalMemories = [...this.memories]
+    let deletedCount = 0
+
+    for (const id of ids) {
+      const index = this.memories.findIndex(m => m.id === id)
+      if (index < 0) continue
+
+      const memory = this.memories[index]
+      // Skip if profile filter is set and memory doesn't match
+      if (profileId !== undefined && memory.profileId !== profileId) continue
+
+      this.memories.splice(index, 1)
+      deletedCount++
+    }
+
+    if (deletedCount > 0) {
+      const success = await this.saveToDisk()
+      if (!success) {
+        this.memories = originalMemories
+        return 0
+      }
+
+      if (isDebugLLM()) {
+        logLLM("[MemoryService] Deleted multiple memories:", deletedCount)
+      }
+    }
+
+    return deletedCount
+  }
+
+  /**
+   * Delete all memories, optionally filtered by profile ID.
+   * @param profileId If provided, only delete memories for this profile
+   * @returns Number of deleted memories
+   */
+  async deleteAllMemories(profileId?: string): Promise<number> {
+    await this.initialize()
+
+    const originalMemories = [...this.memories]
+    let deletedCount: number
+
+    if (profileId) {
+      const toDelete = this.memories.filter(m => m.profileId === profileId)
+      deletedCount = toDelete.length
+      this.memories = this.memories.filter(m => m.profileId !== profileId)
+    } else {
+      deletedCount = this.memories.length
+      this.memories = []
+    }
+
+    if (deletedCount > 0) {
+      const success = await this.saveToDisk()
+      if (!success) {
+        this.memories = originalMemories
+        return 0
+      }
+
+      if (isDebugLLM()) {
+        logLLM("[MemoryService] Deleted all memories:", deletedCount)
+      }
+    }
+
+    return deletedCount
+  }
 }
 
 export const memoryService = new MemoryService()

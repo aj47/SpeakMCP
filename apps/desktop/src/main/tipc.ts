@@ -3625,6 +3625,19 @@ export const router = {
       return memoryService.deleteMemory(input.id)
     }),
 
+  deleteMultipleMemories: t.procedure
+    .input<{ ids: string[] }>()
+    .action(async ({ input }) => {
+      const profileId = profileService.getCurrentProfile()?.id
+      return memoryService.deleteMultipleMemories(input.ids, profileId)
+    }),
+
+  deleteAllMemories: t.procedure
+    .action(async () => {
+      const profileId = profileService.getCurrentProfile()?.id
+      return memoryService.deleteAllMemories(profileId)
+    }),
+
   searchMemories: t.procedure
     .input<{ query: string; profileId?: string }>()
     .action(async ({ input }) => {

@@ -292,7 +292,7 @@ class MemoryService {
     const originalMemories = [...this.memories]
     let deletedCount: number
 
-    if (profileId) {
+    if (profileId !== undefined) {
       const toDelete = this.memories.filter(m => m.profileId === profileId)
       deletedCount = toDelete.length
       this.memories = this.memories.filter(m => m.profileId !== profileId)

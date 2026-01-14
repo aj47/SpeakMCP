@@ -600,10 +600,10 @@ export function Component() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-destructive" />
-              Delete {selectedIds.size} Memories
+              Delete {visibleSelectedCount} Memories
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} selected memories? This action cannot be undone.
+              Are you sure you want to delete {visibleSelectedCount} selected memories? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -612,11 +612,11 @@ export function Component() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteMultipleMutation.mutate(Array.from(selectedIds))}
+              onClick={() => deleteMultipleMutation.mutate([...selectedIds].filter(id => filteredIds.has(id)))}
               disabled={deleteMultipleMutation.isPending}
             >
               {deleteMultipleMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Delete {selectedIds.size} Memories
+              Delete {visibleSelectedCount} Memories
             </Button>
           </DialogFooter>
         </DialogContent>

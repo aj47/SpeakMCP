@@ -1976,7 +1976,7 @@ export default function ChatScreen({ route, navigation }: any) {
                               ]}
                               numberOfLines={1}
                             >
-                              {m.toolCalls?.map(tc => tc.name).join(', ')}
+                              {(m.toolCalls?.map(tc => tc.name) ?? []).join(', ')}
                             </Text>
                             <Text style={[
                               styles.toolCallCompactStatus,

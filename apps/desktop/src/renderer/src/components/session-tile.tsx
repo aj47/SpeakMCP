@@ -18,12 +18,15 @@ import {
   Copy,
   CheckCheck,
   OctagonX,
+  Check,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useMessageQueue, useIsQueuePaused } from "@renderer/stores"
+import { tipcClient } from "@renderer/lib/tipc-client"
 
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 4000 // Allow tiles to fill large displays - effectively no practical limit
@@ -108,6 +111,39 @@ export function SessionTile({
       console.error("Failed to copy message:", err)
     }
   }
+
+  // Tool approval state
+  const [isRespondingToApproval, setIsRespondingToApproval] = useState(false)
+
+  // Tool approval handlers
+  const handleApproveToolCall = async () => {
+    const approvalId = progress?.pendingToolApproval?.approvalId
+    if (!approvalId) return
+    setIsRespondingToApproval(true)
+    try {
+      await tipcClient.respondToToolApproval({ approvalId, approved: true })
+    } catch (error) {
+      console.error("Failed to approve tool call:", error)
+      setIsRespondingToApproval(false)
+    }
+  }
+
+  const handleDenyToolCall = async () => {
+    const approvalId = progress?.pendingToolApproval?.approvalId
+    if (!approvalId) return
+    setIsRespondingToApproval(true)
+    try {
+      await tipcClient.respondToToolApproval({ approvalId, approved: false })
+    } catch (error) {
+      console.error("Failed to deny tool call:", error)
+      setIsRespondingToApproval(false)
+    }
+  }
+
+  // Reset responding state when approval changes (cleared or new approval)
+  useEffect(() => {
+    setIsRespondingToApproval(false)
+  }, [progress?.pendingToolApproval?.approvalId])
 
   const isActive = session.status === "active"
   const isComplete = session.status === "completed"
@@ -387,22 +423,64 @@ export function SessionTile({
                 })
               )}
 
-              {/* Pending tool approval */}
-              {hasPendingApproval && progress?.pendingToolApproval && (
-                <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
-                  <div className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">
-                    Tool Approval Required
-                  </div>
-                  <div className="text-sm text-amber-700 dark:text-amber-300">
-                    <strong>{progress.pendingToolApproval.toolName}</strong>
-                    <pre className="mt-1 text-xs bg-amber-100/50 dark:bg-amber-900/30 p-2 rounded overflow-x-auto">
-                      {JSON.stringify(progress.pendingToolApproval.arguments, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              )}
             </div>
           </ScrollArea>
+
+          {/* Pending tool approval - FIXED position outside scroll area for visibility */}
+          {hasPendingApproval && progress?.pendingToolApproval && (
+            <div className="px-3 py-2 border-t border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 flex-shrink-0">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                  {isRespondingToApproval ? "Processing..." : "Tool Approval Required"}
+                </span>
+                {isRespondingToApproval && (
+                  <Loader2 className="h-3 w-3 text-amber-600 dark:text-amber-400 animate-spin ml-auto" />
+                )}
+              </div>
+              <div className={cn("text-sm text-amber-700 dark:text-amber-300", isRespondingToApproval && "opacity-60")}>
+                <code className="text-xs font-mono font-medium bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
+                  {progress.pendingToolApproval.toolName}
+                </code>
+              </div>
+              {/* Action buttons */}
+              <div className="flex items-center gap-2 mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                  onClick={handleDenyToolCall}
+                  disabled={isRespondingToApproval}
+                >
+                  <XCircle className="h-3 w-3 mr-1" />
+                  Deny
+                </Button>
+                <Button
+                  size="sm"
+                  className={cn(
+                    "h-6 text-xs text-white",
+                    isRespondingToApproval
+                      ? "bg-green-500 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  )}
+                  onClick={handleApproveToolCall}
+                  disabled={isRespondingToApproval}
+                >
+                  {isRespondingToApproval ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3 w-3 mr-1" />
+                      Approve
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Message Queue Panel */}
           {hasQueuedMessages && session.conversationId && (
@@ -430,6 +508,14 @@ export function SessionTile({
               <span className="text-[10px] truncate max-w-[100px]" title={`${progress.modelInfo.provider}: ${progress.modelInfo.model}`}>
                 {progress.modelInfo.provider}/{progress.modelInfo.model.split('/').pop()?.substring(0, 15)}
               </span>
+            )}
+            {progress?.acpSessionInfo?.agentTitle && (
+              <>
+                <span className="text-muted-foreground/50">•</span>
+                <span className="text-[10px] truncate max-w-[80px] text-blue-500/70" title={`Agent: ${progress.acpSessionInfo.agentTitle}`}>
+                  {progress.acpSessionInfo.agentTitle}
+                </span>
+              </>
             )}
             {session.currentIteration && session.maxIterations && (
               <span>

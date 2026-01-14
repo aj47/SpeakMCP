@@ -113,42 +113,62 @@ function createWeakModel(): LanguageModel | null {
  * Build the summarization prompt based on the step data
  */
 function buildSummarizationPrompt(input: SummarizationInput): string {
+  const config = configStore.get()
+  const detailLevel = config.dualModelSummaryDetailLevel || "compact"
+  
   let contextSection = ""
-
+  
   if (input.agentThought) {
-    contextSection += `Reasoning: ${input.agentThought.slice(0, 300)}\n`
+    contextSection += `\n## Agent Reasoning:\n${input.agentThought}\n`
   }
-
+  
   if (input.toolCalls && input.toolCalls.length > 0) {
-    contextSection += `Tools: ${input.toolCalls.map(tc => tc.name).join(", ")}\n`
+    contextSection += `\n## Tools Called:\n`
+    for (const tc of input.toolCalls) {
+      contextSection += `- ${tc.name}: ${JSON.stringify(tc.arguments).slice(0, 200)}...\n`
+    }
   }
-
+  
   if (input.toolResults && input.toolResults.length > 0) {
-    const results = input.toolResults.map(tr => tr.success ? "ok" : "fail").join(",")
-    contextSection += `Results: ${results}\n`
+    contextSection += `\n## Tool Results:\n`
+    for (const tr of input.toolResults) {
+      const status = tr.success ? "✓" : "✗"
+      const content = tr.content.slice(0, 500) + (tr.content.length > 500 ? "..." : "")
+      contextSection += `- ${status} ${content}\n`
+    }
   }
-
+  
   if (input.assistantResponse) {
-    contextSection += `Response: ${input.assistantResponse.slice(0, 500)}\n`
+    contextSection += `\n## Agent Response:\n${input.assistantResponse.slice(0, 1000)}\n`
   }
 
-  return `Extract key info as ONE ultra-compact line.
+  const formatInstructions = detailLevel === "compact"
+    ? "Be extremely concise. Use 1-2 sentences per field."
+    : "Provide detailed explanations for each field."
+
+  return `You are summarizing a step in an AI agent's execution for a human user.
+
+${formatInstructions}
+
+Analyze this agent step and provide a structured summary:
 ${contextSection}
-Output JSON:
+
+Respond in this exact JSON format:
 {
-  "actionSummary": "single line max 80 chars, skip grammar, just key facts",
+  "actionSummary": "Brief description of what the agent did",
+  "keyFindings": ["Finding 1", "Finding 2"],
+  "nextSteps": "What the agent plans to do next (if apparent)",
+  "decisionsMade": ["Decision 1"],
   "importance": "low|medium|high|critical"
 }
 
-Examples of good actionSummary:
-- "user prefers dark mode"
-- "api key in .env not env vars"
-- "uses pnpm, hates npm"
-- "auth fails when token expired"
+Guidelines for importance:
+- "low": Routine operations, simple queries
+- "medium": Useful information gathered, normal progress
+- "high": Important discoveries, significant decisions
+- "critical": Security issues, errors, urgent findings
 
-importance: low=routine, medium=useful, high=discovery, critical=error
-
-JSON only:`
+Respond ONLY with valid JSON, no other text.`
 }
 
 /**
@@ -171,12 +191,16 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
       sessionId: input.sessionId,
       stepNumber: input.stepNumber,
       timestamp: Date.now(),
-      actionSummary: String(parsed.actionSummary || "step done").replace(/[\r\n]+/g, ' ').slice(0, 80),
+      actionSummary: parsed.actionSummary || "Agent executed a step",
+      keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings : [],
+      nextSteps: parsed.nextSteps || undefined,
+      decisionsMade: Array.isArray(parsed.decisionsMade) ? parsed.decisionsMade : undefined,
       importance: ["low", "medium", "high", "critical"].includes(parsed.importance)
         ? parsed.importance
         : "medium",
     }
   } catch (error) {
+    // Fallback if parsing fails
     if (isDebugLLM()) {
       logLLM("[SummarizationService] Failed to parse summary response:", error)
     }
@@ -186,7 +210,8 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
       sessionId: input.sessionId,
       stepNumber: input.stepNumber,
       timestamp: Date.now(),
-      actionSummary: (input.assistantResponse?.replace(/[\r\n]+/g, ' ').slice(0, 80)) || "step done",
+      actionSummary: input.assistantResponse?.slice(0, 100) || "Agent step completed",
+      keyFindings: [],
       importance: "medium",
     }
   }

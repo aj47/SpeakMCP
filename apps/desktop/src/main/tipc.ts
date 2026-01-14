@@ -37,6 +37,7 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  ACPAgentConfig,
   SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
@@ -62,6 +63,9 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
 import { profileService } from "./profile-service"
+import { agentProfileService } from "./agent-profile-service"
+import { acpService, ACPRunRequest } from "./acp-service"
+import { processTranscriptWithACPAgent } from "./acp-main-agent"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -159,6 +163,46 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
+  // Check if ACP main agent mode is enabled - route to ACP agent instead of LLM API
+  if (config.mainAgentMode === "acp" && config.mainAgentName) {
+    logLLM(`[processWithAgentMode] ACP mode enabled, routing to agent: ${config.mainAgentName}`)
+
+    // Create conversation title for session tracking
+    const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+
+    // Start tracking this agent session (or reuse existing one)
+    const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+
+    // Process with ACP agent
+    const result = await processTranscriptWithACPAgent(text, {
+      agentName: config.mainAgentName,
+      conversationId: conversationId || sessionId,
+      sessionId,
+    })
+
+    // Save assistant response to conversation history if we have a conversation ID
+    // Note: User message is already added by createMcpTextInput or processQueuedMessages
+    if (conversationId && result.response) {
+      await conversationService.addMessageToConversation(
+        conversationId,
+        result.response,
+        "assistant"
+      )
+    }
+
+    // Mark session as completed
+    if (result.success) {
+      logLLM(`[processWithAgentMode] ACP mode completed successfully for session ${sessionId}, conversation ${conversationId}`)
+      agentSessionTracker.completeSession(sessionId, "ACP agent completed successfully")
+    } else {
+      logLLM(`[processWithAgentMode] ACP mode failed for session ${sessionId}: ${result.error}`)
+      agentSessionTracker.errorSession(sessionId, result.error || "Unknown error")
+    }
+
+    logLLM(`[processWithAgentMode] ACP mode returning, queue processing should trigger in .finally()`)
+    return result.response || result.error || "No response from agent"
+  }
+
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
 
@@ -238,14 +282,14 @@ async function processWithAgentMode(
         // Wait for user response
         const approved = await approvalPromise
 
-        // Clear the pending approval from the UI by emitting without pendingToolApproval
+        // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
         await emitAgentProgress({
           sessionId,
           currentIteration: 0,
           maxIterations: config.mcpMaxIterations ?? 10,
           steps: [],
           isComplete: false,
-          // No pendingToolApproval - clears it
+          pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
         })
 
         if (!approved) {
@@ -262,8 +306,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig, sessionId)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -414,11 +458,14 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
+  logLLM(`[processQueuedMessages] Starting queue processing for ${conversationId}`)
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
+    logLLM(`[processQueuedMessages] Failed to acquire lock for ${conversationId}`)
     return
   }
+  logLLM(`[processQueuedMessages] Acquired lock for ${conversationId}`)
 
   try {
     while (true) {
@@ -431,6 +478,12 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
       // Peek at the next message without removing it
       const queuedMessage = messageQueueService.peek(conversationId)
       if (!queuedMessage) {
+        logLLM(`[processQueuedMessages] No more pending messages in queue for ${conversationId}`)
+        // Debug: log the actual queue state
+        const allMessages = messageQueueService.getQueue(conversationId)
+        if (allMessages.length > 0) {
+          logLLM(`[processQueuedMessages] Queue has ${allMessages.length} messages but peek returned null. First message status: ${allMessages[0]?.status}`)
+        }
         return // No more messages in queue
       }
 
@@ -794,7 +847,9 @@ export const router = {
   respondToToolApproval: t.procedure
     .input<{ approvalId: string; approved: boolean }>()
     .action(async ({ input }) => {
+      logApp(`[Tool Approval] respondToToolApproval called: approvalId=${input.approvalId}, approved=${input.approved}`)
       const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
+      logApp(`[Tool Approval] respondToApproval result: success=${success}`)
       return { success }
     }),
 
@@ -1204,6 +1259,7 @@ export const router = {
         })
         .finally(() => {
           // Process queued messages after this session completes (success or error)
+          logLLM(`[createMcpTextInput] .finally() triggered for conversation ${conversationId}, calling processQueuedMessages`)
           processQueuedMessages(conversationId!).catch((err) => {
             logLLM("[createMcpTextInput] Error processing queued messages:", err)
           })
@@ -2996,6 +3052,278 @@ export const router = {
 
       return true
     }),
+
+  // ACP Agent Configuration handlers
+  getAcpAgents: t.procedure.action(async () => {
+    const config = configStore.get()
+    const externalAgents = config.acpAgents || []
+    // Include internal agent in the list, but filter out any persisted 'internal' entries
+    // from externalAgents to avoid duplicates (can happen after toggling enabled state)
+    const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
+    const internalAgent = getInternalAgentConfig()
+    // Merge any persisted enabled state from config into the internal agent
+    const persistedInternalAgent = externalAgents.find(a => a.name === 'internal')
+    if (persistedInternalAgent && typeof persistedInternalAgent.enabled === 'boolean') {
+      internalAgent.enabled = persistedInternalAgent.enabled
+    }
+    const filteredExternalAgents = externalAgents.filter(a => a.name !== 'internal')
+    return [internalAgent, ...filteredExternalAgents]
+  }),
+
+  saveAcpAgent: t.procedure
+    .input<{ agent: ACPAgentConfig }>()
+    .action(async ({ input }) => {
+      // Block saving agent with reserved name "internal" to avoid config conflicts
+      // The internal agent is a built-in and should not be persisted as an external agent
+      if (input.agent.name === 'internal') {
+        return { success: false, error: 'Cannot save agent with reserved name "internal"' }
+      }
+
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      // Check if agent with this name already exists
+      const existingIndex = agents.findIndex(a => a.name === input.agent.name)
+
+      if (existingIndex >= 0) {
+        // Update existing agent
+        agents[existingIndex] = input.agent
+      } else {
+        // Add new agent
+        agents.push(input.agent)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+      return { success: true }
+    }),
+
+  deleteAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const filteredAgents = agents.filter(a => a.name !== input.agentName)
+
+      configStore.save({ ...config, acpAgents: filteredAgents })
+      return { success: true }
+    }),
+
+  toggleAcpAgentEnabled: t.procedure
+    .input<{ agentName: string; enabled: boolean }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const agentIndex = agents.findIndex(a => a.name === input.agentName)
+      if (agentIndex >= 0) {
+        agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
+      } else {
+        // Agent not in config (e.g., built-in 'internal' agent) - add an entry to persist enabled state
+        // We include displayName to satisfy the ACPAgentConfig contract and avoid undefined issues
+        agents.push({
+          name: input.agentName,
+          displayName: input.agentName === 'internal' ? 'SpeakMCP Internal' : input.agentName,
+          enabled: input.enabled,
+          isInternal: input.agentName === 'internal',
+          connection: { type: 'internal' as const }
+        } as import('../shared/types').ACPAgentConfig)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+
+      // When disabling an agent, automatically stop it if it's running
+      if (!input.enabled) {
+        const agentStatus = acpService.getAgentStatus(input.agentName)
+        if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
+          try {
+            await acpService.stopAgent(input.agentName)
+          } catch (error) {
+            // Log but don't fail the toggle operation
+            logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
+          }
+        }
+      }
+
+      return { success: true }
+    }),
+
+  // ACP Agent Runtime handlers
+  getAcpAgentStatuses: t.procedure.action(async () => {
+    return acpService.getAgents()
+  }),
+
+  spawnAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.spawnAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  stopAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.stopAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  runAcpTask: t.procedure
+    .input<{ request: ACPRunRequest }>()
+    .action(async ({ input }) => {
+      return acpService.runTask(input.request)
+    }),
+
+  // Get all subagent delegations with conversations for a session
+  getSubagentDelegations: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { getAllDelegationsForSession } = await import("./acp/acp-router-tools")
+      return getAllDelegationsForSession(input.sessionId)
+    }),
+
+  // Get details of a specific subagent delegation
+  getSubagentDelegationDetails: t.procedure
+    .input<{ runId: string }>()
+    .action(async ({ input }) => {
+      const { getDelegatedRunDetails } = await import("./acp/acp-router-tools")
+      return getDelegatedRunDetails(input.runId)
+    }),
+
+  // ============================================================================
+  // Agent Profile Handlers (Unified Profile + ACP Agent)
+  // ============================================================================
+
+  getAgentProfiles: t.procedure.action(async () => {
+    return agentProfileService.getAll()
+  }),
+
+  getAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getById(input.id)
+    }),
+
+  getAgentProfileByName: t.procedure
+    .input<{ name: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getByName(input.name)
+    }),
+
+  createAgentProfile: t.procedure
+    .input<{
+      profile: {
+        name: string
+        displayName: string
+        description?: string
+        systemPrompt?: string
+        guidelines?: string
+
+        properties?: Record<string, string>
+        modelConfig?: import("@shared/types").ProfileModelConfig
+        toolConfig?: import("@shared/types").AgentProfileToolConfig
+        skillsConfig?: import("@shared/types").ProfileSkillsConfig
+        connection: import("@shared/types").AgentProfileConnection
+        isStateful?: boolean
+        enabled: boolean
+        isUserProfile?: boolean
+        isAgentTarget?: boolean
+        isDefault?: boolean
+        autoSpawn?: boolean
+      }
+    }>()
+    .action(async ({ input }) => {
+      return agentProfileService.create(input.profile)
+    }),
+
+  updateAgentProfile: t.procedure
+    .input<{
+      id: string
+      updates: Partial<import("@shared/types").AgentProfile>
+    }>()
+    .action(async ({ input }) => {
+      return agentProfileService.update(input.id, input.updates)
+    }),
+
+  deleteAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.delete(input.id)
+    }),
+
+  getUserProfiles: t.procedure.action(async () => {
+    return agentProfileService.getUserProfiles()
+  }),
+
+  getAgentTargets: t.procedure.action(async () => {
+    return agentProfileService.getAgentTargets()
+  }),
+
+  getEnabledAgentTargets: t.procedure.action(async () => {
+    return agentProfileService.getEnabledAgentTargets()
+  }),
+
+  getCurrentAgentProfile: t.procedure.action(async () => {
+    return agentProfileService.getCurrentProfile()
+  }),
+
+  setCurrentAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      agentProfileService.setCurrentProfile(input.id)
+      return { success: true }
+    }),
+
+  getAgentProfilesByRole: t.procedure
+    .input<{ role: import("@shared/types").AgentProfileRole }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getByRole(input.role)
+    }),
+
+  getExternalAgents: t.procedure.action(async () => {
+    return agentProfileService.getExternalAgents()
+  }),
+
+  getAgentProfileConversation: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getConversation(input.profileId)
+    }),
+
+  setAgentProfileConversation: t.procedure
+    .input<{
+      profileId: string
+      messages: import("@shared/types").ConversationMessage[]
+    }>()
+    .action(async ({ input }) => {
+      agentProfileService.setConversation(input.profileId, input.messages)
+      return { success: true }
+    }),
+
+  clearAgentProfileConversation: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      agentProfileService.clearConversation(input.profileId)
+      return { success: true }
+    }),
+
+  reloadAgentProfiles: t.procedure.action(async () => {
+    agentProfileService.reload()
+    return { success: true }
+  }),
 
   // Agent Skills Management
   getSkills: t.procedure.action(async () => {

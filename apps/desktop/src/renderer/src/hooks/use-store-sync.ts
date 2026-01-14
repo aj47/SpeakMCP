@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
-import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
+import { AgentProgressUpdate, Conversation, ConversationMessage, QueuedMessage } from '@shared/types'
+import { useSaveConversationMutation } from '@renderer/lib/queries'
 import { logUI } from '@renderer/lib/debug'
 
 export function useStoreSync() {
@@ -36,7 +37,6 @@ export function useStoreSync() {
 
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentProgress.listen(() => {
-      logUI('[useStoreSync] Clearing all agent progress')
       clearAllProgress()
     })
     return unlisten
@@ -45,7 +45,6 @@ export function useStoreSync() {
   useEffect(() => {
     const unlisten = rendererHandlers.clearAgentSessionProgress.listen(
       (sessionId: string) => {
-        logUI('[useStoreSync] Clearing agent progress for session:', sessionId)
         clearSessionProgress(sessionId)
       }
     )
@@ -55,7 +54,6 @@ export function useStoreSync() {
   useEffect(() => {
     const unlisten = rendererHandlers.clearInactiveSessions.listen(
       () => {
-        logUI('[useStoreSync] Clearing all inactive sessions')
         clearInactiveSessions()
       }
     )
@@ -65,7 +63,6 @@ export function useStoreSync() {
   useEffect(() => {
     const unlisten = rendererHandlers.focusAgentSession.listen(
       (sessionId: string) => {
-        logUI('[useStoreSync] External focusAgentSession received:', sessionId)
         setFocusedSessionId(sessionId)
         setScrollToSessionId(null)
       }
@@ -77,7 +74,6 @@ export function useStoreSync() {
   useEffect(() => {
     const unlisten = rendererHandlers.onMessageQueueUpdate.listen(
       (data: { conversationId: string; queue: QueuedMessage[]; isPaused: boolean }) => {
-        logUI('[useStoreSync] Message queue update:', data.conversationId, data.queue.length, 'isPaused:', data.isPaused)
         updateMessageQueue(data.conversationId, data.queue, data.isPaused)
       }
     )
@@ -87,12 +83,11 @@ export function useStoreSync() {
   // Initial hydration of message queues on mount
   useEffect(() => {
     tipcClient.getAllMessageQueues().then((queues: Array<{ conversationId: string; messages: QueuedMessage[]; isPaused: boolean }>) => {
-      logUI('[useStoreSync] Initial message queue hydration:', queues.length, 'queues')
       for (const queue of queues) {
         updateMessageQueue(queue.conversationId, queue.messages, queue.isPaused)
       }
-    }).catch((error: unknown) => {
-      logUI('[useStoreSync] Failed to hydrate message queues:', error)
+    }).catch(() => {
+      // Silently ignore hydration failures
     })
   }, [])
 }

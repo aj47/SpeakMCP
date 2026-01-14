@@ -69,6 +69,16 @@ export const Component = () => {
       href: "/settings/whatsapp",
       icon: "i-mingcute-message-4-line",
     }] : []),
+    {
+      text: "Agent Personas",
+      href: "/settings/agent-personas",
+      icon: "i-mingcute-group-line",
+    },
+    {
+      text: "External Agents",
+      href: "/settings/external-agents",
+      icon: "i-mingcute-robot-line",
+    },
   ]
 
   // Route aliases that should highlight the same nav item

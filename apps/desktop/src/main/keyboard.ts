@@ -412,7 +412,6 @@ export function listenToKeyboardEvents() {
           agentKillSwitchHotkey: config.agentKillSwitchHotkey,
           textInputEnabled: config.textInputEnabled,
           textInputShortcut: config.textInputShortcut,
-          mcpToolsEnabled: config.mcpToolsEnabled,
           mcpToolsShortcut: config.mcpToolsShortcut,
           shortcut: config.shortcut,
         })
@@ -425,7 +424,6 @@ export function listenToKeyboardEvents() {
             agentKillSwitchHotkey: config.agentKillSwitchHotkey,
             textInputEnabled: config.textInputEnabled,
             textInputShortcut: config.textInputShortcut,
-            mcpToolsEnabled: config.mcpToolsEnabled,
             mcpToolsShortcut: config.mcpToolsShortcut,
             shortcut: config.shortcut,
           })

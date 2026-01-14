@@ -293,8 +293,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
       : mcpService.getAvailableTools()
 
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-      // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig, sessionId)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, false, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -1173,6 +1173,68 @@ export async function startRemoteServer() {
       return reply.code(500).send({
         success: false,
         error: error?.message || "Emergency stop failed",
+      })
+    }
+  })
+
+  // MCP Protocol Endpoints - Expose SpeakMCP builtin tools to external agents
+  // These endpoints implement a simplified MCP-over-HTTP protocol
+
+  // POST /mcp/tools/list - List all available builtin tools
+  fastify.post("/mcp/tools/list", async (_req, reply) => {
+    try {
+      const { builtinTools } = await import("./builtin-tools")
+
+      // Convert to MCP format
+      const tools = builtinTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }))
+
+      return reply.send({
+        tools,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "MCP tools/list error", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list tools" })
+    }
+  })
+
+  // POST /mcp/tools/call - Execute a builtin tool
+  fastify.post("/mcp/tools/call", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const { name, arguments: args } = body
+
+      if (!name || typeof name !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'name' parameter" })
+      }
+
+      const { executeBuiltinTool, isBuiltinTool } = await import("./builtin-tools")
+
+      // Validate that this is a builtin tool
+      if (!isBuiltinTool(name)) {
+        return reply.code(400).send({ error: `Unknown builtin tool: ${name}` })
+      }
+
+      // Execute the tool
+      const result = await executeBuiltinTool(name, args || {})
+
+      if (!result) {
+        return reply.code(500).send({ error: "Tool execution returned null" })
+      }
+
+      // Return in MCP format
+      return reply.send({
+        content: result.content,
+        isError: result.isError,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "MCP tools/call error", error)
+      return reply.code(500).send({
+        content: [{ type: "text", text: error?.message || "Tool execution failed" }],
+        isError: true,
       })
     }
   })

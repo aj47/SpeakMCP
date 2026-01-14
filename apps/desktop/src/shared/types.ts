@@ -113,6 +113,61 @@ export interface ServerLogEntry {
 }
 
 // Agent Mode Progress Tracking Types
+
+/**
+ * A message in a sub-agent conversation
+ */
+export interface ACPSubAgentMessage {
+  /** Role of the sender */
+  role: 'user' | 'assistant' | 'tool'
+  /** Message content */
+  content: string
+  /** Tool name if this is a tool call/result */
+  toolName?: string
+  /** Tool input (for tool calls) */
+  toolInput?: unknown
+  /** Timestamp */
+  timestamp: number
+}
+
+/**
+ * Progress information for a delegated ACP sub-agent
+ */
+export interface ACPDelegationProgress {
+  /** Unique identifier for this delegation run */
+  runId: string
+  /** Name of the ACP agent being delegated to */
+  agentName: string
+  /** The task that was delegated */
+  task: string
+  /** Current status of the delegation */
+  status: 'pending' | 'spawning' | 'running' | 'completed' | 'failed' | 'cancelled'
+  /** Optional progress message from the sub-agent */
+  progressMessage?: string
+  /** When the delegation started */
+  startTime: number
+  /** When the delegation ended (if complete) */
+  endTime?: number
+  /** Result summary (if completed) */
+  resultSummary?: string
+  /** Error message (if failed) */
+  error?: string
+  /** Full conversation history from the sub-agent */
+  conversation?: ACPSubAgentMessage[]
+}
+
+/**
+ * State of all active ACP delegations for a session
+ */
+export interface ACPDelegationState {
+  /** Session ID of the parent agent */
+  parentSessionId: string
+  /** All delegations for this session */
+  delegations: ACPDelegationProgress[]
+  /** Number of active (non-completed) delegations */
+  activeCount: number
+}
+
 export interface AgentProgressStep {
   id: string
   type: "thinking" | "tool_call" | "tool_result" | "completion" | "tool_approval"
@@ -128,6 +183,17 @@ export interface AgentProgressStep {
     toolName: string
     arguments: any
   }
+  /** If this step is a delegation to a sub-agent */
+  delegation?: ACPDelegationProgress
+  executionStats?: {
+    durationMs?: number
+    totalTokens?: number
+    toolUseCount?: number
+    inputTokens?: number
+    outputTokens?: number
+    cacheHitTokens?: number
+  }
+  subagentId?: string
 }
 
 export interface AgentProgressUpdate {
@@ -175,6 +241,15 @@ export interface AgentProgressUpdate {
   }
   /** Profile name associated with this session (from profile snapshot) */
   profileName?: string
+  acpSessionInfo?: {
+    agentName?: string
+    agentTitle?: string
+    agentVersion?: string
+    currentModel?: string
+    currentMode?: string
+    availableModels?: Array<{ id: string; name: string; description?: string }>
+    availableModes?: Array<{ id: string; name: string; description?: string }>
+  }
   // Dual-model summarization data
   stepSummaries?: AgentStepSummary[]
   latestSummary?: AgentStepSummary
@@ -328,6 +403,9 @@ export type ProfileMcpServerConfig = {
   // When allServersDisabledByDefault is true, this list contains servers that are explicitly ENABLED
   // (i.e., servers the user has opted-in to use for this profile)
   enabledServers?: string[]
+  // When set, only these builtin tools are enabled (whitelist approach for personas)
+  // If undefined, all builtin tools are available (default behavior)
+  enabledBuiltinTools?: string[]
 }
 
 export type ProfileModelConfig = {
@@ -388,7 +466,407 @@ export type SessionProfileSnapshot = {
   systemPrompt?: string
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
+  /** Skills instructions to inject into the system prompt (from persona's enabled skills) */
+  skillsInstructions?: string
+  /** Dynamic persona properties exposed in system prompt (from persona's properties) */
+  personaProperties?: Record<string, string>
   skillsConfig?: ProfileSkillsConfig
+}
+
+// ============================================================================
+// Persona Management Types
+// ============================================================================
+
+/**
+ * MCP server and tool access configuration for a persona.
+ * Controls which MCP servers and tools the persona can access.
+ */
+export type PersonaMcpServerConfig = {
+  /** MCP servers enabled for this persona */
+  enabledServers: string[]
+  /** Specific tools disabled within enabled servers */
+  disabledTools?: string[]
+  /** Builtin tools enabled for this persona */
+  enabledBuiltinTools?: string[]
+}
+
+/**
+ * Model configuration for a persona.
+ * When using the built-in internal agent, this defines which LLM to use.
+ * When using an external ACP agent, model config is handled by that agent.
+ *
+ * @deprecated Use ProfileModelConfig instead for full preset support.
+ * Kept for backward compatibility with existing persona data.
+ */
+export type PersonaModelConfig = {
+  /** LLM provider for this persona */
+  providerId: "openai" | "groq" | "gemini"
+  /** Model name/identifier */
+  model: string
+  /** Optional temperature override (0-2) */
+  temperature?: number
+  /** Optional max tokens override */
+  maxTokens?: number
+}
+
+/**
+ * Skills configuration for a persona.
+ * Defines which skills are enabled for this persona.
+ */
+export type PersonaSkillsConfig = {
+  /** Skill IDs enabled for this persona */
+  enabledSkillIds: string[]
+}
+
+/**
+ * Connection configuration for a persona.
+ * Defines how to connect to the persona's underlying agent.
+ *
+ * Two main modes:
+ * 1. Built-in agent (type: "internal") - Uses SpeakMCP's internal agent with persona's model config
+ * 2. External ACP agent (type: "acp-agent") - Delegates to a configured ACP agent by name
+ */
+export type PersonaConnectionConfig = {
+  /**
+   * Connection type:
+   * - "internal": Uses built-in SpeakMCP agent (model config from persona)
+   * - "acp-agent": Uses an external ACP agent (model config from agent settings)
+   * - "stdio": Direct stdio process (legacy, for advanced use)
+   * - "remote": Remote HTTP endpoint (legacy, for advanced use)
+   */
+  type: "internal" | "acp-agent" | "stdio" | "remote"
+  /** For acp-agent: Name of the ACP agent to use */
+  acpAgentName?: string
+  /** For stdio: command to run */
+  command?: string
+  /** For stdio: command arguments */
+  args?: string[]
+  /** For stdio: environment variables */
+  env?: Record<string, string>
+  /** For stdio: working directory */
+  cwd?: string
+  /** For remote: base URL of the agent server */
+  baseUrl?: string
+}
+
+/**
+ * Dynamic properties for a persona.
+ * Key-value pairs that are exposed in the system prompt.
+ * Example: { "expertise": "Python, TypeScript", "style": "Concise and technical" }
+ */
+export type PersonaProperties = Record<string, string>
+
+/**
+ * Persona definition.
+ * A persona represents a specialized AI assistant with specific capabilities,
+ * system prompts, and tool access configurations.
+ */
+export type Persona = {
+  /** Unique identifier for the persona */
+  id: string
+  /** Internal name (used for referencing) */
+  name: string
+  /** Human-readable display name */
+  displayName: string
+  /** Description of what this persona does */
+  description: string
+  /** System prompt that defines the persona's behavior */
+  systemPrompt: string
+  /** Additional guidelines for the persona */
+  guidelines: string
+  /**
+   * Dynamic properties for this persona.
+   * Exposed in the system prompt as "Property Name: Value" format.
+   */
+  properties?: PersonaProperties
+  /** MCP server and tool access configuration */
+  mcpServerConfig: PersonaMcpServerConfig
+  /**
+   * @deprecated Use profileModelConfig instead for full preset support.
+   * Kept for backward compatibility.
+   */
+  modelConfig?: PersonaModelConfig
+  /**
+   * Model configuration using the same format as profiles.
+   * Only used when connection.type is "internal".
+   * When using an external ACP agent, model is configured in agent settings.
+   */
+  profileModelConfig?: ProfileModelConfig
+  /** Skills configuration */
+  skillsConfig: PersonaSkillsConfig
+  /** Connection configuration for the underlying agent */
+  connection: PersonaConnectionConfig
+  /** Whether this persona maintains conversation state */
+  isStateful: boolean
+  /** Current conversation ID for stateful personas */
+  conversationId?: string
+  /** Whether this persona is enabled */
+  enabled: boolean
+  /** Whether this is a built-in persona (cannot be deleted) */
+  isBuiltIn?: boolean
+  /** Creation timestamp */
+  createdAt: number
+  /** Last update timestamp */
+  updatedAt: number
+}
+
+/**
+ * Storage format for personas data.
+ */
+export type PersonasData = {
+  /** List of all personas */
+  personas: Persona[]
+}
+
+// ============================================================================
+// Unified Agent Profile Type
+// Consolidates Profile, Persona, and ACPAgentConfig into a single type
+// ============================================================================
+
+/**
+ * Connection type for an agent profile.
+ * - "internal": Uses built-in SpeakMCP agent (model config from profile)
+ * - "acp": External ACP-compatible agent (stdio spawn)
+ * - "stdio": Direct stdio process spawn
+ * - "remote": Remote HTTP endpoint
+ */
+export type AgentProfileConnectionType = "internal" | "acp" | "stdio" | "remote"
+
+/**
+ * Connection configuration for an agent profile.
+ */
+export type AgentProfileConnection = {
+  type: AgentProfileConnectionType
+  /** For acp/stdio: command to run */
+  command?: string
+  /** For acp/stdio: command arguments */
+  args?: string[]
+  /** For acp/stdio: environment variables */
+  env?: Record<string, string>
+  /** For acp/stdio: working directory */
+  cwd?: string
+  /** For remote: base URL of the agent server */
+  baseUrl?: string
+}
+
+/**
+ * Tool access configuration for an agent profile.
+ * Controls which MCP servers and tools the agent can access.
+ */
+export type AgentProfileToolConfig = {
+  /** MCP servers enabled for this agent (whitelist) */
+  enabledServers?: string[]
+  /** MCP servers disabled for this agent (blacklist) */
+  disabledServers?: string[]
+  /** Specific tools disabled */
+  disabledTools?: string[]
+  /** Builtin tools enabled (whitelist) - if undefined, all are available */
+  enabledBuiltinTools?: string[]
+  /** When true, newly-added servers are disabled by default */
+  allServersDisabledByDefault?: boolean
+}
+
+/**
+ * Unified Agent Profile.
+ *
+ * Can represent:
+ * - User-facing profiles (isUserProfile: true) - shows in profile picker
+ * - Delegation targets (isAgentTarget: true) - available for delegate_to_agent
+ * - External ACP agents (connection.type: "acp" or "stdio")
+ * - Internal sub-sessions (connection.type: "internal")
+ */
+
+/**
+ * Role classification for an agent profile.
+ * - "user-profile": User-facing profile shown in profile picker
+ * - "delegation-target": Available as a target for delegate_to_agent
+ * - "external-agent": External ACP/stdio agent
+ */
+export type AgentProfileRole = "user-profile" | "delegation-target" | "external-agent"
+
+export type AgentProfile = {
+  /** Unique identifier */
+  id: string
+  /** Internal name for referencing (slug-style) */
+  name: string
+  /** Human-readable display name */
+  displayName: string
+  /** Description of what this agent does */
+  description?: string
+
+  // Behavior
+  /** System prompt that defines the agent's behavior */
+  systemPrompt?: string
+  /** Additional guidelines for the agent */
+  guidelines?: string
+  /** Dynamic properties exposed in system prompt */
+  properties?: Record<string, string>
+
+  // Model Configuration (only for internal execution)
+  /** Model configuration - uses ProfileModelConfig format */
+  modelConfig?: ProfileModelConfig
+
+  // Tool Access
+  /** Tool and MCP server access configuration */
+  toolConfig?: AgentProfileToolConfig
+
+  // Skills
+  /** Skills configuration */
+  skillsConfig?: ProfileSkillsConfig
+
+  // Connection - how to run this agent
+  /** Connection configuration for the underlying agent */
+  connection: AgentProfileConnection
+
+  // State
+  /** Whether this agent maintains conversation state */
+  isStateful?: boolean
+  /** Current conversation ID for stateful agents */
+  conversationId?: string
+
+  // Role Classification
+  /** Role classification for this agent profile */
+  role?: AgentProfileRole
+
+  // Flags
+  /** Whether this agent is enabled */
+  enabled: boolean
+  /** Whether this is a built-in agent (cannot be deleted) */
+  isBuiltIn?: boolean
+  /** Whether this appears in the user profile picker (legacy, use role instead) */
+  isUserProfile?: boolean
+  /** Whether this is available as a delegation target (legacy, use role instead) */
+  isAgentTarget?: boolean
+  /** Whether this is the default profile */
+  isDefault?: boolean
+  /** Whether to auto-spawn this agent on app startup (for ACP agents) */
+  autoSpawn?: boolean
+
+  // Timestamps
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * Storage format for agent profiles.
+ */
+export type AgentProfilesData = {
+  profiles: AgentProfile[]
+  currentProfileId?: string
+}
+
+// ============================================================================
+// Migration Utilities
+// ============================================================================
+
+/**
+ * Convert a legacy Profile to AgentProfile.
+ */
+export function profileToAgentProfile(profile: Profile): AgentProfile {
+  return {
+    id: profile.id,
+    name: profile.name,
+    displayName: profile.name,
+    description: undefined,
+    systemPrompt: profile.systemPrompt,
+    guidelines: profile.guidelines,
+    properties: undefined,
+    modelConfig: profile.modelConfig,
+    toolConfig: profile.mcpServerConfig ? {
+      disabledServers: profile.mcpServerConfig.disabledServers,
+      disabledTools: profile.mcpServerConfig.disabledTools,
+      allServersDisabledByDefault: profile.mcpServerConfig.allServersDisabledByDefault,
+      enabledServers: profile.mcpServerConfig.enabledServers,
+      enabledBuiltinTools: profile.mcpServerConfig.enabledBuiltinTools,
+    } : undefined,
+    skillsConfig: profile.skillsConfig,
+    connection: { type: "internal" },
+    isStateful: false,
+    role: "user-profile",
+    enabled: true,
+    isBuiltIn: false,
+    isUserProfile: true,
+    isAgentTarget: false,
+    isDefault: profile.isDefault,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
+  }
+}
+
+/**
+ * Convert a legacy Persona to AgentProfile.
+ */
+export function personaToAgentProfile(persona: Persona): AgentProfile {
+  // Map persona connection type to AgentProfile connection type
+  const connectionType: AgentProfileConnectionType =
+    persona.connection.type === "acp-agent" ? "acp" : persona.connection.type
+
+  return {
+    id: persona.id,
+    name: persona.name,
+    displayName: persona.displayName,
+    description: persona.description,
+    systemPrompt: persona.systemPrompt,
+    guidelines: persona.guidelines,
+    properties: persona.properties,
+    modelConfig: persona.profileModelConfig,
+    toolConfig: {
+      enabledServers: persona.mcpServerConfig.enabledServers,
+      disabledTools: persona.mcpServerConfig.disabledTools,
+      enabledBuiltinTools: persona.mcpServerConfig.enabledBuiltinTools,
+    },
+    skillsConfig: { enabledSkillIds: persona.skillsConfig.enabledSkillIds },
+    connection: {
+      type: connectionType,
+      command: persona.connection.command,
+      args: persona.connection.args,
+      env: persona.connection.env,
+      cwd: persona.connection.cwd,
+      baseUrl: persona.connection.baseUrl,
+    },
+    isStateful: persona.isStateful,
+    conversationId: persona.conversationId,
+    role: "delegation-target",
+    enabled: persona.enabled,
+    isBuiltIn: persona.isBuiltIn,
+    isUserProfile: false,
+    isAgentTarget: true,
+    createdAt: persona.createdAt,
+    updatedAt: persona.updatedAt,
+  }
+}
+
+/**
+ * Convert a legacy ACPAgentConfig to AgentProfile.
+ */
+export function acpAgentConfigToAgentProfile(config: ACPAgentConfig): AgentProfile {
+  const now = Date.now()
+  const connectionType: AgentProfileConnectionType =
+    config.connection.type === "internal" ? "internal" :
+    config.connection.type === "remote" ? "remote" : "acp"
+
+  return {
+    id: config.name,
+    name: config.name,
+    displayName: config.displayName,
+    description: config.description,
+    connection: {
+      type: connectionType,
+      command: config.connection.command,
+      args: config.connection.args,
+      env: config.connection.env,
+      cwd: config.connection.cwd,
+      baseUrl: config.connection.baseUrl,
+    },
+    role: "external-agent",
+    enabled: config.enabled ?? true,
+    isBuiltIn: config.isInternal,
+    isUserProfile: false,
+    isAgentTarget: true,
+    autoSpawn: config.autoSpawn,
+    createdAt: now,
+    updatedAt: now,
+  }
 }
 
 export interface ModelPreset {
@@ -401,6 +879,39 @@ export interface ModelPreset {
   updatedAt?: number
   mcpToolsModel?: string
   transcriptProcessingModel?: string
+}
+
+// ACP Agent Configuration Types
+export type ACPConnectionType = "stdio" | "remote" | "internal"
+
+export interface ACPAgentConfig {
+  // Unique identifier for the agent
+  name: string
+  // Human-readable display name
+  displayName: string
+  // Description of what the agent does
+  description?: string
+  // Whether to auto-spawn this agent on app startup
+  autoSpawn?: boolean
+  // Whether this agent is enabled
+  enabled?: boolean
+  // Whether this is a built-in internal agent (cannot be deleted)
+  isInternal?: boolean
+  // Connection configuration
+  connection: {
+    // Connection type: "stdio" for local process, "remote" for HTTP endpoint, "internal" for built-in
+    type: ACPConnectionType
+    // For stdio: command to run (e.g., "auggie", "claude-code-acp")
+    command?: string
+    // For stdio: command arguments (e.g., ["--acp"])
+    args?: string[]
+    // For stdio: environment variables
+    env?: Record<string, string>
+    // For stdio: working directory to spawn the agent in
+    cwd?: string
+    // For remote: base URL of the ACP server
+    baseUrl?: string
+  }
 }
 
 // Agent Skills Types
@@ -646,6 +1157,23 @@ export type Config = {
   // Stream Status Watcher Configuration
   streamStatusWatcherEnabled?: boolean
   streamStatusFilePath?: string
+
+  // ACP Agent Configuration
+  acpAgents?: ACPAgentConfig[]
+
+  // Unified Agent Profiles (managed by agent-profile-service)
+  agentProfiles?: AgentProfile[]
+
+  // Main agent mode: "api" uses external LLM API, "acp" uses an ACP agent as the brain
+  mainAgentMode?: "api" | "acp"
+
+  // Name of the ACP agent to use when mainAgentMode is "acp"
+  mainAgentName?: string
+
+  // ACP Tool Injection: When true (default), SpeakMCP's builtin tools are injected
+  // into ACP agent sessions so they can use delegation, settings management, etc.
+  // Set to false for "pure" ACP mode where the agent only uses its own tools.
+  acpInjectBuiltinTools?: boolean
 
   // Streamer Mode Configuration
   // When enabled, hides sensitive information (phone numbers, QR codes, API keys) for screen sharing

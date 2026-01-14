@@ -61,6 +61,9 @@ const getConfig = () => {
   const isWindows = process.platform === 'win32'
 
   const defaultConfig: Partial<Config> = {
+    // Onboarding - not completed by default for new users
+    onboardingCompleted: false,
+
     // Recording shortcut: On Windows, use Ctrl+/ to avoid conflicts with common shortcuts
     // On macOS, Hold Ctrl is fine since Cmd is used for most shortcuts
     shortcut: isWindows ? "ctrl-slash" : "hold-ctrl",
@@ -204,6 +207,10 @@ const getConfig = () => {
 
     // Memory System defaults - enabled by default for backwards compatibility
     memoriesEnabled: true,
+
+    // ACP Tool Injection - when true, injects SpeakMCP builtin tools into ACP agent sessions
+    // This allows ACP agents to use delegation, settings management, etc.
+    acpInjectBuiltinTools: true,
 
   }
 

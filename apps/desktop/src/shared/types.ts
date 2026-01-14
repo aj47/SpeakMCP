@@ -879,6 +879,7 @@ export interface ModelPreset {
   updatedAt?: number
   mcpToolsModel?: string
   transcriptProcessingModel?: string
+  summarizationModel?: string  // Model for dual-model summarization (weak model)
 }
 
 // ACP Agent Configuration Types

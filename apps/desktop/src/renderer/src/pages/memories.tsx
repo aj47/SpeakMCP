@@ -345,19 +345,29 @@ export function Component() {
     })
   }
 
+  // Calculate how many of the currently visible (filtered) memories are selected
+  const filteredIds = new Set(filteredMemories.map(m => m.id))
+  const visibleSelectedCount = [...selectedIds].filter(id => filteredIds.has(id)).length
+
   const handleSelectAll = () => {
-    if (selectedIds.size === filteredMemories.length) {
-      setSelectedIds(new Set())
+    if (visibleSelectedCount === filteredMemories.length && filteredMemories.length > 0) {
+      // Deselect only the visible ones, keep any non-visible selections
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        filteredMemories.forEach(m => next.delete(m.id))
+        return next
+      })
     } else {
-      setSelectedIds(new Set(filteredMemories.map(m => m.id)))
+      // Add all visible to selection (keeps existing non-visible selections)
+      setSelectedIds(prev => new Set([...prev, ...filteredMemories.map(m => m.id)]))
     }
   }
 
   // Stats
   const criticalCount = memories.filter(m => m.importance === "critical").length
   const highCount = memories.filter(m => m.importance === "high").length
-  const allSelected = filteredMemories.length > 0 && selectedIds.size === filteredMemories.length
-  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredMemories.length
+  const allSelected = filteredMemories.length > 0 && visibleSelectedCount === filteredMemories.length
+  const someSelected = visibleSelectedCount > 0 && visibleSelectedCount < filteredMemories.length
 
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">

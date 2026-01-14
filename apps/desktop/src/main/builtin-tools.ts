@@ -1534,8 +1534,16 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
 
-    // Validate all IDs are strings
-    const memoryIds = args.memoryIds.filter((id): id is string => typeof id === "string" && id.trim() !== "")
+    // Validate all IDs are strings, tracking ignored entries
+    const memoryIds: string[] = []
+    const ignoredIds: unknown[] = []
+    for (const id of args.memoryIds) {
+      if (typeof id === "string" && id.trim() !== "") {
+        memoryIds.push(id)
+      } else {
+        ignoredIds.push(id)
+      }
+    }
     if (memoryIds.length === 0) {
       return {
         content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryIds must contain valid string IDs" }) }],
@@ -1559,8 +1567,16 @@ const toolHandlers: Record<string, ToolHandler> = {
           isError: true,
         }
       }
+      const response: { success: true; deletedCount: number; requestedCount: number; ignoredIds?: unknown[] } = {
+        success: true,
+        deletedCount: result.deletedCount,
+        requestedCount: memoryIds.length,
+      }
+      if (ignoredIds.length > 0) {
+        response.ignoredIds = ignoredIds
+      }
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount: result.deletedCount, requestedCount: memoryIds.length }) }],
+        content: [{ type: "text", text: JSON.stringify(response) }],
         isError: false,
       }
     } catch (error) {

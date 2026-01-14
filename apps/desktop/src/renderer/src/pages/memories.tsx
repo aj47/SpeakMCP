@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Badge } from "@renderer/components/ui/badge"
@@ -213,6 +213,11 @@ export function Component() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
+
+  // Clear selection when filters change to avoid deleting non-visible items
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [searchQuery, importanceFilter])
 
   // Get current profile for display
   const currentProfileQuery = useQuery({

@@ -218,9 +218,14 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     clearPanelOpenedWithMain()
   })
 
+  // Clear the flag on close for all platforms (not just macOS)
+  // This ensures the flag doesn't stay true if main window is closed via tray on Windows/Linux
+  win.on("close", () => {
+    clearPanelOpenedWithMain()
+  })
+
   if (process.env.IS_MAC) {
     win.on("close", () => {
-      clearPanelOpenedWithMain()
       if (configStore.get().hideDockIcon) {
         app.setActivationPolicy("accessory")
         app.dock.hide()

@@ -1518,6 +1518,80 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
+  delete_multiple_memories: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
+        isError: true,
+      }
+    }
+
+    if (!Array.isArray(args.memoryIds) || args.memoryIds.length === 0) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryIds must be a non-empty array of strings" }) }],
+        isError: true,
+      }
+    }
+
+    // Validate all IDs are strings
+    const memoryIds = args.memoryIds.filter((id): id is string => typeof id === "string" && id.trim() !== "")
+    if (memoryIds.length === 0) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryIds must contain valid string IDs" }) }],
+        isError: true,
+      }
+    }
+
+    const currentProfileId = config.mcpCurrentProfileId
+
+    try {
+      const deletedCount = await memoryService.deleteMultipleMemories(memoryIds, currentProfileId)
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount, requestedCount: memoryIds.length }) }],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
+  delete_all_memories: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    if (config.memoriesEnabled === false) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
+        isError: true,
+      }
+    }
+
+    // Require explicit confirmation
+    if (args.confirm !== true) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Must set confirm: true to delete all memories" }) }],
+        isError: true,
+      }
+    }
+
+    const currentProfileId = config.mcpCurrentProfileId
+
+    try {
+      const deletedCount = await memoryService.deleteAllMemories(currentProfileId)
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount, message: "All memories deleted for current profile" }) }],
+        isError: false,
+      }
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: String(error) }) }],
+        isError: true,
+      }
+    }
+  },
+
   list_server_tools: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     // Validate serverName parameter
     if (typeof args.serverName !== "string" || args.serverName.trim() === "") {

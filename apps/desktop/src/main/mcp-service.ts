@@ -59,6 +59,15 @@ const accessAsync = promisify(access)
 export const WHATSAPP_SERVER_NAME = "whatsapp"
 
 /**
+ * WhatsApp tools that are enabled by default
+ * All other WhatsApp tools will be disabled by default for safety
+ */
+export const WHATSAPP_DEFAULT_ENABLED_TOOLS = [
+  "whatsapp_send_message",
+  "whatsapp_send_typing",
+]
+
+/**
  * Get paths for the internal WhatsApp MCP server
  * Returns both the script path and node_modules path needed to run the server
  */
@@ -770,6 +779,35 @@ export class MCPService {
           description: tool.description || `Tool from ${serverName} server`,
           inputSchema: tool.inputSchema,
         })
+      }
+
+      // For WhatsApp server, disable non-default tools by default
+      // Only send_message and send_typing are enabled by default for safety
+      if (serverName === WHATSAPP_SERVER_NAME) {
+        const config = configStore.get()
+        const currentDisabledTools = new Set(config.mcpDisabledTools || [])
+        let needsSave = false
+
+        for (const tool of toolsResult.tools) {
+          const fullToolName = `${serverName}:${tool.name}`
+          // If tool is not in the default enabled list and not already disabled, disable it
+          if (!WHATSAPP_DEFAULT_ENABLED_TOOLS.includes(tool.name) && !currentDisabledTools.has(fullToolName)) {
+            this.disabledTools.add(fullToolName)
+            needsSave = true
+          }
+        }
+
+        // Persist the disabled tools
+        if (needsSave) {
+          try {
+            configStore.save({
+              ...config,
+              mcpDisabledTools: Array.from(this.disabledTools),
+            })
+          } catch (e) {
+            // Ignore persistence errors
+          }
+        }
       }
 
       // For stdio transport, track the process for agent mode

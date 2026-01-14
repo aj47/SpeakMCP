@@ -410,6 +410,10 @@ export function Component() {
       setShowTextInput(false)
       // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
       tipcClient.clearTextInputState({})
+      // Set recording state immediately to show waveform UI without waiting for async mic init
+      // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
+      setRecording(true)
+      recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -448,6 +452,11 @@ export function Component() {
         mcpModeRef.current = false
         // Track if recording was triggered via UI button click
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Set recording state immediately to show waveform UI without waiting for async mic init
+        // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
+        setRecording(true)
+        recordingRef.current = true
+        setVisualizerData(() => getInitialVisualizerData())
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }

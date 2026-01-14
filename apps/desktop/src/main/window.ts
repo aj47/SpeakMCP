@@ -720,6 +720,8 @@ export const stopRecordingAndHidePanelWindow = () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
 
     if (win.isVisible()) {
+      // Clear the "opened with main" flag since panel is being hidden
+      clearPanelOpenedWithMain()
       win.hide()
     }
   }

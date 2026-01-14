@@ -925,6 +925,8 @@ export const router = {
         items.push({
           label: "Close",
           click() {
+            // Clear the "opened with main" flag since panel is being hidden
+            clearPanelOpenedWithMain()
             panelWindow?.hide()
           },
         })
@@ -1097,6 +1099,8 @@ export const router = {
 
       const panel = WINDOWS.get("panel")
       if (panel) {
+        // Clear the "opened with main" flag since panel is being hidden
+        clearPanelOpenedWithMain()
         panel.hide()
       }
 
@@ -1152,6 +1156,8 @@ export const router = {
 
       const panel = WINDOWS.get("panel")
       if (panel) {
+        // Clear the "opened with main" flag since panel is being hidden
+        clearPanelOpenedWithMain()
         panel.hide()
       }
 

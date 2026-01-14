@@ -1544,11 +1544,23 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     const currentProfileId = config.mcpCurrentProfileId
+    if (!currentProfileId) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "No profile selected" }) }],
+        isError: true,
+      }
+    }
 
     try {
-      const deletedCount = await memoryService.deleteMultipleMemories(memoryIds, currentProfileId)
+      const result = await memoryService.deleteMultipleMemories(memoryIds, currentProfileId)
+      if (result.error) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: result.error }) }],
+          isError: true,
+        }
+      }
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount, requestedCount: memoryIds.length }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount: result.deletedCount, requestedCount: memoryIds.length }) }],
         isError: false,
       }
     } catch (error) {
@@ -1577,11 +1589,23 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     const currentProfileId = config.mcpCurrentProfileId
+    if (!currentProfileId) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "No profile selected" }) }],
+        isError: true,
+      }
+    }
 
     try {
-      const deletedCount = await memoryService.deleteAllMemories(currentProfileId)
+      const result = await memoryService.deleteAllMemories(currentProfileId)
+      if (result.error) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: result.error }) }],
+          isError: true,
+        }
+      }
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount, message: "All memories deleted for current profile" }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: true, deletedCount: result.deletedCount, message: "All memories deleted for current profile" }) }],
         isError: false,
       }
     } catch (error) {

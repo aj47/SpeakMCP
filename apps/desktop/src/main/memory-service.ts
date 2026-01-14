@@ -246,9 +246,9 @@ class MemoryService {
    * Delete multiple memories by IDs.
    * @param ids Array of memory IDs to delete
    * @param profileId If provided, only delete memories belonging to this profile
-   * @returns Number of deleted memories
+   * @returns Object with deletedCount and optional error message on persistence failure
    */
-  async deleteMultipleMemories(ids: string[], profileId?: string): Promise<number> {
+  async deleteMultipleMemories(ids: string[], profileId?: string): Promise<{ deletedCount: number; error?: string }> {
     await this.initialize()
 
     const originalMemories = [...this.memories]
@@ -270,7 +270,7 @@ class MemoryService {
       const success = await this.saveToDisk()
       if (!success) {
         this.memories = originalMemories
-        return 0
+        return { deletedCount: 0, error: "Failed to save changes to disk" }
       }
 
       if (isDebugLLM()) {
@@ -278,15 +278,15 @@ class MemoryService {
       }
     }
 
-    return deletedCount
+    return { deletedCount }
   }
 
   /**
    * Delete all memories, optionally filtered by profile ID.
    * @param profileId If provided, only delete memories for this profile
-   * @returns Number of deleted memories
+   * @returns Object with deletedCount and optional error message on persistence failure
    */
-  async deleteAllMemories(profileId?: string): Promise<number> {
+  async deleteAllMemories(profileId?: string): Promise<{ deletedCount: number; error?: string }> {
     await this.initialize()
 
     const originalMemories = [...this.memories]
@@ -305,7 +305,7 @@ class MemoryService {
       const success = await this.saveToDisk()
       if (!success) {
         this.memories = originalMemories
-        return 0
+        return { deletedCount: 0, error: "Failed to save changes to disk" }
       }
 
       if (isDebugLLM()) {
@@ -313,7 +313,7 @@ class MemoryService {
       }
     }
 
-    return deletedCount
+    return { deletedCount }
   }
 }
 

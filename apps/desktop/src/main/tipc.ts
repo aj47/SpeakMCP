@@ -3629,13 +3629,27 @@ export const router = {
     .input<{ ids: string[] }>()
     .action(async ({ input }) => {
       const profileId = profileService.getCurrentProfile()?.id
-      return memoryService.deleteMultipleMemories(input.ids, profileId)
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteMultipleMemories(input.ids, profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
     }),
 
   deleteAllMemories: t.procedure
     .action(async () => {
       const profileId = profileService.getCurrentProfile()?.id
-      return memoryService.deleteAllMemories(profileId)
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteAllMemories(profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
     }),
 
   searchMemories: t.procedure

@@ -424,28 +424,6 @@ export function Component() {
                 <PredefinedPromptsMenu
                   onSelectPrompt={handleSelectPrompt}
                 />
-                {/* Keybind hints - hidden on narrow screens */}
-                <div className="hidden lg:flex items-center gap-3 text-xs text-muted-foreground ml-2">
-                  <div className="flex items-center gap-1.5">
-                    <Keyboard className="h-3.5 w-3.5" />
-                    <span>Text:</span>
-                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
-                      {textInputShortcut}
-                    </kbd>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span>Voice:</span>
-                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
-                      {voiceInputShortcut}
-                    </kbd>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span>Dictation:</span>
-                    <kbd className="px-1.5 py-0.5 text-xs font-semibold bg-muted border rounded">
-                      {dictationShortcut}
-                    </kbd>
-                  </div>
-                </div>
               </div>
               <div className="flex items-center gap-2">
                 {/* View mode toggle */}

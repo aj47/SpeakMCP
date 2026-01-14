@@ -18,6 +18,7 @@ import {
   showPanelWindowAndStartMcpRecording,
   WAVEFORM_MIN_HEIGHT,
   MIN_WAVEFORM_WIDTH,
+  clearPanelOpenedWithMain,
 } from "./window"
 import {
   app,
@@ -595,6 +596,8 @@ export const router = {
 
     if (panel) {
       suppressPanelAutoShow(1000)
+      // Clear the "opened with main" flag since panel is being explicitly hidden
+      clearPanelOpenedWithMain()
       panel.hide()
       logApp(`[hidePanelWindow] Panel hidden`)
     }

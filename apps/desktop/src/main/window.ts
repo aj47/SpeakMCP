@@ -141,9 +141,26 @@ function createBaseWindow({
 // Track whether panel was hidden due to main window focus (for restore on blur)
 let panelHiddenByMainFocus = false
 
+// Track whether panel was intentionally opened alongside main window
+// When this is true, we don't hide panel when main window gains focus
+let panelOpenedWithMain = false
+
 // Exported for use in panel show event to reset stale flag
 export function clearPanelHiddenByMainFocus() {
   panelHiddenByMainFocus = false
+}
+
+// Clear the "opened with main" flag when panel is explicitly hidden
+export function clearPanelOpenedWithMain() {
+  panelOpenedWithMain = false
+}
+
+// Set the "opened with main" flag when panel is shown while main is visible
+function setPanelOpenedWithMain() {
+  const main = WINDOWS.get("main")
+  if (main && main.isVisible()) {
+    panelOpenedWithMain = true
+  }
 }
 
 export function createMainWindow({ url }: { url?: string } = {}) {
@@ -159,11 +176,18 @@ export function createMainWindow({ url }: { url?: string } = {}) {
   })
 
   // Hide floating panel when main window is focused (if setting is enabled)
+  // But skip hiding if panel was intentionally opened alongside main window
   win.on("focus", () => {
     const config = configStore.get()
     if (config.hidePanelWhenMainFocused !== false) {
       const panel = WINDOWS.get("panel")
       if (panel && panel.isVisible()) {
+        // Don't hide panel if it was intentionally opened while main window is visible
+        // This prevents the panel from closing during drag/button interactions
+        if (panelOpenedWithMain) {
+          logApp("[createMainWindow] Main window focused - skipping panel hide (panel opened with main)")
+          return
+        }
         logApp("[createMainWindow] Main window focused - hiding floating panel")
         panelHiddenByMainFocus = true
         panel.hide()
@@ -188,8 +212,15 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     }
   })
 
+  // Clear "opened with main" flag when main window is hidden/closed
+  // since the context of "panel opened alongside main" no longer applies
+  win.on("hide", () => {
+    clearPanelOpenedWithMain()
+  })
+
   if (process.env.IS_MAC) {
     win.on("close", () => {
+      clearPanelOpenedWithMain()
       if (configStore.get().hideDockIcon) {
         app.setActivationPolicy("accessory")
         app.dock.hide()
@@ -564,6 +595,10 @@ export function showPanelWindow() {
   if (win) {
     logApp(`[showPanelWindow] Called. Current visibility: ${win.isVisible()}`)
 
+    // Track that panel is being opened alongside main window (if main is visible)
+    // This prevents panel from being hidden when main window regains focus during interactions
+    setPanelOpenedWithMain()
+
     const mode = getCurrentPanelMode()
     // Apply mode sizing/positioning just before showing
     try { applyPanelMode(mode) } catch {}
@@ -697,6 +732,8 @@ export const stopTextInputAndHidePanelWindow = () => {
     getRendererHandlers<RendererHandlers>(win.webContents).hideTextInput.send()
 
     if (win.isVisible()) {
+      // Clear the "opened with main" flag since panel is being hidden
+      clearPanelOpenedWithMain()
       win.hide()
     }
   }
@@ -712,6 +749,8 @@ export const closeAgentModeAndHidePanelWindow = () => {
 
     // Hide the panel immediately to avoid flash when mode changes
     if (win.isVisible()) {
+      // Clear the "opened with main" flag since panel is being hidden
+      clearPanelOpenedWithMain()
       win.hide()
     }
 

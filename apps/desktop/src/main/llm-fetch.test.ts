@@ -473,5 +473,134 @@ describe('LLM Fetch with AI SDK', () => {
     expect(callCount).toBe(2)
     expect(result.content).toBe('Success after rate limit retry')
   })
+
+  it('should retry empty response errors immediately without backoff', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    const { logLLM } = await import('./debug')
+    const logLLMMock = vi.mocked(logLLM)
+
+    let callCount = 0
+    const callTimes: number[] = []
+
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      callTimes.push(Date.now())
+      if (callCount <= 2) {
+        // Throw empty response error on first two attempts
+        throw new Error('LLM returned empty response')
+      }
+      return Promise.resolve({
+        text: '{"content": "Success after empty response retries"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(callCount).toBe(3)
+    expect(result.content).toBe('Success after empty response retries')
+
+    // Verify retries happened quickly (no backoff delay)
+    // With backoff, we'd expect delays of 100ms+, but empty response should be immediate
+    if (callTimes.length >= 2) {
+      const delay1 = callTimes[1] - callTimes[0]
+      const delay2 = callTimes[2] - callTimes[1]
+      // Empty response retries should be nearly instant (< 50ms, accounting for execution time)
+      expect(delay1).toBeLessThan(50)
+      expect(delay2).toBeLessThan(50)
+    }
+
+    // Verify log message indicates immediate retry
+    expect(logLLMMock).toHaveBeenCalledWith(expect.stringContaining('Empty response - retrying immediately'))
+  })
+
+  it('should fail after max retries for persistent empty response errors', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Always throw empty response error
+    generateTextMock.mockImplementation(() => {
+      throw new Error('LLM returned empty response')
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch([{ role: 'user', content: 'test' }], 'openai')
+    ).rejects.toThrow('LLM returned empty response')
+
+    // Should be called maxRetries + 1 times (initial + 3 retries from mocked config)
+    expect(generateTextMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('should detect various empty response error messages', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Test "empty content" error message variant
+    generateTextMock.mockImplementation(() => {
+      throw new Error('API returned empty content')
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch([{ role: 'user', content: 'test' }], 'openai')
+    ).rejects.toThrow('API returned empty content')
+
+    // Should retry without backoff (all 4 calls happen quickly)
+    expect(generateTextMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('should report retry progress for empty response retries', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    let callCount = 0
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        throw new Error('LLM returned empty response')
+      }
+      return Promise.resolve({
+        text: '{"content": "Success"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const retryProgressCalls: any[] = []
+    const onRetryProgress = (info: any) => {
+      retryProgressCalls.push(info)
+    }
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai',
+      onRetryProgress
+    )
+
+    expect(result.content).toBe('Success')
+    expect(callCount).toBe(2)
+
+    // Should have received retry progress callbacks
+    expect(retryProgressCalls.length).toBeGreaterThan(0)
+
+    // Find the retry notification for empty response
+    const emptyResponseRetry = retryProgressCalls.find(
+      call => call.isRetrying && call.reason.includes('Empty response')
+    )
+    expect(emptyResponseRetry).toBeDefined()
+    expect(emptyResponseRetry.delaySeconds).toBe(0) // No backoff delay
+  })
 })
 

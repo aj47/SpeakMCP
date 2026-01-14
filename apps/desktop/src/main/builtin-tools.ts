@@ -1570,7 +1570,7 @@ const toolHandlers: Record<string, ToolHandler> = {
       const response: { success: true; deletedCount: number; requestedCount: number; ignoredIds?: unknown[] } = {
         success: true,
         deletedCount: result.deletedCount,
-        requestedCount: memoryIds.length,
+        requestedCount: args.memoryIds.length,
       }
       if (ignoredIds.length > 0) {
         response.ignoredIds = ignoredIds

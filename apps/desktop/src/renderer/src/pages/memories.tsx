@@ -214,11 +214,6 @@ export function Component() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
 
-  // Clear selection when filters change to avoid deleting non-visible items
-  useEffect(() => {
-    setSelectedIds(new Set())
-  }, [searchQuery, importanceFilter])
-
   // Get current profile for display
   const currentProfileQuery = useQuery({
     queryKey: ["current-profile"],
@@ -227,6 +222,11 @@ export function Component() {
     },
   })
   const currentProfile = currentProfileQuery.data
+
+  // Clear selection when filters or profile change to avoid deleting non-visible items
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [searchQuery, importanceFilter, currentProfile?.id])
 
   // Get memories for the current profile (automatically filtered by profile on the backend)
   const memoriesQuery = useQuery({

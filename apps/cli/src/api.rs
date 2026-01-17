@@ -124,6 +124,33 @@ impl ApiClient {
         format!("{}/{}", base, suffix)
     }
 
+    /// Perform a generic GET request and deserialize the response
+    pub async fn get<T>(&self, path: &str) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let url = self.endpoint(path);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!("API error ({}): {}", status, body));
+        }
+
+        response
+            .json::<T>()
+            .await
+            .context("Failed to parse API response")
+    }
+
     /// Send a chat message and get a response
     pub async fn chat(&self, message: &str, conversation_id: Option<&str>) -> Result<ChatResponse> {
         let url = self.endpoint("chat/completions");

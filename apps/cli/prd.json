@@ -59,7 +59,7 @@
       "type": "RUST",
       "description": "Add a generic get<T>() method to ApiClient for typed GET requests",
       "verificationCommand": "grep -q 'pub async fn get<T>' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {

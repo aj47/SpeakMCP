@@ -29,3 +29,10 @@ Completed: 2026-01-17T12:21:00Z
 Status: PASS
 Notes: Added 'mod commands;' to main.rs alongside other module imports. Cargo check passes with only warnings (unused imports in types.rs and unused function in placeholder.rs - both expected at this stage).
 
+=== Task 0.2.1 ===
+Title: Add generic GET method to ApiClient
+Started: 2026-01-17T14:30:00Z
+Completed: 2026-01-17T14:35:00Z
+Status: PASS
+Notes: Added generic get<T>() method to ApiClient in api.rs. Method takes a path string and returns Result<T> where T: DeserializeOwned. Uses existing endpoint() helper and follows the same error handling pattern as chat(). Cargo check passes.
+

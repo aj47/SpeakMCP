@@ -77,21 +77,8 @@ enum Commands {
 
     /// Manage configuration
     Config {
-        /// Set the server URL
-        #[arg(long)]
-        server_url: Option<String>,
-
-        /// Set the API key
-        #[arg(long)]
-        api_key: Option<String>,
-
-        /// Show current configuration
-        #[arg(long)]
-        show: bool,
-
-        /// Initialize config file with defaults
-        #[arg(long)]
-        init: bool,
+        #[command(subcommand)]
+        command: Option<ConfigCommand>,
     },
 
     /// Check connection to the server
@@ -317,6 +304,28 @@ enum HealthCommand {
     Errors,
 }
 
+/// Subcommands for configuration management
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// Show current configuration
+    Show,
+
+    /// Initialize config file with defaults
+    Init,
+
+    /// Set a configuration value
+    Set {
+        /// Configuration key to set
+        key: String,
+
+        /// Value to set
+        value: String,
+    },
+
+    /// Import configuration from the SpeakMCP desktop app
+    ImportFromDesktop,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -363,13 +372,8 @@ async fn main() -> Result<()> {
             send_message(&config, &message_text, conversation.as_deref(), stream).await?;
         }
 
-        Some(Commands::Config {
-            server_url,
-            api_key,
-            show,
-            init,
-        }) => {
-            handle_config(server_url, api_key, show, init)?;
+        Some(Commands::Config { command }) => {
+            handle_config_command(command)?;
         }
 
         Some(Commands::Status) => {
@@ -616,70 +620,71 @@ async fn send_message(
 }
 
 /// Handle config subcommand
-fn handle_config(
-    server_url: Option<String>,
-    api_key: Option<String>,
-    show: bool,
-    init: bool,
-) -> Result<()> {
-    if init {
-        let path = Config::init()?;
-        println!("{} {}", "Created config file:".green(), path.display());
-        return Ok(());
-    }
-
-    if show {
-        let config = Config::load()?;
-        println!("{}", "Current configuration:".bold());
-        println!("  Server URL: {}", config.server_url.cyan());
-        println!(
-            "  API Key: {}",
-            if config.api_key.is_empty() {
-                "(not set)".dimmed().to_string()
-            } else {
-                format!("{}...", &config.api_key[..8.min(config.api_key.len())])
-                    .dimmed()
-                    .to_string()
+fn handle_config_command(command: Option<ConfigCommand>) -> Result<()> {
+    match command {
+        Some(ConfigCommand::Show) | None => {
+            let config = Config::load()?;
+            println!("{}", "Current configuration:".bold());
+            println!("  Server URL: {}", config.server_url.cyan());
+            println!(
+                "  API Key: {}",
+                if config.api_key.is_empty() {
+                    "(not set)".dimmed().to_string()
+                } else {
+                    format!("{}...", &config.api_key[..8.min(config.api_key.len())])
+                        .dimmed()
+                        .to_string()
+                }
+            );
+            println!(
+                "  Colored output: {}",
+                if config.colored_output { "yes" } else { "no" }
+            );
+            println!(
+                "  Show tool calls: {}",
+                if config.show_tool_calls { "yes" } else { "no" }
+            );
+            if let Some(path) = Config::config_path() {
+                println!();
+                println!("{} {}", "Config file:".dimmed(), path.display());
             }
-        );
-        println!(
-            "  Colored output: {}",
-            if config.colored_output { "yes" } else { "no" }
-        );
-        println!(
-            "  Show tool calls: {}",
-            if config.show_tool_calls { "yes" } else { "no" }
-        );
-        if let Some(path) = Config::config_path() {
-            println!();
-            println!("{} {}", "Config file:".dimmed(), path.display());
         }
-        return Ok(());
+        Some(ConfigCommand::Init) => {
+            let path = Config::init()?;
+            println!("{} {}", "Created config file:".green(), path.display());
+        }
+        Some(ConfigCommand::Set { key, value }) => {
+            let mut config = Config::load()?;
+            match key.as_str() {
+                "server_url" => {
+                    config.server_url = value;
+                    println!("{}", "Updated server URL".green());
+                }
+                "api_key" => {
+                    config.api_key = value;
+                    println!("{}", "Updated API key".green());
+                }
+                "colored_output" => {
+                    config.colored_output = value.parse().unwrap_or(true);
+                    println!("{}", "Updated colored output".green());
+                }
+                "show_tool_calls" => {
+                    config.show_tool_calls = value.parse().unwrap_or(true);
+                    println!("{}", "Updated show tool calls".green());
+                }
+                _ => {
+                    println!("{}: Unknown config key: {}", "error".red(), key);
+                    println!("Valid keys: server_url, api_key, colored_output, show_tool_calls");
+                    return Ok(());
+                }
+            }
+            config.save()?;
+            println!("{}", "Configuration saved.".green());
+        }
+        Some(ConfigCommand::ImportFromDesktop) => {
+            config::import_from_desktop()?;
+        }
     }
-
-    // Update configuration
-    let mut config = Config::load()?;
-    let mut updated = false;
-
-    if let Some(url) = server_url {
-        config.server_url = url;
-        updated = true;
-        println!("{}", "Updated server URL".green());
-    }
-
-    if let Some(key) = api_key {
-        config.api_key = key;
-        updated = true;
-        println!("{}", "Updated API key".green());
-    }
-
-    if updated {
-        config.save()?;
-        println!("{}", "Configuration saved.".green());
-    } else {
-        println!("No changes specified. Use --show to view current config or --help for options.");
-    }
-
     Ok(())
 }
 

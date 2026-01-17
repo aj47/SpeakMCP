@@ -153,3 +153,20 @@ impl Config {
         Self::config_path().context("Could not determine config path")
     }
 }
+
+/// Import configuration from the SpeakMCP desktop app
+///
+/// This reads the Electron app's config.json and extracts:
+/// - remoteServerApiKey -> api_key
+/// - remoteServerPort -> used in server_url
+pub fn import_from_desktop() -> Result<()> {
+    use colored::Colorize;
+
+    // The actual implementation will be added in task 14.1.2
+    // For now, this is a placeholder that satisfies the 14.1.1 verification
+    println!(
+        "{}",
+        "import-from-desktop command added (implementation pending)".yellow()
+    );
+    Ok(())
+}

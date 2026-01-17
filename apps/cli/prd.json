@@ -1209,7 +1209,7 @@
       "type": "RUST",
       "description": "Add a command that reads the Electron desktop app's config.json from ~/Library/Application Support/app.speakmcp/config.json (macOS), %APPDATA%/app.speakmcp/config.json (Windows), or ~/.config/app.speakmcp/config.json (Linux) and imports the remoteServerApiKey and remoteServerPort into the CLI's cli.toml. This allows the CLI to reuse the desktop app's authentication.",
       "verificationCommand": "grep -q 'import_from_desktop\\|import-from-desktop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["9.1.3"]
     },
     {

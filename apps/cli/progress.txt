@@ -921,3 +921,12 @@ Notes: Fixed failing test_parse_progress_event test in sse.rs. The test data had
        but the struct expected "maxIterations" (plural) due to camelCase rename. Changed test data from 
        "maxIteration":10 to "maxIterations":10. All 9 tests now pass.
 
+
+=== Task 14.1.1 ===
+Title: Add 'config import-from-desktop' command
+Started: 2026-01-17T22:21:39Z
+Completed: 2026-01-17T22:21:39Z
+Status: PASS
+Notes: Converted Config command from flag-based to subcommand-based structure. Added ConfigCommand enum with Show, Init, Set, and ImportFromDesktop variants. Created handle_config_command() function to dispatch subcommands. Added import_from_desktop() placeholder function to config.rs. Verification command passes (grep for 'import_from_desktop|import-from-desktop' and cargo check both succeed). Actual desktop config reading logic will be implemented in task 14.1.2.
+
+

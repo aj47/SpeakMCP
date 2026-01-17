@@ -478,3 +478,10 @@ Completed: 2026-01-17T20:05:00Z
 Status: PASS
 Notes: Uncommented 'pub mod stop;' in commands/mod.rs to export the stop module. Cargo check passes (three warnings about unused code in stop.rs are expected since emergency_stop() hasn't been wired up in main.rs yet - that's task 6.1.5).
 
+=== Task 6.1.4 ===
+Title: Implement emergency_stop() function
+Started: 2026-01-17T20:30:00Z
+Completed: 2026-01-17T20:35:00Z
+Status: PASS
+Notes: Function was already implemented in commands/stop.rs. Creates ApiClient from config, calls POST v1/emergency-stop with empty request body via EmptyRequest struct, parses StopResponse with success and message fields, and displays appropriate success/status message. Verification command passes (grep for 'pub async fn emergency_stop' and 'emergency-stop' both succeed, cargo check passes with warnings for unused code - expected until task 6.1.5 wires up the command).
+

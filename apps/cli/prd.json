@@ -699,7 +699,7 @@
       "type": "RUST",
       "description": "Implement function to call POST /v1/emergency-stop",
       "verificationCommand": "grep -q 'pub async fn emergency_stop' apps/cli/src/commands/stop.rs && grep -q 'emergency-stop' apps/cli/src/commands/stop.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["6.1.3", "0.2.2"]
     },
     {

@@ -1,11 +1,17 @@
 import { ChildProcess } from "child_process"
+import type { SessionProfileSnapshot } from "../shared/types"
 
-interface AgentSessionState {
+export interface AgentSessionState {
   sessionId: string
   shouldStop: boolean
   iterationCount: number
   abortControllers: Set<AbortController>
   processes: Set<ChildProcess>
+  /**
+   * Profile snapshot captured at session creation time.
+   * This ensures session isolation - changes to the global profile don't affect running sessions.
+   */
+  profileSnapshot?: SessionProfileSnapshot
 }
 
 interface PendingToolApproval {
@@ -120,7 +126,13 @@ export const llmRequestAbortManager = {
   },
 }
 
-export const agentSessionStateManager = {  createSession(sessionId: string): void {
+export const agentSessionStateManager = {
+  /**
+   * Create a new agent session state
+   * @param sessionId - Unique session identifier
+   * @param profileSnapshot - Optional profile snapshot for session isolation
+   */
+  createSession(sessionId: string, profileSnapshot?: SessionProfileSnapshot): void {
     if (!state.agentSessions.has(sessionId)) {
       state.agentSessions.set(sessionId, {
         sessionId,
@@ -128,6 +140,7 @@ export const agentSessionStateManager = {  createSession(sessionId: string): voi
         iterationCount: 0,
         abortControllers: new Set(),
         processes: new Set(),
+        profileSnapshot,
       })
       // Update legacy global flag
       state.isAgentModeActive = true
@@ -140,6 +153,12 @@ export const agentSessionStateManager = {  createSession(sessionId: string): voi
   // Get session state
   getSession(sessionId: string): AgentSessionState | undefined {
     return state.agentSessions.get(sessionId)
+  },
+
+  // Get profile snapshot for a session
+  getSessionProfileSnapshot(sessionId: string): SessionProfileSnapshot | undefined {
+    const session = state.agentSessions.get(sessionId)
+    return session?.profileSnapshot
   },
 
   // Check if session should stop
@@ -338,5 +357,10 @@ export const toolApprovalManager = {
       approval.resolve(false) // Deny all tool calls
     }
     state.pendingToolApprovals.clear()
+  },
+
+  // Get the count of pending approvals (for debugging)
+  getPendingApprovalCount(): number {
+    return state.pendingToolApprovals.size
   },
 }

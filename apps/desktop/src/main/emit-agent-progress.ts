@@ -5,19 +5,15 @@ import { AgentProgressUpdate } from "../shared/types"
 import { isPanelAutoShowSuppressed, agentSessionStateManager } from "./state"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { configStore } from "./config"
-import { logApp } from "./debug"
 
 export async function emitAgentProgress(update: AgentProgressUpdate): Promise<void> {
   // Skip updates for stopped sessions, except final completion updates
   if (update.sessionId && !update.isComplete) {
     const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId)
     if (shouldStop) {
-      logApp(`[emitAgentProgress] Skipping update for stopped session ${update.sessionId}`)
       return
     }
   }
-
-  logApp(`[emitAgentProgress] Called for session ${update.sessionId}, isSnoozed: ${update.isSnoozed}`)
 
   // Send updates to main window if visible
   const main = WINDOWS.get("main")
@@ -27,63 +23,54 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
       setTimeout(() => {
         try {
           mainHandlers.agentProgressUpdate.send(update)
-        } catch (error) {
-          logApp("Failed to send progress update to main window:", error)
+        } catch {
+          // Silently ignore send failures
         }
       }, 10)
-    } catch (error) {
-      logApp("Failed to get main window renderer handlers:", error)
+    } catch {
+      // Silently ignore handler failures
     }
   }
 
   // Now handle panel window updates
   const panel = WINDOWS.get("panel")
   if (!panel) {
-    logApp("Panel window not available for progress update")
     return
   }
-
-  logApp(`[emitAgentProgress] Panel visible: ${panel.isVisible()}`)
 
   // Check if floating panel auto-show is globally disabled in settings
   const config = configStore.get()
   const floatingPanelAutoShowEnabled = config.floatingPanelAutoShow !== false
+  const hidePanelWhenMainFocused = config.hidePanelWhenMainFocused !== false
+
+  // Check if main window is focused (to prevent panel showing when main app is focused)
+  // Reuse the 'main' variable from above to avoid redeclaration
+  const isMainFocused = main?.isFocused() ?? false
 
   if (!panel.isVisible() && update.sessionId) {
     const isSnoozed = agentSessionTracker.isSessionSnoozed(update.sessionId)
-    logApp(`[emitAgentProgress] Panel not visible. Session ${update.sessionId} snoozed check: ${isSnoozed}, floatingPanelAutoShow: ${floatingPanelAutoShowEnabled}`)
 
-    if (!floatingPanelAutoShowEnabled) {
-      logApp(`[emitAgentProgress] Floating panel auto-show disabled in settings; NOT showing panel for session ${update.sessionId}`)
-    } else if (isPanelAutoShowSuppressed()) {
-      logApp(`[emitAgentProgress] Panel auto-show suppressed; NOT showing panel for session ${update.sessionId}`)
-    } else if (!isSnoozed) {
-      logApp(`[emitAgentProgress] Showing panel for non-snoozed session ${update.sessionId}`)
+    if (floatingPanelAutoShowEnabled && !isPanelAutoShowSuppressed() && !isSnoozed && !(hidePanelWhenMainFocused && isMainFocused)) {
       resizePanelForAgentMode()
       showPanelWindow()
-    } else {
-      logApp(`[emitAgentProgress] Session ${update.sessionId} is snoozed, NOT showing panel`)
     }
-  } else {
-    logApp(`[emitAgentProgress] Skipping show check - panel visible: ${panel.isVisible()}, has sessionId: ${!!update.sessionId}`)
   }
 
   try {
     const handlers = getRendererHandlers<RendererHandlers>(panel.webContents)
     if (!handlers.agentProgressUpdate) {
-      logApp("Agent progress handler not available")
       return
     }
 
     setTimeout(() => {
       try {
         handlers.agentProgressUpdate.send(update)
-      } catch (error) {
-        logApp("Failed to send progress update:", error)
+      } catch {
+        // Silently ignore send failures
       }
     }, 10)
-  } catch (error) {
-    logApp("Failed to get renderer handlers:", error)
+  } catch {
+    // Silently ignore handler failures
   }
 }
 

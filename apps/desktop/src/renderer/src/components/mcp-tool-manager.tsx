@@ -38,6 +38,7 @@ interface DetailedTool {
   description: string
   serverName: string
   enabled: boolean
+  serverEnabled: boolean
   inputSchema: any
 }
 
@@ -67,8 +68,11 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
     return () => clearInterval(interval)
   }, [])
 
-  // Group tools by server
-  const toolsByServer = tools.reduce(
+  // Filter tools to only include those from enabled servers
+  const toolsFromEnabledServers = tools.filter((tool) => tool.serverEnabled)
+
+  // Group tools by server (only from enabled servers)
+  const toolsByServer = toolsFromEnabledServers.reduce(
     (acc, tool) => {
       if (!acc[tool.serverName]) {
         acc[tool.serverName] = []
@@ -213,8 +217,8 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
   }
 
   const serverNames = Object.keys(toolsByServer)
-  const totalTools = tools.length
-  const enabledTools = tools.filter((tool) => tool.enabled).length
+  const totalTools = toolsFromEnabledServers.length
+  const enabledTools = toolsFromEnabledServers.filter((tool) => tool.enabled).length
 
   return (
     <div className="min-w-0 space-y-6">
@@ -279,7 +283,9 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
               <p className="text-center text-muted-foreground">
                 {tools.length === 0
                   ? "No tools available. Configure MCP servers to see tools."
-                  : "No tools match your search criteria."}
+                  : toolsFromEnabledServers.length === 0
+                    ? "No tools from enabled servers. Enable a server to see its tools."
+                    : "No tools match your search criteria."}
               </p>
             </CardContent>
           </Card>
@@ -364,19 +370,19 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </DialogTrigger>
-                              <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                  <DialogTitle>{tool.name}</DialogTitle>
-                                  <DialogDescription>
+                              <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-y-auto">
+                                <DialogHeader className="min-w-0">
+                                  <DialogTitle className="break-words">{tool.name}</DialogTitle>
+                                  <DialogDescription className="break-words">
                                     {tool.description}
                                   </DialogDescription>
                                 </DialogHeader>
-                                <div className="space-y-4">
-                                  <div>
+                                <div className="space-y-4 min-w-0">
+                                  <div className="min-w-0">
                                     <Label className="text-sm font-medium">
                                       Input Schema
                                     </Label>
-                                    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
+                                    <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap break-words">
                                       {JSON.stringify(
                                         tool.inputSchema,
                                         null,

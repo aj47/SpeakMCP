@@ -49,11 +49,21 @@ module.exports = {
       {
         from: "build/icon.ico",
         to: "icon.ico"
+      },
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
       }
     ]
   },
   nsis: {
-    artifactName: "${name}-${version}-setup.${ext}",
+    artifactName: "${productName}-${version}-setup.${ext}",
     shortcutName: "${productName}",
     uninstallDisplayName: "${productName}",
     createDesktopShortcut: "always",
@@ -64,6 +74,18 @@ module.exports = {
   mac: {
     binaries: [
       "resources/bin/speakmcp-rs",
+    ],
+    extraResources: [
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
+      }
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
@@ -191,7 +213,7 @@ module.exports = {
     overwriteAction: "upgrade",
   },
   linux: {
-    target: ["AppImage", "snap", "deb"],
+    target: ["AppImage", "deb"],
     maintainer: "SpeakMCP <hi@techfren.net>",
     vendor: "SpeakMCP",
     category: "Utility",
@@ -214,11 +236,21 @@ module.exports = {
         from: "resources/bin/speakmcp-rs",
         to: "bin/speakmcp-rs",
         filter: ["**/*"]
+      },
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
       }
     ]
   },
   deb: {
-    artifactName: "${name}_${version}_${arch}.${ext}",
+    artifactName: "${productName}_${version}_${arch}.${ext}",
     depends: [
       "libgtk-3-0",
       "libnotify4",
@@ -238,7 +270,7 @@ module.exports = {
     afterRemove: "build/linux/postrm.sh",
   },
   appImage: {
-    artifactName: "${name}-${version}.${ext}",
+    artifactName: "${productName}-${version}.${ext}",
   },
   npmRebuild: false,
   // After packing, clean up unnecessary files

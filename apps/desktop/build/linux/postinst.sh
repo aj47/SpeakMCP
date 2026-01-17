@@ -46,12 +46,7 @@ fi
 # 5. Update icon cache
 # This ensures the app icon appears in menus and launchers
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    for size in 16 24 32 48 64 128 256 512; do
-        if [ -d "$ICON_DIR/${size}x${size}/apps" ]; then
-            gtk-update-icon-cache -f -t "$ICON_DIR" 2>/dev/null || true
-            break
-        fi
-    done
+    gtk-update-icon-cache -f -t "$ICON_DIR" 2>/dev/null || true
     echo "✓ Updated icon cache"
 fi
 
@@ -65,6 +60,24 @@ fi
 # 7. Update MIME database (if needed in the future)
 if command -v update-mime-database >/dev/null 2>&1; then
     update-mime-database /usr/share/mime 2>/dev/null || true
+fi
+
+# 8. Check if user needs to be added to input group for global hotkeys (Wayland)
+# This is required for evdev-based keyboard listening on Wayland
+CURRENT_USER="${SUDO_USER:-$USER}"
+if [ -n "$CURRENT_USER" ] && [ "$CURRENT_USER" != "root" ]; then
+    if ! groups "$CURRENT_USER" 2>/dev/null | grep -qw 'input'; then
+        echo ""
+        echo "⚠️  IMPORTANT: For global hotkeys to work (especially on Wayland),"
+        echo "   you need to add your user to the 'input' group:"
+        echo ""
+        echo "   sudo usermod -aG input $CURRENT_USER"
+        echo ""
+        echo "   Then log out and log back in for the change to take effect."
+        echo ""
+    else
+        echo "✓ User is in 'input' group (hotkeys will work)"
+    fi
 fi
 
 echo "SpeakMCP installation complete!"

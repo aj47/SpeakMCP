@@ -1,67 +1,71 @@
 # SpeakMCP Debugging Guide
 
-## Desktop App (Electron)
+## 🔧 Quick Start: Enable Debug Logging
 
-### Debug Logging
-
-```bash
-pnpm dev -- -d              # Enable all debug logging (short form)
-pnpm dev -- --debug         # Enable all debug logging (long form)
-pnpm dev -- --debug-llm     # LLM calls and responses
-pnpm dev -- --debug-tools   # MCP tool execution
-pnpm dev -- --debug-ui      # UI state changes
-pnpm dev -- --debug-app     # App lifecycle events
-pnpm dev -- --debug-keybinds # Keybind handling
-```
-
-You can also use environment variables:
-```bash
-DEBUG=llm pnpm dev          # LLM debugging
-DEBUG=tools,llm pnpm dev    # Multiple debug flags
-DEBUG=* pnpm dev            # All debugging
-DEBUG_LLM=1 pnpm dev        # Alternative env format
-```
-
-### Chrome DevTools Protocol (CDP)
+**Always start with debug logging enabled** - this captures LLM calls, tool execution, UI events, and app lifecycle:
 
 ```bash
-pnpm dev -- --remote-debugging-port=9222
+pnpm dev -- -d              # Enable ALL debug logging (recommended)
 ```
 
-Connect: Chrome → `chrome://inspect` → Configure → add `localhost:9222` → inspect
+Selective flags:
+| Flag | Description |
+|------|-------------|
+| `--debug-llm` / `-dl` | LLM API calls and responses |
+| `--debug-tools` / `-dt` | MCP tool execution |
+| `--debug-ui` / `-dui` | UI/renderer console logs |
+| `--debug-app` / `-dapp` | App lifecycle events |
+| `--debug-keybinds` / `-dk` | Keyboard shortcut handling |
 
-### IPC Methods
-
-Invoke TIPC procedures in DevTools console:
-
-```javascript
-window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'Hello', conversationId: null })
-window.electron.ipcRenderer.invoke('emergencyStopAgent')
-window.electron.ipcRenderer.invoke('debugPanelState')
-window.electron.ipcRenderer.invoke('getConfig')
-window.electron.ipcRenderer.invoke('saveConfig', { config: { /* ... */ } })
-window.electron.ipcRenderer.invoke('getAgentStatus')
-window.electron.ipcRenderer.invoke('getAgentSessions')
-```
-
-> Procedures defined in `apps/desktop/src/main/tipc.ts`. Direct `invoke()` works because TIPC registers individual `ipcMain.handle` handlers.
+Environment variable alternative: `DEBUG=* pnpm dev`
 
 ---
 
-## Mobile App (Expo Web)
+## CDP (Chrome DevTools Protocol)
 
-Debug the mobile app by running it as a web app with full Chrome DevTools access.
-
-### Start in Web Mode
+For browser-style debugging with DevTools:
 
 ```bash
-pnpm dev:mobile           # Then press 'w' for web
-# or
-pnpm --filter @speakmcp/mobile web
+REMOTE_DEBUGGING_PORT=9222 pnpm dev -- -d
 ```
 
-Opens at `http://localhost:8081`. Use Chrome DevTools (`F12`) to debug.
+> ⚠️ **Note**: The `--remote-debugging-port` flag must be passed via the `REMOTE_DEBUGGING_PORT` env var,
+> not as a CLI argument. Using `pnpm dev -- --remote-debugging-port=9222` will NOT work.
 
-### Voice Features
+Chrome → `chrome://inspect` → Configure → add `localhost:9222` → inspect
 
-Web uses the Web Speech API fallback (Chrome/Edge required). Grant microphone permissions when prompted.
+---
+
+## Agent UI Tests (For AI Agents)
+
+After connecting via CDP: `list_electron_targets_electron-native` → `connect_to_electron_target_electron-native`
+
+### Test 1: Click Settings Button
+```javascript
+// execute_javascript_electron-native
+window.location.hash = '/settings/general';
+setTimeout(() => document.querySelector('[data-state]')?.click(), 500);
+```
+
+### Test 2: Send 'hi' to Agent
+```javascript
+// execute_javascript_electron-native
+await window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'hi', conversationId: null });
+```
+Verify: `window.electron.ipcRenderer.invoke('getAgentStatus')`
+
+---
+
+## IPC Methods
+```javascript
+window.electron.ipcRenderer.invoke('emergencyStopAgent')
+window.electron.ipcRenderer.invoke('getConfig')
+window.electron.ipcRenderer.invoke('saveConfig', { config: {...} })
+window.electron.ipcRenderer.invoke('getAgentSessions')
+```
+> All procedures in `apps/desktop/src/main/tipc.ts`
+
+## Mobile App
+```bash
+pnpm dev:mobile  # Press 'w' for web → localhost:8081
+```

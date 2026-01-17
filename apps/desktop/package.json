@@ -1,6 +1,6 @@
 {
   "name": "@speakmcp/desktop",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "AI-powered dictation tool with MCP integration",
   "main": "./out/main/index.js",
@@ -41,6 +41,8 @@
     "setup:worktree": "pnpm install --ignore-scripts --frozen-lockfile && npx electron-rebuild"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.1",
+    "@ai-sdk/openai": "^3.0.1",
     "@egoist/electron-panel-window": "^8.0.3",
     "@fastify/cors": "^11.1.0",
     "@modelcontextprotocol/sdk": "^1.24.3",
@@ -48,6 +50,7 @@
     "@radix-ui/react-scroll-area": "^1.2.9",
     "@radix-ui/react-tabs": "^1.1.13",
     "@speakmcp/shared": "workspace:^",
+    "ai": "^6.0.3",
     "ajv": "^8.17.1",
     "fastify": "^5.6.1",
     "highlight.js": "^11.11.1",
@@ -104,6 +107,9 @@
     "vite": "^5.4.8",
     "vite-tsconfig-paths": "^5.0.1",
     "vitest": "^1.6.0"
+  },
+  "optionalDependencies": {
+    "langfuse": "^3.38.6"
   },
   "packageManager": "pnpm@9.12.1+sha512.e5a7e52a4183a02d5931057f7a0dbff9d5e9ce3161e33fa68ae392125b79282a8a8a470a51dfc8a0ed86221442eb2fb57019b0990ed24fab519bf0e1bc5ccfc4"
 }

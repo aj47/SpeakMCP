@@ -1,24 +1,84 @@
-import React, { useRef } from "react"
+import React, { useRef, useState, useEffect, createContext, useContext } from "react"
 import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
+
+// Context to share container width, gap, and reset key with tile wrappers
+interface SessionGridContextValue {
+  containerWidth: number
+  gap: number
+  resetKey: number
+}
+
+const SessionGridContext = createContext<SessionGridContextValue>({
+  containerWidth: 0,
+  gap: 16,
+  resetKey: 0,
+})
+
+export function useSessionGridContext() {
+  return useContext(SessionGridContext)
+}
 
 interface SessionGridProps {
   children: React.ReactNode
   sessionCount: number
   className?: string
+  resetKey?: number
 }
 
-export function SessionGrid({ children, sessionCount, className }: SessionGridProps) {
+export function SessionGrid({ children, sessionCount, className, resetKey = 0 }: SessionGridProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [gap, setGap] = useState(16) // Default to gap-4 = 16px
+
+  const updateMeasurements = () => {
+    if (containerRef.current) {
+      // Dynamically compute padding from computed styles to handle className overrides
+      const computedStyle = getComputedStyle(containerRef.current)
+      // Use proper NaN check to allow 0 as a valid padding value
+      const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
+      const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
+      const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
+      const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
+      const totalHorizontalPadding = paddingLeft + paddingRight
+      setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
+
+      // Also compute gap from styles to handle className overrides (columnGap or gap)
+      // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
+      const parsedColumnGap = parseFloat(computedStyle.columnGap)
+      const parsedGap = parseFloat(computedStyle.gap)
+      const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
+      setGap(columnGap)
+    }
+  }
+
+  useEffect(() => {
+    updateMeasurements()
+
+    // Also update on resize
+    const resizeObserver = new ResizeObserver(updateMeasurements)
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [])
+
   return (
-    <div
-      className={cn(
-        "flex flex-wrap gap-4 p-4 content-start",
-        className
-      )}
-    >
-      {children}
-    </div>
+    <SessionGridContext.Provider value={{ containerWidth, gap, resetKey }}>
+      <div
+        ref={containerRef}
+        className={cn(
+          "flex flex-wrap gap-4 p-4 content-start",
+          className
+        )}
+      >
+        {children}
+      </div>
+    </SessionGridContext.Provider>
   )
 }
 
@@ -35,6 +95,16 @@ interface SessionTileWrapperProps {
   isDragging?: boolean
 }
 
+// Calculate half container width for tile sizing, clamped to min/max
+function calculateHalfWidth(containerWidth: number, gap: number): number {
+  if (containerWidth <= 0) {
+    return TILE_DIMENSIONS.width.default
+  }
+  // Account for gap between tiles (subtract gap for the space between two tiles)
+  const halfWidth = Math.floor((containerWidth - gap) / 2)
+  return Math.max(TILE_DIMENSIONS.width.min, Math.min(TILE_DIMENSIONS.width.max, halfWidth))
+}
+
 export function SessionTileWrapper({
   children,
   sessionId,
@@ -48,6 +118,9 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const { containerWidth, gap, resetKey } = useSessionGridContext()
+  const hasInitializedRef = useRef(false)
+  const lastResetKeyRef = useRef(resetKey)
 
   const {
     width,
@@ -56,11 +129,43 @@ export function SessionTileWrapper({
     handleWidthResizeStart,
     handleHeightResizeStart,
     handleCornerResizeStart,
+    setSize,
   } = useResizable({
-    initialWidth: TILE_DIMENSIONS.width.default,
+    initialWidth: calculateHalfWidth(containerWidth, gap),
     initialHeight: TILE_DIMENSIONS.height.default,
     storageKey: "session-tile",
   })
+
+  // Reset tile size when resetKey changes (user clicked "Reset Layout")
+  useEffect(() => {
+    if (resetKey !== lastResetKeyRef.current && containerWidth > 0) {
+      lastResetKeyRef.current = resetKey
+      const halfWidth = calculateHalfWidth(containerWidth, gap)
+      setSize({ width: halfWidth, height: TILE_DIMENSIONS.height.default })
+    }
+  }, [resetKey, containerWidth, gap, setSize])
+
+  // Update width to half container width once container is measured (only on first valid measurement)
+  // This handles the case where containerWidth is 0 on initial render
+  useEffect(() => {
+    // Only run once when containerWidth becomes valid and we haven't initialized yet
+    if (containerWidth > 0 && !hasInitializedRef.current) {
+      hasInitializedRef.current = true
+      // Check if there's already a persisted size - if so, don't override it
+      // Use try/catch to handle restricted environments where localStorage may throw
+      let hasPersistedSize = false
+      try {
+        const persistedKey = "speakmcp-resizable-session-tile"
+        hasPersistedSize = localStorage.getItem(persistedKey) !== null
+      } catch {
+        // Storage unavailable, fall back to default behavior
+      }
+      if (!hasPersistedSize) {
+        const halfWidth = calculateHalfWidth(containerWidth, gap)
+        setSize({ width: halfWidth })
+      }
+    }
+  }, [containerWidth, gap, setSize])
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move"

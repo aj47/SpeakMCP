@@ -9,7 +9,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
-import { logUI } from "@renderer/lib/debug"
 import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
@@ -20,6 +19,9 @@ import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
+const WAVEFORM_MIN_HEIGHT = 110
+const TEXT_INPUT_MIN_HEIGHT = 160
+const PROGRESS_MIN_HEIGHT = 200
 
 const getInitialVisualizerData = () =>
   Array<number>(VISUALIZER_BUFFER_LENGTH).fill(-1000)
@@ -41,6 +43,7 @@ export function Component() {
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
+
   const requestPanelMode = (mode: "normal" | "agent" | "textInput") => {
     if (lastRequestedModeRef.current === mode) return
     lastRequestedModeRef.current = mode
@@ -84,6 +87,7 @@ export function Component() {
     .filter(progress => progress && !progress.isSnoozed && !progress.isComplete).length
 
   // Count all visible sessions (including completed but not snoozed) for overlay display
+  // Note: focused session exception is handled separately in anyVisibleSessions below
   const visibleSessionCount = Array.from(agentProgressById?.values() ?? [])
     .filter(progress => progress && !progress.isSnoozed).length
   const hasMultipleSessions = visibleSessionCount > 1
@@ -92,35 +96,16 @@ export function Component() {
   // Only consider non-snoozed AND non-completed sessions as "active" for mode switching
   const anyActiveNonSnoozed = activeSessionCount > 0
   // Any non-snoozed session (including completed) should show the overlay
-  const anyVisibleSessions = visibleSessionCount > 0
+  // Also show overlay if there's a focused session (user explicitly selected it, even if snoozed)
+  const anyVisibleSessions = visibleSessionCount > 0 || (focusedSessionId && agentProgressById?.has(focusedSessionId))
   const displayProgress = useMemo(() => {
-    if (agentProgress && !agentProgress.isSnoozed) return agentProgress
-    // pick first non-snoozed session if focused one is missing/snoozed
+    // If user has explicitly focused a session, show it regardless of snoozed state
+    // This fixes the bug where clicking a completed snoozed session in kanban shows blank panel
+    if (agentProgress) return agentProgress
+    // pick first non-snoozed session if focused one is missing
     const entry = Array.from(agentProgressById?.values() ?? []).find(p => p && !p.isSnoozed)
     return entry || null
   }, [agentProgress, agentProgressById])
-
-  useEffect(() => {
-    logUI('[Panel] agentProgress changed:', {
-      hasProgress: !!agentProgress,
-      sessionId: agentProgress?.sessionId,
-      focusedSessionId,
-      totalSessions: agentProgressById.size,
-      activeSessionCount,
-      hasMultipleSessions,
-      allSessionIds: Array.from(agentProgressById.keys())
-    })
-  }, [agentProgress, focusedSessionId, agentProgressById.size, activeSessionCount, hasMultipleSessions])
-
-  useEffect(() => {
-    logUI('[Panel] recording state changed:', {
-      recording,
-      anyActiveNonSnoozed,
-      anyVisibleSessions,
-      showTextInput,
-      mcpMode
-    })
-  }, [recording, anyActiveNonSnoozed, anyVisibleSessions, showTextInput, mcpMode])
 
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
@@ -137,6 +122,8 @@ export function Component() {
       const shortcut = config.mcpToolsShortcut
       if (shortcut === "hold-ctrl-alt") {
         return "Release keys"
+      } else if (shortcut === "toggle-ctrl-alt") {
+        return "Ctrl+Alt"
       } else if (shortcut === "ctrl-alt-slash") {
         return "Ctrl+Alt+/"
       } else if (shortcut === "custom" && config.customMcpToolsShortcut) {
@@ -348,9 +335,9 @@ export function Component() {
     const recorder = (recorderRef.current = new Recorder())
 
     recorder.on("record-start", () => {
-      setRecording(true)
-      recordingRef.current = true
-      tipcClient.recordEvent({ type: "start" })
+      // Pass mcpMode to main process so it knows we're in MCP toggle mode
+      // This is critical for preventing panel close on key release in toggle mode
+      tipcClient.recordEvent({ type: "start", mcpMode: mcpModeRef.current })
     })
 
     recorder.on("visualizer-data", (rms) => {
@@ -376,25 +363,17 @@ export function Component() {
         return
       }
 
-      // Check if blob is empty
+      // Check if blob is empty - silently ignore (likely accidental press)
       if (blob.size === 0) {
-        console.error("[Panel] Recording blob is empty, cannot transcribe")
+        console.warn("[Panel] Recording blob is empty, ignoring (likely accidental press)")
         tipcClient.hidePanelWindow({})
-        tipcClient.displayError({
-          title: "Recording Error",
-          message: "Recording is empty. Please try recording again and speak for at least 1 second.",
-        })
         return
       }
 
-      // Check minimum duration (at least 100ms)
+      // Check minimum duration (at least 100ms) - silently ignore (likely accidental press)
       if (duration < 100) {
-        console.warn("[Panel] Recording duration too short:", duration, "ms")
+        console.warn("[Panel] Recording duration too short:", duration, "ms - ignoring (likely accidental press)")
         tipcClient.hidePanelWindow({})
-        tipcClient.displayError({
-          title: "Recording Too Short",
-          message: "Recording is too short. Please speak for at least 1 second.",
-        })
         return
       }
 
@@ -427,6 +406,14 @@ export function Component() {
       mcpModeRef.current = false
       // Track if recording was triggered via UI button click (e.g., tray menu)
       setFromButtonClick(data?.fromButtonClick ?? false)
+      // Hide text input panel if it was showing - voice recording takes precedence
+      setShowTextInput(false)
+      // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
+      tipcClient.clearTextInputState({})
+      // Set recording state immediately to show waveform UI without waiting for async mic init
+      // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
+      setRecording(true)
+      recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -465,6 +452,11 @@ export function Component() {
         mcpModeRef.current = false
         // Track if recording was triggered via UI button click
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Set recording state immediately to show waveform UI without waiting for async mic init
+        // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
+        setRecording(true)
+        recordingRef.current = true
+        setVisualizerData(() => getInitialVisualizerData())
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
@@ -475,9 +467,8 @@ export function Component() {
 
   // Text input handlers
   useEffect(() => {
-    const unlisten = rendererHandlers.showTextInput.listen(() => {
+    const unlisten = rendererHandlers.showTextInput.listen((data) => {
       // Reset any previous pending state to ensure textarea is enabled
-      logUI('[Panel] showTextInput received: resetting text input mutations and enabling textarea')
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
@@ -491,6 +482,10 @@ export function Component() {
       // Panel window is already shown by the keyboard handler
       // Focus the text input after a short delay to ensure it's rendered
       setTimeout(() => {
+        // Set initial text if provided (e.g., from predefined prompts)
+        if (data?.initialText) {
+          textInputPanelRef.current?.setInitialText(data.initialText)
+        }
         textInputPanelRef.current?.focus()
       }, 100)
     })
@@ -554,9 +549,18 @@ export function Component() {
         endConversation()
       }
 
+      // Hide text input panel if it was showing - voice recording takes precedence
+      // This fixes bug #903 where mic button in continue conversation showed text input
+      setShowTextInput(false)
+      // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
+      tipcClient.clearTextInputState({})
+
       setMcpMode(true)
       mcpModeRef.current = true
-      // Mode sizing is now applied in main before show; avoid duplicate calls here
+      // Set recording state immediately to show waveform UI without waiting for async mic init
+      // This prevents flash of stale progress UI during the ~280ms mic initialization
+      setRecording(true)
+      recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -586,7 +590,13 @@ export function Component() {
         mcpSessionIdRef.current = data?.sessionId
         // Track if recording was triggered via UI button click vs keyboard shortcut
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Hide text input panel if it was showing - voice recording takes precedence
+        // This fixes bug #903 where mic button in continue conversation showed text input
+        setShowTextInput(false)
+        // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
+        tipcClient.clearTextInputState({})
         setMcpMode(true)
+        mcpModeRef.current = true
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
@@ -612,7 +622,6 @@ export function Component() {
       targetMode = "agent"
       // When switching to agent mode, stop any ongoing recording
       if (recordingRef.current) {
-        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false
@@ -642,21 +651,6 @@ export function Component() {
   // 2. mcpTextInputMutation.onSuccess/onError also hide it (lines 194, 204)
   // 3. Hiding on ANY agentProgress change would close text input when background
   //    sessions get updates, which breaks the UX when user is typing
-
-  // Debug: Log overlay visibility conditions
-  useEffect(() => {
-    logUI('[Panel] Overlay visibility check:', {
-      hasAgentProgress: !!agentProgress,
-      mcpTranscribePending: mcpTranscribeMutation.isPending,
-      shouldShowOverlay: anyVisibleSessions && !recording,
-      anyVisibleSessions,
-      recording,
-      anyActiveNonSnoozed,
-      agentProgressSessionId: agentProgress?.sessionId,
-      agentProgressComplete: agentProgress?.isComplete,
-      agentProgressSnoozed: agentProgress?.isSnoozed
-    })
-  }, [agentProgress, anyActiveNonSnoozed, anyVisibleSessions, recording, mcpTranscribeMutation.isPending])
 
   // Clear agent progress handler
   useEffect(() => {
@@ -726,7 +720,6 @@ export function Component() {
     return unlisten
   }, [isConversationActive, endConversation, transcribeMutation, mcpTranscribeMutation, textInputMutation, mcpTextInputMutation])
 
-
 	  // Track latest state values in a ref to avoid race conditions with auto-close timeout
 	  const autoCloseStateRef = useRef({
 	    anyVisibleSessions,
@@ -779,11 +772,14 @@ export function Component() {
 
 	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
+  // Use appropriate minimum height based on current mode
+  const minHeight = showTextInput ? TEXT_INPUT_MIN_HEIGHT : (anyVisibleSessions && !recording ? PROGRESS_MIN_HEIGHT : WAVEFORM_MIN_HEIGHT)
+
   return (
     <PanelResizeWrapper
       enableResize={true}
       minWidth={200}
-      minHeight={100}
+      minHeight={minHeight}
       className={cn(
         "floating-panel modern-text-strong flex h-screen flex-col text-foreground",
         isDark ? "dark" : ""
@@ -810,14 +806,15 @@ export function Component() {
             agentProgress={agentProgress}
           />
         ) : (
-          <div className={cn(
+          <div
+            className={cn(
             "voice-input-panel modern-text-strong flex h-full w-full rounded-xl transition-all duration-300",
             isDark ? "dark" : ""
           )}>
 
             <div className="relative flex grow items-center overflow-hidden">
               {/* Agent progress overlay - left-aligned and full coverage */}
-              {/* Hide overlay when recording to prevent waveform from appearing over completed sessions */}
+              {/* Hide overlay when recording to show waveform instead */}
               {anyVisibleSessions && !recording && (
                 hasMultipleSessions ? (
                   <MultiAgentProgressView
@@ -835,7 +832,7 @@ export function Component() {
                 )
               )}
 
-              {/* Waveform visualization and submit controls - only show when recording is active */}
+              {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
                   {/* Waveform */}
@@ -880,7 +877,11 @@ export function Component() {
                       <span>Submit</span>
                     </button>
                     <span className="text-xs text-muted-foreground">
-                      or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd>
+                      {getSubmitShortcutText.toLowerCase().startsWith("release") ? (
+                        <>or <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd></>
+                      ) : (
+                        <>or press <kbd className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono text-xs">{getSubmitShortcutText}</kbd></>
+                      )}
                     </span>
                   </div>
                 </div>

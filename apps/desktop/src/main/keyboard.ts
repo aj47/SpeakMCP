@@ -208,11 +208,33 @@ const parseEvents = (data: Buffer | string): RdevEvent[] => {
 // when other keys are pressed, pressing ctrl will not start recording
 const keysPressed = new Map<string, number>()
 
+// Delay before starting hold-to-record (kept small to reduce perceived latency, while still
+// allowing common modifier combos like Ctrl+C to cancel before recording begins).
+const HOLD_TO_RECORD_DELAY_MS = 250
+
+// Helper to check if a key is a modifier key
+const isModifierKey = (key: string): boolean => {
+  return (
+    key === "ControlLeft" ||
+    key === "ControlRight" ||
+    key === "ShiftLeft" ||
+    key === "ShiftRight" ||
+    key === "Alt" ||
+    key === "AltLeft" ||
+    key === "AltRight" ||
+    key === "MetaLeft" ||
+    key === "MetaRight"
+  )
+}
+
 const hasRecentKeyPress = () => {
   if (keysPressed.size === 0) return false
 
   const now = Date.now() / 1000
-  return [...keysPressed.values()].some((time) => {
+  return [...keysPressed.entries()].some(([key, time]) => {
+    // Exclude modifier keys from the check - they should not block shortcuts
+    // that use only modifier key combinations (like toggle-ctrl-alt)
+    if (isModifierKey(key)) return false
     // 10 seconds
     // for some weird reasons sometime KeyRelease event is missing for some keys
     // so they stay in the map
@@ -301,7 +323,39 @@ export function listenToKeyboardEvents() {
       if (!isPressedCtrlKey || !isPressedAltKey) return
       isHoldingCtrlAltKey = true
       showPanelWindowAndStartMcpRecording()
-    }, 800)
+    }, HOLD_TO_RECORD_DELAY_MS)
+  }
+
+  const tryToggleMcpIfEligible = () => {
+    const config = configStore.get()
+    if (config.mcpToolsShortcut !== "toggle-ctrl-alt") {
+      return
+    }
+
+    // Both modifiers must be down
+    if (!isPressedCtrlKey || !isPressedAltKey) return
+
+    // Guard against recent non-modifier presses
+    if (hasRecentKeyPress()) return
+
+    // Cancel regular recording timer since MCP is prioritized
+    cancelRecordingTimer()
+
+    if (isDebugKeybinds()) {
+      logKeybinds("MCP tools triggered: Ctrl+Alt (toggle mode)")
+    }
+
+    // Set state.isRecordingMcpMode BEFORE sending the message
+    // This ensures the key release handlers know we're in MCP toggle mode
+    // and won't prematurely close the panel when the user releases Ctrl/Alt
+    if (!state.isRecording) {
+      // Starting MCP recording - set the flag now so key release handlers know
+      state.isRecordingMcpMode = true
+    }
+    // Note: When stopping, the recordEvent handler will set isRecordingMcpMode = false
+
+    // Toggle MCP recording on/off
+    getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
   }
 
 
@@ -310,6 +364,7 @@ export function listenToKeyboardEvents() {
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         isPressedCtrlKey = true
         tryStartMcpHoldIfEligible()
+        tryToggleMcpIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds("Ctrl key pressed, isPressedCtrlKey =", isPressedCtrlKey)
         }
@@ -329,6 +384,7 @@ export function listenToKeyboardEvents() {
         isPressedAltKey = true
         isPressedCtrlAltKey = isPressedCtrlKey && isPressedAltKey
         tryStartMcpHoldIfEligible()
+        tryToggleMcpIfEligible()
         if (isDebugKeybinds()) {
           logKeybinds(
             "Alt key pressed, isPressedAltKey =",
@@ -356,7 +412,6 @@ export function listenToKeyboardEvents() {
           agentKillSwitchHotkey: config.agentKillSwitchHotkey,
           textInputEnabled: config.textInputEnabled,
           textInputShortcut: config.textInputShortcut,
-          mcpToolsEnabled: config.mcpToolsEnabled,
           mcpToolsShortcut: config.mcpToolsShortcut,
           shortcut: config.shortcut,
         })
@@ -369,7 +424,6 @@ export function listenToKeyboardEvents() {
             agentKillSwitchHotkey: config.agentKillSwitchHotkey,
             textInputEnabled: config.textInputEnabled,
             textInputShortcut: config.textInputShortcut,
-            mcpToolsEnabled: config.mcpToolsEnabled,
             mcpToolsShortcut: config.mcpToolsShortcut,
             shortcut: config.shortcut,
           })
@@ -497,7 +551,7 @@ export function listenToKeyboardEvents() {
       // Handle Enter key to submit recording when triggered from UI button click
       // The panel window is shown with showInactive() so it doesn't receive keyboard focus,
       // which means we need to use the global keyboard hook to detect Enter key
-      if (e.data.key === "Return" || e.data.key === "Enter" || e.data.key === "NumpadEnter") {
+      if (e.data.key === "Return" || e.data.key === "Enter" || e.data.key === "KpReturn") {
         if (state.isRecording && state.isRecordingFromButtonClick && !isPressedShiftKey) {
           if (isDebugKeybinds()) {
             logKeybinds("Enter key pressed during button-click recording, submitting")
@@ -521,6 +575,33 @@ export function listenToKeyboardEvents() {
           config.customTextInputShortcut,
         )
 
+        // Helper to cancel any voice recording in progress when switching to text input
+        const cancelVoiceRecordingForTextInput = () => {
+          cancelRecordingTimer()
+          cancelMcpRecordingTimer()
+          cancelCustomRecordingTimer()
+          cancelCustomMcpTimer()
+          
+          // If a recording has already started, explicitly discard it
+          // stopRecordingAndHidePanelWindow sends stopRecording which sets isConfirmedRef=false,
+          // causing the recording to be discarded rather than processed
+          if (state.isRecording) {
+            // Reset recording state flags before stopping
+            state.isRecordingFromButtonClick = false
+            state.isRecordingMcpMode = false
+            state.isToggleRecordingActive = false
+            // Send stop signal to discard the recording
+            // Note: This only discards the blob; showPanelWindowAndShowTextInput will show the panel in text input mode
+            const panelHandlers = getWindowRendererHandlers("panel")
+            panelHandlers?.stopRecording.send()
+          }
+          
+          isHoldingCtrlKey = false
+          isHoldingCtrlAltKey = false
+          isHoldingCustomRecordingKey = false
+          isHoldingCustomMcpKey = false
+        }
+
         if (
           config.textInputShortcut === "ctrl-t" &&
           e.data.key === "KeyT" &&
@@ -531,6 +612,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -544,6 +626,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+Shift+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -557,6 +640,7 @@ export function listenToKeyboardEvents() {
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Alt+T")
           }
+          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -583,6 +667,7 @@ export function listenToKeyboardEvents() {
             )
           }
           if (matches) {
+            cancelVoiceRecordingForTextInput()
             showPanelWindowAndShowTextInput()
             return
           }
@@ -707,7 +792,7 @@ export function listenToKeyboardEvents() {
             getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
             return
           } else {
-            // Hold mode: start timer on key press, start recording after 800ms
+            // Hold mode: start timer on key press, start recording after a short delay
             if (isDebugKeybinds()) {
               logKeybinds(
                 "MCP tools triggered: Custom hotkey (hold mode)",
@@ -743,7 +828,7 @@ export function listenToKeyboardEvents() {
 
               isHoldingCustomMcpKey = true
               showPanelWindowAndStartMcpRecording()
-            }, 800)
+            }, HOLD_TO_RECORD_DELAY_MS)
             return
           }
         }
@@ -868,7 +953,7 @@ export function listenToKeyboardEvents() {
             getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
             return
           } else {
-            // Hold mode: start timer on key press, start recording after 800ms
+            // Hold mode: start timer on key press, start recording after a short delay
             if (isDebugKeybinds()) {
               logKeybinds(
                 "Recording triggered: Custom hotkey (hold mode)",
@@ -900,7 +985,7 @@ export function listenToKeyboardEvents() {
 
               isHoldingCustomRecordingKey = true
               showPanelWindowAndStartRecording()
-            }, 800)
+            }, HOLD_TO_RECORD_DELAY_MS)
             return
           }
         }
@@ -924,7 +1009,7 @@ export function listenToKeyboardEvents() {
             }
             isHoldingCtrlKey = true
             showPanelWindowAndStartRecording()
-          }, 800)
+          }, HOLD_TO_RECORD_DELAY_MS)
         } else if (
           (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") &&
           isPressedCtrlKey &&
@@ -950,7 +1035,7 @@ export function listenToKeyboardEvents() {
             }
             isHoldingCtrlAltKey = true
             showPanelWindowAndStartMcpRecording()
-          }, 800)
+          }, HOLD_TO_RECORD_DELAY_MS)
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
@@ -1091,31 +1176,15 @@ export function listenToKeyboardEvents() {
         cancelCustomMcpTimer()
       }
 
-      // Skip built-in hold mode handling for toggle mode shortcuts
-      if (
-        (currentConfig.shortcut === "ctrl-slash") ||
-        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
-      )
-        return
-
-      cancelRecordingTimer()
+      // Always handle MCP hold-ctrl-alt key releases, regardless of recording shortcut mode
+      // This must happen before the toggle mode early return below
       cancelMcpRecordingTimer()
 
-      // Finish MCP hold on either modifier release
       if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
         if (isHoldingCtrlAltKey) {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
           isHoldingCtrlAltKey = false
-        } else {
-          if (isHoldingCtrlKey) {
-            getWindowRendererHandlers("panel")?.finishRecording.send()
-          } else if (!state.isTextInputActive) {
-            // Only close panel if we're not in text input mode
-            stopRecordingAndHidePanelWindow()
-          }
-
-          isHoldingCtrlKey = false
         }
       }
 
@@ -1124,8 +1193,36 @@ export function listenToKeyboardEvents() {
           const panelHandlers = getWindowRendererHandlers("panel")
           panelHandlers?.finishMcpRecording.send()
           isHoldingCtrlAltKey = false
-        } else if (!state.isTextInputActive) {
-          // Only close panel if we're not in text input mode
+        }
+      }
+
+      // Skip built-in hold mode handling for toggle mode shortcuts
+      // (only applies to regular recording, not MCP agent mode which is handled above)
+      if (
+        (currentConfig.shortcut === "ctrl-slash") ||
+        (currentConfig.shortcut === "custom" && currentConfig.customShortcutMode === "toggle")
+      )
+        return
+
+      cancelRecordingTimer()
+
+      // Finish regular hold-ctrl recording on Ctrl release
+      if (e.data.key === "ControlLeft" || e.data.key === "ControlRight") {
+        if (isHoldingCtrlKey) {
+          getWindowRendererHandlers("panel")?.finishRecording.send()
+        } else if (!state.isTextInputActive && !state.isRecordingMcpMode) {
+          // Only close panel if we're not in text input mode and not in MCP recording mode
+          // (MCP toggle mode should not close panel on key release)
+          stopRecordingAndHidePanelWindow()
+        }
+        isHoldingCtrlKey = false
+      }
+
+      // Close panel on Alt release if not in text input mode (and not in MCP mode, which is handled above)
+      if (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") {
+        if (!state.isTextInputActive && !state.isRecordingMcpMode) {
+          // Only close panel if we're not in text input mode and not in MCP recording mode
+          // (MCP toggle mode should not close panel on key release)
           stopRecordingAndHidePanelWindow()
         }
       }
@@ -1145,9 +1242,19 @@ export function listenToKeyboardEvents() {
     }
   })
 
+  // Cap the stderr buffer to 16KB to avoid unbounded memory growth
+  const STDERR_BUFFER_MAX_SIZE = 16 * 1024
+  let stderrBuffer = ""
+
   child.stderr?.on("data", (data) => {
+    const output = data.toString()
+    stderrBuffer += output
+    // Keep only the last N bytes to prevent unbounded growth
+    if (stderrBuffer.length > STDERR_BUFFER_MAX_SIZE) {
+      stderrBuffer = stderrBuffer.slice(-STDERR_BUFFER_MAX_SIZE)
+    }
     if (isDebugKeybinds()) {
-      logKeybinds("Keyboard listener stderr:", data.toString())
+      logKeybinds("Keyboard listener stderr:", output)
     }
   })
 
@@ -1160,6 +1267,50 @@ export function listenToKeyboardEvents() {
   child.on("exit", (code, signal) => {
     if (isDebugKeybinds()) {
       logKeybinds("Keyboard listener process exited:", { code, signal })
+    }
+
+    // On Linux, if the process exits with code 1 and mentions PermissionDenied,
+    // show a helpful notification about the input group requirement
+    if (process.platform === "linux" && code === 1) {
+      if (stderrBuffer.includes("PermissionDenied") || stderrBuffer.includes("Permission denied")) {
+        const { dialog, Notification } = require("electron")
+
+        // Show a notification if supported
+        if (Notification.isSupported()) {
+          const notification = new Notification({
+            title: "SpeakMCP: Hotkeys Not Working",
+            body: "Global hotkeys require input group membership. Click for details.",
+            urgency: "critical",
+          })
+          notification.on("click", () => {
+            dialog.showMessageBox({
+              type: "warning",
+              title: "Global Hotkeys Permission Required",
+              message: "To use global hotkeys on Linux (especially Wayland), you need to add your user to the 'input' group.",
+              detail: "Run this command in a terminal:\n\nsudo usermod -aG input $USER\n\nThen log out and log back in for the change to take effect.\n\nThis is required because SpeakMCP needs to read keyboard events from /dev/input/ devices.",
+              buttons: ["OK"],
+            })
+          })
+          notification.show()
+        } else {
+          // Fallback to dialog
+          dialog.showMessageBox({
+            type: "warning",
+            title: "Global Hotkeys Permission Required",
+            message: "To use global hotkeys on Linux (especially Wayland), you need to add your user to the 'input' group.",
+            detail: "Run this command in a terminal:\n\nsudo usermod -aG input $USER\n\nThen log out and log back in for the change to take effect.",
+            buttons: ["OK"],
+          })
+        }
+
+        // eslint-disable-next-line no-console
+        console.error(
+          "[SpeakMCP] Global hotkeys failed: Permission denied.\n" +
+          "To fix this on Linux, add your user to the 'input' group:\n" +
+          "  sudo usermod -aG input $USER\n" +
+          "Then log out and log back in."
+        )
+      }
     }
   })
 }

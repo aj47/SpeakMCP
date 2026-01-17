@@ -4,16 +4,19 @@ import { cn } from "@renderer/lib/utils"
 import { AgentProcessingView } from "./agent-processing-view"
 import { AgentProgressUpdate } from "../../../shared/types"
 import { useTheme } from "@renderer/contexts/theme-context"
+import { PredefinedPromptsMenu } from "./predefined-prompts-menu"
 
 interface TextInputPanelProps {
   onSubmit: (text: string) => void
   onCancel: () => void
   isProcessing?: boolean
   agentProgress?: AgentProgressUpdate | null
+  initialText?: string
 }
 
 export interface TextInputPanelRef {
   focus: () => void
+  setInitialText: (text: string) => void
 }
 
 export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>(({
@@ -21,14 +24,18 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   onCancel,
   isProcessing = false,
   agentProgress,
+  initialText,
 }, ref) => {
-  const [text, setText] = useState("")
+  const [text, setText] = useState(initialText || "")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isDark } = useTheme()
 
   useImperativeHandle(ref, () => ({
     focus: () => {
       textareaRef.current?.focus()
+    },
+    setInitialText: (newText: string) => {
+      setText(newText)
     }
   }))
 
@@ -116,9 +123,12 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
         />
       ) : (
         <div className="flex flex-1 flex-col gap-2">
-          <div className="modern-text-muted text-xs">
-            Type your message • Enter to send • Shift+Enter for new line • Esc
-            to cancel
+          <div className="modern-text-muted flex items-center justify-between text-xs">
+            <span>Type your message • Enter to send • Shift+Enter for new line • Esc to cancel</span>
+            <PredefinedPromptsMenu
+              onSelectPrompt={(content) => setText(content)}
+              disabled={isProcessing}
+            />
           </div>
           <Textarea
             ref={textareaRef}

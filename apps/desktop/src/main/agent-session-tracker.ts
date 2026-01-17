@@ -5,6 +5,9 @@
 
 import type { RendererHandlers } from "./renderer-handlers"
 import { logApp } from "./debug"
+import { WINDOWS } from "./window"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import type { SessionProfileSnapshot } from "../shared/types"
 
 export interface AgentSession {
   id: string
@@ -18,6 +21,11 @@ export interface AgentSession {
   lastActivity?: string
   errorMessage?: string
   isSnoozed?: boolean // When true, session runs in background without stealing focus
+  /**
+   * Profile snapshot captured at session creation time.
+   * This ensures session isolation - changes to the global profile don't affect running sessions.
+   */
+  profileSnapshot?: SessionProfileSnapshot
 }
 
 /**
@@ -25,9 +33,6 @@ export interface AgentSession {
  */
 async function emitSessionUpdate() {
   try {
-    const { WINDOWS } = await import("./window")
-    const { getRendererHandlers } = await import("@egoist/tipc/main")
-
     const agentSessionTracker = AgentSessionTracker.getInstance()
     const data = {
       activeSessions: agentSessionTracker.getActiveSessions(),
@@ -76,8 +81,17 @@ class AgentSessionTracker {
    * Start tracking a new agent session
    * Sessions start snoozed by default - they run in background without showing floating panel
    * User can explicitly maximize/focus a session to see its progress
+   * @param conversationId - Optional conversation ID to link the session to
+   * @param conversationTitle - Optional title for the session
+   * @param startSnoozed - If true, session runs in background without showing floating panel
+   * @param profileSnapshot - Optional profile snapshot to bind to this session for isolation
    */
-  startSession(conversationId?: string, conversationTitle?: string, startSnoozed: boolean = true): string {
+  startSession(
+    conversationId?: string,
+    conversationTitle?: string,
+    startSnoozed: boolean = true,
+    profileSnapshot?: SessionProfileSnapshot
+  ): string {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
     const session: AgentSession = {
@@ -90,10 +104,11 @@ class AgentSessionTracker {
       maxIterations: 10,
       lastActivity: "Starting agent session...",
       isSnoozed: startSnoozed, // Start snoozed by default - no floating panel auto-show
+      profileSnapshot, // Capture profile settings at session creation for isolation
     }
 
     this.sessions.set(sessionId, session)
-    logApp(`[AgentSessionTracker] Started session: ${sessionId}, snoozed: ${startSnoozed}, total sessions: ${this.sessions.size}`)
+    logApp(`[AgentSessionTracker] Started session: ${sessionId}, snoozed: ${startSnoozed}, profile: ${profileSnapshot?.profileName || 'none'}, total sessions: ${this.sessions.size}`)
 
     // Emit update to UI
     emitSessionUpdate()
@@ -111,6 +126,8 @@ class AgentSessionTracker {
     const session = this.sessions.get(sessionId)
     if (session) {
       Object.assign(session, updates)
+      // Emit update to UI so sidebar and other components reflect changes (e.g., title updates)
+      emitSessionUpdate()
     }
   }
 
@@ -252,6 +269,15 @@ class AgentSessionTracker {
   isSessionSnoozed(sessionId: string): boolean {
     const session = this.sessions.get(sessionId)
     return session?.isSnoozed ?? false
+  }
+
+  /**
+   * Get the profile snapshot for a session
+   * Returns the profile snapshot if the session exists and has one, undefined otherwise
+   */
+  getSessionProfileSnapshot(sessionId: string): SessionProfileSnapshot | undefined {
+    const session = this.sessions.get(sessionId)
+    return session?.profileSnapshot
   }
 
   /**

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -58,24 +58,90 @@ import {
   Wrench,
 } from "lucide-react"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry } from "@shared/types"
+import { MCPConfig, MCPServerConfig, MCPTransportType, OAuthConfig, ServerLogEntry, Profile } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { toast } from "sonner"
 import { OAuthServerConfig } from "./OAuthServerConfig"
 import { OAUTH_MCP_EXAMPLES, getOAuthExample } from "@shared/oauth-examples"
 import { parseShellCommand } from "@shared/shell-parse"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip"
+
 
 interface DetailedTool {
   name: string
   description: string
   serverName: string
   enabled: boolean
+  serverEnabled: boolean
   inputSchema: any
+}
+
+// Built-in server name - always enabled regardless of profile config
+const BUILTIN_SERVER_NAME = "speakmcp-settings"
+
+/**
+ * Check if a tool is enabled for a specific profile
+ */
+function isToolEnabledForProfile(toolName: string, serverName: string, profile: Profile): boolean {
+  const mcpConfig = profile.mcpServerConfig
+  if (!mcpConfig) return true // No config means all enabled
+
+  // Built-in server tools are always enabled regardless of profile config
+  if (serverName === BUILTIN_SERVER_NAME) return true
+
+  // Check if the server is disabled for this profile
+  if (mcpConfig.allServersDisabledByDefault) {
+    // In opt-in mode, server must be in enabledServers
+    if (!mcpConfig.enabledServers?.includes(serverName)) {
+      return false
+    }
+  } else {
+    // In opt-out mode, server must not be in disabledServers
+    if (mcpConfig.disabledServers?.includes(serverName)) {
+      return false
+    }
+  }
+
+  // Check if the tool itself is disabled
+  if (mcpConfig.disabledTools?.includes(toolName)) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Check if a server is enabled for a specific profile
+ */
+function isServerEnabledForProfile(serverName: string, profile: Profile): boolean {
+  const mcpConfig = profile.mcpServerConfig
+  if (!mcpConfig) return true // No config means all enabled
+
+  // Built-in server is always enabled regardless of profile config
+  if (serverName === BUILTIN_SERVER_NAME) return true
+
+  if (mcpConfig.allServersDisabledByDefault) {
+    // In opt-in mode, server must be in enabledServers
+    return mcpConfig.enabledServers?.includes(serverName) ?? false
+  } else {
+    // In opt-out mode, server must not be in disabledServers
+    return !mcpConfig.disabledServers?.includes(serverName)
+  }
 }
 
 interface MCPConfigManagerProps {
   config: MCPConfig
   onConfigChange: (config: MCPConfig) => void
+  // UI state persistence for collapsed/expanded sections
+  collapsedToolServers?: string[]
+  collapsedServers?: string[]
+  onCollapsedToolServersChange?: (servers: string[]) => void
+  onCollapsedServersChange?: (servers: string[]) => void
 }
 
 interface ServerDialogProps {
@@ -90,9 +156,13 @@ interface ServerDialogProps {
   isOpen?: boolean
 }
 
+// Reserved server names that cannot be used by users (used for built-in functionality)
+const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
+
 function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFromText, isOpen }: ServerDialogProps) {
   const [name, setName] = useState(server?.name || "")
-  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>('manual')
+  // Default to 'examples' tab when adding a new server, 'manual' when editing
+  const [activeTab, setActiveTab] = useState<'manual' | 'file' | 'paste' | 'examples'>(server ? 'manual' : 'examples')
   const [jsonInputText, setJsonInputText] = useState("")
   const [isValidatingJson, setIsValidatingJson] = useState(false)
   const [transport, setTransport] = useState<MCPTransportType>(
@@ -134,7 +204,8 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   // Reset all fields when server prop changes (e.g., when switching from edit to add)
   useEffect(() => {
     setName(server?.name || "")
-    setActiveTab('manual')
+    // Default to 'examples' tab when adding a new server, 'manual' when editing
+    setActiveTab(server ? 'manual' : 'examples')
     setJsonInputText("")  // Clear pasted JSON to prevent data/secrets from persisting across dialog close/open
     setTransport(server?.config.transport || "stdio")
 
@@ -176,7 +247,7 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
       // Only reset for Add mode (server is undefined)
       // Edit mode is handled by the server dependency useEffect above
       setName("")
-      setActiveTab('manual')
+      setActiveTab('examples')  // Default to 'examples' tab when adding a new server
       setJsonInputText("")
       setIsValidatingJson(false) // Reset validation state to prevent UI getting stuck
       setTransport("stdio")
@@ -194,6 +265,12 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
   const handleSave = () => {
     if (!name.trim()) {
       toast.error("Server name is required")
+      return
+    }
+
+    // Check for reserved server names
+    if (RESERVED_SERVER_NAMES.includes(name.trim().toLowerCase())) {
+      toast.error(`Server name "${name.trim()}" is reserved and cannot be used`)
       return
     }
 
@@ -657,6 +734,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                             Environment: {Object.keys(example.config.env).join(", ")}
                           </p>
                         )}
+                        {example.note && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                            ⚠️ {example.note}
+                          </p>
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -678,6 +760,16 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                           )
                           setTimeout(example.config.timeout?.toString() || "")
                           setDisabled(example.config.disabled || false)
+                          // Set headers if the example has them
+                          setHeaders(
+                            example.config.headers
+                              ? Object.entries(example.config.headers)
+                                  .map(([k, v]) => `${k}=${v}`)
+                                  .join("\n")
+                              : ""
+                          )
+                          // Reset OAuth config when switching examples to prevent stale fields
+                          setOAuthConfig({})
                           setActiveTab('manual')
                         }}
                       >
@@ -760,7 +852,25 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
 }
 
 // Example MCP server configurations
-const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = {
+const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig; note?: string }> = {
+  github: {
+    name: "github",
+    config: {
+      transport: "stdio" as MCPTransportType,
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: {
+        GITHUB_PERSONAL_ACCESS_TOKEN: "your-github-token-here",
+      },
+    },
+  },
+  exa: {
+    name: "exa",
+    config: {
+      transport: "streamableHttp" as MCPTransportType,
+      url: "https://mcp.exa.ai/mcp",
+    },
+  },
   memory: {
     name: "memory",
     config: {
@@ -785,15 +895,6 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
       transport: "stdio" as MCPTransportType,
       command: "npx",
       args: ["-y", "@wonderwhy-er/desktop-commander@latest"],
-      env: {},
-    },
-  },
-  "mem0": {
-    name: "mem0",
-    config: {
-      transport: "stdio" as MCPTransportType,
-      command: "npx",
-      args: ["-y", "@pinkpixel/mem0-mcp"],
       env: {},
     },
   },
@@ -833,6 +934,10 @@ const MCP_EXAMPLES: Record<string, { name: string; config: MCPServerConfig }> = 
 export function MCPConfigManager({
   config,
   onConfigChange,
+  collapsedToolServers,
+  collapsedServers,
+  onCollapsedToolServersChange,
+  onCollapsedServersChange,
 }: MCPConfigManagerProps) {
   const [editingServer, setEditingServer] = useState<{
     name: string
@@ -859,24 +964,160 @@ export function MCPConfigManager({
   const [oauthStatus, setOAuthStatus] = useState<Record<string, { configured: boolean; authenticated: boolean; tokenExpiry?: number; error?: string }>>({})
   const [serverLogs, setServerLogs] = useState<Record<string, ServerLogEntry[]>>({})
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
-  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+  // Initialize expandedServers from persisted expanded state
+  // All servers are collapsed by default - only expand those explicitly persisted as expanded
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(() => {
+    // collapsedServers stores which servers are collapsed
+    // - undefined: never persisted before (first time) → all collapsed by default
+    // - []: explicitly persisted as "no servers collapsed" (e.g., user clicked "expand all") → all expanded
+    // - [...names]: specific servers are collapsed → expand all except those
+    const allServerNames = [...Object.keys(config.mcpServers || {}), "speakmcp-settings"]
+
+    // If collapsedServers is undefined, we haven't persisted yet - default to all collapsed
+    if (collapsedServers === undefined) {
+      return new Set<string>() // All collapsed by default
+    }
+
+    // If collapsedServers is an empty array, user explicitly set "no servers collapsed" (all expanded)
+    // Otherwise, expand servers not in the collapsed list
+    const collapsedSet = new Set(collapsedServers)
+    return new Set(allServerNames.filter(name => !collapsedSet.has(name)))
+  })
   // Tool management state
   const [tools, setTools] = useState<DetailedTool[]>([])
   const [toolSearchQuery, setToolSearchQuery] = useState("")
   const [showDisabledTools, setShowDisabledTools] = useState(true)
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  // Initialize expandedTools (servers in Tools section) - all expanded by default except those persisted as collapsed
+  const [expandedToolServers, setExpandedToolServers] = useState<Set<string>>(() => {
+    // We don't know server names yet, so start with empty set meaning "all expanded"
+    // When collapsedToolServers is provided, those will be collapsed
+    return new Set<string>() // Will be populated when tools load
+  })
+  const [toolServersInitialized, setToolServersInitialized] = useState(false)
+  // Profile data for showing which profiles have tools/servers enabled
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [currentProfileId, setCurrentProfileId] = useState<string | null>(null)
 
   // Define servers early so it can be used in hooks below
   const servers = config.mcpServers || {}
 
-  // Prune stale entries from expandedServers when servers change
+  // Track which reserved server names we've already warned about (to avoid repeated warnings)
+  const warnedReservedServersRef = useRef<Set<string>>(new Set())
+
+  // Track known server names to detect new servers
+  // Include RESERVED_SERVER_NAMES so built-in servers aren't treated as "new" on first mount
+  const [knownServers, setKnownServers] = useState<Set<string>>(() => new Set([...Object.keys(config.mcpServers || {}), ...RESERVED_SERVER_NAMES]))
+
+  // Track if we've completed the initial config hydration
+  // This prevents treating all servers as "new" when settings-mcp-tools initially renders
+  // with an empty config before useConfigQuery resolves
+  const initialHydrationCompleteRef = useRef(
+    // If config already has servers on mount, we're hydrated.
+    // Also treat persisted collapse state as a signal that config is hydrated,
+    // even when the config legitimately has zero servers.
+    collapsedServers !== undefined || Object.keys(config.mcpServers || {}).length > 0
+  )
+
+  // Handle server changes: prune stale entries (new servers stay collapsed by default)
+  // Include reserved server names (built-in servers) so they don't get pruned
   useEffect(() => {
-    const serverNames = new Set(Object.keys(servers))
-    const prunedSet = new Set([...expandedServers].filter(name => serverNames.has(name)))
+    const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
+
+    // Find new servers (not in knownServers)
+    const newServers = [...currentServerNames].filter(name => !knownServers.has(name))
+
+    // Prune stale entries (remove servers that no longer exist)
+    const prunedSet = new Set([...expandedServers].filter(name => currentServerNames.has(name)))
+
+    // New servers stay collapsed by default - don't add them to expanded set
+
     if (prunedSet.size !== expandedServers.size) {
       setExpandedServers(prunedSet)
     }
+
+    // Check if we're still in initial hydration phase
+    // If knownServers only had RESERVED_SERVER_NAMES and now we're seeing user servers,
+    // this is the initial config load, not new servers being added
+    const wasEmptyOnMount = knownServers.size <= RESERVED_SERVER_NAMES.length &&
+      [...knownServers].every(name => RESERVED_SERVER_NAMES.includes(name))
+
+    if (wasEmptyOnMount && newServers.length > 0 && !initialHydrationCompleteRef.current) {
+      // This is the initial config load - don't persist, just update knownServers
+      initialHydrationCompleteRef.current = true
+      setKnownServers(currentServerNames)
+      return
+    }
+
+    // Mark hydration complete once we have any persisted collapse state, even if
+    // the config legitimately has zero servers.
+    if (collapsedServers !== undefined || Object.keys(servers).length > 0) {
+      initialHydrationCompleteRef.current = true
+    }
+
+    // Persist new servers as collapsed to ensure consistency after Settings reopen
+    // Only do this if we have already persisted (collapsedServers is not undefined)
+    // and we're past the initial hydration phase
+    // This ensures that when a new server is added and we want it collapsed,
+    // it's added to the persisted collapsed list so it stays collapsed after reopening
+    if (newServers.length > 0 && collapsedServers !== undefined && onCollapsedServersChange && initialHydrationCompleteRef.current) {
+      const updatedCollapsed = [...new Set([...collapsedServers, ...newServers])]
+      onCollapsedServersChange(updatedCollapsed)
+    }
+
+    // Update known servers
+    if (newServers.length > 0 || [...knownServers].some(name => !currentServerNames.has(name))) {
+      setKnownServers(currentServerNames)
+    }
+  }, [servers, collapsedServers])
+
+  // Warn about servers with reserved names that are being filtered out
+  useEffect(() => {
+    const hiddenServers = Object.keys(servers).filter(
+      (name) => RESERVED_SERVER_NAMES.some(
+        (reserved) => name.trim().toLowerCase() === reserved.toLowerCase()
+      )
+    )
+    for (const serverName of hiddenServers) {
+      if (!warnedReservedServersRef.current.has(serverName)) {
+        warnedReservedServersRef.current.add(serverName)
+        toast.warning(`Server "${serverName}" uses a reserved name and has been hidden. Please rename or remove it from your MCP configuration.`)
+      }
+    }
   }, [servers])
+
+  // Sync expandedServers when collapsedServers prop changes (e.g., after async config load)
+  // This tracks the previous collapsedServers to detect external changes
+  const prevCollapsedServersRef = useRef<string[] | undefined>(collapsedServers)
+  useEffect(() => {
+    // Check if collapsedServers prop actually changed
+    const prevCollapsed = prevCollapsedServersRef.current
+    const prevSet = new Set(prevCollapsed ?? [])
+    const currentSet = new Set(collapsedServers ?? [])
+    // Also detect undefined → array transitions
+    const wasUndefined = prevCollapsed === undefined
+    const isUndefined = collapsedServers === undefined
+    const collapsedChanged =
+      wasUndefined !== isUndefined ||
+      prevSet.size !== currentSet.size ||
+      [...prevSet].some(s => !currentSet.has(s))
+
+    if (collapsedChanged) {
+      prevCollapsedServersRef.current = collapsedServers
+      // Re-sync expandedServers from the new collapsed list
+      const currentServerNames = new Set([...Object.keys(servers), ...RESERVED_SERVER_NAMES])
+
+      // undefined = never persisted (first time) → all collapsed
+      if (collapsedServers === undefined) {
+        setExpandedServers(new Set<string>())
+      } else {
+        // [] = explicitly "no servers collapsed" (all expanded)
+        // [...names] = specific servers are collapsed
+        const collapsedSet = new Set(collapsedServers)
+        const newExpanded = new Set([...currentServerNames].filter(name => !collapsedSet.has(name)))
+        setExpandedServers(newExpanded)
+      }
+    }
+  }, [collapsedServers, servers])
 
   // Load OAuth status for all servers
   const refreshOAuthStatus = async (serverName?: string) => {
@@ -935,18 +1176,95 @@ export function MCPConfigManager({
     return () => clearInterval(interval)
   }, [servers, expandedLogs])
 
+  // Fetch tools function - defined as useCallback so it can be reused
+  const fetchTools = useCallback(async () => {
+    try {
+      const toolList = await tipcClient.getMcpDetailedToolList({})
+      setTools(toolList as DetailedTool[])
+    } catch (error) {}
+  }, [])
+
   // Fetch tools periodically
   useEffect(() => {
-    const fetchTools = async () => {
-      try {
-        const toolList = await tipcClient.getMcpDetailedToolList({})
-        setTools(toolList as DetailedTool[])
-      } catch (error) {}
-    }
-
     fetchTools()
     const interval = setInterval(fetchTools, 5000) // Update every 5 seconds
 
+    return () => clearInterval(interval)
+  }, [fetchTools])
+
+  // Track known tool server names to detect new servers
+  const [knownToolServers, setKnownToolServers] = useState<Set<string>>(new Set())
+
+  // Initialize expandedToolServers when tools are first loaded
+  // All servers are expanded by default - only collapse those in collapsedToolServers
+  // Also handles new servers appearing after initialization - they default to expanded
+  useEffect(() => {
+    if (tools.length > 0) {
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers ?? [])
+
+      if (!toolServersInitialized) {
+        // Initial setup: all servers expanded by default, except those persisted as collapsed
+        const expanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+        setExpandedToolServers(expanded)
+        setKnownToolServers(new Set(allToolServerNames))
+        setToolServersInitialized(true)
+      } else {
+        // After initialization: detect new servers and expand them by default
+        const newServers = allToolServerNames.filter(name => !knownToolServers.has(name))
+        if (newServers.length > 0) {
+          setExpandedToolServers(prev => {
+            const updated = new Set(prev)
+            newServers.forEach(name => updated.add(name))
+            return updated
+          })
+          setKnownToolServers(prev => {
+            const updated = new Set(prev)
+            newServers.forEach(name => updated.add(name))
+            return updated
+          })
+        }
+      }
+    }
+  }, [tools, collapsedToolServers, toolServersInitialized, knownToolServers])
+
+  // Sync expandedToolServers when collapsedToolServers prop changes (e.g., after async config load)
+  const prevCollapsedToolServersRef = useRef<string[] | undefined>(collapsedToolServers)
+  useEffect(() => {
+    // Check if collapsedToolServers prop actually changed (use set comparison for robustness)
+    const prevCollapsed = prevCollapsedToolServersRef.current
+    const prevSet = new Set(prevCollapsed ?? [])
+    const currentSet = new Set(collapsedToolServers ?? [])
+    const collapsedChanged =
+      prevSet.size !== currentSet.size ||
+      [...prevSet].some(s => !currentSet.has(s))
+
+    if (collapsedChanged && toolServersInitialized) {
+      prevCollapsedToolServersRef.current = collapsedToolServers
+      // Re-sync expandedToolServers from the new collapsed list
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers ?? [])
+      const newExpanded = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      setExpandedToolServers(newExpanded)
+    }
+  }, [collapsedToolServers, tools, toolServersInitialized])
+
+  // Fetch profiles for showing which profiles have tools/servers enabled
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const [profileList, currentProfile] = await Promise.all([
+          tipcClient.getProfiles(),
+          tipcClient.getCurrentProfile(),
+        ])
+        setProfiles(profileList as Profile[])
+        setCurrentProfileId((currentProfile as Profile | null)?.id ?? null)
+      } catch (error) {}
+    }
+
+    fetchProfiles()
+    // Refresh when tools change (which happens on profile switch)
+    const interval = setInterval(fetchProfiles, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -963,9 +1281,12 @@ export function MCPConfigManager({
   )
 
   // Filter tools for a specific server
+  // Only include tools from enabled servers
   const getFilteredToolsForServer = (serverName: string) => {
     const serverTools = toolsByServer[serverName] || []
     return serverTools.filter((tool) => {
+      // Hide tools from disabled servers
+      if (!tool.serverEnabled) return false
       const matchesSearch =
         tool.name.toLowerCase().includes(toolSearchQuery.toLowerCase()) ||
         tool.description.toLowerCase().includes(toolSearchQuery.toLowerCase())
@@ -1068,12 +1389,28 @@ export function MCPConfigManager({
   }
 
   const toggleToolsExpansion = (serverName: string) => {
-    setExpandedTools(prev => {
-      const newSet = new Set(prev)
+    setExpandedToolServers(prev => {
+      const allToolServerNames = [...new Set(tools.map(t => t.serverName))]
+      const collapsedSet = new Set(collapsedToolServers ?? [])
+
+      // If not yet initialized, start with all servers expanded (minus persisted collapsed ones)
+      // This ensures first toggle behaves correctly even before useEffect runs
+      let newSet: Set<string>
+      if (!toolServersInitialized && prev.size === 0) {
+        newSet = new Set(allToolServerNames.filter(name => !collapsedSet.has(name)))
+      } else {
+        newSet = new Set(prev)
+      }
+
       if (newSet.has(serverName)) {
         newSet.delete(serverName)
       } else {
         newSet.add(serverName)
+      }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      if (onCollapsedToolServersChange) {
+        const collapsed = allToolServerNames.filter(name => !newSet.has(name))
+        onCollapsedToolServersChange(collapsed)
       }
       return newSet
     })
@@ -1153,17 +1490,40 @@ export function MCPConfigManager({
     try {
       const importedConfig = await tipcClient.loadMcpConfigFile({})
       if (importedConfig) {
+        // Filter out reserved server names (case-insensitive to match ServerDialog validation)
+        const filteredServers: Record<string, any> = {}
+        const skippedNames: string[] = []
+        for (const [serverName, serverConfig] of Object.entries(importedConfig.mcpServers)) {
+          const normalizedName = serverName.trim().toLowerCase()
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === normalizedName)) {
+            skippedNames.push(serverName)
+          } else {
+            filteredServers[serverName] = serverConfig
+          }
+        }
+
+        // Warn about skipped reserved names
+        for (const skippedName of skippedNames) {
+          toast.warning(`Skipped importing reserved server name: ${skippedName}`)
+        }
+
+        const importedCount = Object.keys(filteredServers).length
+        if (importedCount === 0 && skippedNames.length > 0) {
+          toast.error("No servers to import - all server names were reserved")
+          return
+        }
+
         // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
             ...config.mcpServers,
-            ...importedConfig.mcpServers,
+            ...filteredServers,
           },
         }
         onConfigChange(newConfig)
         setShowAddDialog(false)
-        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
+        toast.success(`Successfully imported ${importedCount} server(s)`)
       }
     } catch (error) {
       toast.error(`Failed to import config: ${error instanceof Error ? error.message : String(error)}`)
@@ -1201,17 +1561,40 @@ export function MCPConfigManager({
       const importedConfig = await tipcClient.validateMcpConfigText({ text: formattedJson })
 
       if (importedConfig) {
+        // Filter out reserved server names (case-insensitive to match ServerDialog validation)
+        const filteredServers: Record<string, any> = {}
+        const skippedNames: string[] = []
+        for (const [serverName, serverConfig] of Object.entries(importedConfig.mcpServers)) {
+          const normalizedName = serverName.trim().toLowerCase()
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === normalizedName)) {
+            skippedNames.push(serverName)
+          } else {
+            filteredServers[serverName] = serverConfig
+          }
+        }
+
+        // Warn about skipped reserved names
+        for (const skippedName of skippedNames) {
+          toast.warning(`Skipped importing reserved server name: ${skippedName}`)
+        }
+
+        const importedCount = Object.keys(filteredServers).length
+        if (importedCount === 0 && skippedNames.length > 0) {
+          toast.error("No servers to import - all server names were reserved")
+          return false
+        }
+
         // Add imported servers to config (duplicates will be replaced by imported versions)
         const newConfig = {
           ...config,
           mcpServers: {
             ...config.mcpServers,
-            ...importedConfig.mcpServers,
+            ...filteredServers,
           },
         }
         onConfigChange(newConfig)
         setShowAddDialog(false)
-        toast.success(`Successfully imported ${Object.keys(importedConfig.mcpServers).length} server(s)`)
+        toast.success(`Successfully imported ${importedCount} server(s)`)
         return true
       }
       return false
@@ -1275,6 +1658,8 @@ export function MCPConfigManager({
       const result = await tipcClient.stopMcpServer({ serverName })
       if ((result as any).success) {
         toast.success(`Server ${serverName} stopped successfully`)
+        // Immediately fetch tools to update the UI
+        await fetchTools()
       } else {
         toast.error(`Failed to stop server: ${(result as any).error}`)
       }
@@ -1299,6 +1684,8 @@ export function MCPConfigManager({
       const result = await tipcClient.restartMcpServer({ serverName })
       if ((result as any).success) {
         toast.success(`Server ${serverName} started successfully`)
+        // Immediately fetch tools so they appear without waiting for the 5-second interval
+        await fetchTools()
       } else {
         toast.error(`Failed to start server: ${(result as any).error}`)
       }
@@ -1321,6 +1708,22 @@ export function MCPConfigManager({
     })
   }
 
+  // Build combined servers list (config servers + builtin server)
+  // Filter out any user servers with reserved names to prevent collisions
+  // Defined before toggleServerExpansion so it can use allServers for persistence
+  const BUILTIN_SERVER_NAME = "speakmcp-settings"
+  const filteredUserServers = Object.fromEntries(
+    Object.entries(servers).filter(
+      ([name]) => !RESERVED_SERVER_NAMES.some(
+        (reserved) => name.trim().toLowerCase() === reserved.toLowerCase()
+      )
+    )
+  )
+  const allServers: Record<string, MCPServerConfig | { isBuiltin: true }> = {
+    ...filteredUserServers,
+    [BUILTIN_SERVER_NAME]: { isBuiltin: true } as any,
+  }
+
   const toggleServerExpansion = (serverName: string) => {
     setExpandedServers(prev => {
       const newSet = new Set(prev)
@@ -1329,15 +1732,31 @@ export function MCPConfigManager({
       } else {
         newSet.add(serverName)
       }
+      // Persist the collapsed state (servers NOT in expanded set are collapsed)
+      // Use allServers to include built-in server in persistence
+      if (onCollapsedServersChange) {
+        const allServerNames = Object.keys(allServers)
+        const collapsed = allServerNames.filter(name => !newSet.has(name))
+        onCollapsedServersChange(collapsed)
+      }
       return newSet
     })
   }
 
   const toggleAllServers = (expand: boolean) => {
+    const allServerNames = Object.keys(allServers)
     if (expand) {
-      setExpandedServers(new Set(Object.keys(servers)))
+      setExpandedServers(new Set(allServerNames))
+      // Persist: when all expanded, no servers are collapsed
+      if (onCollapsedServersChange) {
+        onCollapsedServersChange([])
+      }
     } else {
       setExpandedServers(new Set())
+      // Persist: when all collapsed, all servers are in collapsed list
+      if (onCollapsedServersChange) {
+        onCollapsedServersChange(allServerNames)
+      }
     }
   }
 
@@ -1351,32 +1770,108 @@ export function MCPConfigManager({
     }
   }
 
+  // Calculate total tools count (only from enabled servers)
+  const toolsFromEnabledServers = tools.filter((t) => t.serverEnabled)
+  const totalToolsCount = toolsFromEnabledServers.length
+  const enabledToolsCount = toolsFromEnabledServers.filter((t) => t.enabled).length
+  const disabledToolsCount = totalToolsCount - enabledToolsCount
+
+  // State for collapsible sections
+  const [toolsSectionExpanded, setToolsSectionExpanded] = useState(true)
+  const [serversSectionExpanded, setServersSectionExpanded] = useState(true)
+
+  // Get all filtered tools (global, across all servers)
+  // Only include tools from enabled servers
+  const getAllFilteredTools = () => {
+    return tools.filter((tool) => {
+      // Hide tools from disabled servers
+      if (!tool.serverEnabled) return false
+      const matchesSearch =
+        tool.name.toLowerCase().includes(toolSearchQuery.toLowerCase()) ||
+        tool.description.toLowerCase().includes(toolSearchQuery.toLowerCase())
+      const matchesVisibility = showDisabledTools || tool.enabled
+      return matchesSearch && matchesVisibility
+    })
+  }
+
+  // Handle toggle all tools (global)
+  const handleToggleAllTools = async (enable: boolean) => {
+    const filteredTools = getAllFilteredTools()
+    if (filteredTools.length === 0) return
+
+    // Capture original enabled states before any changes
+    const originalStates = new Map<string, boolean>()
+    filteredTools.forEach(tool => {
+      originalStates.set(tool.name, tool.enabled)
+    })
+
+    // Update local state immediately for better UX
+    const updatedTools = tools.map((tool) => {
+      if (filteredTools.some(ft => ft.name === tool.name)) {
+        return { ...tool, enabled: enable }
+      }
+      return tool
+    })
+    setTools(updatedTools)
+
+    // Track promises for all backend calls
+    const promises = filteredTools.map((tool) =>
+      tipcClient.setMcpToolEnabled({ toolName: tool.name, enabled: enable }),
+    )
+
+    try {
+      const results = await Promise.allSettled(promises)
+      // Check both if the promise was fulfilled AND if the success field is true
+      const successful = results.filter(
+        (r) => r.status === "fulfilled" && (r.value as any).success === true,
+      ).length
+      const failed = results.length - successful
+
+      if (failed === 0) {
+        toast.success(`All ${filteredTools.length} tools ${enable ? "enabled" : "disabled"}`)
+      } else {
+        // Revert local state for failed calls (rejected OR success: false)
+        const failedTools = filteredTools.filter(
+          (_, index) =>
+            results[index].status === "rejected" ||
+            (results[index].status === "fulfilled" &&
+              (results[index] as PromiseFulfilledResult<any>).value.success !== true),
+        )
+        const revertedTools = updatedTools.map((tool) => {
+          if (failedTools.some(ft => ft.name === tool.name)) {
+            return { ...tool, enabled: originalStates.get(tool.name) ?? tool.enabled }
+          }
+          return tool
+        })
+        setTools(revertedTools)
+
+        toast.warning(
+          `${successful}/${filteredTools.length} tools ${enable ? "enabled" : "disabled"} (${failed} failed)`,
+        )
+      }
+    } catch (error: any) {
+      // Revert all tools on error
+      const revertedTools = updatedTools.map((tool) => {
+        if (filteredTools.some(ft => ft.name === tool.name)) {
+          return { ...tool, enabled: originalStates.get(tool.name) ?? tool.enabled }
+        }
+        return tool
+      })
+      setTools(revertedTools)
+      toast.error(`Error toggling tools: ${error.message}`)
+    }
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-lg font-medium">MCP Server Configuration</h3>
-        </div>
-        <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
-          <Button variant="outline" size="sm" onClick={handleExportConfig}>
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Server
-              </Button>
-            </DialogTrigger>
-            <ServerDialog
-              onSave={handleAddServer}
-              onCancel={() => setShowAddDialog(false)}
-              onImportFromFile={handleImportConfigFromFile}
-              onImportFromText={handleImportFromText}
-              isOpen={showAddDialog}
-            />
-          </Dialog>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-medium">MCP Tools & Servers</h3>
+          {totalToolsCount > 0 && (
+            <Badge variant="secondary" className="text-sm">
+              {enabledToolsCount}/{totalToolsCount} tools enabled
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -1409,455 +1904,684 @@ export function MCPConfigManager({
         </Card>
       )}
 
-      {/* Tool Search and Filter Controls */}
-      {Object.entries(servers).length > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tools..."
-                value={toolSearchQuery}
-                onChange={(e) => setToolSearchQuery(e.target.value)}
-                className="pl-8 h-9"
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowDisabledTools(!showDisabledTools)}
-              className="shrink-0"
-            >
-              {showDisabledTools ? (
-                <EyeOff className="mr-2 h-4 w-4" />
-              ) : (
-                <Eye className="mr-2 h-4 w-4" />
-              )}
-              {showDisabledTools ? "Hide Disabled" : "Show All"}
-            </Button>
+      {/* ==================== TOOLS SECTION ==================== */}
+      <Card>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={toolsSectionExpanded}
+          aria-label="Toggle tools section"
+          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={() => setToolsSectionExpanded(!toolsSectionExpanded)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setToolsSectionExpanded(!toolsSectionExpanded)
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            {toolsSectionExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <Wrench className="h-4 w-4" />
+            <span className="font-medium">Tools</span>
+            <Badge variant="secondary" className="text-xs">
+              {enabledToolsCount}/{totalToolsCount} enabled
+            </Badge>
           </div>
-          {(() => {
-            const serverKeys = Object.keys(servers)
-            const expandedCount = serverKeys.filter(key => expandedServers.has(key)).length
-            const allExpanded = expandedCount >= serverKeys.length
-            return (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleAllServers(!allExpanded)}
-                className="text-muted-foreground shrink-0"
-              >
-                <ChevronsUpDown className="mr-2 h-4 w-4" />
-                {allExpanded ? "Collapse All" : "Expand All"}
-              </Button>
-            )
-          })()}
         </div>
-      )}
 
-      <div className="grid gap-2">
-        {Object.entries(servers).length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-8">
-              <Server className="mb-4 h-12 w-12 text-muted-foreground" />
-              <p className="text-center text-muted-foreground">
-                No MCP servers configured. Add a server to get started.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          Object.entries(servers).map(([name, serverConfig]) => (
-            <Card key={name} className="overflow-hidden">
-              {/* Collapsed Header Row - Always Visible */}
-              <div
-                role="button"
-                tabIndex={0}
-                aria-expanded={expandedServers.has(name)}
-                aria-label={`Toggle ${name} server details`}
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                onClick={() => toggleServerExpansion(name)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    toggleServerExpansion(name)
-                  }
-                }}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {expandedServers.has(name) ? (
-                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className="font-medium truncate">{name}</span>
-                  {serverConfig.disabled ? (
-                    <Badge variant="secondary" className="shrink-0">Disabled</Badge>
-                  ) : serverStatus[name]?.runtimeEnabled === false ? (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Square className="h-3 w-3 text-orange-500" />
-                      <Badge
-                        variant="outline"
-                        className="border-orange-300 text-orange-600 text-xs"
-                      >
-                        Stopped
-                      </Badge>
-                    </div>
-                  ) : (
-                    <>
-                      {serverStatus[name]?.connected ? (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                          <Badge variant="default" className="text-xs">
-                            {serverStatus[name].toolCount} tools
-                          </Badge>
-                        </div>
-                      ) : serverStatus[name]?.error ? (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <XCircle className="h-3 w-3 text-red-500" />
-                          <Badge variant="destructive" className="text-xs">Error</Badge>
-                        </div>
-                      ) : (
-                        <div className="flex shrink-0 items-center gap-1">
-                          <AlertCircle className="h-3 w-3 text-yellow-500" />
-                          <Badge variant="outline" className="text-xs">Disconnected</Badge>
-                        </div>
-                      )}
-                    </>
-                  )}
+        {toolsSectionExpanded && (
+          <CardContent className="border-t pt-4">
+            {/* Tool Search and Filter Controls */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div className="flex flex-1 items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tools..."
+                    value={toolSearchQuery}
+                    onChange={(e) => setToolSearchQuery(e.target.value)}
+                    className="pl-8 h-9"
+                  />
                 </div>
-                {/* Action buttons - stop propagation so clicks/keys don't toggle expansion */}
-                <div
-                  className="flex shrink-0 items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDisabledTools(!showDisabledTools)}
+                  className="shrink-0"
                 >
-                  {!serverConfig.disabled && (
-                    <>
-                      {serverStatus[name]?.runtimeEnabled === false ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartServer(name)}
-                          title="Start server"
-                        >
-                          <Play className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRestartServer(name)}
-                            title="Restart server"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleStopServer(name)}
-                            title="Stop server"
-                          >
-                            <Square className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </>
+                  {showDisabledTools ? (
+                    <EyeOff className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Eye className="mr-2 h-4 w-4" />
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setEditingServer({ name, config: serverConfig })
-                    }
-                    title="Edit server"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  {/* OAuth authorization controls */}
-                  {serverConfig.transport === "streamableHttp" && serverConfig.url && (
-                    <>
-                      {oauthStatus[name]?.authenticated ? (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              await window.electronAPI.revokeOAuthTokens(name)
-                              toast.success("OAuth authentication revoked")
-                              refreshOAuthStatus()
-                            } catch (error) {
-                              toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
-                            }
-                          }}
-                          title="Revoke OAuth authentication"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      ) : oauthStatus[name]?.configured ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              await window.electronAPI.initiateOAuthFlow(name)
-                              toast.success("OAuth authentication started")
-                              // Poll for completion
-                              const checkCompletion = setInterval(async () => {
-                                const status = await window.electronAPI.getOAuthStatus(name)
-                                if (status.authenticated) {
-                                  clearInterval(checkCompletion)
-                                  refreshOAuthStatus()
-                                  toast.success("OAuth authentication completed")
-                                }
-                              }, 2000)
-                              setTimeout(() => clearInterval(checkCompletion), 60000)
-                            } catch (error) {
-                              toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
-                            }
-                          }}
-                          title="Start OAuth authentication"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                    </>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteServer(name)}
-                    title="Delete server"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                  {showDisabledTools ? "Hide Disabled" : "Show All"}
+                </Button>
               </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleAllTools(true)}
+                  className="shrink-0"
+                >
+                  <Power className="mr-1 h-3 w-3" />
+                  All ON
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleAllTools(false)}
+                  className="shrink-0"
+                >
+                  <PowerOff className="mr-1 h-3 w-3" />
+                  All OFF
+                </Button>
+              </div>
+            </div>
 
-              {/* Expanded Details Section */}
-              {expandedServers.has(name) && (
-                <>
-                  <CardContent className="pt-0 border-t">
-                    <div className="space-y-3 py-3">
-                      {/* Command/Transport Info */}
-                      <div className="text-sm">
-                        <span className="font-medium text-muted-foreground">
-                          {serverConfig.transport === "stdio" || !serverConfig.transport ? "Command:" : "Transport:"}
-                        </span>{" "}
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                          {serverConfig.transport === "stdio" || !serverConfig.transport
-                            ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
-                            : `${serverConfig.transport}: ${serverConfig.url || ""}`}
-                        </code>
+            {/* Tools List - Grouped by Server with Collapsible Groups */}
+            <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
+              {getAllFilteredTools().length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-4">
+                  {totalToolsCount === 0
+                    ? "No tools available. Connect a server to see its tools."
+                    : "No tools match your search"}
+                </div>
+              ) : (
+                // Group filtered tools by server
+                Object.entries(
+                  getAllFilteredTools().reduce((acc, tool) => {
+                    if (!acc[tool.serverName]) {
+                      acc[tool.serverName] = []
+                    }
+                    acc[tool.serverName].push(tool)
+                    return acc
+                  }, {} as Record<string, DetailedTool[]>)
+                ).map(([serverName, serverTools]) => {
+                  // Before initialization: expanded unless in collapsedToolServers (respects persisted state)
+                  // After initialization: use the expandedToolServers set
+                  const isExpanded = !toolServersInitialized
+                    ? !(collapsedToolServers ?? []).includes(serverName)
+                    : expandedToolServers.has(serverName)
+                  return (
+                  <div key={serverName} className="space-y-2">
+                    {/* Server Header - Clickable for collapse/expand */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      aria-label={`Toggle ${serverName} tools`}
+                      className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/70 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                      onClick={() => toggleToolsExpansion(serverName)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleToolsExpansion(serverName)
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform" />
+                        )}
+                        <Server className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{serverName}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {serverTools.filter(t => t.enabled).length}/{serverTools.length} enabled
+                        </Badge>
+                        {/* Profile availability indicators */}
+                        <TooltipProvider delayDuration={0}>
+                          <div className="flex items-center gap-0.5 ml-1">
+                            {profiles.map((profile) => {
+                              const isEnabled = isServerEnabledForProfile(serverName, profile)
+                              const isCurrent = profile.id === currentProfileId
+                              return (
+                                <Tooltip key={profile.id}>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className={`h-2 w-2 rounded-full ${
+                                        isEnabled
+                                          ? isCurrent
+                                            ? "bg-primary ring-1 ring-primary ring-offset-1"
+                                            : "bg-green-500"
+                                          : "bg-muted-foreground/30"
+                                      }`}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs">
+                                    <span className="font-medium">{profile.name}</span>
+                                    {isCurrent && " (current)"}
+                                    : {isEnabled ? "enabled" : "disabled"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )
+                            })}
+                          </div>
+                        </TooltipProvider>
                       </div>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleAllToolsForServer(serverName, true)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <Power className="mr-1 h-3 w-3" />
+                          ON
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleAllToolsForServer(serverName, false)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <PowerOff className="mr-1 h-3 w-3" />
+                          OFF
+                        </Button>
+                      </div>
+                    </div>
+                    {/* Tools for this server - Collapsible with animation */}
+                    {isExpanded && (
+                      <div className="space-y-2 pl-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                        {serverTools.map((tool) => (
+                          <div
+                            key={tool.name}
+                            className="flex items-center justify-between rounded-lg border p-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <h4 className="truncate text-sm font-medium">
+                                  {tool.name.includes(":")
+                                    ? tool.name.split(":").slice(1).join(":")
+                                    : tool.name}
+                                </h4>
+                                {!tool.enabled && (
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    Disabled
+                                  </Badge>
+                                )}
+                                {/* Profile availability indicators */}
+                                <TooltipProvider delayDuration={0}>
+                                  <div className="flex items-center gap-0.5">
+                                    {profiles.map((profile) => {
+                                      const isEnabled = isToolEnabledForProfile(tool.name, tool.serverName, profile)
+                                      const isCurrent = profile.id === currentProfileId
+                                      return (
+                                        <Tooltip key={profile.id}>
+                                          <TooltipTrigger asChild>
+                                            <div
+                                              className={`h-2 w-2 rounded-full ${
+                                                isEnabled
+                                                  ? isCurrent
+                                                    ? "bg-primary ring-1 ring-primary ring-offset-1"
+                                                    : "bg-green-500"
+                                                  : "bg-muted-foreground/30"
+                                              }`}
+                                            />
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top" className="text-xs">
+                                            <span className="font-medium">{profile.name}</span>
+                                            {isCurrent && " (current)"}
+                                            : {isEnabled ? "enabled" : "disabled"}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )
+                                    })}
+                                  </div>
+                                </TooltipProvider>
+	                              </div>
+                            </div>
+                            <div className="ml-4 flex items-center gap-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-y-auto">
+                                  <DialogHeader className="min-w-0">
+                                    <DialogTitle className="break-words">{tool.name}</DialogTitle>
+                                    <DialogDescription className="break-words">
+                                      {tool.description}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4 min-w-0">
+                                    <div className="min-w-0">
+                                      <Label className="text-sm font-medium">
+                                        Server
+                                      </Label>
+                                      <p className="text-sm text-muted-foreground mt-1 break-words">
+                                        {tool.serverName}
+                                      </p>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <Label className="text-sm font-medium">
+                                        Input Schema
+                                      </Label>
+                                      <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap break-words">
+                                        {JSON.stringify(tool.inputSchema, null, 2)}
+                                      </pre>
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <Label className="text-sm font-medium">
+                                      Profile Availability
+                                    </Label>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {profiles.map((profile) => {
+                                        const isEnabled = isToolEnabledForProfile(tool.name, tool.serverName, profile)
+                                        const isCurrent = profile.id === currentProfileId
+                                        return (
+                                          <Badge
+                                            key={profile.id}
+                                            variant={isEnabled ? "default" : "secondary"}
+                                            className={`text-xs ${isCurrent ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                                          >
+                                            {isEnabled ? (
+                                              <CheckCircle className="mr-1 h-3 w-3" />
+                                            ) : (
+                                              <XCircle className="mr-1 h-3 w-3" />
+                                            )}
+                                            {profile.name}
+                                            {isCurrent && " (current)"}
+                                          </Badge>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                              </DialogContent>
+                            </Dialog>
+                            <Switch
+                              checked={tool.enabled}
+                              onCheckedChange={(enabled) =>
+                                handleToolToggle(tool.name, enabled)
+                              }
+                            />
+                          </div>
+	                        </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )})
+              )}
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
-                      {/* Environment Variables */}
-                      {serverConfig.env && Object.keys(serverConfig.env).length > 0 && (
-                        <div className="text-sm">
-                          <span className="font-medium text-muted-foreground">Environment:</span>{" "}
-                          <span className="text-xs text-muted-foreground">
-                            {Object.keys(serverConfig.env).join(", ")}
-                          </span>
-                        </div>
-                      )}
+      {/* ==================== SERVERS SECTION ==================== */}
+      <Card>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={serversSectionExpanded}
+          aria-label="Toggle servers section"
+          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={() => setServersSectionExpanded(!serversSectionExpanded)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setServersSectionExpanded(!serversSectionExpanded)
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            {serversSectionExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <Server className="h-4 w-4" />
+            <span className="font-medium">Servers</span>
+            <Badge variant="secondary" className="text-xs">
+              {Object.keys(allServers).length}
+            </Badge>
+          </div>
+          <div
+            className="flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Button variant="outline" size="sm" onClick={handleExportConfig}>
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Server
+                </Button>
+              </DialogTrigger>
+              <ServerDialog
+                onSave={handleAddServer}
+                onCancel={() => setShowAddDialog(false)}
+                onImportFromFile={handleImportConfigFromFile}
+                onImportFromText={handleImportFromText}
+                isOpen={showAddDialog}
+              />
+            </Dialog>
+          </div>
+        </div>
 
-                      {/* Timeout */}
-                      {serverConfig.timeout && (
-                        <div className="text-sm">
-                          <span className="font-medium text-muted-foreground">Timeout:</span>{" "}
-                          <span className="text-xs text-muted-foreground">{serverConfig.timeout}ms</span>
-                        </div>
-                      )}
+        {serversSectionExpanded && (
+          <CardContent className="border-t pt-4">
+            <div className="grid gap-2">
+              {Object.entries(allServers).map(([name, serverConfigOrBuiltin]) => {
+                const isBuiltin = name === BUILTIN_SERVER_NAME
+                const serverConfig = isBuiltin ? null : (serverConfigOrBuiltin as MCPServerConfig)
+                const status = serverStatus[name]
+                const serverTools = toolsByServer[name] || []
+                const enabledToolCount = serverTools.filter((t) => t.enabled).length
 
-                      {/* Error (if any) */}
-                      {serverStatus[name]?.error && (
-                        <div className="text-sm text-red-500">
-                          <span className="font-medium">Error:</span> {serverStatus[name].error}
+                return (
+                  <Card key={name} className="overflow-hidden">
+                    {/* Collapsed Header Row - Always Visible */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={expandedServers.has(name)}
+                      aria-label={`Toggle ${name} server details`}
+                      className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      onClick={() => toggleServerExpansion(name)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleServerExpansion(name)
+                        }
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        {expandedServers.has(name) ? (
+                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="font-medium truncate">{name}</span>
+                        {isBuiltin ? (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                            <Badge variant="outline" className="text-xs border-green-300 text-green-600">
+                              Built-in
+                            </Badge>
+                            <Badge variant="default" className="text-xs">
+                              {enabledToolCount}/{serverTools.length} tools
+                            </Badge>
+                          </div>
+                        ) : serverConfig?.disabled ? (
+                          <Badge variant="secondary" className="shrink-0">Disabled</Badge>
+                        ) : status?.runtimeEnabled === false ? (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Square className="h-3 w-3 text-orange-500" />
+                            <Badge
+                              variant="outline"
+                              className="border-orange-300 text-orange-600 text-xs"
+                            >
+                              Stopped
+                            </Badge>
+                          </div>
+                        ) : (
+                          <>
+                            {status?.connected ? (
+                              <div className="flex shrink-0 items-center gap-1">
+                                <CheckCircle className="h-3 w-3 text-green-500" />
+                                <Badge variant="default" className="text-xs">
+                                  {serverTools.length > 0
+                                    ? `${enabledToolCount}/${serverTools.length} tools`
+                                    : `${status.toolCount} tools`}
+                                </Badge>
+                              </div>
+                            ) : status?.error ? (
+                              <div className="flex shrink-0 items-center gap-1">
+                                <XCircle className="h-3 w-3 text-red-500" />
+                                <Badge variant="destructive" className="text-xs">Error</Badge>
+                              </div>
+                            ) : (
+                              <div className="flex shrink-0 items-center gap-1">
+                                <AlertCircle className="h-3 w-3 text-yellow-500" />
+                                <Badge variant="outline" className="text-xs">Disconnected</Badge>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {/* Action buttons - stop propagation so clicks/keys don't toggle expansion */}
+                      {!isBuiltin && serverConfig && (
+                        <div
+                          className="flex shrink-0 items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {!serverConfig.disabled && (
+                            <>
+                              {status?.runtimeEnabled === false ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleStartServer(name)}
+                                  title="Start server"
+                                >
+                                  <Play className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRestartServer(name)}
+                                    title="Restart server"
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStopServer(name)}
+                                    title="Stop server"
+                                  >
+                                    <Square className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setEditingServer({ name, config: serverConfig })
+                            }
+                            title="Edit server"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {/* OAuth authorization controls */}
+                          {serverConfig.transport === "streamableHttp" && serverConfig.url && (
+                            <>
+                              {oauthStatus[name]?.authenticated ? (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await window.electronAPI.revokeOAuthTokens(name)
+                                      toast.success("OAuth authentication revoked")
+                                      refreshOAuthStatus()
+                                    } catch (error) {
+                                      toast.error(`Failed to revoke authentication: ${error instanceof Error ? error.message : String(error)}`)
+                                    }
+                                  }}
+                                  title="Revoke OAuth authentication"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              ) : oauthStatus[name]?.configured ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await window.electronAPI.initiateOAuthFlow(name)
+                                      toast.success("OAuth authentication started")
+                                      // Poll for completion
+                                      const checkCompletion = setInterval(async () => {
+                                        const statusResult = await window.electronAPI.getOAuthStatus(name)
+                                        if (statusResult.authenticated) {
+                                          clearInterval(checkCompletion)
+                                          refreshOAuthStatus()
+                                          toast.success("OAuth authentication completed")
+                                        }
+                                      }, 2000)
+                                      setTimeout(() => clearInterval(checkCompletion), 60000)
+                                    } catch (error) {
+                                      toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
+                                    }
+                                  }}
+                                  title="Start OAuth authentication"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteServer(name)}
+                            title="Delete server"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       )}
                     </div>
-                  </CardContent>
 
-                  {/* Server Logs Section - only show for stdio servers */}
-                  {(serverConfig.transport === "stdio" || !serverConfig.transport) && (
-                    <CardContent className="pt-0 border-t">
-                      <div className="space-y-2 py-2">
-                        <div className="flex items-center justify-between">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleLogs(name)}
-                            className="flex items-center gap-2 -ml-2"
-                          >
-                            <Terminal className="h-4 w-4" />
-                            <span>Server Logs</span>
-                            {expandedLogs.has(name) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                          {expandedLogs.has(name) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleClearLogs(name)}
-                              title="Clear logs"
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-
-                        {expandedLogs.has(name) && (
-                          <div className="bg-black/90 rounded-md p-3 max-h-64 overflow-y-auto font-mono text-xs">
-                            {serverLogs[name]?.length > 0 ? (
-                              <div className="space-y-1">
-                                {serverLogs[name].map((log, idx) => (
-                                  <div key={idx} className="text-green-400">
-                                    <span className="text-gray-500">
-                                      [{new Date(log.timestamp).toLocaleTimeString()}]
-                                    </span>{' '}
-                                    {log.message}
-                                  </div>
-                                ))}
+                    {/* Expanded Details Section */}
+                    {expandedServers.has(name) && (
+                      <>
+                        <CardContent className="pt-0 border-t">
+                          <div className="space-y-3 py-3">
+                            {isBuiltin ? (
+                              <div className="text-sm">
+                                <span className="font-medium text-muted-foreground">Type:</span>{" "}
+                                <span className="text-xs text-muted-foreground">
+                                  Built-in SpeakMCP settings tools (always available)
+                                </span>
                               </div>
-                            ) : (
-                              <div className="text-gray-500 text-center py-4">
-                                No logs available
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  )}
-
-                  {/* Tools Section */}
-                  {serverStatus[name]?.connected && (
-                    <CardContent className="pt-0 border-t">
-                      <div className="space-y-2 py-2">
-                        <div className="flex items-center justify-between">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleToolsExpansion(name)}
-                            className="flex items-center gap-2 -ml-2"
-                          >
-                            <Wrench className="h-4 w-4" />
-                            <span>Tools</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {(toolsByServer[name] || []).filter((t) => t.enabled).length}/
-                              {(toolsByServer[name] || []).length}
-                            </Badge>
-                            {expandedTools.has(name) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                          {expandedTools.has(name) && (toolsByServer[name]?.length > 0) && (
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleAllToolsForServer(name, true)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                <Power className="mr-1 h-3 w-3" />
-                                All ON
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleAllToolsForServer(name, false)}
-                                className="h-7 px-2 text-xs"
-                              >
-                                <PowerOff className="mr-1 h-3 w-3" />
-                                All OFF
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        {expandedTools.has(name) && (
-                          <div className="space-y-2">
-                            {getFilteredToolsForServer(name).length === 0 ? (
-                              <div className="text-sm text-muted-foreground text-center py-4">
-                                {(toolsByServer[name] || []).length === 0
-                                  ? "No tools available"
-                                  : "No tools match your search"}
-                              </div>
-                            ) : (
-                              getFilteredToolsForServer(name).map((tool) => (
-                                <div
-                                  key={tool.name}
-                                  className="flex items-center justify-between rounded-lg border p-3"
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="mb-1 flex items-center gap-2">
-                                      <h4 className="truncate text-sm font-medium">
-                                        {tool.name.includes(":")
-                                          ? tool.name.split(":").slice(1).join(":")
-                                          : tool.name}
-                                      </h4>
-                                      {!tool.enabled && (
-                                        <Badge variant="outline" className="text-xs">
-                                          Disabled
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <p className="line-clamp-2 text-xs text-muted-foreground">
-                                      {tool.description}
-                                    </p>
-                                  </div>
-                                  <div className="ml-4 flex items-center gap-2">
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm">
-                                          <Eye className="h-4 w-4" />
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="max-w-2xl">
-                                        <DialogHeader>
-                                          <DialogTitle>{tool.name}</DialogTitle>
-                                          <DialogDescription>
-                                            {tool.description}
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="space-y-4">
-                                          <div>
-                                            <Label className="text-sm font-medium">
-                                              Input Schema
-                                            </Label>
-                                            <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-                                              {JSON.stringify(tool.inputSchema, null, 2)}
-                                            </pre>
-                                          </div>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-                                    <Switch
-                                      checked={tool.enabled}
-                                      onCheckedChange={(enabled) =>
-                                        handleToolToggle(tool.name, enabled)
-                                      }
-                                    />
-                                  </div>
+                            ) : serverConfig && (
+                              <>
+                                {/* Command/Transport Info */}
+                                <div className="text-sm">
+                                  <span className="font-medium text-muted-foreground">
+                                    {serverConfig.transport === "stdio" || !serverConfig.transport ? "Command:" : "Transport:"}
+                                  </span>{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                    {serverConfig.transport === "stdio" || !serverConfig.transport
+                                      ? `${serverConfig.command || ""} ${serverConfig.args ? serverConfig.args.join(" ") : ""}`
+                                      : `${serverConfig.transport}: ${serverConfig.url || ""}`}
+                                  </code>
                                 </div>
-                              ))
+
+                                {/* Environment Variables */}
+                                {serverConfig.env && Object.keys(serverConfig.env).length > 0 && (
+                                  <div className="text-sm">
+                                    <span className="font-medium text-muted-foreground">Environment:</span>{" "}
+                                    <span className="text-xs text-muted-foreground">
+                                      {Object.keys(serverConfig.env).join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Timeout */}
+                                {serverConfig.timeout && (
+                                  <div className="text-sm">
+                                    <span className="font-medium text-muted-foreground">Timeout:</span>{" "}
+                                    <span className="text-xs text-muted-foreground">{serverConfig.timeout}ms</span>
+                                  </div>
+                                )}
+
+                                {/* Error (if any) */}
+                                {status?.error && (
+                                  <div className="text-sm text-red-500">
+                                    <span className="font-medium">Error:</span> {status.error}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
+                        </CardContent>
+
+                        {/* Server Logs Section - only show for stdio servers (not builtin) */}
+                        {!isBuiltin && serverConfig && (serverConfig.transport === "stdio" || !serverConfig.transport) && (
+                          <CardContent className="pt-0 border-t">
+                            <div className="space-y-2 py-2">
+                              <div className="flex items-center justify-between">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleLogs(name)}
+                                  className="flex items-center gap-2 -ml-2"
+                                >
+                                  <Terminal className="h-4 w-4" />
+                                  <span>Server Logs</span>
+                                  {expandedLogs.has(name) ? (
+                                    <ChevronUp className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                {expandedLogs.has(name) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleClearLogs(name)}
+                                    title="Clear logs"
+                                  >
+                                    <Trash className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              {expandedLogs.has(name) && (
+                                <div className="bg-black/90 rounded-md p-3 max-h-64 overflow-y-auto font-mono text-xs">
+                                  {serverLogs[name]?.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {serverLogs[name].map((log, idx) => (
+                                        <div key={idx} className="text-green-400">
+                                          <span className="text-gray-500">
+                                            [{new Date(log.timestamp).toLocaleTimeString()}]
+                                          </span>{' '}
+                                          {log.message}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-gray-500 text-center py-4">
+                                      No logs available
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
                         )}
-                      </div>
-                    </CardContent>
-                  )}
-                </>
-              )}
-            </Card>
-          ))
+                      </>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
+          </CardContent>
         )}
-      </div>
+      </Card>
 
       {editingServer && (
         <Dialog open={true} onOpenChange={() => setEditingServer(null)}>

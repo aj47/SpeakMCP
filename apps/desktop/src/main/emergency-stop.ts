@@ -1,5 +1,9 @@
 import { agentProcessManager, llmRequestAbortManager, state, agentSessionStateManager, toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { agentSessionTracker } from "./agent-session-tracker"
+import { messageQueueService } from "./message-queue-service"
+import { acpProcessManager, acpClientService } from "./acp"
+import { acpService } from "./acp-service"
 
 /**
  * Centralized emergency stop: abort LLM requests, kill tracked child processes,
@@ -16,11 +20,16 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
 
   // Mark all active agent sessions as stopped in the tracker and emit progress updates
   try {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
     const activeSessions = agentSessionTracker.getActiveSessions()
     for (const session of activeSessions) {
       // Cancel any pending tool approvals for this session
       toolApprovalManager.cancelSessionApprovals(session.id)
+
+      // Pause the message queue for this conversation to prevent processing the next queued message
+      // The user can resume the queue later if they want to continue
+      if (session.conversationId) {
+        messageQueueService.pauseQueue(session.conversationId)
+      }
 
       // Emit a final progress update so the UI shows "Stopped" state
       // This allows users to see the stopped state and send follow-up messages
@@ -38,7 +47,7 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
             id: `stop_${Date.now()}`,
             type: "completion",
             title: "Agent stopped",
-            description: "Agent mode was stopped by emergency kill switch",
+            description: "Agent mode was stopped by emergency kill switch. Queue paused.",
             status: "error",
             timestamp: Date.now(),
           },
@@ -90,6 +99,25 @@ export async function emergencyStopAll(): Promise<{ before: number; after: numbe
   // This prevents a race condition where stray updates slip through after emergency stop.
   state.isAgentModeActive = false
   state.agentIterationCount = 0
+
+  // Cancel all ACP runs
+  acpClientService.cancelAllRuns()
+
+  // Stop all spawned ACP agents - isolated so failures don't prevent rest of cleanup
+  try {
+    await acpProcessManager.stopAllAgents()
+  } catch (error) {
+    // Log but don't fail - emergency stop should be best-effort
+    console.error('[EmergencyStop] Error stopping ACP agents:', error)
+  }
+
+  // Stop all ACP stdio agents - isolated so failures don't prevent rest of cleanup
+  try {
+    await acpService.shutdown()
+  } catch (error) {
+    // Log but don't fail - emergency stop should be best-effort
+    console.error('[EmergencyStop] Error shutting down ACP service:', error)
+  }
 
   return { before, after }
 }

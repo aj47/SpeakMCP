@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl, Share, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
 import { useTheme, ThemeMode } from '../ui/ThemeProvider';
@@ -7,6 +7,9 @@ import { spacing, radius } from '../ui/theme';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
+import { useTunnelConnection } from '../store/tunnelConnection';
+import { useProfile } from '../store/profile';
+import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -44,8 +47,406 @@ export default function SettingsScreen({ navigation }: any) {
   const [scanned, setScanned] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
+  const { setCurrentProfile: setProfileContext } = useProfile();
+
+  // Remote settings state
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [currentProfileId, setCurrentProfileId] = useState<string | undefined>();
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [remoteSettings, setRemoteSettings] = useState<Settings | null>(null);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Track if the server is a SpeakMCP desktop server (supports our settings API)
+  const [isSpeakMCPServer, setIsSpeakMCPServer] = useState(false);
+
+  // Profile import/export state
+  const [isExportingProfile, setIsExportingProfile] = useState(false);
+  const [isImportingProfile, setIsImportingProfile] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importJsonText, setImportJsonText] = useState('');
+
+  // Model picker state
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const [useCustomModel, setUseCustomModel] = useState(false);
+
+  // Preset picker state
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+
+  // Custom model input state (for debouncing)
+  const [customModelDraft, setCustomModelDraft] = useState('');
+  const modelUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  // Create settings API client when we have valid credentials
+  const settingsClient = useMemo(() => {
+    if (config.baseUrl && config.apiKey) {
+      return new SettingsApiClient(config.baseUrl, config.apiKey);
+    }
+    return null;
+  }, [config.baseUrl, config.apiKey]);
+
+  // Clear pending model update timeout when settingsClient changes
+  // to prevent sending updates to the previous server
+  useEffect(() => {
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+      modelUpdateTimeoutRef.current = null;
+    }
+  }, [settingsClient]);
+
+  // Fetch remote settings from desktop
+  const fetchRemoteSettings = useCallback(async () => {
+    if (!settingsClient) {
+      setProfiles([]);
+      setMcpServers([]);
+      setRemoteSettings(null);
+      setIsSpeakMCPServer(false);
+      return;
+    }
+
+    setIsLoadingRemote(true);
+    setRemoteError(null);
+
+    try {
+      const errors: string[] = [];
+      let successCount = 0;
+
+      const [profilesRes, serversRes, settingsRes] = await Promise.all([
+        settingsClient.getProfiles().catch((e) => { errors.push('profiles'); return null; }),
+        settingsClient.getMCPServers().catch((e) => { errors.push('MCP servers'); return null; }),
+        settingsClient.getSettings().catch((e) => { errors.push('settings'); return null; }),
+      ]);
+
+      if (profilesRes) {
+        setProfiles(profilesRes.profiles);
+        setCurrentProfileId(profilesRes.currentProfileId);
+        successCount++;
+      }
+      if (serversRes) {
+        setMcpServers(serversRes.servers);
+        successCount++;
+      }
+      if (settingsRes) {
+        setRemoteSettings(settingsRes);
+        successCount++;
+      }
+
+      // Consider it a SpeakMCP server if at least one endpoint succeeded
+      // This gates the Desktop Settings section for non-SpeakMCP endpoints (e.g., OpenAI)
+      setIsSpeakMCPServer(successCount > 0);
+
+      // Show error if any endpoint failed but at least one succeeded
+      if (errors.length > 0 && successCount > 0) {
+        setRemoteError(`Failed to load: ${errors.join(', ')}`);
+      } else if (successCount === 0) {
+        // All endpoints failed - not a SpeakMCP server
+        setIsSpeakMCPServer(false);
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch remote settings:', error);
+      setRemoteError(error.message || 'Failed to load remote settings');
+      setIsSpeakMCPServer(false);
+    } finally {
+      setIsLoadingRemote(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch remote settings when client becomes available
+  useEffect(() => {
+    if (settingsClient) {
+      fetchRemoteSettings();
+    }
+  }, [settingsClient, fetchRemoteSettings]);
+
+  // Handle pull-to-refresh
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchRemoteSettings();
+    setIsRefreshing(false);
+  }, [fetchRemoteSettings]);
+
+  // Handle profile switch
+  const handleProfileSwitch = async (profileId: string) => {
+    if (!settingsClient || profileId === currentProfileId) return;
+
+    try {
+      await settingsClient.setCurrentProfile(profileId);
+      setCurrentProfileId(profileId);
+      // Update the profile context so the header badge updates immediately
+      const selectedProfile = profiles.find(p => p.id === profileId);
+      if (selectedProfile) {
+        setProfileContext(selectedProfile);
+      }
+      // Refresh MCP servers as they may have changed with the profile
+      const serversRes = await settingsClient.getMCPServers();
+      setMcpServers(serversRes.servers);
+    } catch (error: any) {
+      console.error('[Settings] Failed to switch profile:', error);
+      setRemoteError(error.message || 'Failed to switch profile');
+    }
+  };
+
+  // Handle profile export
+  const handleExportProfile = async () => {
+    if (!settingsClient || !currentProfileId) return;
+
+    setIsExportingProfile(true);
+    try {
+      const result = await settingsClient.exportProfile(currentProfileId);
+      await Share.share({
+        message: result.profileJson,
+        title: 'Export Profile',
+      });
+    } catch (error: any) {
+      console.error('[Settings] Failed to export profile:', error);
+      Alert.alert('Export Failed', error.message || 'Failed to export profile');
+    } finally {
+      setIsExportingProfile(false);
+    }
+  };
+
+  // Handle profile import
+  const handleImportProfile = async () => {
+    if (!settingsClient || !importJsonText.trim()) return;
+
+    setIsImportingProfile(true);
+    try {
+      const result = await settingsClient.importProfile(importJsonText.trim());
+      // Import succeeded - close modal and show success first
+      setShowImportModal(false);
+      setImportJsonText('');
+      Alert.alert('Success', `Profile "${result.profile.name}" imported successfully`);
+
+      // Refresh profiles list separately - don't show import failure if only refresh fails
+      try {
+        const profilesRes = await settingsClient.getProfiles();
+        setProfiles(profilesRes.profiles);
+        setCurrentProfileId(profilesRes.currentProfileId);
+      } catch (refreshError: any) {
+        console.error('[Settings] Failed to refresh profiles after import:', refreshError);
+        // Don't show error alert - import was successful, just log the refresh issue
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to import profile:', error);
+      Alert.alert('Import Failed', error.message || 'Failed to import profile');
+    } finally {
+      setIsImportingProfile(false);
+    }
+  };
+
+  // Handle MCP server toggle
+  const handleServerToggle = async (serverName: string, enabled: boolean) => {
+    if (!settingsClient) return;
+
+    try {
+      await settingsClient.toggleMCPServer(serverName, enabled);
+      // Update local state optimistically
+      setMcpServers(prev => prev.map(s =>
+        s.name === serverName ? { ...s, enabled, runtimeEnabled: enabled } : s
+      ));
+    } catch (error: any) {
+      console.error('[Settings] Failed to toggle server:', error);
+      setRemoteError(error.message || 'Failed to toggle server');
+      // Refresh to get actual state
+      fetchRemoteSettings();
+    }
+  };
+
+  // Handle remote settings toggle
+  const handleRemoteSettingToggle = async (key: keyof Settings, value: boolean) => {
+    if (!settingsClient || !remoteSettings) return;
+
+    try {
+      await settingsClient.updateSettings({ [key]: value });
+      setRemoteSettings(prev => prev ? { ...prev, [key]: value } : null);
+    } catch (error: any) {
+      console.error('[Settings] Failed to update setting:', error);
+      setRemoteError(error.message || 'Failed to update setting');
+    }
+  };
+
+  // Fetch available models for the current provider
+  const fetchModels = useCallback(async (providerId: 'openai' | 'groq' | 'gemini') => {
+    if (!settingsClient) return;
+
+    setIsLoadingModels(true);
+    try {
+      const response = await settingsClient.getModels(providerId);
+      setAvailableModels(response.models);
+      // Check if current model is in the list, if not enable custom mode
+      const currentModel = getCurrentModelValue();
+      if (currentModel && response.models.length > 0) {
+        const isInList = response.models.some(m => m.id === currentModel);
+        setUseCustomModel(!isInList);
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch models:', error);
+      // Keep any existing models on error to avoid UI looking empty
+      // Only log the error, don't clear the list
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch models when remote settings load or provider changes
+  useEffect(() => {
+    if (remoteSettings?.mcpToolsProviderId && settingsClient) {
+      fetchModels(remoteSettings.mcpToolsProviderId);
+    }
+  }, [remoteSettings?.mcpToolsProviderId, settingsClient, fetchModels]);
+
+  // Handle provider change
+  const handleProviderChange = async (provider: 'openai' | 'groq' | 'gemini') => {
+    if (!settingsClient || !remoteSettings || remoteSettings.mcpToolsProviderId === provider) return;
+
+    // Cancel any pending model update to avoid writing to the wrong provider's model key
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+      modelUpdateTimeoutRef.current = null;
+    }
+
+    try {
+      await settingsClient.updateSettings({ mcpToolsProviderId: provider });
+      setRemoteSettings(prev => prev ? { ...prev, mcpToolsProviderId: provider } : null);
+      // Reset custom model mode when switching providers
+      setUseCustomModel(false);
+      // Models will be fetched via the useEffect above
+    } catch (error: any) {
+      console.error('[Settings] Failed to change provider:', error);
+      setRemoteError(error.message || 'Failed to change provider');
+    }
+  };
+
+  // Handle preset change (OpenAI compatible providers)
+  const handlePresetChange = async (presetId: string) => {
+    if (!settingsClient || !remoteSettings || remoteSettings.currentModelPresetId === presetId) return;
+
+    // Cancel any pending model update to avoid writing to the wrong preset's context
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+      modelUpdateTimeoutRef.current = null;
+    }
+
+    setShowPresetPicker(false);
+    try {
+      await settingsClient.updateSettings({ currentModelPresetId: presetId });
+      setRemoteSettings(prev => prev ? { ...prev, currentModelPresetId: presetId } : null);
+      // Reset models and fetch new ones for the new preset
+      setAvailableModels([]);
+      setUseCustomModel(false);
+      // Fetch models for the new preset
+      if (remoteSettings.mcpToolsProviderId === 'openai') {
+        fetchModels('openai');
+      }
+    } catch (error: any) {
+      console.error('[Settings] Failed to change preset:', error);
+      setRemoteError(error.message || 'Failed to change preset');
+    }
+  };
+
+  // Get current preset display name
+  const getCurrentPresetName = () => {
+    if (!remoteSettings?.availablePresets || !remoteSettings.currentModelPresetId) return 'OpenAI';
+    const preset = remoteSettings.availablePresets.find(p => p.id === remoteSettings.currentModelPresetId);
+    return preset?.name || 'OpenAI';
+  };
+
+  // Handle model name change with debouncing to avoid request storms per keystroke
+  const handleModelNameChange = useCallback((modelName: string) => {
+    // Update draft state immediately for responsive UI
+    setCustomModelDraft(modelName);
+
+    // Cancel any pending update
+    if (modelUpdateTimeoutRef.current) {
+      clearTimeout(modelUpdateTimeoutRef.current);
+    }
+
+    // Debounce the actual API call by 500ms
+    modelUpdateTimeoutRef.current = setTimeout(async () => {
+      if (!settingsClient || !remoteSettings) return;
+
+      const provider = remoteSettings.mcpToolsProviderId;
+      const modelKey = provider === 'openai' ? 'mcpToolsOpenaiModel'
+        : provider === 'groq' ? 'mcpToolsGroqModel'
+        : 'mcpToolsGeminiModel';
+
+      // Update local state
+      setRemoteSettings(prev => prev ? { ...prev, [modelKey]: modelName } : null);
+
+      try {
+        await settingsClient.updateSettings({ [modelKey]: modelName });
+      } catch (error: any) {
+        console.error('[Settings] Failed to update model:', error);
+        setRemoteError(error.message || 'Failed to update model');
+        // Refresh to get actual state
+        fetchRemoteSettings();
+      }
+    }, 500);
+  }, [settingsClient, remoteSettings, fetchRemoteSettings]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (modelUpdateTimeoutRef.current) {
+        clearTimeout(modelUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Sync customModelDraft with remoteSettings when it changes (e.g., on initial load or provider change)
+  useEffect(() => {
+    if (remoteSettings) {
+      setCustomModelDraft(getCurrentModelValue());
+    }
+  }, [remoteSettings?.mcpToolsProviderId, remoteSettings?.mcpToolsOpenaiModel, remoteSettings?.mcpToolsGroqModel, remoteSettings?.mcpToolsGeminiModel]);
+
+  // Get current model value based on provider
+  const getCurrentModelValue = () => {
+    if (!remoteSettings) return '';
+    const provider = remoteSettings.mcpToolsProviderId;
+    if (provider === 'openai') return remoteSettings.mcpToolsOpenaiModel || '';
+    if (provider === 'groq') return remoteSettings.mcpToolsGroqModel || '';
+    return remoteSettings.mcpToolsGeminiModel || '';
+  };
+
+  // Get placeholder based on provider
+  const getModelPlaceholder = () => {
+    if (!remoteSettings) return '';
+    const provider = remoteSettings.mcpToolsProviderId;
+    if (provider === 'openai') return 'gpt-4o-mini';
+    if (provider === 'groq') return 'llama-3.3-70b-versatile';
+    return 'gemini-1.5-flash-002';
+  };
+
+  // Get display name for current model
+  const getCurrentModelDisplayName = () => {
+    const currentValue = getCurrentModelValue();
+    if (!currentValue) return 'Select a model';
+    const model = availableModels.find(m => m.id === currentValue);
+    return model?.name || currentValue;
+  };
+
+  // Handle model selection from picker
+  const handleModelSelect = async (modelId: string) => {
+    setShowModelPicker(false);
+    setModelSearchQuery('');
+    await handleModelNameChange(modelId);
+  };
+
+  // Filter models by search query
+  const filteredModels = useMemo(() => {
+    if (!modelSearchQuery.trim()) return availableModels;
+    const query = modelSearchQuery.toLowerCase();
+    return availableModels.filter(
+      m => m.id.toLowerCase().includes(query) || m.name.toLowerCase().includes(query)
+    );
+  }, [availableModels, modelSearchQuery]);
 
   useEffect(() => {
     setDraft(config);
@@ -131,6 +532,19 @@ export default function SettingsScreen({ navigation }: any) {
     // Connection successful or no validation needed, proceed
     setConfig(normalizedDraft);
     await saveConfig(normalizedDraft);
+
+    // Connect tunnel for persistence (fire and forget - don't block navigation)
+    if (normalizedDraft.baseUrl && normalizedDraft.apiKey) {
+      tunnelConnect(normalizedDraft.baseUrl, normalizedDraft.apiKey).catch((error) => {
+        console.warn('[Settings] Tunnel connect failed (non-blocking):', error);
+      });
+    } else {
+      // Clear tunnel metadata when credentials are removed
+      tunnelDisconnect().catch((error) => {
+        console.warn('[Settings] Tunnel disconnect failed (non-blocking):', error);
+      });
+    }
+
     navigation.navigate('Sessions');
   };
 
@@ -171,6 +585,14 @@ export default function SettingsScreen({ navigation }: any) {
       <ScrollView
         style={{ backgroundColor: theme.colors.background }}
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + spacing.md }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
       >
         <Text style={styles.h1}>Settings</Text>
 
@@ -254,6 +676,277 @@ export default function SettingsScreen({ navigation }: any) {
           Queue messages while the agent is busy processing
         </Text>
 
+        {/* Remote Settings Section - only show when connected to a SpeakMCP desktop server */}
+        {settingsClient && (isLoadingRemote || isSpeakMCPServer) && (
+          <>
+            <Text style={styles.sectionTitle}>Desktop Settings</Text>
+
+            {isLoadingRemote && !isRefreshing && (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Loading remote settings...</Text>
+              </View>
+            )}
+
+            {remoteError && (
+              <View style={styles.warningContainer}>
+                <Text style={styles.warningText}>⚠️ {remoteError}</Text>
+                <TouchableOpacity onPress={fetchRemoteSettings}>
+                  <Text style={styles.retryText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Profile Switching */}
+            {profiles.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>Profile</Text>
+                <View style={styles.profileList}>
+                  {profiles.map((profile) => (
+                    <TouchableOpacity
+                      key={profile.id}
+                      style={[
+                        styles.profileItem,
+                        currentProfileId === profile.id && styles.profileItemActive,
+                      ]}
+                      onPress={() => handleProfileSwitch(profile.id)}
+                    >
+                      <Text style={[
+                        styles.profileName,
+                        currentProfileId === profile.id && styles.profileNameActive,
+                      ]}>
+                        {profile.name}
+                        {profile.isDefault && ' (Default)'}
+                      </Text>
+                      {currentProfileId === profile.id && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {/* Profile Import/Export Buttons */}
+                <View style={styles.profileActions}>
+                  <TouchableOpacity
+                    style={[styles.profileActionButton, isImportingProfile && styles.profileActionButtonDisabled]}
+                    onPress={() => setShowImportModal(true)}
+                    disabled={isImportingProfile}
+                  >
+                    <Text style={styles.profileActionButtonText}>
+                      {isImportingProfile ? 'Importing...' : '📥 Import'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.profileActionButton, (!currentProfileId || isExportingProfile) && styles.profileActionButtonDisabled]}
+                    onPress={handleExportProfile}
+                    disabled={!currentProfileId || isExportingProfile}
+                  >
+                    <Text style={styles.profileActionButtonText}>
+                      {isExportingProfile ? 'Exporting...' : '📤 Export'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {/* MCP Servers */}
+            {mcpServers.length > 0 && (
+              <>
+                <Text style={styles.subsectionTitle}>MCP Servers</Text>
+                {mcpServers.map((server) => (
+                  <View key={server.name} style={styles.serverRow}>
+                    <View style={styles.serverInfo}>
+                      <View style={styles.serverNameRow}>
+                        <View style={[
+                          styles.statusDot,
+                          server.connected ? styles.statusConnected : styles.statusDisconnected,
+                        ]} />
+                        <Text style={styles.serverName}>{server.name}</Text>
+                      </View>
+                      <Text style={styles.serverMeta}>
+                        {server.toolCount} tool{server.toolCount !== 1 ? 's' : ''}
+                        {server.error && ` • ${server.error}`}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={server.enabled}
+                      onValueChange={(v) => handleServerToggle(server.name, v)}
+                      trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                      thumbColor={server.enabled ? theme.colors.primaryForeground : theme.colors.background}
+                      disabled={server.configDisabled}
+                    />
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Model Settings */}
+            {remoteSettings && (
+              <>
+                <Text style={styles.subsectionTitle}>Model</Text>
+
+                <Text style={styles.label}>Provider</Text>
+                <View style={styles.providerSelector}>
+                  {(['openai', 'groq', 'gemini'] as const).map((provider) => (
+                    <Pressable
+                      key={provider}
+                      style={[
+                        styles.providerOption,
+                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionActive,
+                      ]}
+                      onPress={() => handleProviderChange(provider)}
+                    >
+                      <Text style={[
+                        styles.providerOptionText,
+                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionTextActive,
+                      ]}>
+                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {/* OpenAI Compatible Preset Selector - only show when OpenAI provider is selected */}
+                {remoteSettings.mcpToolsProviderId === 'openai' && remoteSettings.availablePresets && remoteSettings.availablePresets.length > 0 && (
+                  <>
+                    <Text style={styles.label}>OpenAI Compatible Endpoint</Text>
+                    <TouchableOpacity
+                      style={styles.modelSelector}
+                      onPress={() => setShowPresetPicker(true)}
+                    >
+                      <View style={styles.modelSelectorContent}>
+                        <Text style={styles.modelSelectorText}>
+                          {getCurrentPresetName()}
+                        </Text>
+                        <Text style={styles.modelSelectorChevron}>▼</Text>
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.helperText}>
+                      Select API endpoint (OpenAI, OpenRouter, Together AI, etc.)
+                    </Text>
+                  </>
+                )}
+
+                <View style={styles.modelLabelRow}>
+                  <Text style={styles.label}>Model Name</Text>
+                  <View style={styles.modelActions}>
+                    <TouchableOpacity
+                      style={styles.modelActionButton}
+                      onPress={() => setUseCustomModel(!useCustomModel)}
+                    >
+                      <Text style={styles.modelActionText}>
+                        {useCustomModel ? '📋 List' : '✏️ Custom'}
+                      </Text>
+                    </TouchableOpacity>
+                    {!useCustomModel && (
+                      <TouchableOpacity
+                        style={styles.modelActionButton}
+                        onPress={() => remoteSettings && fetchModels(remoteSettings.mcpToolsProviderId)}
+                        disabled={isLoadingModels}
+                      >
+                        <Text style={styles.modelActionText}>
+                          {isLoadingModels ? '⏳' : '🔄'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {useCustomModel ? (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      value={customModelDraft}
+                      onChangeText={handleModelNameChange}
+                      placeholder={getModelPlaceholder()}
+                      placeholderTextColor={theme.colors.mutedForeground}
+                      autoCapitalize='none'
+                    />
+                    <Text style={styles.helperText}>
+                      Enter any model name supported by your provider
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.modelSelector}
+                      onPress={() => setShowModelPicker(true)}
+                      disabled={isLoadingModels}
+                    >
+                      {isLoadingModels ? (
+                        <View style={styles.modelSelectorContent}>
+                          <ActivityIndicator size="small" color={theme.colors.mutedForeground} />
+                          <Text style={styles.modelSelectorPlaceholder}>Loading models...</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.modelSelectorContent}>
+                          <Text style={[
+                            styles.modelSelectorText,
+                            !getCurrentModelValue() && styles.modelSelectorPlaceholder
+                          ]}>
+                            {getCurrentModelDisplayName()}
+                          </Text>
+                          <Text style={styles.modelSelectorChevron}>▼</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    <Text style={styles.helperText}>
+                      {availableModels.length > 0
+                        ? `${availableModels.length} model${availableModels.length !== 1 ? 's' : ''} available`
+                        : 'Model used for agent/MCP tool calling'}
+                    </Text>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Feature Toggles */}
+            {remoteSettings && (
+              <>
+                <Text style={styles.subsectionTitle}>Features</Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Text-to-Speech</Text>
+                  <Switch
+                    value={remoteSettings.ttsEnabled}
+                    onValueChange={(v) => handleRemoteSettingToggle('ttsEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.ttsEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Enable text-to-speech for responses on desktop
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Post-Processing</Text>
+                  <Switch
+                    value={remoteSettings.transcriptPostProcessingEnabled}
+                    onValueChange={(v) => handleRemoteSettingToggle('transcriptPostProcessingEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.transcriptPostProcessingEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Clean up transcripts before sending to LLM
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Tool Approval Required</Text>
+                  <Switch
+                    value={remoteSettings.mcpRequireApprovalBeforeToolCall}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpRequireApprovalBeforeToolCall', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpRequireApprovalBeforeToolCall ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Require approval before executing MCP tools
+                </Text>
+              </>
+            )}
+          </>
+        )}
+
         {connectionError && (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>⚠️ {connectionError}</Text>
@@ -293,6 +986,218 @@ export default function SettingsScreen({ navigation }: any) {
           <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
             <Text style={styles.closeButtonText}>✕ Close</Text>
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Model Picker Modal */}
+      <Modal
+        visible={showModelPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowModelPicker(false);
+          setModelSearchQuery('');
+        }}
+      >
+        <View style={styles.modelPickerOverlay}>
+          <View style={styles.modelPickerContainer}>
+            <View style={styles.modelPickerHeader}>
+              <Text style={styles.modelPickerTitle}>Select Model</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowModelPicker(false);
+                  setModelSearchQuery('');
+                }}
+              >
+                <Text style={styles.modelPickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View style={styles.modelSearchContainer}>
+              <TextInput
+                style={styles.modelSearchInput}
+                value={modelSearchQuery}
+                onChangeText={setModelSearchQuery}
+                placeholder="Search models..."
+                placeholderTextColor={theme.colors.mutedForeground}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            {/* Models List */}
+            <ScrollView style={styles.modelList} keyboardShouldPersistTaps="handled">
+              {filteredModels.length === 0 ? (
+                <View style={styles.modelListEmpty}>
+                  <Text style={styles.modelListEmptyText}>
+                    {modelSearchQuery ? `No models match "${modelSearchQuery}"` : 'No models available'}
+                  </Text>
+                </View>
+              ) : (
+                filteredModels.map((model) => {
+                  const isSelected = getCurrentModelValue() === model.id;
+                  return (
+                    <TouchableOpacity
+                      key={model.id}
+                      style={[
+                        styles.modelItem,
+                        isSelected && styles.modelItemActive,
+                      ]}
+                      onPress={() => handleModelSelect(model.id)}
+                    >
+                      <View style={styles.modelItemContent}>
+                        <Text style={[
+                          styles.modelItemName,
+                          isSelected && styles.modelItemNameActive,
+                        ]}>
+                          {model.name}
+                        </Text>
+                        {model.id !== model.name && (
+                          <Text style={styles.modelItemId}>{model.id}</Text>
+                        )}
+                      </View>
+                      {isSelected && (
+                        <Text style={styles.modelItemCheck}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {/* Footer with model count */}
+            <View style={styles.modelPickerFooter}>
+              <Text style={styles.modelPickerFooterText}>
+                {modelSearchQuery
+                  ? `${filteredModels.length} of ${availableModels.length} models`
+                  : `${availableModels.length} model${availableModels.length !== 1 ? 's' : ''} available`}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Preset Picker Modal */}
+      <Modal
+        visible={showPresetPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPresetPicker(false)}
+      >
+        <View style={styles.modelPickerOverlay}>
+          <View style={styles.modelPickerContainer}>
+            <View style={styles.modelPickerHeader}>
+              <Text style={styles.modelPickerTitle}>Select Endpoint</Text>
+              <TouchableOpacity onPress={() => setShowPresetPicker(false)}>
+                <Text style={styles.modelPickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modelList}>
+              {remoteSettings?.availablePresets?.map((preset) => {
+                const isSelected = remoteSettings.currentModelPresetId === preset.id;
+                return (
+                  <TouchableOpacity
+                    key={preset.id}
+                    style={[
+                      styles.modelItem,
+                      isSelected && styles.modelItemActive,
+                    ]}
+                    onPress={() => handlePresetChange(preset.id)}
+                  >
+                    <View style={styles.modelItemContent}>
+                      <Text style={[
+                        styles.modelItemName,
+                        isSelected && styles.modelItemNameActive,
+                      ]}>
+                        {preset.name}
+                      </Text>
+                      <Text style={styles.modelItemId}>{preset.baseUrl}</Text>
+                    </View>
+                    {isSelected && (
+                      <Text style={styles.modelItemCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modelPickerFooter}>
+              <Text style={styles.modelPickerFooterText}>
+                {remoteSettings?.availablePresets?.length || 0} endpoint{(remoteSettings?.availablePresets?.length || 0) !== 1 ? 's' : ''} available
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Profile Import Modal */}
+      <Modal
+        visible={showImportModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowImportModal(false);
+          setImportJsonText('');
+        }}
+      >
+        <View style={styles.importModalOverlay}>
+          <View style={styles.importModalContainer}>
+            <View style={styles.importModalHeader}>
+              <Text style={styles.importModalTitle}>Import Profile</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowImportModal(false);
+                  setImportJsonText('');
+                }}
+              >
+                <Text style={styles.importModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.importModalDescription}>
+              Paste the profile JSON below to import it.
+            </Text>
+
+            <TextInput
+              style={styles.importJsonInput}
+              value={importJsonText}
+              onChangeText={setImportJsonText}
+              placeholder='{"name": "My Profile", ...}'
+              placeholderTextColor={theme.colors.mutedForeground}
+              multiline
+              numberOfLines={8}
+              textAlignVertical="top"
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
+            />
+
+            <View style={styles.importModalActions}>
+              <TouchableOpacity
+                style={styles.importModalCancelButton}
+                onPress={() => {
+                  setShowImportModal(false);
+                  setImportJsonText('');
+                }}
+              >
+                <Text style={styles.importModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.importModalImportButton,
+                  (!importJsonText.trim() || isImportingProfile) && styles.importModalImportButtonDisabled,
+                ]}
+                onPress={handleImportProfile}
+                disabled={!importJsonText.trim() || isImportingProfile}
+              >
+                <Text style={styles.importModalImportText}>
+                  {isImportingProfile ? 'Importing...' : 'Import'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </>
@@ -360,6 +1265,33 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.foreground,
     },
     themeOptionTextActive: {
+      color: theme.colors.primaryForeground,
+      fontWeight: '600',
+    },
+    providerSelector: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    providerOption: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      alignItems: 'center',
+    },
+    providerOptionActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary,
+    },
+    providerOptionText: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    providerOptionTextActive: {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
     },
@@ -447,6 +1379,356 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: '#fff',
       fontSize: 16,
       fontWeight: '600',
+    },
+    // Remote settings styles
+    subsectionTitle: {
+      ...theme.typography.label,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+    },
+    loadingText: {
+      color: theme.colors.mutedForeground,
+      fontSize: 14,
+    },
+    warningContainer: {
+      backgroundColor: '#f59e0b20', // amber-500 with opacity
+      borderWidth: 1,
+      borderColor: '#f59e0b', // amber-500
+      borderRadius: radius.md,
+      padding: spacing.md,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    warningText: {
+      color: '#d97706', // amber-600
+      fontSize: 14,
+      flex: 1,
+    },
+    retryText: {
+      color: theme.colors.primary,
+      fontSize: 14,
+      fontWeight: '600',
+      marginLeft: spacing.sm,
+    },
+    profileList: {
+      gap: spacing.xs,
+    },
+    profileItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+    },
+    profileItemActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary + '10',
+    },
+    profileName: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    profileNameActive: {
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    checkmark: {
+      color: theme.colors.primary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    profileActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    profileActionButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      alignItems: 'center',
+    },
+    profileActionButtonDisabled: {
+      opacity: 0.5,
+    },
+    profileActionButtonText: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+      fontWeight: '500',
+    },
+    importModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    importModalContainer: {
+      backgroundColor: theme.colors.background,
+      borderRadius: radius.lg,
+      padding: spacing.lg,
+      width: '100%',
+      maxWidth: 400,
+    },
+    importModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    importModalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    importModalClose: {
+      fontSize: 20,
+      color: theme.colors.mutedForeground,
+      padding: spacing.xs,
+    },
+    importModalDescription: {
+      fontSize: 14,
+      color: theme.colors.mutedForeground,
+      marginBottom: spacing.md,
+    },
+    importJsonInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      fontSize: 14,
+      color: theme.colors.foreground,
+      backgroundColor: theme.colors.muted,
+      minHeight: 150,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    importModalActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    importModalCancelButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    importModalCancelText: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+      fontWeight: '500',
+    },
+    importModalImportButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+    },
+    importModalImportButtonDisabled: {
+      opacity: 0.5,
+    },
+    importModalImportText: {
+      fontSize: 14,
+      color: theme.colors.primaryForeground,
+      fontWeight: '600',
+    },
+    serverRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    serverInfo: {
+      flex: 1,
+      marginRight: spacing.md,
+    },
+    serverNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    serverName: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.foreground,
+    },
+    serverMeta: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: 2,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    statusConnected: {
+      backgroundColor: '#22c55e', // green-500
+    },
+    statusDisconnected: {
+      backgroundColor: theme.colors.muted,
+    },
+    // Model picker styles
+    modelLabelRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: spacing.sm,
+    },
+    modelActions: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    modelActionButton: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    modelActionText: {
+      fontSize: 12,
+      color: theme.colors.primary,
+    },
+    modelSelector: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.md,
+      backgroundColor: theme.colors.background,
+      padding: spacing.md,
+    },
+    modelSelectorContent: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    modelSelectorText: {
+      flex: 1,
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    modelSelectorPlaceholder: {
+      color: theme.colors.mutedForeground,
+    },
+    modelSelectorChevron: {
+      fontSize: 10,
+      color: theme.colors.mutedForeground,
+    },
+    // Model Picker Modal styles
+    modelPickerOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modelPickerContainer: {
+      backgroundColor: theme.colors.background,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      maxHeight: '80%',
+    },
+    modelPickerHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modelPickerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    modelPickerClose: {
+      fontSize: 20,
+      color: theme.colors.mutedForeground,
+      padding: spacing.sm,
+    },
+    modelSearchContainer: {
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modelSearchInput: {
+      ...theme.input,
+      marginTop: 0,
+    },
+    modelList: {
+      maxHeight: 400,
+    },
+    modelListEmpty: {
+      padding: spacing.xl,
+      alignItems: 'center',
+    },
+    modelListEmptyText: {
+      color: theme.colors.mutedForeground,
+      fontSize: 14,
+    },
+    modelItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modelItemActive: {
+      backgroundColor: theme.colors.primary + '10',
+    },
+    modelItemContent: {
+      flex: 1,
+    },
+    modelItemName: {
+      fontSize: 14,
+      color: theme.colors.foreground,
+    },
+    modelItemNameActive: {
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    modelItemId: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: 2,
+    },
+    modelItemCheck: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.colors.primary,
+      marginLeft: spacing.sm,
+    },
+    modelPickerFooter: {
+      padding: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    modelPickerFooterText: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
     },
   });
 }

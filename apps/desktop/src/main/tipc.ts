@@ -13,6 +13,12 @@ import {
   getCurrentPanelMode,
   markManualResize,
   setPanelFocusable,
+  emergencyStopAgentMode,
+  showPanelWindowAndShowTextInput,
+  showPanelWindowAndStartMcpRecording,
+  WAVEFORM_MIN_HEIGHT,
+  MIN_WAVEFORM_WIDTH,
+  clearPanelOpenedWithMain,
 } from "./window"
 import {
   app,
@@ -32,6 +38,8 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  ACPAgentConfig,
+  SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
@@ -41,22 +49,26 @@ import {
   processTranscriptWithTools,
   processTranscriptWithAgentMode,
 } from "./llm"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, WHATSAPP_SERVER_NAME, getInternalWhatsAppServerPath } from "./mcp-service"
 import {
   saveCustomPosition,
   updatePanelPosition,
   constrainPositionToScreen,
   PanelPosition,
 } from "./panel-position"
-import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager } from "./state"
+import { state, agentProcessManager, suppressPanelAutoShow, isPanelAutoShowSuppressed, toolApprovalManager, agentSessionStateManager } from "./state"
 
 
 import { startRemoteServer, stopRemoteServer, restartRemoteServer } from "./remote-server"
 import { emitAgentProgress } from "./emit-agent-progress"
+import { agentSessionTracker } from "./agent-session-tracker"
+import { messageQueueService } from "./message-queue-service"
+import { profileService } from "./profile-service"
+import { agentProfileService } from "./agent-profile-service"
+import { acpService, ACPRunRequest } from "./acp-service"
+import { processTranscriptWithACPAgent } from "./acp-main-agent"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
-  const { agentSessionStateManager } = await import("./state")
-
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
 
   if (shouldStop()) {
@@ -152,16 +164,82 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
+  // Check if ACP main agent mode is enabled - route to ACP agent instead of LLM API
+  if (config.mainAgentMode === "acp" && config.mainAgentName) {
+    logLLM(`[processWithAgentMode] ACP mode enabled, routing to agent: ${config.mainAgentName}`)
+
+    // Create conversation title for session tracking
+    const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+
+    // Start tracking this agent session (or reuse existing one)
+    const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+
+    // Process with ACP agent
+    const result = await processTranscriptWithACPAgent(text, {
+      agentName: config.mainAgentName,
+      conversationId: conversationId || sessionId,
+      sessionId,
+    })
+
+    // Save assistant response to conversation history if we have a conversation ID
+    // Note: User message is already added by createMcpTextInput or processQueuedMessages
+    if (conversationId && result.response) {
+      await conversationService.addMessageToConversation(
+        conversationId,
+        result.response,
+        "assistant"
+      )
+    }
+
+    // Mark session as completed
+    if (result.success) {
+      logLLM(`[processWithAgentMode] ACP mode completed successfully for session ${sessionId}, conversation ${conversationId}`)
+      agentSessionTracker.completeSession(sessionId, "ACP agent completed successfully")
+    } else {
+      logLLM(`[processWithAgentMode] ACP mode failed for session ${sessionId}: ${result.error}`)
+      agentSessionTracker.errorSession(sessionId, result.error || "Unknown error")
+    }
+
+    logLLM(`[processWithAgentMode] ACP mode returning, queue processing should trigger in .finally()`)
+    return result.response || result.error || "No response from agent"
+  }
+
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
 
   // Agent mode state is managed per-session via agentSessionStateManager
 
+  // Determine profile snapshot for session isolation
+  // If reusing an existing session, use its stored snapshot to maintain isolation
+  // Only capture a new snapshot from the current global profile when creating a new session
+  let profileSnapshot: SessionProfileSnapshot | undefined
+
+  if (existingSessionId) {
+    // Try to get the stored profile snapshot from the existing session
+    profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+      ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+  }
+
+  // Only capture a new snapshot if we don't have one from an existing session
+  if (!profileSnapshot) {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      profileSnapshot = {
+        profileId: currentProfile.id,
+        profileName: currentProfile.name,
+        guidelines: currentProfile.guidelines,
+        systemPrompt: currentProfile.systemPrompt,
+        mcpServerConfig: currentProfile.mcpServerConfig,
+        modelConfig: currentProfile.modelConfig,
+        skillsConfig: currentProfile.skillsConfig,
+      }
+    }
+  }
+
   // Start tracking this agent session (or reuse existing one)
-  const { agentSessionTracker } = await import("./agent-session-tracker")
   let conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
   // When creating a new session from keybind/UI, start unsnoozed so panel shows immediately
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     // Initialize MCP with progress feedback
@@ -171,8 +249,11 @@ async function processWithAgentMode(
     // This handles the case where servers were already initialized before agent mode was activated
     mcpService.registerExistingProcessesWithAgentManager()
 
-    // Get available tools
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
 
     // Use agent mode for iterative tool calling
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
@@ -202,14 +283,14 @@ async function processWithAgentMode(
         // Wait for user response
         const approved = await approvalPromise
 
-        // Clear the pending approval from the UI by emitting without pendingToolApproval
+        // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
         await emitAgentProgress({
           sessionId,
           currentIteration: 0,
           maxIterations: config.mcpMaxIterations ?? 10,
           steps: [],
           isComplete: false,
-          // No pendingToolApproval - clears it
+          pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
         })
 
         if (!approved) {
@@ -226,7 +307,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      return await mcpService.executeToolCall(toolCall, onProgress, true) // Pass skipApprovalCheck=true
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -243,11 +325,14 @@ async function processWithAgentMode(
 
     if (conversationId) {
       logLLM(`[tipc.ts processWithAgentMode] Loading conversation history for conversationId: ${conversationId}`)
+      // Use loadConversationWithCompaction to automatically compact old conversations on load
+      // Pass sessionId so that compaction summarization can be cancelled by emergency stop
       const conversation =
-        await conversationService.loadConversation(conversationId)
+        await conversationService.loadConversationWithCompaction(conversationId, sessionId)
 
       if (conversation && conversation.messages.length > 0) {
         logLLM(`[tipc.ts processWithAgentMode] Loaded conversation with ${conversation.messages.length} messages`)
+
         // Convert conversation messages to the format expected by agent mode
         // Exclude the last message since it's the current user input that will be added
         const messagesToConvert = conversation.messages.slice(0, -1)
@@ -295,6 +380,8 @@ async function processWithAgentMode(
       previousConversationHistory,
       conversationId, // Pass conversation ID for linking to conversation history
       sessionId, // Pass session ID for progress routing and isolation
+      undefined, // onProgress callback (not used here, progress is emitted via emitAgentProgress)
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed
@@ -307,7 +394,6 @@ async function processWithAgentMode(
     agentSessionTracker.errorSession(sessionId, errorMessage)
 
     // Emit error progress update to the UI so users see the error message
-    const { emitAgentProgress } = await import("./emit-agent-progress")
     await emitAgentProgress({
       sessionId,
       conversationId: conversationId || "",
@@ -336,6 +422,8 @@ async function processWithAgentMode(
   }
 }
 import { diagnosticsService } from "./diagnostics"
+import { memoryService } from "./memory-service"
+import { summarizationService } from "./summarization-service"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
@@ -371,13 +459,14 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
-  const { messageQueueService } = await import("./message-queue-service")
-  const { agentSessionTracker } = await import("./agent-session-tracker")
+  logLLM(`[processQueuedMessages] Starting queue processing for ${conversationId}`)
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
+    logLLM(`[processQueuedMessages] Failed to acquire lock for ${conversationId}`)
     return
   }
+  logLLM(`[processQueuedMessages] Acquired lock for ${conversationId}`)
 
   try {
     while (true) {
@@ -390,6 +479,12 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
       // Peek at the next message without removing it
       const queuedMessage = messageQueueService.peek(conversationId)
       if (!queuedMessage) {
+        logLLM(`[processQueuedMessages] No more pending messages in queue for ${conversationId}`)
+        // Debug: log the actual queue state
+        const allMessages = messageQueueService.getQueue(conversationId)
+        if (allMessages.length > 0) {
+          logLLM(`[processQueuedMessages] Queue has ${allMessages.length} messages but peek returned null. First message status: ${allMessages[0]?.status}`)
+        }
         return // No more messages in queue
       }
 
@@ -501,6 +596,8 @@ export const router = {
 
     if (panel) {
       suppressPanelAutoShow(1000)
+      // Clear the "opened with main" flag since panel is being explicitly hidden
+      clearPanelOpenedWithMain()
       panel.hide()
       logApp(`[hidePanelWindow] Panel hidden`)
     }
@@ -603,7 +700,6 @@ export const router = {
   }),
 
   emergencyStopAgent: t.procedure.action(async () => {
-    const { emergencyStopAgentMode } = await import("./window")
     await emergencyStopAgentMode()
 
     return { success: true, message: "Agent mode emergency stopped" }
@@ -638,8 +734,7 @@ export const router = {
     }),
 
   clearInactiveSessions: t.procedure.action(async () => {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-
+  
     // Clear completed sessions from the tracker
     agentSessionTracker.clearCompletedSessions()
 
@@ -670,20 +765,25 @@ export const router = {
   }),
 
   getAgentSessions: t.procedure.action(async () => {
-    const { agentSessionTracker } = await import("./agent-session-tracker")
-    return {
+      return {
       activeSessions: agentSessionTracker.getActiveSessions(),
       recentSessions: agentSessionTracker.getRecentSessions(4),
     }
   }),
 
+  // Get the profile snapshot for a specific session
+  // This allows the UI to display which profile a session is using
+  getSessionProfileSnapshot: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+        ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+    }),
+
   stopAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-      const { agentSessionStateManager, toolApprovalManager } = await import("./state")
-      const { messageQueueService } = await import("./message-queue-service")
-
+        
       // Stop the session in the state manager (aborts LLM requests, kills processes)
       agentSessionStateManager.stopSession(input.sessionId)
 
@@ -729,8 +829,7 @@ export const router = {
   snoozeAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+    
       // Snooze the session (runs in background without stealing focus)
       agentSessionTracker.snoozeSession(input.sessionId)
 
@@ -740,8 +839,7 @@ export const router = {
   unsnoozeAgentSession: t.procedure
     .input<{ sessionId: string }>()
     .action(async ({ input }) => {
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+    
       // Unsnooze the session (allow it to show progress UI again)
       agentSessionTracker.unsnoozeSession(input.sessionId)
 
@@ -752,8 +850,9 @@ export const router = {
   respondToToolApproval: t.procedure
     .input<{ approvalId: string; approved: boolean }>()
     .action(async ({ input }) => {
-      const { toolApprovalManager } = await import("./state")
+      logApp(`[Tool Approval] respondToToolApproval called: approvalId=${input.approvalId}, approved=${input.approved}`)
       const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
+      logApp(`[Tool Approval] respondToApproval result: success=${success}`)
       return { success }
     }),
 
@@ -826,6 +925,8 @@ export const router = {
         items.push({
           label: "Close",
           click() {
+            // Clear the "opened with main" flag since panel is being hidden
+            clearPanelOpenedWithMain()
             panelWindow?.hide()
           },
         })
@@ -860,15 +961,15 @@ export const router = {
     showPanelWindow()
   }),
 
-  showPanelWindowWithTextInput: t.procedure.action(async () => {
-    const { showPanelWindowAndShowTextInput } = await import("./window")
-    await showPanelWindowAndShowTextInput()
-  }),
+  showPanelWindowWithTextInput: t.procedure
+    .input<{ initialText?: string }>()
+    .action(async ({ input }) => {
+      await showPanelWindowAndShowTextInput(input.initialText)
+    }),
 
   triggerMcpRecording: t.procedure
     .input<{ conversationId?: string; sessionId?: string; fromTile?: boolean }>()
     .action(async ({ input }) => {
-      const { showPanelWindowAndStartMcpRecording } = await import("./window")
       // Always show the panel during recording for waveform feedback
       // The fromTile flag tells the panel to hide after recording ends
       // fromButtonClick=true indicates this was triggered via UI button (not keyboard shortcut)
@@ -931,7 +1032,7 @@ export const router = {
       )
       form.append(
         "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
       )
       form.append("response_format", "json")
 
@@ -998,6 +1099,8 @@ export const router = {
 
       const panel = WINDOWS.get("panel")
       if (panel) {
+        // Clear the "opened with main" flag since panel is being hidden
+        clearPanelOpenedWithMain()
         panel.hide()
       }
 
@@ -1053,6 +1156,8 @@ export const router = {
 
       const panel = WINDOWS.get("panel")
       if (panel) {
+        // Clear the "opened with main" flag since panel is being hidden
+        clearPanelOpenedWithMain()
         panel.hide()
       }
 
@@ -1076,9 +1181,7 @@ export const router = {
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-      const { messageQueueService } = await import("./message-queue-service")
-
+        
       // Create or get conversation ID
       let conversationId = input.conversationId
       if (!conversationId) {
@@ -1165,6 +1268,7 @@ export const router = {
         })
         .finally(() => {
           // Process queued messages after this session completes (success or error)
+          logLLM(`[createMcpTextInput] .finally() triggered for conversation ${conversationId}, calling processQueuedMessages`)
           processQueuedMessages(conversationId!).catch((err) => {
             logLLM("[createMcpTextInput] Error processing queued messages:", err)
           })
@@ -1189,10 +1293,118 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
+      // Check if message queuing is enabled and there's an active session for this conversation
+      // If so, we'll transcribe the audio and queue the transcript instead of processing immediately
+      if (input.conversationId && config.mcpMessageQueueEnabled !== false) {
+        const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (activeSessionId) {
+          const session = agentSessionTracker.getSession(activeSessionId)
+          if (session && session.status === "active") {
+            // Active session exists - transcribe audio and queue the result
+            logApp(`[createMcpRecording] Active session ${activeSessionId} found for conversation ${input.conversationId}, will queue transcript`)
+
+            // Transcribe the audio first
+            const form = new FormData()
+            form.append(
+              "file",
+              new File([input.recording], "recording.webm", { type: "audio/webm" }),
+            )
+            form.append(
+              "model",
+              config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
+            )
+            form.append("response_format", "json")
+
+            if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+              form.append("prompt", config.groqSttPrompt.trim())
+            }
+
+            const languageCode = config.sttProviderId === "groq"
+              ? config.groqSttLanguage || config.sttLanguage
+              : config.openaiSttLanguage || config.sttLanguage
+
+            if (languageCode && languageCode !== "auto") {
+              form.append("language", languageCode)
+            }
+
+            const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+            const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+            const transcriptResponse = await fetch(
+              config.sttProviderId === "groq"
+                ? `${groqBaseUrl}/audio/transcriptions`
+                : `${openaiBaseUrl}/audio/transcriptions`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+                },
+                body: form,
+              },
+            )
+
+            if (!transcriptResponse.ok) {
+              const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+              throw new Error(message)
+            }
+
+            const json: { text: string } = await transcriptResponse.json()
+            transcript = json.text
+
+            // Save the recording file
+            const recordingId = Date.now().toString()
+            fs.writeFileSync(
+              path.join(recordingsFolder, `${recordingId}.webm`),
+              Buffer.from(input.recording),
+            )
+
+            // Queue the transcript instead of processing immediately
+            const queuedMessage = messageQueueService.enqueue(input.conversationId, transcript)
+            logApp(`[createMcpRecording] Queued voice transcript ${queuedMessage.id} for active session ${activeSessionId}`)
+
+            return { conversationId: input.conversationId, queued: true, queuedMessageId: queuedMessage.id }
+          }
+        }
+      }
+
+      // No active session or queuing disabled - proceed with normal processing
       // Emit initial loading progress immediately BEFORE transcription
       // This ensures users see feedback during the (potentially long) STT call
-      const { agentSessionTracker } = await import("./agent-session-tracker")
       const tempConversationId = input.conversationId || `temp_${Date.now()}`
+
+      // Determine profile snapshot for session isolation
+      // If reusing an existing session, use its stored snapshot to maintain isolation
+      // Only capture a new snapshot from the current global profile when creating a new session
+      let profileSnapshot: SessionProfileSnapshot | undefined
+
+      if (input.sessionId) {
+        // Try to get the stored profile snapshot from the existing session
+        profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(input.sessionId)
+          ?? agentSessionTracker.getSessionProfileSnapshot(input.sessionId)
+      } else if (input.conversationId) {
+        // Try to find existing session for this conversation and get its profile snapshot
+        const existingSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+        if (existingSessionId) {
+          profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+            ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+        }
+      }
+
+      // Only capture a new snapshot if we don't have one from an existing session
+      if (!profileSnapshot) {
+        const currentProfile = profileService.getCurrentProfile()
+        if (currentProfile) {
+          profileSnapshot = {
+            profileId: currentProfile.id,
+            profileName: currentProfile.name,
+            guidelines: currentProfile.guidelines,
+            systemPrompt: currentProfile.systemPrompt,
+            mcpServerConfig: currentProfile.mcpServerConfig,
+            modelConfig: currentProfile.modelConfig,
+            skillsConfig: currentProfile.skillsConfig,
+          }
+        }
+      }
 
       // If sessionId is provided, try to revive that session.
       // Otherwise, if conversationId is provided, try to find and revive a session for that conversation.
@@ -1212,8 +1424,8 @@ export const router = {
             lastActivity: "Transcribing audio...",
           })
         } else {
-          // Session not found, create a new one
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // Session not found, create a new one with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else if (input.conversationId) {
         // No sessionId but have conversationId - try to find existing session for this conversation
@@ -1229,16 +1441,16 @@ export const router = {
               lastActivity: "Transcribing audio...",
             })
           } else {
-            // Revive failed, create new session
-            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+            // Revive failed, create new session with profile snapshot
+            sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
           }
         } else {
-          // No existing session for this conversation, create new
-          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+          // No existing session for this conversation, create new with profile snapshot
+          sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
         }
       } else {
-        // No sessionId or conversationId provided, create a new session
-        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed)
+        // No sessionId or conversationId provided, create a new session with profile snapshot
+        sessionId = agentSessionTracker.startSession(tempConversationId, "Transcribing...", startSnoozed, profileSnapshot)
       }
 
       try {
@@ -1271,7 +1483,7 @@ export const router = {
       )
       form.append(
         "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
       )
       form.append("response_format", "json")
 
@@ -1490,6 +1702,28 @@ export const router = {
         // best-effort only
       }
 
+      // Apply dock icon visibility changes immediately (macOS only)
+      if (process.env.IS_MAC) {
+        try {
+          const prevHideDock = !!(prev as any)?.hideDockIcon
+          const nextHideDock = !!(merged as any)?.hideDockIcon
+
+          if (prevHideDock !== nextHideDock) {
+            if (nextHideDock) {
+              // User wants to hide dock icon - hide it now
+              app.setActivationPolicy("accessory")
+              app.dock.hide()
+            } else {
+              // User wants to show dock icon - show it now
+              app.dock.show()
+              app.setActivationPolicy("regular")
+            }
+          }
+        } catch (_e) {
+          // best-effort only
+        }
+      }
+
       // Manage Remote Server lifecycle on config changes
       try {
         const prevEnabled = !!(prev as any)?.remoteServerEnabled
@@ -1515,15 +1749,115 @@ export const router = {
       } catch (_e) {
         // lifecycle is best-effort
       }
+
+      // Manage WhatsApp MCP server auto-configuration
+      // Note: The actual server path is determined at runtime in mcp-service.ts createTransport()
+      // This ensures the correct internal bundled path is always used, regardless of what's in config
+      try {
+        const prevWhatsappEnabled = !!(prev as any)?.whatsappEnabled
+        const nextWhatsappEnabled = !!(merged as any)?.whatsappEnabled
+
+        if (prevWhatsappEnabled !== nextWhatsappEnabled) {
+          const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
+          const hasWhatsappServer = !!currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]
+
+          if (nextWhatsappEnabled) {
+            // WhatsApp is being enabled
+            const { mcpService } = await import("./mcp-service")
+            if (!hasWhatsappServer) {
+              // Auto-add WhatsApp MCP server config when enabled
+              // The path in config is just a placeholder - the actual path is determined
+              // at runtime in createTransport() to ensure the correct bundled path is used
+              const updatedMcpConfig: MCPConfig = {
+                ...currentMcpConfig,
+                mcpServers: {
+                  ...currentMcpConfig.mcpServers,
+                  [WHATSAPP_SERVER_NAME]: {
+                    command: "node",
+                    args: [getInternalWhatsAppServerPath()],
+                    transport: "stdio",
+                  },
+                },
+              }
+              merged.mcpConfig = updatedMcpConfig
+              configStore.save(merged)
+            }
+            // Start/restart the WhatsApp server (handles both new and existing configs)
+            await mcpService.restartServer(WHATSAPP_SERVER_NAME)
+          } else if (!nextWhatsappEnabled && hasWhatsappServer) {
+            // Stop the WhatsApp server when disabled (but keep config for re-enabling)
+            const { mcpService } = await import("./mcp-service")
+            await mcpService.stopServer(WHATSAPP_SERVER_NAME)
+          }
+        } else if (nextWhatsappEnabled) {
+          // Check if WhatsApp settings changed - restart server to pick up new env vars
+          // Also watch Remote Server settings since prepareEnvironment() derives callback URL/API key from them
+          const whatsappSettingsChanged =
+            JSON.stringify((prev as any)?.whatsappAllowFrom) !== JSON.stringify((merged as any)?.whatsappAllowFrom) ||
+            (prev as any)?.whatsappAutoReply !== (merged as any)?.whatsappAutoReply ||
+            (prev as any)?.whatsappLogMessages !== (merged as any)?.whatsappLogMessages
+
+          // If auto-reply is enabled, also restart when Remote Server settings change
+          // This includes remoteServerEnabled because prepareEnvironment() only enables
+          // callback URL/API key injection when remote server is enabled
+          const remoteServerSettingsChanged = (merged as any)?.whatsappAutoReply && (
+            (prev as any)?.remoteServerEnabled !== (merged as any)?.remoteServerEnabled ||
+            (prev as any)?.remoteServerPort !== (merged as any)?.remoteServerPort ||
+            (prev as any)?.remoteServerApiKey !== (merged as any)?.remoteServerApiKey
+          )
+
+          if (whatsappSettingsChanged || remoteServerSettingsChanged) {
+            const { mcpService } = await import("./mcp-service")
+            const currentMcpConfig = merged.mcpConfig || { mcpServers: {} }
+            if (currentMcpConfig.mcpServers?.[WHATSAPP_SERVER_NAME]) {
+              await mcpService.restartServer(WHATSAPP_SERVER_NAME)
+            }
+          }
+        }
+      } catch (_e) {
+        // lifecycle is best-effort
+      }
+
+      // Reinitialize Langfuse if any Langfuse config fields changed
+      // This ensures config changes take effect without requiring app restart
+      try {
+        const langfuseConfigChanged =
+          (prev as any)?.langfuseEnabled !== (merged as any)?.langfuseEnabled ||
+          (prev as any)?.langfuseSecretKey !== (merged as any)?.langfuseSecretKey ||
+          (prev as any)?.langfusePublicKey !== (merged as any)?.langfusePublicKey ||
+          (prev as any)?.langfuseBaseUrl !== (merged as any)?.langfuseBaseUrl
+
+        if (langfuseConfigChanged) {
+          const { reinitializeLangfuse } = await import("./langfuse-service")
+          reinitializeLangfuse()
+        }
+      } catch (_e) {
+        // Langfuse reinitialization is best-effort
+      }
     }),
 
+  // Check if langfuse package is installed (for UI to show install instructions)
+  isLangfuseInstalled: t.procedure.action(async () => {
+    try {
+      const { isLangfuseInstalled } = await import("./langfuse-service")
+      return isLangfuseInstalled()
+    } catch {
+      return false
+    }
+  }),
+
   recordEvent: t.procedure
-    .input<{ type: "start" | "end" }>()
+    .input<{ type: "start" | "end"; mcpMode?: boolean }>()
     .action(async ({ input }) => {
       if (input.type === "start") {
         state.isRecording = true
+        // Track MCP mode state so main process knows if we're in MCP toggle mode
+        if (input.mcpMode !== undefined) {
+          state.isRecordingMcpMode = input.mcpMode
+        }
       } else {
         state.isRecording = false
+        state.isRecordingMcpMode = false
       }
       updateTrayIcon()
     }),
@@ -1884,6 +2218,136 @@ export const router = {
       return { success: true }
     }),
 
+  // WhatsApp Integration
+  whatsappConnect: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      // Check if WhatsApp server is available
+      const serverStatus = mcpService.getServerStatus()
+      const whatsappServer = serverStatus[WHATSAPP_SERVER_NAME]
+      if (!whatsappServer || !whatsappServer.connected) {
+        return { success: false, error: "WhatsApp server is not running. Please enable WhatsApp in settings." }
+      }
+
+      // Call the whatsapp_connect tool
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_connect", arguments: {} },
+        undefined,
+        true // skip approval check for internal calls
+      )
+
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Connection failed"
+        return { success: false, error: errorText }
+      }
+
+      // Parse the result to extract QR code if present
+      const textContent = result.content?.find((c: any) => c.type === "text")
+      if (textContent?.text) {
+        try {
+          const parsed = JSON.parse(textContent.text)
+          if (parsed.qrCode) {
+            return { success: true, qrCode: parsed.qrCode, status: "qr_required" }
+          } else if (parsed.status === "qr_required") {
+            return { success: true, qrCode: parsed.qrCode, status: "qr_required" }
+          }
+        } catch {
+          // Not JSON, check for connection success message
+          if (textContent.text.includes("Connected successfully")) {
+            return { success: true, status: "connected", message: textContent.text }
+          }
+          if (textContent.text.includes("Already connected")) {
+            return { success: true, status: "connected", message: textContent.text }
+          }
+        }
+        return { success: true, message: textContent.text }
+      }
+
+      return { success: true, message: "Connection initiated" }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
+  whatsappGetStatus: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      // Check if WhatsApp server is available
+      const serverStatus = mcpService.getServerStatus()
+      const whatsappServer = serverStatus[WHATSAPP_SERVER_NAME]
+      if (!whatsappServer || !whatsappServer.connected) {
+        return { available: false, connected: false, error: "WhatsApp server is not running" }
+      }
+
+      // Call the whatsapp_get_status tool
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_get_status", arguments: {} },
+        undefined,
+        true // skip approval check for internal calls
+      )
+
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Failed to get status"
+        return { available: true, connected: false, error: errorText }
+      }
+
+      // Parse the result
+      const textContent = result.content?.find((c: any) => c.type === "text")
+      if (textContent?.text) {
+        try {
+          const parsed = JSON.parse(textContent.text)
+          return { available: true, ...parsed }
+        } catch {
+          return { available: true, message: textContent.text }
+        }
+      }
+
+      return { available: true, connected: false }
+    } catch (error) {
+      return { available: false, connected: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
+  whatsappDisconnect: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_disconnect", arguments: {} },
+        undefined,
+        true
+      )
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Disconnect failed"
+        return { success: false, error: errorText }
+      }
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
+  whatsappLogout: t.procedure.action(async () => {
+    const WHATSAPP_SERVER_NAME = "whatsapp"
+    try {
+      const result = await mcpService.executeToolCall(
+        { name: "whatsapp_logout", arguments: {} },
+        undefined,
+        true
+      )
+      // Check if the tool returned an error result
+      if (result.isError) {
+        const errorText = result.content?.find((c: any) => c.type === "text")?.text || "Logout failed"
+        return { success: false, error: errorText }
+      }
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }),
+
   // Text-to-Speech
   generateSpeech: t.procedure
     .input<{
@@ -2059,9 +2523,9 @@ export const router = {
         throw new Error("Panel window not found")
       }
 
-      // Apply minimum size constraints
-      const minWidth = 200
-      const minHeight = 100
+      // Apply minimum size constraints (use MIN_WAVEFORM_WIDTH to ensure visualizer bars aren't clipped)
+      const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+      const minHeight = WAVEFORM_MIN_HEIGHT
       const finalWidth = Math.max(minWidth, input.width)
       const finalHeight = Math.max(minHeight, input.height)
 
@@ -2115,12 +2579,13 @@ export const router = {
 
     const config = configStore.get()
     if (config.panelCustomSize) {
-      // Apply saved custom size
+      // Apply saved custom size (use MIN_WAVEFORM_WIDTH to ensure visualizer bars aren't clipped)
       const { width, height } = config.panelCustomSize
-      const finalWidth = Math.max(200, width)
-      const finalHeight = Math.max(100, height)
+      const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+      const finalWidth = Math.max(minWidth, width)
+      const finalHeight = Math.max(WAVEFORM_MIN_HEIGHT, height)
 
-      win.setMinimumSize(200, 100)
+      win.setMinimumSize(minWidth, WAVEFORM_MIN_HEIGHT)
       win.setSize(finalWidth, finalHeight, false) // no animation on init
       return { width: finalWidth, height: finalHeight }
     }
@@ -2132,19 +2597,16 @@ export const router = {
 
   // Profile Management
   getProfiles: t.procedure.action(async () => {
-    const { profileService } = await import("./profile-service")
     return profileService.getProfiles()
   }),
 
   getProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.getProfile(input.id)
+        return profileService.getProfile(input.id)
     }),
 
   getCurrentProfile: t.procedure.action(async () => {
-    const { profileService } = await import("./profile-service")
     return profileService.getCurrentProfile()
   }),
 
@@ -2157,15 +2619,13 @@ export const router = {
   createProfile: t.procedure
     .input<{ name: string; guidelines: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.createProfile(input.name, input.guidelines, input.systemPrompt)
+        return profileService.createProfile(input.name, input.guidelines, input.systemPrompt)
     }),
 
   updateProfile: t.procedure
     .input<{ id: string; name?: string; guidelines?: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const updates: any = {}
+        const updates: any = {}
       if (input.name !== undefined) updates.name = input.name
       if (input.guidelines !== undefined) updates.guidelines = input.guidelines
       if (input.systemPrompt !== undefined) updates.systemPrompt = input.systemPrompt
@@ -2187,16 +2647,13 @@ export const router = {
   deleteProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.deleteProfile(input.id)
+        return profileService.deleteProfile(input.id)
     }),
 
   setCurrentProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const { mcpService } = await import("./mcp-service")
-      const profile = profileService.setCurrentProfile(input.id)
+        const profile = profileService.setCurrentProfile(input.id)
 
       // Update the config with the profile's guidelines, system prompt, and model config
       const config = configStore.get()
@@ -2262,24 +2719,20 @@ export const router = {
   exportProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.exportProfile(input.id)
+        return profileService.exportProfile(input.id)
     }),
 
   importProfile: t.procedure
     .input<{ profileJson: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.importProfile(input.profileJson)
+        return profileService.importProfile(input.profileJson)
     }),
 
   // Save current MCP server state to a profile
   saveCurrentMcpStateToProfile: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const { mcpService } = await import("./mcp-service")
-
+  
       const currentState = mcpService.getCurrentMcpConfigState()
       return profileService.saveCurrentMcpStateToProfile(
         input.profileId,
@@ -2293,8 +2746,7 @@ export const router = {
   updateProfileMcpConfig: t.procedure
     .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[] }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.updateProfileMcpConfig(input.profileId, {
+        return profileService.updateProfileMcpConfig(input.profileId, {
         disabledServers: input.disabledServers,
         disabledTools: input.disabledTools,
         enabledServers: input.enabledServers,
@@ -2305,8 +2757,7 @@ export const router = {
   saveCurrentModelStateToProfile: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const config = configStore.get()
+        const config = configStore.get()
       return profileService.saveCurrentModelStateToProfile(input.profileId, {
         // Agent/MCP Tools settings
         mcpToolsProviderId: config.mcpToolsProviderId,
@@ -2347,8 +2798,7 @@ export const router = {
       ttsProviderId?: "openai" | "groq" | "gemini"
     }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      return profileService.updateProfileModelConfig(input.profileId, {
+        return profileService.updateProfileModelConfig(input.profileId, {
         // Agent/MCP Tools settings
         mcpToolsProviderId: input.mcpToolsProviderId,
         mcpToolsOpenaiModel: input.mcpToolsOpenaiModel,
@@ -2370,8 +2820,7 @@ export const router = {
   saveProfileFile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-      const { profileService } = await import("./profile-service")
-      const profileJson = profileService.exportProfile(input.id)
+        const profileJson = profileService.exportProfile(input.id)
 
       const result = await dialog.showSaveDialog({
         title: "Export Profile",
@@ -2412,8 +2861,7 @@ export const router = {
 
     try {
       const profileJson = fs.readFileSync(result.filePaths[0], "utf8")
-      const { profileService } = await import("./profile-service")
-      return profileService.importProfile(profileJson)
+        return profileService.importProfile(profileJson)
     } catch (error) {
       throw new Error(
         `Failed to import profile: ${error instanceof Error ? error.message : String(error)}`,
@@ -2432,6 +2880,17 @@ export const router = {
     return startCloudflareTunnel()
   }),
 
+  startNamedCloudflareTunnel: t.procedure
+    .input<{
+      tunnelId: string
+      hostname: string
+      credentialsPath?: string
+    }>()
+    .action(async ({ input }) => {
+      const { startNamedCloudflareTunnel } = await import("./cloudflare-tunnel")
+      return startNamedCloudflareTunnel(input)
+    }),
+
   stopCloudflareTunnel: t.procedure.action(async () => {
     const { stopCloudflareTunnel } = await import("./cloudflare-tunnel")
     return stopCloudflareTunnel()
@@ -2440,6 +2899,16 @@ export const router = {
   getCloudflareTunnelStatus: t.procedure.action(async () => {
     const { getCloudflareTunnelStatus } = await import("./cloudflare-tunnel")
     return getCloudflareTunnelStatus()
+  }),
+
+  listCloudflareTunnels: t.procedure.action(async () => {
+    const { listCloudflareTunnels } = await import("./cloudflare-tunnel")
+    return listCloudflareTunnels()
+  }),
+
+  checkCloudflaredLoggedIn: t.procedure.action(async () => {
+    const { checkCloudflaredLoggedIn } = await import("./cloudflare-tunnel")
+    return checkCloudflaredLoggedIn()
   }),
 
   // MCP Elicitation handlers (Protocol 2025-11-25)
@@ -2472,41 +2941,40 @@ export const router = {
   getMessageQueue: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.getQueue(input.conversationId)
+          return messageQueueService.getQueue(input.conversationId)
     }),
 
   getAllMessageQueues: t.procedure.action(async () => {
-    const { messageQueueService } = await import("./message-queue-service")
-    return messageQueueService.getAllQueues()
+      const queues = messageQueueService.getAllQueues()
+      // Include isPaused state for each queue
+      return queues.map(q => ({
+        ...q,
+        isPaused: messageQueueService.isQueuePaused(q.conversationId),
+      }))
   }),
 
   removeFromMessageQueue: t.procedure
     .input<{ conversationId: string; messageId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.removeFromQueue(input.conversationId, input.messageId)
+          return messageQueueService.removeFromQueue(input.conversationId, input.messageId)
     }),
 
   clearMessageQueue: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.clearQueue(input.conversationId)
+          return messageQueueService.clearQueue(input.conversationId)
     }),
 
   reorderMessageQueue: t.procedure
     .input<{ conversationId: string; messageIds: string[] }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.reorderQueue(input.conversationId, input.messageIds)
+          return messageQueueService.reorderQueue(input.conversationId, input.messageIds)
     }),
 
   updateQueuedMessageText: t.procedure
     .input<{ conversationId: string; messageId: string; text: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-
+    
       // Check if this was a failed message before updating
       const queue = messageQueueService.getQueue(input.conversationId)
       const message = queue.find((m) => m.id === input.messageId)
@@ -2518,8 +2986,7 @@ export const router = {
       // If this was a failed message that's now reset to pending,
       // check if conversation is idle and trigger queue processing
       if (wasFailed) {
-        const { agentSessionTracker } = await import("./agent-session-tracker")
-        const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
+              const activeSessionId = agentSessionTracker.findSessionByConversationId(input.conversationId)
         if (activeSessionId) {
           const session = agentSessionTracker.getSession(activeSessionId)
           if (session && session.status === "active") {
@@ -2540,9 +3007,7 @@ export const router = {
   retryQueuedMessage: t.procedure
     .input<{ conversationId: string; messageId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+        
       // Use resetToPending to reset failed message status without modifying text
       // This works even for addedToHistory messages since we're not changing the text
       const success = messageQueueService.resetToPending(input.conversationId, input.messageId)
@@ -2569,16 +3034,13 @@ export const router = {
   isMessageQueuePaused: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      return messageQueueService.isQueuePaused(input.conversationId)
+          return messageQueueService.isQueuePaused(input.conversationId)
     }),
 
   resumeMessageQueue: t.procedure
     .input<{ conversationId: string }>()
     .action(async ({ input }) => {
-      const { messageQueueService } = await import("./message-queue-service")
-      const { agentSessionTracker } = await import("./agent-session-tracker")
-
+        
       // Resume the queue
       messageQueueService.resumeQueue(input.conversationId)
 
@@ -2598,6 +3060,626 @@ export const router = {
       })
 
       return true
+    }),
+
+  // ACP Agent Configuration handlers
+  getAcpAgents: t.procedure.action(async () => {
+    const config = configStore.get()
+    const externalAgents = config.acpAgents || []
+    // Include internal agent in the list, but filter out any persisted 'internal' entries
+    // from externalAgents to avoid duplicates (can happen after toggling enabled state)
+    const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
+    const internalAgent = getInternalAgentConfig()
+    // Merge any persisted enabled state from config into the internal agent
+    const persistedInternalAgent = externalAgents.find(a => a.name === 'internal')
+    if (persistedInternalAgent && typeof persistedInternalAgent.enabled === 'boolean') {
+      internalAgent.enabled = persistedInternalAgent.enabled
+    }
+    const filteredExternalAgents = externalAgents.filter(a => a.name !== 'internal')
+    return [internalAgent, ...filteredExternalAgents]
+  }),
+
+  saveAcpAgent: t.procedure
+    .input<{ agent: ACPAgentConfig }>()
+    .action(async ({ input }) => {
+      // Block saving agent with reserved name "internal" to avoid config conflicts
+      // The internal agent is a built-in and should not be persisted as an external agent
+      if (input.agent.name === 'internal') {
+        return { success: false, error: 'Cannot save agent with reserved name "internal"' }
+      }
+
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      // Check if agent with this name already exists
+      const existingIndex = agents.findIndex(a => a.name === input.agent.name)
+
+      if (existingIndex >= 0) {
+        // Update existing agent
+        agents[existingIndex] = input.agent
+      } else {
+        // Add new agent
+        agents.push(input.agent)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+      return { success: true }
+    }),
+
+  deleteAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const filteredAgents = agents.filter(a => a.name !== input.agentName)
+
+      configStore.save({ ...config, acpAgents: filteredAgents })
+      return { success: true }
+    }),
+
+  toggleAcpAgentEnabled: t.procedure
+    .input<{ agentName: string; enabled: boolean }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const agentIndex = agents.findIndex(a => a.name === input.agentName)
+      if (agentIndex >= 0) {
+        agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
+      } else {
+        // Agent not in config (e.g., built-in 'internal' agent) - add an entry to persist enabled state
+        // We include displayName to satisfy the ACPAgentConfig contract and avoid undefined issues
+        agents.push({
+          name: input.agentName,
+          displayName: input.agentName === 'internal' ? 'SpeakMCP Internal' : input.agentName,
+          enabled: input.enabled,
+          isInternal: input.agentName === 'internal',
+          connection: { type: 'internal' as const }
+        } as import('../shared/types').ACPAgentConfig)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+
+      // When disabling an agent, automatically stop it if it's running
+      if (!input.enabled) {
+        const agentStatus = acpService.getAgentStatus(input.agentName)
+        if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
+          try {
+            await acpService.stopAgent(input.agentName)
+          } catch (error) {
+            // Log but don't fail the toggle operation
+            logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
+          }
+        }
+      }
+
+      return { success: true }
+    }),
+
+  // ACP Agent Runtime handlers
+  getAcpAgentStatuses: t.procedure.action(async () => {
+    return acpService.getAgents()
+  }),
+
+  spawnAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.spawnAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  stopAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.stopAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  runAcpTask: t.procedure
+    .input<{ request: ACPRunRequest }>()
+    .action(async ({ input }) => {
+      return acpService.runTask(input.request)
+    }),
+
+  // Get all subagent delegations with conversations for a session
+  getSubagentDelegations: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { getAllDelegationsForSession } = await import("./acp/acp-router-tools")
+      return getAllDelegationsForSession(input.sessionId)
+    }),
+
+  // Get details of a specific subagent delegation
+  getSubagentDelegationDetails: t.procedure
+    .input<{ runId: string }>()
+    .action(async ({ input }) => {
+      const { getDelegatedRunDetails } = await import("./acp/acp-router-tools")
+      return getDelegatedRunDetails(input.runId)
+    }),
+
+  // ============================================================================
+  // Agent Profile Handlers (Unified Profile + ACP Agent)
+  // ============================================================================
+
+  getAgentProfiles: t.procedure.action(async () => {
+    return agentProfileService.getAll()
+  }),
+
+  getAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getById(input.id)
+    }),
+
+  getAgentProfileByName: t.procedure
+    .input<{ name: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getByName(input.name)
+    }),
+
+  createAgentProfile: t.procedure
+    .input<{
+      profile: {
+        name: string
+        displayName: string
+        description?: string
+        systemPrompt?: string
+        guidelines?: string
+
+        properties?: Record<string, string>
+        modelConfig?: import("@shared/types").ProfileModelConfig
+        toolConfig?: import("@shared/types").AgentProfileToolConfig
+        skillsConfig?: import("@shared/types").ProfileSkillsConfig
+        connection: import("@shared/types").AgentProfileConnection
+        isStateful?: boolean
+        enabled: boolean
+        isUserProfile?: boolean
+        isAgentTarget?: boolean
+        isDefault?: boolean
+        autoSpawn?: boolean
+      }
+    }>()
+    .action(async ({ input }) => {
+      return agentProfileService.create(input.profile)
+    }),
+
+  updateAgentProfile: t.procedure
+    .input<{
+      id: string
+      updates: Partial<import("@shared/types").AgentProfile>
+    }>()
+    .action(async ({ input }) => {
+      return agentProfileService.update(input.id, input.updates)
+    }),
+
+  deleteAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.delete(input.id)
+    }),
+
+  getUserProfiles: t.procedure.action(async () => {
+    return agentProfileService.getUserProfiles()
+  }),
+
+  getAgentTargets: t.procedure.action(async () => {
+    return agentProfileService.getAgentTargets()
+  }),
+
+  getEnabledAgentTargets: t.procedure.action(async () => {
+    return agentProfileService.getEnabledAgentTargets()
+  }),
+
+  getCurrentAgentProfile: t.procedure.action(async () => {
+    return agentProfileService.getCurrentProfile()
+  }),
+
+  setCurrentAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      agentProfileService.setCurrentProfile(input.id)
+      return { success: true }
+    }),
+
+  getAgentProfilesByRole: t.procedure
+    .input<{ role: import("@shared/types").AgentProfileRole }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getByRole(input.role)
+    }),
+
+  getExternalAgents: t.procedure.action(async () => {
+    return agentProfileService.getExternalAgents()
+  }),
+
+  getAgentProfileConversation: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getConversation(input.profileId)
+    }),
+
+  setAgentProfileConversation: t.procedure
+    .input<{
+      profileId: string
+      messages: import("@shared/types").ConversationMessage[]
+    }>()
+    .action(async ({ input }) => {
+      agentProfileService.setConversation(input.profileId, input.messages)
+      return { success: true }
+    }),
+
+  clearAgentProfileConversation: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      agentProfileService.clearConversation(input.profileId)
+      return { success: true }
+    }),
+
+  reloadAgentProfiles: t.procedure.action(async () => {
+    agentProfileService.reload()
+    return { success: true }
+  }),
+
+  // Agent Skills Management
+  getSkills: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getSkills()
+  }),
+
+  getEnabledSkills: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getEnabledSkills()
+  }),
+
+  getSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.getSkill(input.id)
+    }),
+
+  createSkill: t.procedure
+    .input<{ name: string; description: string; instructions: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.createSkill(input.name, input.description, input.instructions)
+      // Auto-enable the new skill for the current profile so it's immediately usable
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return skill
+    }),
+
+  updateSkill: t.procedure
+    .input<{ id: string; name?: string; description?: string; instructions?: string; enabled?: boolean }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const { id, ...updates } = input
+      return skillsService.updateSkill(id, updates)
+    }),
+
+  deleteSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.deleteSkill(input.id)
+    }),
+
+  toggleSkill: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.toggleSkill(input.id)
+    }),
+
+  importSkillFromMarkdown: t.procedure
+    .input<{ content: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.importSkillFromMarkdown(input.content)
+      // Auto-enable the imported skill for the current profile so it's immediately usable
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return skill
+    }),
+
+  exportSkillToMarkdown: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      return skillsService.exportSkillToMarkdown(input.id)
+    }),
+
+  // Import a single skill - can be a .md file or a folder containing SKILL.md
+  importSkillFile: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skill",
+      filters: [
+        { name: "Skill Files", extensions: ["md"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+      properties: ["openFile", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const skill = skillsService.importSkillFromFile(result.filePaths[0])
+    // Auto-enable the imported skill for the current profile so it's immediately usable
+    profileService.enableSkillForCurrentProfile(skill.id)
+    return skill
+  }),
+
+  // Import a skill from a folder containing SKILL.md
+  importSkillFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skill Folder",
+      message: "Select a folder containing SKILL.md",
+      properties: ["openDirectory", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const skill = skillsService.importSkillFromFolder(result.filePaths[0])
+    // Auto-enable the imported skill for the current profile so it's immediately usable
+    profileService.enableSkillForCurrentProfile(skill.id)
+    return skill
+  }),
+
+  // Bulk import all skill folders from a parent directory
+  importSkillsFromParentFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const result = await dialog.showOpenDialog({
+      title: "Import Skills from Folder",
+      message: "Select a folder containing multiple skill folders (each with SKILL.md)",
+      properties: ["openDirectory", "showHiddenFiles"],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const importResult = skillsService.importSkillsFromParentFolder(result.filePaths[0])
+    // Auto-enable all imported skills for the current profile so they're immediately usable
+    for (const skill of importResult.imported) {
+      profileService.enableSkillForCurrentProfile(skill.id)
+    }
+    return importResult
+  }),
+
+  saveSkillFile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const skill = skillsService.getSkill(input.id)
+      if (!skill) {
+        throw new Error(`Skill with id ${input.id} not found`)
+      }
+
+      const result = await dialog.showSaveDialog({
+        title: "Export Skill",
+        defaultPath: `${skill.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.md`,
+        filters: [
+          { name: "Markdown Files", extensions: ["md"] },
+        ],
+      })
+
+      if (result.canceled || !result.filePath) {
+        return false
+      }
+
+      const content = skillsService.exportSkillToMarkdown(input.id)
+      fs.writeFileSync(result.filePath, content)
+      return true
+    }),
+
+  openSkillsFolder: t.procedure.action(async () => {
+    const { skillsFolder } = await import("./skills-service")
+    // Ensure folder exists
+    fs.mkdirSync(skillsFolder, { recursive: true })
+    await shell.openPath(skillsFolder)
+  }),
+
+  scanSkillsFolder: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    const importedSkills = skillsService.scanSkillsFolder()
+    // Auto-enable all newly imported skills for the current profile so they're immediately usable
+    for (const skill of importedSkills) {
+      profileService.enableSkillForCurrentProfile(skill.id)
+    }
+    return importedSkills
+  }),
+
+  // Import skill(s) from a GitHub repository
+  importSkillFromGitHub: t.procedure
+    .input<{ repoIdentifier: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const result = await skillsService.importSkillFromGitHub(input.repoIdentifier)
+      // Auto-enable all imported skills for the current profile so they're immediately usable
+      for (const skill of result.imported) {
+        profileService.enableSkillForCurrentProfile(skill.id)
+      }
+      return result
+    }),
+
+  getEnabledSkillsInstructions: t.procedure.action(async () => {
+    const { skillsService } = await import("./skills-service")
+    return skillsService.getEnabledSkillsInstructions()
+  }),
+
+  // Per-profile skill management
+  getProfileSkillsConfig: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const profile = profileService.getProfile(input.profileId)
+      return profile?.skillsConfig ?? { enabledSkillIds: [], allSkillsDisabledByDefault: true }
+    }),
+
+  updateProfileSkillsConfig: t.procedure
+    .input<{ profileId: string; enabledSkillIds?: string[]; allSkillsDisabledByDefault?: boolean }>()
+    .action(async ({ input }) => {
+      const { profileId, ...config } = input
+      return profileService.updateProfileSkillsConfig(profileId, config)
+    }),
+
+  toggleProfileSkill: t.procedure
+    .input<{ profileId: string; skillId: string }>()
+    .action(async ({ input }) => {
+      return profileService.toggleProfileSkill(input.profileId, input.skillId)
+    }),
+
+  isSkillEnabledForProfile: t.procedure
+    .input<{ profileId: string; skillId: string }>()
+    .action(async ({ input }) => {
+      return profileService.isSkillEnabledForProfile(input.profileId, input.skillId)
+    }),
+
+  getEnabledSkillIdsForProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      return profileService.getEnabledSkillIdsForProfile(input.profileId)
+    }),
+
+  // Get enabled skills instructions for a specific profile
+  getEnabledSkillsInstructionsForProfile: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
+      return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+    }),
+
+  // Memory service handlers
+  // Get all memories - optionally filtered by profile
+  getAllMemories: t.procedure
+    .input<{ profileId?: string }>()
+    .action(async ({ input }) => {
+      const profileId = input?.profileId
+      if (profileId) {
+        return memoryService.getMemoriesByProfile(profileId)
+      }
+      return memoryService.getAllMemories()
+    }),
+
+  // Get memories for the current profile (convenience method)
+  getMemoriesForCurrentProfile: t.procedure.action(async () => {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      return memoryService.getMemoriesByProfile(currentProfile.id)
+    }
+    return memoryService.getAllMemories()
+  }),
+
+  getMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.getMemory(input.id)
+    }),
+
+  saveMemoryFromSummary: t.procedure
+    .input<{
+      summary: import("../shared/types").AgentStepSummary
+      title?: string
+      userNotes?: string
+      tags?: string[]
+      conversationTitle?: string
+      conversationId?: string
+      profileId?: string
+    }>()
+    .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      const memory = memoryService.createMemoryFromSummary(
+        input.summary,
+        input.title,
+        input.userNotes,
+        input.tags,
+        input.conversationTitle,
+        input.conversationId,
+        profileId,
+      )
+      const success = await memoryService.saveMemory(memory)
+      return { success, memory: success ? memory : null }
+    }),
+
+  updateMemory: t.procedure
+    .input<{
+      id: string
+      updates: Partial<Omit<import("../shared/types").AgentMemory, "id" | "createdAt">>
+    }>()
+    .action(async ({ input }) => {
+      return memoryService.updateMemory(input.id, input.updates)
+    }),
+
+  deleteMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.deleteMemory(input.id)
+    }),
+
+  deleteMultipleMemories: t.procedure
+    .input<{ ids: string[] }>()
+    .action(async ({ input }) => {
+      const profileId = profileService.getCurrentProfile()?.id
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteMultipleMemories(input.ids, profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
+    }),
+
+  deleteAllMemories: t.procedure
+    .action(async () => {
+      const profileId = profileService.getCurrentProfile()?.id
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteAllMemories(profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
+    }),
+
+  searchMemories: t.procedure
+    .input<{ query: string; profileId?: string }>()
+    .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      return memoryService.searchMemories(input.query, profileId)
+    }),
+
+  // Summarization service handlers
+  getSessionSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getSummaries(input.sessionId)
+    }),
+
+  getImportantSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getImportantSummaries(input.sessionId)
     }),
 }
 
@@ -2658,8 +3740,10 @@ async function generateGroqTTS(
   input: { voice?: string; model?: string },
   config: Config
 ): Promise<ArrayBuffer> {
-  const model = input.model || config.groqTtsModel || "playai-tts"
-  const voice = input.voice || config.groqTtsVoice || "Fritz-PlayAI"
+  const model = input.model || config.groqTtsModel || "canopylabs/orpheus-v1-english"
+  // Choose default voice based on model - Arabic model should use Arabic voice
+  const defaultVoice = model === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy"
+  const voice = input.voice || config.groqTtsVoice || defaultVoice
 
   const baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
   const apiKey = config.groqApiKey
@@ -2695,7 +3779,11 @@ async function generateGroqTTS(
 
     // Check for specific error cases and provide helpful messages
     if (errorText.includes("requires terms acceptance")) {
-      throw new Error("Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=playai-tts to accept the terms for the PlayAI TTS model.")
+      // The model parameter determines which terms page to show
+      const modelParam = model === "canopylabs/orpheus-arabic-saudi"
+        ? "canopylabs%2Forpheus-arabic-saudi"
+        : "canopylabs%2Forpheus-v1-english"
+      throw new Error(`Groq TTS model requires terms acceptance. Please visit https://console.groq.com/playground?model=${modelParam} and accept the terms when prompted, then try again.`)
     }
 
     throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)

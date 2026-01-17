@@ -4,6 +4,8 @@ export interface DebugFlags {
   keybinds: boolean
   app: boolean
   ui: boolean
+  mcp: boolean
+  acp: boolean
   all: boolean
 }
 
@@ -13,6 +15,8 @@ const flags: DebugFlags = {
   keybinds: false,
   app: false,
   ui: false,
+  mcp: false,
+  acp: false,
   all: false,
 }
 
@@ -58,6 +62,18 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     envDebug === "*" ||
     envDebug.includes("all")
 
+  const envMCP =
+    strToBool(process.env.DEBUG_MCP) ||
+    envParts.includes("mcp") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
+
+  const envACP =
+    strToBool(process.env.DEBUG_ACP) ||
+    envParts.includes("acp") ||
+    envDebug === "*" ||
+    envDebug.includes("all")
+
   const all =
     hasAny("--debug", "--debug-all", "-d", "-da", "debug", "debug-all", "d", "da") ||
     envDebug === "*" ||
@@ -68,11 +84,13 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.keybinds = all || hasAny("--debug-keybinds", "-dk", "debug-keybinds", "dk") || envKeybinds
   flags.app = all || hasAny("--debug-app", "-dapp", "debug-app", "dapp") || envApp
   flags.ui = all || hasAny("--debug-ui", "-dui", "debug-ui", "dui") || envUI
+  flags.mcp = all || hasAny("--debug-mcp", "-dmcp", "debug-mcp", "dmcp") || envMCP
+  flags.acp = all || hasAny("--debug-acp", "-dacp", "debug-acp", "dacp") || envACP
   flags.all = all
 
 
 
-  if (flags.llm || flags.tools || flags.keybinds || flags.app || flags.ui) {
+  if (flags.llm || flags.tools || flags.keybinds || flags.app || flags.ui || flags.mcp || flags.acp) {
     // Small banner so users can see debugs are enabled
     const enabled: string[] = []
     if (flags.llm) enabled.push("LLM")
@@ -80,9 +98,11 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
     if (flags.keybinds) enabled.push("KEYBINDS")
     if (flags.app) enabled.push("APP")
     if (flags.ui) enabled.push("UI")
+    if (flags.mcp) enabled.push("MCP")
+    if (flags.acp) enabled.push("ACP")
     // eslint-disable-next-line no-console
     console.log(
-      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "da", "dapp", "dui"].includes(a)).join(" ") || "none"})`,
+      `[DEBUG] Enabled: ${enabled.join(", ")} (argv: ${argv.filter((a) => a.startsWith("--debug") || a.startsWith("-d") || a.startsWith("debug") || ["d", "dt", "dl", "dk", "da", "dapp", "dui", "dmcp", "dacp"].includes(a)).join(" ") || "none"})`,
     )
   }
 
@@ -111,6 +131,14 @@ export function isDebugUI(): boolean {
   return flags.ui || flags.all
 }
 
+export function isDebugMCP(): boolean {
+  return flags.mcp || flags.all
+}
+
+export function isDebugACP(): boolean {
+  return flags.acp || flags.all
+}
+
 function ts(): string {
   const d = new Date()
   return d.toISOString()
@@ -134,16 +162,49 @@ export function logKeybinds(...args: any[]) {
   console.log(`[${ts()}] [DEBUG][KEYBINDS]`, ...args)
 }
 
-export function logApp(...args: any[]) {
+export function logApp(...args: unknown[]) {
   if (!isDebugApp()) return
+  const formattedArgs = args.map(arg => {
+    if (arg instanceof Error) {
+      return `${arg.name}: ${arg.message}\n${arg.stack}`
+    }
+    if (typeof arg === "object" && arg !== null) {
+      try {
+        return JSON.stringify(arg, null, 2)
+      } catch {
+        return String(arg)
+      }
+    }
+    return arg
+  })
   // eslint-disable-next-line no-console
-  console.log(`[${ts()}] [DEBUG][APP]`, ...args)
+  console.log(`[${ts()}] [DEBUG][APP]`, ...formattedArgs)
 }
 
 export function logUI(...args: any[]) {
   if (!isDebugUI()) return
   // eslint-disable-next-line no-console
   console.log(`[${ts()}] [DEBUG][UI]`, ...args)
+}
+
+export function logMCP(direction: "REQUEST" | "RESPONSE", serverName: string, data: unknown) {
+  if (!isDebugMCP()) return
+  const prefix = direction === "REQUEST" ? "→" : "←"
+  const formatted = typeof data === "object" && data !== null
+    ? JSON.stringify(data, null, 2)
+    : String(data)
+  // eslint-disable-next-line no-console
+  console.log(`[${ts()}] [MCP] ${prefix} [${serverName}]\n${formatted}`)
+}
+
+export function logACP(direction: "REQUEST" | "RESPONSE" | "NOTIFICATION", agentName: string, method: string, data: unknown) {
+  if (!isDebugACP()) return
+  const prefix = direction === "REQUEST" ? "→" : direction === "RESPONSE" ? "←" : "◆"
+  const formatted = typeof data === "object" && data !== null
+    ? JSON.stringify(data, null, 2)
+    : String(data)
+  // eslint-disable-next-line no-console
+  console.log(`[${ts()}] [ACP] ${prefix} [${agentName}] ${method}\n${formatted}`)
 }
 
 export function getDebugFlags(): DebugFlags {

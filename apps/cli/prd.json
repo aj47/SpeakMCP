@@ -869,7 +869,7 @@
       "type": "RUST",
       "description": "Add Memory struct with id, content, importance, tags, createdAt, profileId",
       "verificationCommand": "grep -q 'pub struct Memory' apps/cli/src/types.rs && grep -q 'importance' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.4"]
     },
     {

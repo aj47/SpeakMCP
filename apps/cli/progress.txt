@@ -593,3 +593,10 @@ Completed: 2026-01-17T14:40:00Z
 Status: PASS
 Notes: Created commands/memories.rs with module documentation and two async functions: list_memories() to call GET /v1/memories and display results in table/JSON format, and delete_memory() to call DELETE /v1/memories/:id. Added format_timestamp() and truncate_string() helper functions (matching history.rs patterns). Uses MemoriesResponse and Memory types from types.rs (to be added in task 10.1.4). File includes #![allow(dead_code)] since functions will be wired up in later phases. Verification command passes.
 
+=== Task 10.1.4 ===
+Title: Define Memory struct in types.rs
+Started: 2026-01-17T15:00:00Z
+Completed: 2026-01-17T15:10:00Z
+Status: PASS
+Notes: Added Memory and MemoriesResponse structs to types.rs matching GET /v1/memories API response. Memory struct includes: id (String), content (String), importance (u32), tags (Vec<String> with default), created_at (u64), profile_id (Option<String>). MemoriesResponse is a wrapper struct with memories: Vec<Memory>. Used #[serde(rename_all = "camelCase")] for proper JSON deserialization from TypeScript API. Cargo check passes.
+

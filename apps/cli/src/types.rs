@@ -372,3 +372,34 @@ pub struct SettingsPreset {
     #[serde(default)]
     pub is_built_in: Option<bool>,
 }
+
+/// Response wrapper for GET /v1/memories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoriesResponse {
+    pub memories: Vec<Memory>,
+}
+
+/// Memory item from GET /v1/memories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Memory {
+    /// Memory ID (unique identifier)
+    pub id: String,
+
+    /// Memory content text
+    pub content: String,
+
+    /// Importance level (0-10)
+    pub importance: u32,
+
+    /// Tags associated with the memory
+    #[serde(default)]
+    pub tags: Vec<String>,
+
+    /// Creation timestamp (Unix milliseconds)
+    pub created_at: u64,
+
+    /// Profile ID this memory belongs to
+    #[serde(default)]
+    pub profile_id: Option<String>,
+}

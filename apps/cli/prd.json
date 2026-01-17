@@ -239,7 +239,7 @@
       "type": "RUST",
       "description": "Create the profiles command module file",
       "verificationCommand": "test -f apps/cli/src/commands/profiles.rs && grep -q 'pub async fn' apps/cli/src/commands/profiles.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

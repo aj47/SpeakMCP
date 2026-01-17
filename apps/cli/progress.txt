@@ -155,3 +155,10 @@ Completed: 2026-01-17T13:05:00Z
 Status: PASS
 Notes: Added Profiles variant to Commands enum with ProfilesCommand subcommand enum containing List, Current, and Switch { name: String } variants. Added placeholder match arm in main() using todo!() macros for each subcommand (to be implemented in later tasks). Cargo check passes.
 
+=== Task 2.1.2 ===
+Title: Create commands/profiles.rs module
+Started: 2026-01-17T14:00:00Z
+Completed: 2026-01-17T14:05:00Z
+Status: PASS
+Notes: Created commands/profiles.rs with module documentation and three stub async functions: list_profiles(), get_current_profile(), and switch_profile(). Includes proper imports from crate modules (api::ApiClient, config::Config). Uses #![allow(dead_code)] since functions will be wired up in later phases. Verification command passes.
+

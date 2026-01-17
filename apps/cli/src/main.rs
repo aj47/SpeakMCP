@@ -16,7 +16,8 @@ mod sse;
 mod types;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::generate;
 use colored::Colorize;
 use std::io::{self, Write};
 
@@ -128,6 +129,13 @@ enum Commands {
 
     /// Emergency stop - halt all running operations
     Stop,
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -366,6 +374,11 @@ async fn main() -> Result<()> {
 
         Some(Commands::Stop) => {
             commands::stop::emergency_stop(&config).await?;
+        }
+
+        Some(Commands::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "speakmcp", &mut io::stdout());
         }
 
         None => {

@@ -557,3 +557,10 @@ Completed: 2026-01-17T11:05:00Z
 Status: PASS
 Notes: Added clap_complete = "4" to Cargo.toml dependencies section for shell completion generation. Crate provides completions for bash, zsh, fish, powershell, and elvish shells. Cargo check passes with successful download of clap_complete v4.5.65.
 
+=== Task 8.1.1 ===
+Title: Add Completions subcommand enum variant
+Started: 2026-01-17T11:30:00Z
+Completed: 2026-01-17T11:40:00Z
+Status: PASS
+Notes: Added Completions variant to Commands enum in main.rs with shell argument of type clap_complete::Shell (value_enum). Added match arm in main() that calls clap_complete::generate() to output shell completions for bash, zsh, fish, powershell, or elvish. Added imports for clap::CommandFactory, clap_complete::generate. Verification command passes (grep for 'Completions' and cargo check both succeed).
+

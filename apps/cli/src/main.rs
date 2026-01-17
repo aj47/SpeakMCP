@@ -494,8 +494,7 @@ async fn main() -> Result<()> {
                 commands::health::check_health(&config, cli.json).await?;
             }
             HealthCommand::Errors => {
-                // TODO: Implement get_errors in a later task
-                println!("Health errors command not yet implemented");
+                commands::health::get_errors(&config, cli.json).await?;
             }
         },
 

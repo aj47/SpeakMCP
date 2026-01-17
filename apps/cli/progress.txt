@@ -865,3 +865,23 @@ Notes: Wired up HealthCommand::Check in main.rs to call commands::health::check_
        Verification command passes (grep for 'Health.*=>|Commands::Health' and 'check_health'
        both succeed, cargo check passes).
 
+=== Task 13.2.1 ===
+Title: Implement get_errors() function
+Started: 2026-01-17T13:00:00Z
+Completed: 2026-01-17T13:05:00Z
+Status: PASS
+Notes: Function was already implemented in commands/health.rs. Creates ApiClient from config,
+       calls GET v1/errors using ErrorsResponse type, displays errors in table format (TIMESTAMP,
+       MESSAGE, CONTEXT columns) or JSON format when --json flag is set. Handles empty error list
+       case gracefully. Verification command passes.
+
+=== Task 13.2.2 ===
+Title: Wire up 'health errors' command in main.rs
+Started: 2026-01-17T13:10:00Z
+Completed: 2026-01-17T13:15:00Z
+Status: PASS
+Notes: Wired up HealthCommand::Errors in main.rs to call commands::health::get_errors().
+       Replaced TODO placeholder and println! with actual function call that passes config and
+       json flag. Verification command passes (grep for 'Errors|health.*errors' and cargo check
+       both succeed).
+

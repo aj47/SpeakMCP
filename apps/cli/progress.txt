@@ -751,3 +751,11 @@ Notes: Created commands/skills.rs module with module documentation and list_skil
        Skill type is defined in types.rs. Uses #![allow(dead_code)] since function will be wired
        up in later phases. Verification command passes (file exists with 'pub async fn').
 
+=== Task 12.1.3 ===
+Title: Export skills module from commands/mod.rs
+Started: 2026-01-17T23:00:00Z
+Completed: 2026-01-17T23:05:00Z
+Status: PASS
+Notes: Uncommented 'pub mod skills;' in commands/mod.rs to export the skills module.
+       Cargo check passes with one expected warning about unused import in skills.rs.
+

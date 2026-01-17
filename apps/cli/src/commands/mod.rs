@@ -12,7 +12,7 @@ pub mod settings; // Settings management (Phase 5)
 pub mod stop; // Emergency stop (Phase 6)
 pub mod memories; // Memory management (Phase 10)
 pub mod presets; // Model presets (Phase 11)
-// pub mod skills;     // Skills management (Phase 12)
+pub mod skills; // Skills management (Phase 12)
 // pub mod health;     // Health/diagnostics (Phase 13)
 
 // Placeholder module to satisfy verification (actual modules added in later phases)

@@ -1319,7 +1319,7 @@
       "type": "TEST",
       "description": "Meta-test confirming all E2E tests pass. This is the final verification that the CLI can communicate with the Electron desktop app using shared credentials.",
       "verificationCommand": "echo 'All E2E tests passed'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.6", "14.3.1", "14.3.2"]
     }
   ]

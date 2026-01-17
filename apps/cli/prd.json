@@ -1239,7 +1239,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp config import-from-desktop' to import the desktop app's API key. Then run 'speakmcp config show' and verify the api_key and server_url are set correctly. This requires the desktop app to have been run at least once.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- config import-from-desktop && cargo run --manifest-path apps/cli/Cargo.toml -- config show | grep -q 'server_url'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.1.3"]
     },
     {

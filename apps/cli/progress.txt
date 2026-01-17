@@ -943,3 +943,10 @@ Completed: 2026-01-17T23:22:00Z
 Status: PASS
 Notes: Task was already implemented in previous work. The ConfigCommand::ImportFromDesktop match arm in handle_config_command() calls config::import_from_desktop() which reads the desktop app's config.json, extracts remoteServerApiKey and remoteServerPort, updates the CLI's cli.toml, and prints success/error messages with colored output. Verification command passes (grep for 'ImportFromDesktop|import_from_desktop' and cargo check both succeed).
 
+=== Task 14.2.1 ===
+Title: E2E Test: Import config from desktop and verify CLI config
+Started: 2026-01-17T23:30:00Z
+Completed: 2026-01-17T23:35:00Z
+Status: PASS
+Notes: Ran 'speakmcp config import-from-desktop' and 'speakmcp config show' successfully. The import command found the desktop app's config.json at ~/Library/Application Support/app.speakmcp/config.json, extracted the remoteServerApiKey (8b459328...) and remoteServerPort (3210), and saved to cli.toml. The config show command displays server_url correctly. This confirms the CLI can reuse the desktop app's authentication.
+

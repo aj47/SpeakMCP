@@ -22,3 +22,10 @@ Completed: 2026-01-17T12:16:00Z
 Status: PASS
 Notes: Added 'mod types;' to main.rs. Cargo check passes (one warning about unused imports in types.rs is expected at this stage).
 
+=== Task 0.1.5 ===
+Title: Add commands module to main.rs
+Started: 2026-01-17T12:20:00Z
+Completed: 2026-01-17T12:21:00Z
+Status: PASS
+Notes: Added 'mod commands;' to main.rs alongside other module imports. Cargo check passes with only warnings (unused imports in types.rs and unused function in placeholder.rs - both expected at this stage).
+

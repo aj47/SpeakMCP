@@ -8,6 +8,7 @@
 //! - Terminal-based interface for developers who prefer CLI
 
 mod api;
+mod commands;
 mod config;
 mod repl;
 mod types;

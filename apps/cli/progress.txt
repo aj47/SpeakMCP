@@ -549,3 +549,11 @@ Started: 2026-01-17T10:30:00Z
 Completed: 2026-01-17T10:35:00Z
 Status: PASS
 Notes: Fixed dead_code warning for SseEvent::Unknown(String) variant by adding #[allow(dead_code)] attribute. The Unknown variant stores raw SSE data for debugging purposes but is intentionally not consumed by calling code. After fix, both cargo build and cargo clippy -- -D warnings pass successfully. Phase 7 (streaming) is now complete.
+
+=== Task 8.1.2 ===
+Title: Add clap_complete crate to Cargo.toml
+Started: 2026-01-17T11:00:00Z
+Completed: 2026-01-17T11:05:00Z
+Status: PASS
+Notes: Added clap_complete = "4" to Cargo.toml dependencies section for shell completion generation. Crate provides completions for bash, zsh, fish, powershell, and elvish shells. Cargo check passes with successful download of clap_complete v4.5.65.
+

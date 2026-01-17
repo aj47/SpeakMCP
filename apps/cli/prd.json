@@ -1219,7 +1219,7 @@
       "type": "RUST",
       "description": "In config.rs, add a function to locate and read the Electron app's config.json. Parse the JSON to extract remoteServerApiKey and remoteServerPort (default 3210). Handle platform-specific paths: macOS uses ~/Library/Application Support/, Windows uses %APPDATA%, Linux uses ~/.config/.",
       "verificationCommand": "grep -q 'app.speakmcp' apps/cli/src/config.rs && grep -qE 'remoteServerApiKey|remote_server_api_key' apps/cli/src/config.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.1.1"]
     },
     {

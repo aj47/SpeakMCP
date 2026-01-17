@@ -929,4 +929,10 @@ Completed: 2026-01-17T22:21:39Z
 Status: PASS
 Notes: Converted Config command from flag-based to subcommand-based structure. Added ConfigCommand enum with Show, Init, Set, and ImportFromDesktop variants. Created handle_config_command() function to dispatch subcommands. Added import_from_desktop() placeholder function to config.rs. Verification command passes (grep for 'import_from_desktop|import-from-desktop' and cargo check both succeed). Actual desktop config reading logic will be implemented in task 14.1.2.
 
+=== Task 14.1.2 ===
+Title: Implement desktop config reading logic
+Started: 2026-01-17T23:00:00Z
+Completed: 2026-01-17T23:15:00Z
+Status: PASS
+Notes: Implemented desktop config reading logic in config.rs. Added DesktopConfig struct with serde camelCase rename for JSON parsing. Added get_desktop_config_path() function that returns platform-specific paths: ~/Library/Application Support/app.speakmcp/config.json (macOS), %APPDATA%/app.speakmcp/config.json (Windows), ~/.config/app.speakmcp/config.json (Linux). Added read_desktop_config() function that reads the JSON file and extracts remoteServerApiKey and remoteServerPort (default 3210). Updated import_from_desktop() to use these functions, update the CLI config with imported values, and save to cli.toml. Verification command passes (grep for 'app.speakmcp' and 'remote_server_api_key', cargo check passes with no errors or warnings).
 

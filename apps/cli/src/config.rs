@@ -154,6 +154,78 @@ impl Config {
     }
 }
 
+/// Desktop app config JSON structure (subset of fields we care about)
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopConfig {
+    remote_server_api_key: Option<String>,
+    remote_server_port: Option<u16>,
+}
+
+/// Get the desktop app's config.json path based on platform
+///
+/// - macOS: ~/Library/Application Support/app.speakmcp/config.json
+/// - Windows: %APPDATA%/app.speakmcp/config.json
+/// - Linux: ~/.config/app.speakmcp/config.json
+fn get_desktop_config_path() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        dirs::home_dir().map(|h| {
+            h.join("Library")
+                .join("Application Support")
+                .join("app.speakmcp")
+                .join("config.json")
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        dirs::config_dir().map(|c| c.join("app.speakmcp").join("config.json"))
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        dirs::config_dir().map(|c| c.join("app.speakmcp").join("config.json"))
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+/// Read the desktop app's config.json and extract remote server settings
+pub fn read_desktop_config() -> Result<(String, u16)> {
+    let path = get_desktop_config_path().context(
+        "Could not determine desktop app config path for this platform",
+    )?;
+
+    if !path.exists() {
+        anyhow::bail!(
+            "Desktop app config not found at: {}\nMake sure the SpeakMCP desktop app has been run at least once.",
+            path.display()
+        );
+    }
+
+    let content = fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read desktop config file: {}", path.display()))?;
+
+    let desktop_config: DesktopConfig = serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse desktop config file: {}", path.display()))?;
+
+    let api_key = desktop_config
+        .remote_server_api_key
+        .filter(|k| !k.is_empty())
+        .context(
+            "No remoteServerApiKey found in desktop config.\n\
+             Enable the Remote Server in the desktop app settings first.",
+        )?;
+
+    let port = desktop_config.remote_server_port.unwrap_or(3210);
+
+    Ok((api_key, port))
+}
+
 /// Import configuration from the SpeakMCP desktop app
 ///
 /// This reads the Electron app's config.json and extracts:
@@ -162,11 +234,30 @@ impl Config {
 pub fn import_from_desktop() -> Result<()> {
     use colored::Colorize;
 
-    // The actual implementation will be added in task 14.1.2
-    // For now, this is a placeholder that satisfies the 14.1.1 verification
+    // Read the desktop config
+    let (api_key, port) = read_desktop_config()?;
+
+    // Load existing CLI config or create default
+    let mut config = Config::load().unwrap_or_default();
+
+    // Update with desktop values
+    config.api_key = api_key;
+    config.server_url = format!("http://localhost:{}/v1", port);
+
+    // Save the updated config
+    config.save()?;
+
+    println!("{}", "Successfully imported config from desktop app!".green());
+    println!("  Server URL: {}", config.server_url.cyan());
     println!(
-        "{}",
-        "import-from-desktop command added (implementation pending)".yellow()
+        "  API Key: {}...",
+        &config.api_key[..8.min(config.api_key.len())].dimmed()
     );
+
+    if let Some(path) = Config::config_path() {
+        println!();
+        println!("{} {}", "Config saved to:".dimmed(), path.display());
+    }
+
     Ok(())
 }

@@ -992,3 +992,10 @@ Completed: 2026-01-17T15:05:00Z
 Status: PASS
 Notes: Verified --json flag outputs valid JSON for servers list command. Running 'speakmcp --json servers list' outputs a JSON array with 9 MCP server objects containing name, connected, toolCount, enabled, runtimeEnabled, configDisabled, and error fields. The output starts with '[' and is valid JSON. Verification command passes (grep -qE '^\[|^\{|error').
 
+=== Task 14.3.2 ===
+Title: E2E Test: Help commands work
+Started: 2026-01-17T16:00:00Z
+Completed: 2026-01-17T16:05:00Z
+Status: PASS
+Notes: Verified --help flag works for main command and subcommands. Running 'speakmcp --help' outputs usage info with 'Usage' text. Running 'speakmcp servers --help' shows the servers subcommands including 'list'. Both verification grep patterns pass. Clap is properly configured for CLI help generation.
+

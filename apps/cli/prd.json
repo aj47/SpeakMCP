@@ -1309,7 +1309,7 @@
       "type": "TEST",
       "description": "Verify --help works for main command and subcommands. This tests clap is properly configured.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- --help | grep -q 'Usage' && cargo run --manifest-path apps/cli/Cargo.toml -- servers --help | grep -q 'list'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["9.1.3"]
     },
     {

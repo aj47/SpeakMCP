@@ -289,3 +289,10 @@ Completed: 2026-01-17T16:05:00Z
 Status: PASS
 Notes: Verified Phase 3 code compiles and passes clippy. Ran cargo build and cargo clippy -- -D warnings from apps/cli directory. Both succeeded with no errors or warnings. All tools commands (list, call) are fully implemented and wired up.
 
+=== Task 4.1.1 ===
+Title: Add History subcommand enum variant
+Started: 2026-01-17T17:00:00Z
+Completed: 2026-01-17T17:10:00Z
+Status: PASS
+Notes: Added History variant to Commands enum with HistoryCommand subcommand enum containing List, Show { id }, Delete { id }, Export { id, output }, and Continue { id } variants. Added placeholder match arm in main() with todo!() macros for each subcommand (to be implemented in tasks 4.1.6, 4.2.2, 4.3.2, 4.4.2, 4.5.2). Cargo check passes.
+

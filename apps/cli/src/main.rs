@@ -107,6 +107,12 @@ enum Commands {
         #[command(subcommand)]
         command: ToolsCommand,
     },
+
+    /// Manage conversation history
+    History {
+        #[command(subcommand)]
+        command: HistoryCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -158,6 +164,41 @@ enum ToolsCommand {
         /// Arguments to pass to the tool as JSON
         #[arg(short, long)]
         args: Option<String>,
+    },
+}
+
+/// Subcommands for conversation history management
+#[derive(Subcommand)]
+enum HistoryCommand {
+    /// List all conversations
+    List,
+
+    /// Show details of a specific conversation
+    Show {
+        /// Conversation ID
+        id: String,
+    },
+
+    /// Delete a conversation
+    Delete {
+        /// Conversation ID
+        id: String,
+    },
+
+    /// Export a conversation to a file
+    Export {
+        /// Conversation ID
+        id: String,
+
+        /// Output file path (defaults to stdout if not specified)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Continue a past conversation in interactive mode
+    Continue {
+        /// Conversation ID
+        id: String,
     },
 }
 
@@ -249,6 +290,24 @@ async fn main() -> Result<()> {
             }
             ToolsCommand::Call { name, args } => {
                 commands::tools::call_tool(&config, &name, args.as_deref(), cli.json).await?;
+            }
+        },
+
+        Some(Commands::History { command }) => match command {
+            HistoryCommand::List => {
+                todo!("history list command not yet implemented");
+            }
+            HistoryCommand::Show { id: _ } => {
+                todo!("history show command not yet implemented");
+            }
+            HistoryCommand::Delete { id: _ } => {
+                todo!("history delete command not yet implemented");
+            }
+            HistoryCommand::Export { id: _, output: _ } => {
+                todo!("history export command not yet implemented");
+            }
+            HistoryCommand::Continue { id: _ } => {
+                todo!("history continue command not yet implemented");
             }
         },
 

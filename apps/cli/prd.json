@@ -559,7 +559,7 @@
       "type": "RUST",
       "description": "Add match arm for History::Continue that starts REPL with conversation context",
       "verificationCommand": "grep -qE 'Continue.*id|history.*continue' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["4.1.1", "4.5.1"]
     },
     {

@@ -307,8 +307,14 @@ async fn main() -> Result<()> {
                 commands::history::export_conversation(&config, &id, output.as_deref(), cli.json)
                     .await?;
             }
-            HistoryCommand::Continue { id: _ } => {
-                todo!("history continue command not yet implemented");
+            HistoryCommand::Continue { id } => {
+                // Verify the conversation exists and get its ID
+                let conversation_id = commands::history::continue_conversation(&config, &id).await?;
+                // Update config with conversation ID for REPL
+                let mut repl_config = config.clone();
+                repl_config.default_conversation_id = Some(conversation_id);
+                // Start REPL with the conversation context
+                repl::run(&repl_config).await?;
             }
         },
 

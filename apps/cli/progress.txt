@@ -268,3 +268,10 @@ Completed: 2026-01-17T13:05:00Z
 Status: PASS
 Notes: Wired up ToolsCommand::List in main.rs to call commands::tools::list_tools(). Replaced placeholder eprintln message with actual function call that passes config and json flag. Call subcommand still has placeholder eprintln message (to be implemented in task 3.2.2). Verification command (grep and cargo check) passes.
 
+=== Task 3.2.1 ===
+Title: Implement call_tool() function
+Started: 2026-01-17T14:00:00Z
+Completed: 2026-01-17T14:10:00Z
+Status: PASS
+Notes: Implemented call_tool() function in commands/tools.rs. Creates ApiClient from config, parses optional JSON arguments string using serde_json::from_str(), calls POST mcp/tools/call with CallToolRequest containing tool name and arguments. Displays results in JSON format when --json flag is set, or prints each content item's text. Shows error message prefix if response has isError=true. Uses ToolCallResponse type from types.rs. Cargo check passes.
+

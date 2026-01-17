@@ -12,6 +12,7 @@ mod commands;
 mod config;
 mod output;
 mod repl;
+mod sse;
 mod types;
 
 use anyhow::{Context, Result};

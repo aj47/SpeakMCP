@@ -113,3 +113,10 @@ Completed: 2026-01-17T23:05:00Z
 Status: PASS
 Notes: Implemented list_servers() function in commands/servers.rs. Creates ApiClient from config, calls GET v1/mcp/servers, displays results in table format (with NAME, STATUS, TOOLS, ENABLED, ERROR columns) or JSON format when --json flag is set. Uses McpServersResponse type from types.rs and output utilities from output.rs. Cargo check passes.
 
+=== Task 1.1.6 ===
+Title: Wire up 'servers list' command in main.rs
+Started: 2026-01-17T23:30:00Z
+Completed: 2026-01-17T23:35:00Z
+Status: PASS
+Notes: Wired up ServersCommand::List in main.rs to call commands::servers::list_servers(). Updated match arm from placeholder to properly dispatch to list_servers with config and json flag. Enable/Disable still have placeholder error messages (to be implemented in tasks 1.2.2, 1.2.3). Removed #[allow(dead_code)] from ServersCommand enum. Cargo check and clippy pass.
+

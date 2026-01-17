@@ -99,7 +99,6 @@ enum Commands {
 
 /// Subcommands for MCP server management
 #[derive(Subcommand)]
-#[allow(dead_code)]
 enum ServersCommand {
     /// List all MCP servers
     List,
@@ -175,11 +174,21 @@ async fn main() -> Result<()> {
             check_status(&config).await?;
         }
 
-        Some(Commands::Servers { command: _ }) => {
-            // TODO: Implement in Phase 1 tasks 1.1.5, 1.1.6, 1.2.2, 1.2.3
-            eprintln!("{}: servers command not yet implemented", "error".red());
-            std::process::exit(1);
-        }
+        Some(Commands::Servers { command }) => match command {
+            ServersCommand::List => {
+                commands::servers::list_servers(&config, cli.json).await?;
+            }
+            ServersCommand::Enable { name: _ } => {
+                // TODO: Implement in task 1.2.2
+                eprintln!("{}: enable command not yet implemented", "error".red());
+                std::process::exit(1);
+            }
+            ServersCommand::Disable { name: _ } => {
+                // TODO: Implement in task 1.2.3
+                eprintln!("{}: disable command not yet implemented", "error".red());
+                std::process::exit(1);
+            }
+        },
 
         None => {
             // Default behavior: interactive mode or single message

@@ -408,3 +408,17 @@ Completed: 2026-01-17T16:15:00Z
 Status: PASS
 Notes: Created commands/settings.rs with module documentation and two async functions: show_settings() to call GET /v1/settings and display results in table/JSON format, and update_setting() to call POST /v1/settings with key-value pair. Added Settings struct import, UpdateSettingRequest struct for API call, and parse_value() helper for automatic type conversion (bool/int/float/string). Uses #![allow(dead_code)] since functions will be wired up in later phases.
 
+=== Task 5.1.3 ===
+Title: Export settings module from commands/mod.rs
+Started: 2026-01-17T17:00:00Z
+Completed: 2026-01-17T17:10:00Z
+Status: PASS
+Notes: Uncommented 'pub mod settings;' in commands/mod.rs to export the settings module. This task required 5.1.4 to be completed first since the settings.rs module imports Settings type from types.rs. Cargo check passes after Settings struct was added.
+
+=== Task 5.1.4 ===
+Title: Define Settings struct in types.rs
+Started: 2026-01-17T17:00:00Z
+Completed: 2026-01-17T17:10:00Z
+Status: PASS
+Notes: Added Settings and SettingsPreset structs to types.rs matching GET /v1/settings API response. Settings struct includes: mcp_tools_provider, mcp_tools_provider_id, mcp_tools_openai_model, mcp_tools_groq_model, mcp_tools_gemini_model, current_model_preset_id, available_presets, mcp_require_approval_before_tool_call, tts_enabled, whatsapp_enabled, mcp_max_iterations, agent_mode_enabled, auto_submit, auto_listen, theme. All fields are Option types with serde(default) for forward compatibility. Uses #[serde(rename_all = "camelCase")] for proper JSON deserialization. Cargo check passes.
+

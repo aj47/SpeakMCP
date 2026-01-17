@@ -292,3 +292,83 @@ pub struct ConversationMetadata {
     #[serde(default)]
     pub agent_mode: Option<bool>,
 }
+
+/// Application settings from GET /v1/settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    /// MCP tools provider ID (e.g., "openai", "groq", "gemini")
+    #[serde(default)]
+    pub mcp_tools_provider: Option<String>,
+
+    /// MCP tools provider ID (alias for mcp_tools_provider)
+    #[serde(default, rename = "mcpToolsProviderId")]
+    pub mcp_tools_provider_id: Option<String>,
+
+    /// OpenAI model for MCP tools
+    #[serde(default)]
+    pub mcp_tools_openai_model: Option<String>,
+
+    /// Groq model for MCP tools
+    #[serde(default)]
+    pub mcp_tools_groq_model: Option<String>,
+
+    /// Gemini model for MCP tools
+    #[serde(default)]
+    pub mcp_tools_gemini_model: Option<String>,
+
+    /// Current model preset ID
+    #[serde(default)]
+    pub current_model_preset_id: Option<String>,
+
+    /// Available model presets
+    #[serde(default)]
+    pub available_presets: Option<Vec<SettingsPreset>>,
+
+    /// Whether to require approval before tool calls
+    #[serde(default)]
+    pub mcp_require_approval_before_tool_call: Option<bool>,
+
+    /// Whether TTS is enabled
+    #[serde(default)]
+    pub tts_enabled: Option<bool>,
+
+    /// Whether WhatsApp integration is enabled
+    #[serde(default)]
+    pub whatsapp_enabled: Option<bool>,
+
+    /// Maximum MCP iterations in agent mode
+    #[serde(default)]
+    pub mcp_max_iterations: Option<u32>,
+
+    /// Whether agent mode is enabled (derived for CLI display)
+    #[serde(default)]
+    pub agent_mode_enabled: Option<bool>,
+
+    /// Whether auto submit is enabled
+    #[serde(default)]
+    pub auto_submit: Option<bool>,
+
+    /// Whether auto listen is enabled
+    #[serde(default)]
+    pub auto_listen: Option<bool>,
+
+    /// UI theme
+    #[serde(default)]
+    pub theme: Option<String>,
+}
+
+/// Model preset in settings response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsPreset {
+    /// Preset ID
+    pub id: String,
+
+    /// Preset name
+    pub name: String,
+
+    /// Whether this is a built-in preset
+    #[serde(default)]
+    pub is_built_in: Option<bool>,
+}

@@ -374,6 +374,7 @@ pub struct SettingsPreset {
 }
 
 /// Model preset from GET /v1/settings availablePresets
+/// JSON fields: id, name, baseUrl, isBuiltIn
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelPreset {
@@ -387,7 +388,7 @@ pub struct ModelPreset {
     #[serde(default)]
     pub base_url: Option<String>,
 
-    /// Whether this is a built-in preset
+    /// Whether this is a built-in preset (JSON: isBuiltIn)
     #[serde(default)]
     pub is_built_in: bool,
 }

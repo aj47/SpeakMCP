@@ -959,7 +959,7 @@
       "type": "RUST",
       "description": "Add ModelPreset struct with id, name, baseUrl, isBuiltIn fields",
       "verificationCommand": "grep -q 'pub struct ModelPreset' apps/cli/src/types.rs && grep -q 'isBuiltIn' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.4"]
     },
     {

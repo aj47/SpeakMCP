@@ -89,7 +89,7 @@
       "type": "RUST",
       "description": "Add a --json flag to the CLI struct for machine-readable output",
       "verificationCommand": "grep -q 'json.*bool' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {

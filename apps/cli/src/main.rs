@@ -42,6 +42,10 @@ struct Cli {
     /// API key override
     #[arg(short = 'k', long, env = "SPEAKMCP_API_KEY")]
     api_key: Option<String>,
+
+    /// Output in JSON format for machine-readable output
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand)]

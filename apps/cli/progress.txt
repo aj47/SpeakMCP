@@ -50,3 +50,10 @@ Completed: 2026-01-17T16:10:00Z
 Status: PASS
 Notes: Added ApiError enum to api.rs with variants: Unauthorized (401), NotFound (404), InternalServerError (500), NetworkError, HttpError (generic with status code), and ParseError. Implemented Display and std::error::Error traits. Cargo check passes with expected warnings for unused code (normal at this infrastructure phase).
 
+=== Task 0.3.1 ===
+Title: Add --json global flag to CLI
+Started: 2026-01-17T17:00:00Z
+Completed: 2026-01-17T17:05:00Z
+Status: PASS
+Notes: Added --json flag to the Cli struct in main.rs with global = true attribute for machine-readable output. Flag is a bool type. Cargo check passes with expected warnings for unused code in api.rs and types.rs.
+

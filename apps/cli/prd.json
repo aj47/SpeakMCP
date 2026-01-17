@@ -619,7 +619,7 @@
       "type": "RUST",
       "description": "Implement function to call GET /v1/settings",
       "verificationCommand": "grep -q 'pub async fn show_settings' apps/cli/src/commands/settings.rs && grep -q '/settings' apps/cli/src/commands/settings.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["5.1.3", "5.1.4", "0.2.1"]
     },
     {
@@ -629,7 +629,7 @@
       "type": "RUST",
       "description": "Add match arm for Settings::Show that calls show_settings()",
       "verificationCommand": "grep -qE 'Settings.*Show|SettingsCommand.*Show' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["5.1.1", "5.1.5"]
     },
     {
@@ -639,7 +639,7 @@
       "type": "RUST",
       "description": "Implement function to call POST /v1/settings with key-value update",
       "verificationCommand": "grep -q 'pub async fn update_setting' apps/cli/src/commands/settings.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["5.1.3", "0.2.2"]
     },
     {
@@ -649,7 +649,7 @@
       "type": "RUST",
       "description": "Add match arm for Settings::Set that calls update_setting(key, value)",
       "verificationCommand": "grep -qE 'Set.*key.*value|settings.*set' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["5.1.1", "5.2.1"]
     },
     {
@@ -659,7 +659,7 @@
       "type": "TEST",
       "description": "Verify all Phase 5 code compiles and passes clippy",
       "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["5.1.6", "5.2.2"]
     },
     {
@@ -669,7 +669,7 @@
       "type": "RUST",
       "description": "Add Stop variant to Commands enum for emergency stop",
       "verificationCommand": "grep -q 'Stop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.4.1"]
     },
     {

@@ -119,6 +119,9 @@ enum Commands {
         #[command(subcommand)]
         command: SettingsCommand,
     },
+
+    /// Emergency stop - halt all running operations
+    Stop,
 }
 
 /// Subcommands for MCP server management
@@ -353,6 +356,11 @@ async fn main() -> Result<()> {
                 );
             }
         },
+
+        Some(Commands::Stop) => {
+            // TODO: Implement emergency_stop in a later task
+            println!("Stop command not yet implemented");
+        }
 
         None => {
             // Default behavior: interactive mode or single message

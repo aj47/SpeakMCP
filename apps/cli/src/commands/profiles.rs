@@ -11,7 +11,7 @@ use anyhow::Result;
 use crate::api::ApiClient;
 use crate::config::Config;
 use crate::output::{print_json, print_table, TableRow};
-use crate::types::{ProfileDetail, ProfilesResponse};
+use crate::types::{ProfileDetail, ProfilesResponse, SwitchProfileResponse};
 
 /// List all profiles and their status
 ///
@@ -97,10 +97,63 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Placeholder for switching profiles
+/// Request body for POST /v1/profiles/current
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SwitchProfileRequest {
+    profile_id: String,
+}
+
+/// Switch to a different profile
 ///
-/// This function will be implemented to call POST /v1/profiles/current
-pub async fn switch_profile(_config: &Config, _name: &str) -> Result<()> {
-    // TODO: Implement in task 2.3.1
+/// Calls POST /v1/profiles/current with the profileId.
+/// The profile_id can be either the profile ID or the profile name.
+/// If a name is provided, we first look up the profile ID.
+pub async fn switch_profile(config: &Config, profile_id: &str, json: bool) -> Result<()> {
+    let client = ApiClient::from_config(config)?;
+
+    // First, try to find the profile by name if it's not a valid ID
+    let actual_profile_id = resolve_profile_id(&client, profile_id).await?;
+
+    let request = SwitchProfileRequest {
+        profile_id: actual_profile_id.clone(),
+    };
+
+    let response: SwitchProfileResponse = client.post("v1/profiles/current", &request).await?;
+
+    if json {
+        print_json(&response)?;
+    } else {
+        println!("Switched to profile: {} ({})", response.profile.name, response.profile.id);
+    }
+
     Ok(())
+}
+
+/// Resolve a profile name or ID to an actual profile ID
+///
+/// If the input looks like a profile ID, return it directly.
+/// Otherwise, look up the profile by name.
+async fn resolve_profile_id(client: &ApiClient, name_or_id: &str) -> Result<String> {
+    // Fetch profiles list
+    let response: ProfilesResponse = client.get("v1/profiles").await?;
+
+    // First check if it matches an ID exactly
+    if response.profiles.iter().any(|p| p.id == name_or_id) {
+        return Ok(name_or_id.to_string());
+    }
+
+    // Then check if it matches a name (case-insensitive)
+    if let Some(profile) = response
+        .profiles
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(name_or_id))
+    {
+        return Ok(profile.id.clone());
+    }
+
+    Err(anyhow::anyhow!(
+        "Profile '{}' not found. Use 'speakmcp profiles list' to see available profiles.",
+        name_or_id
+    ))
 }

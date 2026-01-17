@@ -205,3 +205,10 @@ Completed: 2026-01-17T19:05:00Z
 Status: PASS
 Notes: Wired up ProfilesCommand::Current in main.rs to call commands::profiles::get_current_profile(). Replaced todo!() placeholder with actual function call that passes config and json flag. Switch subcommand still has placeholder todo!() macro (to be implemented in task 2.3.2). Verification command (grep and cargo check) passes.
 
+=== Task 2.3.1 ===
+Title: Implement switch_profile() function
+Started: 2026-01-17T20:00:00Z
+Completed: 2026-01-17T20:05:00Z
+Status: PASS
+Notes: The switch_profile() function was already implemented in profiles.rs. It calls POST /v1/profiles/current with profileId, includes resolve_profile_id() helper for name-to-ID lookup, and uses SwitchProfileRequest struct with proper camelCase serialization. Verification command passes (grep for 'pub async fn switch_profile' and 'profileId' both succeed, cargo check passes).
+

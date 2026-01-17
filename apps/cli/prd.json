@@ -309,7 +309,7 @@
       "type": "RUST",
       "description": "Implement function to call POST /v1/profiles/current",
       "verificationCommand": "grep -q 'pub async fn switch_profile' apps/cli/src/commands/profiles.rs && grep -q 'profileId' apps/cli/src/commands/profiles.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["2.1.3", "0.2.2"]
     },
     {

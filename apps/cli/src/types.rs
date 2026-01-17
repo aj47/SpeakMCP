@@ -164,3 +164,131 @@ pub struct McpServer {
     #[serde(default)]
     pub error: Option<String>,
 }
+
+/// Response wrapper for GET /v1/conversations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationsResponse {
+    pub conversations: Vec<ConversationHistoryItem>,
+}
+
+/// Conversation summary from GET /v1/conversations (list endpoint)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationHistoryItem {
+    /// Conversation ID (unique identifier)
+    pub id: String,
+
+    /// Conversation title
+    pub title: String,
+
+    /// Creation timestamp (Unix milliseconds)
+    pub created_at: u64,
+
+    /// Last update timestamp (Unix milliseconds)
+    pub updated_at: u64,
+
+    /// Number of messages in the conversation
+    pub message_count: u32,
+
+    /// Last message content (truncated)
+    #[serde(default)]
+    pub last_message: Option<String>,
+
+    /// Preview of the conversation
+    #[serde(default)]
+    pub preview: Option<String>,
+}
+
+/// Full conversation from GET /v1/conversations/:id
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conversation {
+    /// Conversation ID (unique identifier)
+    pub id: String,
+
+    /// Conversation title
+    pub title: String,
+
+    /// Creation timestamp (Unix milliseconds)
+    pub created_at: u64,
+
+    /// Last update timestamp (Unix milliseconds)
+    pub updated_at: u64,
+
+    /// Messages in the conversation
+    pub messages: Vec<ConversationMessage>,
+
+    /// Optional metadata
+    #[serde(default)]
+    pub metadata: Option<ConversationMetadata>,
+}
+
+/// Message within a conversation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationMessage {
+    /// Message ID (unique within conversation)
+    pub id: String,
+
+    /// Role of the message sender
+    pub role: String,
+
+    /// Message content
+    pub content: String,
+
+    /// Timestamp (Unix milliseconds)
+    pub timestamp: u64,
+
+    /// Tool calls made by the assistant (if any)
+    #[serde(default)]
+    pub tool_calls: Option<Vec<ConversationToolCall>>,
+
+    /// Tool results (if any)
+    #[serde(default)]
+    pub tool_results: Option<Vec<ConversationToolResult>>,
+}
+
+/// Tool call within a conversation message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationToolCall {
+    /// Tool name
+    pub name: String,
+
+    /// Tool arguments as JSON value
+    pub arguments: serde_json::Value,
+}
+
+/// Tool result within a conversation message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationToolResult {
+    /// Whether the tool call was successful
+    pub success: bool,
+
+    /// Result content
+    pub content: String,
+
+    /// Error message (if failed)
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Optional metadata for a conversation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationMetadata {
+    /// Total tokens used in the conversation
+    #[serde(default)]
+    pub total_tokens: Option<u32>,
+
+    /// Model used for the conversation
+    #[serde(default)]
+    pub model: Option<String>,
+
+    /// Provider used for the conversation
+    #[serde(default)]
+    pub provider: Option<String>,
+
+    /// Whether agent mode was used
+    #[serde(default)]
+    pub agent_mode: Option<bool>,
+}

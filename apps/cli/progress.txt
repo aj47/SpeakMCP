@@ -310,3 +310,10 @@ Completed: 2026-01-17T19:05:00Z
 Status: PASS
 Notes: Uncommented 'pub mod history;' in commands/mod.rs to export the history module. Cargo check passes (warnings about unused imports in history.rs are expected at this stage since the functions are not yet fully implemented).
 
+=== Task 4.1.4 ===
+Title: Define Conversation struct in types.rs
+Started: 2026-01-17T20:00:00Z
+Completed: 2026-01-17T20:15:00Z
+Status: PASS
+Notes: Added Conversation and related structs to types.rs matching GET /v1/conversations and GET /v1/conversations/:id API responses. Added: ConversationsResponse (wrapper), ConversationHistoryItem (for list), Conversation (full with messages), ConversationMessage, ConversationToolCall, ConversationToolResult, ConversationMetadata. All structs use #[serde(rename_all = "camelCase")] for proper JSON deserialization. Cargo check passes.
+

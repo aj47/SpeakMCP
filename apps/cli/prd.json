@@ -459,7 +459,7 @@
       "type": "RUST",
       "description": "Add Conversation and ConversationSummary structs",
       "verificationCommand": "grep -q 'pub struct Conversation' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.4"]
     },
     {

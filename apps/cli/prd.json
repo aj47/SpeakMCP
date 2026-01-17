@@ -1269,7 +1269,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp profiles list' and verify it returns profile information. This tests the GET /v1/profiles endpoint integration.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- profiles list 2>&1 | grep -qE 'NAME|default|error|Unauthorized'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.3"]
     },
     {

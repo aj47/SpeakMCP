@@ -44,7 +44,8 @@ pub struct Profile {
     /// Profile name
     pub name: String,
 
-    /// Whether this is the default profile
+    /// Whether this is the default profile (only present when true in API response)
+    #[serde(default)]
     pub is_default: bool,
 
     /// Creation timestamp
@@ -66,7 +67,8 @@ pub struct ProfileDetail {
     /// Profile name
     pub name: String,
 
-    /// Whether this is the default profile
+    /// Whether this is the default profile (only present when true in API response)
+    #[serde(default)]
     pub is_default: bool,
 
     /// Guidelines for the profile

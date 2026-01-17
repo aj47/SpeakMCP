@@ -11,7 +11,7 @@ use anyhow::Result;
 use crate::api::ApiClient;
 use crate::config::Config;
 use crate::output::{print_json, print_table, TableRow};
-use crate::types::ProfilesResponse;
+use crate::types::{ProfileDetail, ProfilesResponse};
 
 /// List all profiles and their status
 ///
@@ -50,12 +50,51 @@ pub async fn list_profiles(config: &Config, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Placeholder for getting current profile
+/// Get the currently active profile
 ///
-/// This function will be implemented to call GET /v1/profiles/current
-pub async fn get_current_profile(_config: &Config, _json: bool) -> Result<()> {
-    // TODO: Implement in task 2.2.1
+/// Calls GET /v1/profiles/current and displays the profile details.
+pub async fn get_current_profile(config: &Config, json: bool) -> Result<()> {
+    let client = ApiClient::from_config(config)?;
+    let profile: ProfileDetail = client.get("v1/profiles/current").await?;
+
+    if json {
+        print_json(&profile)?;
+    } else {
+        let headers = &["FIELD", "VALUE"];
+        let rows = vec![
+            TableRow::new(vec!["Name".to_string(), profile.name.clone()]),
+            TableRow::new(vec!["ID".to_string(), profile.id.clone()]),
+            TableRow::new(vec![
+                "Default".to_string(),
+                if profile.is_default { "yes" } else { "no" }.to_string(),
+            ]),
+            TableRow::new(vec![
+                "Guidelines".to_string(),
+                profile.guidelines.clone().unwrap_or_else(|| "-".to_string()),
+            ]),
+            TableRow::new(vec![
+                "System Prompt".to_string(),
+                profile
+                    .system_prompt
+                    .clone()
+                    .map(|s| truncate_string(&s, 50))
+                    .unwrap_or_else(|| "-".to_string()),
+            ]),
+        ];
+
+        print_table(headers, &rows);
+    }
+
     Ok(())
+}
+
+/// Truncate a string to a maximum length, adding ellipsis if needed
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
 }
 
 /// Placeholder for switching profiles

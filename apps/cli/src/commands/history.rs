@@ -179,14 +179,55 @@ pub async fn delete_conversation(config: &Config, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Placeholder - export_conversation will be implemented in task 4.4.1
+/// Export a conversation to a JSON file
+///
+/// Calls GET /v1/conversations/:id and saves the full conversation to a file.
+/// If no output path is specified, uses the conversation ID as the filename.
 pub async fn export_conversation(
-    _config: &Config,
-    _id: &str,
-    _output: Option<&str>,
-    _json: bool,
+    config: &Config,
+    id: &str,
+    output: Option<&str>,
+    json: bool,
 ) -> Result<()> {
-    todo!("export_conversation not yet implemented")
+    use std::fs;
+    use std::path::PathBuf;
+
+    let client = ApiClient::from_config(config)?;
+    let path = format!("v1/conversations/{}", id);
+    let conversation: Conversation = client.get(&path).await?;
+
+    // Determine output file path
+    let output_path: PathBuf = match output {
+        Some(p) => PathBuf::from(p),
+        None => PathBuf::from(format!("conversation-{}.json", id)),
+    };
+
+    // Serialize conversation to JSON
+    let json_content = serde_json::to_string_pretty(&conversation)?;
+
+    // Write to file
+    fs::write(&output_path, &json_content)?;
+
+    if json {
+        // Print as JSON object with export details
+        let result = serde_json::json!({
+            "exported": true,
+            "id": conversation.id,
+            "title": conversation.title,
+            "path": output_path.display().to_string(),
+            "message_count": conversation.messages.len()
+        });
+        print_json(&result)?;
+    } else {
+        println!(
+            "Exported conversation '{}' ({} messages) to {}",
+            truncate_string(&conversation.title, 40),
+            conversation.messages.len(),
+            output_path.display()
+        );
+    }
+
+    Ok(())
 }
 
 /// Placeholder - continue_conversation will be implemented in task 4.5.1

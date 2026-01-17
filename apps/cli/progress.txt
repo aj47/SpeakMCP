@@ -578,3 +578,10 @@ Completed: 2026-01-17T13:05:00Z
 Status: PASS
 Notes: Verified Phase 8 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. Phase 8 (shell completions) is now complete.
 
+=== Task 10.1.1 ===
+Title: Add Memories subcommand enum variant
+Started: 2026-01-17T14:00:00Z
+Completed: 2026-01-17T14:15:00Z
+Status: PASS
+Notes: Added Memories variant to Commands enum with MemoriesCommand subcommand enum containing List, Show { id: String }, and Delete { id: String } variants. Added match arm in main() with placeholder println! messages for each subcommand (to be implemented in later tasks 10.1.6, 10.2.2). Verification command passes (grep finds 'Memories' and cargo check succeeds).
+

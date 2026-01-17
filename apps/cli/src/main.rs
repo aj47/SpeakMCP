@@ -136,6 +136,12 @@ enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+
+    /// Manage memories (long-term context storage)
+    Memories {
+        #[command(subcommand)]
+        command: MemoriesCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -238,6 +244,25 @@ enum SettingsCommand {
 
         /// Value to set
         value: String,
+    },
+}
+
+/// Subcommands for memories management
+#[derive(Subcommand)]
+enum MemoriesCommand {
+    /// List all memories
+    List,
+
+    /// Show details of a specific memory
+    Show {
+        /// Memory ID
+        id: String,
+    },
+
+    /// Delete a memory
+    Delete {
+        /// Memory ID
+        id: String,
     },
 }
 
@@ -380,6 +405,21 @@ async fn main() -> Result<()> {
             let mut cmd = Cli::command();
             generate(shell, &mut cmd, "speakmcp", &mut io::stdout());
         }
+
+        Some(Commands::Memories { command }) => match command {
+            MemoriesCommand::List => {
+                // TODO: Implement list_memories in a later task
+                println!("Memories list command not yet implemented");
+            }
+            MemoriesCommand::Show { id } => {
+                // TODO: Implement show_memory in a later task
+                println!("Memories show command not yet implemented: {}", id);
+            }
+            MemoriesCommand::Delete { id } => {
+                // TODO: Implement delete_memory in a later task
+                println!("Memories delete command not yet implemented: {}", id);
+            }
+        },
 
         None => {
             // Default behavior: interactive mode or single message

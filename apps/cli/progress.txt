@@ -226,3 +226,10 @@ Completed: 2026-01-17T22:05:00Z
 Status: PASS
 Notes: Verified Phase 2 code compiles and passes clippy. Ran cargo build and cargo clippy -- -D warnings from apps/cli directory. Both succeeded with no errors or warnings. All profiles commands (list, current, switch) are fully implemented and wired up.
 
+=== Task 3.1.1 ===
+Title: Add Tools subcommand enum variant
+Started: 2026-01-17T23:00:00Z
+Completed: 2026-01-17T23:10:00Z
+Status: PASS
+Notes: Added Tools variant to Commands enum with ToolsCommand subcommand enum containing List and Call { name: String, args: Option<String> } variants. Added placeholder match arm in main() with eprintln messages for each subcommand (to be implemented in tasks 3.1.6, 3.2.2). Cargo check passes.
+

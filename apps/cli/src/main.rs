@@ -101,6 +101,12 @@ enum Commands {
         #[command(subcommand)]
         command: ProfilesCommand,
     },
+
+    /// Manage MCP tools
+    Tools {
+        #[command(subcommand)]
+        command: ToolsCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -135,6 +141,23 @@ enum ProfilesCommand {
     Switch {
         /// Name of the profile to switch to
         name: String,
+    },
+}
+
+/// Subcommands for tool management
+#[derive(Subcommand)]
+enum ToolsCommand {
+    /// List all available tools from connected MCP servers
+    List,
+
+    /// Call a specific tool
+    Call {
+        /// Name of the tool to call (format: server_name::tool_name or just tool_name)
+        name: String,
+
+        /// Arguments to pass to the tool as JSON
+        #[arg(short, long)]
+        args: Option<String>,
     },
 }
 
@@ -217,6 +240,17 @@ async fn main() -> Result<()> {
             }
             ProfilesCommand::Switch { name } => {
                 commands::profiles::switch_profile(&config, &name, cli.json).await?;
+            }
+        },
+
+        Some(Commands::Tools { command }) => match command {
+            ToolsCommand::List => {
+                // TODO: Implement in task 3.1.6
+                eprintln!("tools list not yet implemented");
+            }
+            ToolsCommand::Call { name: _, args: _ } => {
+                // TODO: Implement in task 3.2.2
+                eprintln!("tools call not yet implemented");
             }
         },
 

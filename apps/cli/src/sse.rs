@@ -16,7 +16,8 @@ pub enum SseEvent {
     Done(DoneEvent),
     /// Error occurred during processing
     Error(ErrorEvent),
-    /// Unknown event type
+    /// Unknown event type (stores raw data for debugging)
+    #[allow(dead_code)]
     Unknown(String),
 }
 

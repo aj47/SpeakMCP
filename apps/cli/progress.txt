@@ -36,3 +36,10 @@ Completed: 2026-01-17T14:35:00Z
 Status: PASS
 Notes: Added generic get<T>() method to ApiClient in api.rs. Method takes a path string and returns Result<T> where T: DeserializeOwned. Uses existing endpoint() helper and follows the same error handling pattern as chat(). Cargo check passes.
 
+=== Task 0.2.2 ===
+Title: Add generic POST method to ApiClient
+Started: 2026-01-17T15:00:00Z
+Completed: 2026-01-17T15:05:00Z
+Status: PASS
+Notes: Added generic post<T, R>() method to ApiClient in api.rs. Method takes a path string and a reference to a body of type T (where T: Serialize) and returns Result<R> where R: DeserializeOwned. Follows same error handling pattern as get() and chat() methods. Cargo check passes.
+

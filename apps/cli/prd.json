@@ -69,7 +69,7 @@
       "type": "RUST",
       "description": "Add a generic post<T, R>() method to ApiClient for typed POST requests",
       "verificationCommand": "grep -q 'pub async fn post<' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {

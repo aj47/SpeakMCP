@@ -453,6 +453,47 @@ pub struct SettingsUpdateResponse {
     pub updated: Vec<String>,
 }
 
+/// Response wrapper for GET /v1/skills
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillsResponse {
+    pub skills: Vec<Skill>,
+}
+
+/// Agent skill from GET /v1/skills
+/// Skills are instruction files that can be loaded dynamically to improve AI performance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Skill {
+    /// Skill ID (unique identifier)
+    pub id: String,
+
+    /// Skill name
+    pub name: String,
+
+    /// Skill description
+    pub description: String,
+
+    /// Markdown content with instructions
+    pub instructions: String,
+
+    /// Whether the skill is enabled
+    pub enabled: bool,
+
+    /// Creation timestamp (Unix milliseconds)
+    pub created_at: u64,
+
+    /// Last update timestamp (Unix milliseconds)
+    pub updated_at: u64,
+
+    /// Source of the skill (local or imported)
+    #[serde(default)]
+    pub source: Option<String>,
+
+    /// Path to the SKILL.md file if loaded from disk
+    #[serde(default)]
+    pub file_path: Option<String>,
+}
+
 /// Response wrapper for GET /v1/memories
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoriesResponse {

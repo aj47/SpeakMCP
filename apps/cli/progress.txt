@@ -759,3 +759,15 @@ Status: PASS
 Notes: Uncommented 'pub mod skills;' in commands/mod.rs to export the skills module.
        Cargo check passes with one expected warning about unused import in skills.rs.
 
+
+=== Task 12.1.4 ===
+Title: Define Skill struct in types.rs
+Started: 2026-01-17T10:00:00Z
+Completed: 2026-01-17T10:10:00Z
+Status: PASS
+Notes: Added Skill and SkillsResponse structs to types.rs matching GET /v1/skills API response.
+       Skill struct includes: id (String), name (String), description (String), instructions (String),
+       enabled (bool), created_at (u64), updated_at (u64), source (Option<String>), file_path (Option<String>).
+       SkillsResponse is a wrapper struct with skills: Vec<Skill>. Used #[serde(rename_all = "camelCase")]
+       for proper JSON deserialization from TypeScript API. Cargo check passes.
+

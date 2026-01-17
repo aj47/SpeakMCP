@@ -94,14 +94,26 @@ function sanitizeToolName(name: string, suffix?: string): string {
 /**
  * Restore original tool name from sanitized version using the provided map.
  * Falls back to simple replacement if no map is provided (for JSON response parsing).
+ *
+ * Note: Some LLM proxies (e.g., certain OpenAI-compatible gateways) may prepend
+ * "proxy_" to tool names in responses. We strip this prefix to ensure correct mapping.
  */
 function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
+  // Some LLM proxies prepend "proxy_" to tool names - strip it for lookup
+  const cleanedName = sanitizedName.startsWith("proxy_")
+    ? sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
+    : sanitizedName
+
   // If we have a map, use it for exact lookup (preferred method)
+  if (toolNameMap && toolNameMap.has(cleanedName)) {
+    return toolNameMap.get(cleanedName)!
+  }
+  // Also try the original name in case it wasn't prefixed
   if (toolNameMap && toolNameMap.has(sanitizedName)) {
     return toolNameMap.get(sanitizedName)!
   }
   // Fallback: reverse the sanitization for JSON responses where we don't have the map
-  return sanitizedName.replace(/__COLON__/g, ":")
+  return cleanedName.replace(/__COLON__/g, ":")
 }
 
 /**

@@ -1029,7 +1029,7 @@
       "type": "RUST",
       "description": "Create the skills command module file",
       "verificationCommand": "test -f apps/cli/src/commands/skills.rs && grep -q 'pub async fn' apps/cli/src/commands/skills.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

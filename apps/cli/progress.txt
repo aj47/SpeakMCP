@@ -740,3 +740,14 @@ Notes: Added Skills variant to Commands enum with SkillsCommand subcommand enum 
        list_skills() in task 12.1.6). Verification command passes (grep for 'Skills' and cargo
        check both succeed).
 
+=== Task 12.1.2 ===
+Title: Create commands/skills.rs module
+Started: 2026-01-17T22:30:00Z
+Completed: 2026-01-17T22:35:00Z
+Status: PASS
+Notes: Created commands/skills.rs module with module documentation and list_skills() async function.
+       Function signature matches the pattern used by other command modules (takes Config reference
+       and json bool). Implementation is a placeholder that will be completed in task 12.1.5 when
+       Skill type is defined in types.rs. Uses #![allow(dead_code)] since function will be wired
+       up in later phases. Verification command passes (file exists with 'pub async fn').
+

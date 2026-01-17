@@ -471,3 +471,10 @@ Completed: 2026-01-17T19:35:00Z
 Status: PASS
 Notes: Created commands/stop.rs with module documentation and emergency_stop() async function. Function creates ApiClient from config, calls POST v1/emergency-stop with empty request body, and displays success/message response. Added EmptyRequest and StopResponse structs for API call. Verification command passes (file exists with 'pub async fn').
 
+=== Task 6.1.3 ===
+Title: Export stop module from commands/mod.rs
+Started: 2026-01-17T20:00:00Z
+Completed: 2026-01-17T20:05:00Z
+Status: PASS
+Notes: Uncommented 'pub mod stop;' in commands/mod.rs to export the stop module. Cargo check passes (three warnings about unused code in stop.rs are expected since emergency_stop() hasn't been wired up in main.rs yet - that's task 6.1.5).
+

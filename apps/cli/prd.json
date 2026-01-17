@@ -689,7 +689,7 @@
       "type": "RUST",
       "description": "Add 'pub mod stop;' to commands/mod.rs",
       "verificationCommand": "grep -q 'pub mod stop' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["6.1.2"]
     },
     {

@@ -719,7 +719,7 @@
       "type": "TEST",
       "description": "Verify Phase 6 code compiles and passes clippy",
       "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["6.1.5"]
     },
     {

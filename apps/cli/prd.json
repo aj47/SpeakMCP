@@ -519,7 +519,7 @@
       "type": "RUST",
       "description": "Add match arm for History::Delete that calls delete_conversation()",
       "verificationCommand": "grep -qE 'Delete.*id|history.*delete' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["4.1.1", "4.3.1"]
     },
     {

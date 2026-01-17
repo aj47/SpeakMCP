@@ -621,3 +621,10 @@ Completed: 2026-01-17T16:35:00Z
 Status: PASS
 Notes: Wired up MemoriesCommand::List in main.rs to call commands::memories::list_memories(). Replaced placeholder println! with actual function call that passes config and json flag. Show and Delete subcommands still have placeholder println! messages (to be implemented in later tasks). Verification command passes (grep for 'Memories.*List|MemoriesCommand.*List' succeeds, cargo check passes with one warning about unused import Memory in memories.rs - expected until delete_memory is wired up).
 
+=== Task 10.2.1 ===
+Title: Implement delete_memory() function
+Started: 2026-01-17T17:00:00Z
+Completed: 2026-01-17T17:05:00Z
+Status: PASS
+Notes: Function was already implemented in commands/memories.rs. Creates ApiClient from config, calls DELETE v1/memories/:id using the delete() method from ApiClient. Prints success message with deleted memory ID. Verification command passes (grep for 'pub async fn delete_memory' succeeds, cargo check passes with one warning about unused import Memory - expected until all memories functions are wired up).
+

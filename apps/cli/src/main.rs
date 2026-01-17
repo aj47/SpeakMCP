@@ -213,7 +213,7 @@ async fn main() -> Result<()> {
                 commands::profiles::list_profiles(&config, cli.json).await?;
             }
             ProfilesCommand::Current => {
-                todo!("profiles current not yet implemented")
+                commands::profiles::get_current_profile(&config, cli.json).await?;
             }
             ProfilesCommand::Switch { name: _ } => {
                 todo!("profiles switch not yet implemented")

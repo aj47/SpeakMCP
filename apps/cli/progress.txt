@@ -198,3 +198,10 @@ Completed: 2026-01-17T18:10:00Z
 Status: PASS
 Notes: Implemented get_current_profile() function in commands/profiles.rs. Creates ApiClient from config, calls GET v1/profiles/current, displays result in table format (with FIELD, VALUE columns showing Name, ID, Default, Guidelines, System Prompt) or JSON format when --json flag is set. Uses ProfileDetail type from types.rs. Added truncate_string() helper function to handle long system prompts. Cargo check passes.
 
+=== Task 2.2.2 ===
+Title: Wire up 'profiles current' command in main.rs
+Started: 2026-01-17T19:00:00Z
+Completed: 2026-01-17T19:05:00Z
+Status: PASS
+Notes: Wired up ProfilesCommand::Current in main.rs to call commands::profiles::get_current_profile(). Replaced todo!() placeholder with actual function call that passes config and json flag. Switch subcommand still has placeholder todo!() macro (to be implemented in task 2.3.2). Verification command (grep and cargo check) passes.
+

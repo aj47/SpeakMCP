@@ -299,7 +299,7 @@
       "type": "RUST",
       "description": "Add match arm for Profiles::Current that calls get_current_profile()",
       "verificationCommand": "grep -qE 'Current.*get_current|profiles.*current' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["2.1.1", "2.2.1"]
     },
     {

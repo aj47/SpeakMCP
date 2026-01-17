@@ -524,3 +524,18 @@ pub struct Memory {
     #[serde(default)]
     pub profile_id: Option<String>,
 }
+
+/// Health status from GET /v1/health
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthStatus {
+    /// Status string (e.g., "ok", "degraded", "error")
+    pub status: String,
+
+    /// Application version
+    #[serde(default)]
+    pub version: Option<String>,
+
+    /// Uptime in seconds
+    #[serde(default)]
+    pub uptime: Option<u64>,
+}

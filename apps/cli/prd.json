@@ -1109,7 +1109,7 @@
       "type": "RUST",
       "description": "Add 'pub mod health;' to commands/mod.rs",
       "verificationCommand": "grep -q 'pub mod health' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["13.1.2"]
     },
     {
@@ -1119,7 +1119,7 @@
       "type": "RUST",
       "description": "Add HealthStatus struct for diagnostic info",
       "verificationCommand": "grep -q 'pub struct HealthStatus' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.4"]
     },
     {

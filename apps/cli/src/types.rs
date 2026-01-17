@@ -373,6 +373,85 @@ pub struct SettingsPreset {
     pub is_built_in: Option<bool>,
 }
 
+/// Model preset from GET /v1/settings availablePresets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelPreset {
+    /// Preset ID (unique identifier)
+    pub id: String,
+
+    /// Preset name
+    pub name: String,
+
+    /// Base URL for the model API
+    #[serde(default)]
+    pub base_url: Option<String>,
+
+    /// Whether this is a built-in preset
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
+/// Response from GET /v1/settings for presets listing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsResponse {
+    /// Current model preset ID
+    #[serde(default)]
+    pub current_model_preset_id: Option<String>,
+
+    /// Available model presets
+    #[serde(default)]
+    pub available_presets: Vec<ModelPreset>,
+
+    /// MCP tools provider ID
+    #[serde(default)]
+    pub mcp_tools_provider_id: Option<String>,
+
+    /// OpenAI model for MCP tools
+    #[serde(default)]
+    pub mcp_tools_openai_model: Option<String>,
+
+    /// Groq model for MCP tools
+    #[serde(default)]
+    pub mcp_tools_groq_model: Option<String>,
+
+    /// Gemini model for MCP tools
+    #[serde(default)]
+    pub mcp_tools_gemini_model: Option<String>,
+
+    /// Whether transcript post-processing is enabled
+    #[serde(default)]
+    pub transcript_post_processing_enabled: Option<bool>,
+
+    /// Whether to require approval before tool calls
+    #[serde(default)]
+    pub mcp_require_approval_before_tool_call: Option<bool>,
+
+    /// Whether TTS is enabled
+    #[serde(default)]
+    pub tts_enabled: Option<bool>,
+
+    /// Whether WhatsApp integration is enabled
+    #[serde(default)]
+    pub whatsapp_enabled: Option<bool>,
+
+    /// Maximum MCP iterations in agent mode
+    #[serde(default)]
+    pub mcp_max_iterations: Option<u32>,
+}
+
+/// Response from PATCH /v1/settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingsUpdateResponse {
+    /// Whether the update was successful
+    pub success: bool,
+
+    /// List of updated setting keys
+    #[serde(default)]
+    pub updated: Vec<String>,
+}
+
 /// Response wrapper for GET /v1/memories
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoriesResponse {

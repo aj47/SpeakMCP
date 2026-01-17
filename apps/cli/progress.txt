@@ -650,3 +650,14 @@ Completed: 2026-01-17T11:10:00Z
 Status: PASS
 Notes: Added Presets variant to Commands enum with PresetsCommand subcommand enum containing List, Current, and Switch { id: String } variants. Added placeholder match arm in main() with println! messages for each subcommand (to be implemented in later tasks 11.1.6, 11.2.2). Cargo check passes.
 
+
+=== Task 11.1.2 ===
+Title: Create commands/presets.rs module
+Started: 2026-01-17T21:50:00Z
+Completed: 2026-01-17T21:55:00Z
+Status: PASS
+Notes: Created commands/presets.rs module with list_presets() and switch_preset() functions.
+       Added patch() method to ApiClient for PATCH requests.
+       Added ModelPreset, SettingsResponse, and SettingsUpdateResponse types to types.rs.
+       The module follows the same pattern as profiles.rs for listing and switching.
+

@@ -244,6 +244,36 @@ impl ApiClient {
         Ok(())
     }
 
+    /// Perform a generic PATCH request with a JSON body and deserialize the response
+    pub async fn patch<T, R>(&self, path: &str, body: &T) -> Result<R>
+    where
+        T: Serialize,
+        R: serde::de::DeserializeOwned,
+    {
+        let url = self.endpoint(path);
+
+        let response = self
+            .client
+            .patch(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!("API error ({}): {}", status, body));
+        }
+
+        response
+            .json::<R>()
+            .await
+            .context("Failed to parse API response")
+    }
+
     /// Send a chat message and get a response
     pub async fn chat(&self, message: &str, conversation_id: Option<&str>) -> Result<ChatResponse> {
         let url = self.endpoint("chat/completions");

@@ -939,7 +939,7 @@
       "type": "RUST",
       "description": "Create the presets command module file for model preset management",
       "verificationCommand": "test -f apps/cli/src/commands/presets.rs && grep -q 'pub async fn' apps/cli/src/commands/presets.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

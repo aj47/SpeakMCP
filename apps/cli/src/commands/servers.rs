@@ -52,13 +52,38 @@ pub async fn list_servers(config: &Config, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Request body for POST /v1/mcp/servers/:name/toggle
+#[derive(serde::Serialize)]
+struct ToggleRequest {
+    enabled: bool,
+}
+
+/// Response from POST /v1/mcp/servers/:name/toggle
+#[derive(serde::Deserialize)]
+struct ToggleResponse {
+    success: bool,
+    server: String,
+    enabled: bool,
+}
+
 /// Toggle an MCP server's enabled state
 ///
 /// Calls POST /v1/mcp/servers/:name/toggle with the desired state.
-pub async fn toggle_server(_config: &Config, _name: &str, _enabled: bool) -> Result<()> {
-    // TODO: Implement in task 1.2.1
-    // - Create ApiClient from config
-    // - Call POST /v1/mcp/servers/:name/toggle
-    // - Display success/failure message
+pub async fn toggle_server(config: &Config, name: &str, enabled: bool) -> Result<()> {
+    let client = ApiClient::from_config(config)?;
+    let path = format!("v1/mcp/servers/{}/toggle", name);
+    let request = ToggleRequest { enabled };
+
+    let response: ToggleResponse = client.post(&path, &request).await?;
+
+    if response.success {
+        let action = if response.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        println!("Server '{}' {}", response.server, action);
+    }
+
     Ok(())
 }

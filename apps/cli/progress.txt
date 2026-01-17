@@ -120,3 +120,10 @@ Completed: 2026-01-17T23:35:00Z
 Status: PASS
 Notes: Wired up ServersCommand::List in main.rs to call commands::servers::list_servers(). Updated match arm from placeholder to properly dispatch to list_servers with config and json flag. Enable/Disable still have placeholder error messages (to be implemented in tasks 1.2.2, 1.2.3). Removed #[allow(dead_code)] from ServersCommand enum. Cargo check and clippy pass.
 
+=== Task 1.2.1 ===
+Title: Implement toggle_server() function
+Started: 2026-01-18T00:00:00Z
+Completed: 2026-01-18T00:10:00Z
+Status: PASS
+Notes: Implemented toggle_server() function in commands/servers.rs. Added ToggleRequest and ToggleResponse structs for the API call. Function creates ApiClient from config, calls POST /v1/mcp/servers/:name/toggle with enabled boolean, and displays success message showing server name and action (enabled/disabled). Cargo check passes.
+

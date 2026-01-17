@@ -254,3 +254,10 @@ Completed: 2026-01-17T11:10:00Z
 Status: PASS
 Notes: Added Tool struct to types.rs matching POST /mcp/tools/list response with fields: name, description, input_schema (optional serde_json::Value for JSON schema). Also added ToolsListResponse wrapper struct, ToolCallResponse for POST /mcp/tools/call response, and ToolContent for content items. Used #[serde(rename_all = "camelCase")] for proper JSON deserialization. Cargo check passes.
 
+=== Task 3.1.5 ===
+Title: Implement list_tools() function
+Started: 2026-01-17T12:00:00Z
+Completed: 2026-01-17T12:10:00Z
+Status: PASS
+Notes: Implemented list_tools() function in commands/tools.rs. Creates ApiClient from config, calls POST mcp/tools/list with empty request body, displays results in table format (with NAME, DESCRIPTION columns) or JSON format when --json flag is set. Uses ToolsListResponse type from types.rs and output utilities from output.rs. Description is truncated to 60 chars for table display. Cargo check passes.
+

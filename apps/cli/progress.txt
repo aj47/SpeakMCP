@@ -643,3 +643,10 @@ Completed: 2026-01-17T10:05:00Z
 Status: PASS
 Notes: Fixed unused import warning in commands/memories.rs by removing unused 'Memory' import from line 14. The Memory type was imported but only used indirectly via MemoriesResponse iteration, so Rust considered it unused. After fix, both cargo build and cargo clippy -- -D warnings pass successfully with no errors or warnings. Phase 10 (memories commands) is now complete.
 
+=== Task 11.1.1 ===
+Title: Add Presets subcommand enum variant
+Started: 2026-01-17T11:00:00Z
+Completed: 2026-01-17T11:10:00Z
+Status: PASS
+Notes: Added Presets variant to Commands enum with PresetsCommand subcommand enum containing List, Current, and Switch { id: String } variants. Added placeholder match arm in main() with println! messages for each subcommand (to be implemented in later tasks 11.1.6, 11.2.2). Cargo check passes.
+

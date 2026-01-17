@@ -142,6 +142,12 @@ enum Commands {
         #[command(subcommand)]
         command: MemoriesCommand,
     },
+
+    /// Manage model presets
+    Presets {
+        #[command(subcommand)]
+        command: PresetsCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -262,6 +268,22 @@ enum MemoriesCommand {
     /// Delete a memory
     Delete {
         /// Memory ID
+        id: String,
+    },
+}
+
+/// Subcommands for model presets management
+#[derive(Subcommand)]
+enum PresetsCommand {
+    /// List all model presets
+    List,
+
+    /// Show current preset
+    Current,
+
+    /// Switch to a different preset
+    Switch {
+        /// ID of the preset to switch to
         id: String,
     },
 }
@@ -416,6 +438,21 @@ async fn main() -> Result<()> {
             }
             MemoriesCommand::Delete { id } => {
                 commands::memories::delete_memory(&config, &id).await?;
+            }
+        },
+
+        Some(Commands::Presets { command }) => match command {
+            PresetsCommand::List => {
+                // TODO: Implement list_presets in task 11.1.6
+                println!("Presets list command not yet implemented");
+            }
+            PresetsCommand::Current => {
+                // TODO: Implement get_current_preset in a later task
+                println!("Presets current command not yet implemented");
+            }
+            PresetsCommand::Switch { id } => {
+                // TODO: Implement switch_preset in task 11.2.2
+                println!("Presets switch command not yet implemented: {}", id);
             }
         },
 

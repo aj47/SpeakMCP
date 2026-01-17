@@ -771,3 +771,15 @@ Notes: Added Skill and SkillsResponse structs to types.rs matching GET /v1/skill
        SkillsResponse is a wrapper struct with skills: Vec<Skill>. Used #[serde(rename_all = "camelCase")]
        for proper JSON deserialization from TypeScript API. Cargo check passes.
 
+
+=== Task 12.1.5 ===
+Title: Implement list_skills() function
+Started: 2026-01-17T22:02:51Z
+Completed: 2026-01-17T22:02:51Z
+Status: PASS
+Notes: Implemented list_skills() function in commands/skills.rs. Creates ApiClient from config,
+       calls GET v1/skills using SkillsResponse type, displays results in table format (NAME,
+       DESCRIPTION, ENABLED, SOURCE columns) or JSON format when --json flag is set. Includes
+       truncate_string() helper function for description truncation (max 50 chars). Handles
+       empty skills list case gracefully. Verification command passes.
+

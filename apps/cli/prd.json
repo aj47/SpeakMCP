@@ -1059,7 +1059,7 @@
       "type": "RUST",
       "description": "Implement function to call GET /v1/skills",
       "verificationCommand": "grep -q 'pub async fn list_skills' apps/cli/src/commands/skills.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["12.1.3", "12.1.4", "0.2.1"]
     },
     {

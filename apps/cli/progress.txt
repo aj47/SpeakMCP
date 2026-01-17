@@ -803,3 +803,13 @@ Notes: Verified Phase 12 code compiles and passes clippy. Ran cargo build --mani
        Both commands completed successfully with no errors or warnings. Phase 12 (skills commands)
        is now complete.
 
+=== Task 13.1.1 ===
+Title: Add Health subcommand enum variant
+Started: 2026-01-17T23:00:00Z
+Completed: 2026-01-17T23:15:00Z
+Status: PASS
+Notes: Added Health variant to Commands enum with HealthCommand subcommand enum containing
+       Check and Errors variants. Added match arm in main() with placeholder println! messages
+       for each subcommand (to be implemented in tasks 13.1.6, 13.2.2). Verification command
+       passes (grep for 'Health' and cargo check both succeed).
+

@@ -154,6 +154,12 @@ enum Commands {
         #[command(subcommand)]
         command: SkillsCommand,
     },
+
+    /// Check system health and diagnostics
+    Health {
+        #[command(subcommand)]
+        command: HealthCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -299,6 +305,16 @@ enum PresetsCommand {
 enum SkillsCommand {
     /// List all available skills
     List,
+}
+
+/// Subcommands for health and diagnostics
+#[derive(Subcommand)]
+enum HealthCommand {
+    /// Check overall system health
+    Check,
+
+    /// Show recent errors
+    Errors,
 }
 
 #[tokio::main]
@@ -470,6 +486,17 @@ async fn main() -> Result<()> {
         Some(Commands::Skills { command }) => match command {
             SkillsCommand::List => {
                 commands::skills::list_skills(&config, cli.json).await?;
+            }
+        },
+
+        Some(Commands::Health { command }) => match command {
+            HealthCommand::Check => {
+                // TODO: Implement check_health in a later task
+                println!("Health check command not yet implemented");
+            }
+            HealthCommand::Errors => {
+                // TODO: Implement get_errors in a later task
+                println!("Health errors command not yet implemented");
             }
         },
 

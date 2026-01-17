@@ -29,7 +29,7 @@
       "type": "RUST",
       "description": "Create a types module for shared structs used across commands",
       "verificationCommand": "test -f apps/cli/src/types.rs && grep -q 'use serde' apps/cli/src/types.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {

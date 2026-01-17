@@ -969,7 +969,7 @@
       "type": "RUST",
       "description": "Implement function to call GET /v1/presets",
       "verificationCommand": "grep -q 'pub async fn list_presets' apps/cli/src/commands/presets.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["11.1.3", "11.1.4", "0.2.1"]
     },
     {

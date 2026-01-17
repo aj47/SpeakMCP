@@ -729,7 +729,7 @@
       "type": "RUST",
       "description": "Add SSE client crate for streaming responses",
       "verificationCommand": "grep -q 'eventsource' apps/cli/Cargo.toml && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.4.1"]
     },
     {

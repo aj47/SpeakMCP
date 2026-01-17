@@ -45,6 +45,9 @@ colored = "3"
 futures-util = "0.3"
 tokio-stream = "0.1"
 
+# SSE client for streaming API responses
+reqwest-eventsource = "0.6"
+
 [profile.release]
 strip = true
 lto = true

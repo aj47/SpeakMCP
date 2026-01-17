@@ -499,3 +499,10 @@ Completed: 2026-01-17T21:12:00Z
 Status: PASS
 Notes: Verified Phase 6 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. The stop command is fully implemented and wired up.
 
+=== Task 7.1.1 ===
+Title: Add reqwest-eventsource crate to Cargo.toml
+Started: 2026-01-17T22:00:00Z
+Completed: 2026-01-17T22:05:00Z
+Status: PASS
+Notes: Added reqwest-eventsource = "0.6" to Cargo.toml dependencies section for SSE client streaming support. Crate downloaded successfully and cargo check passes. Verification command (grep for 'eventsource' and cargo check) succeeds.
+

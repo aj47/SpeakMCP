@@ -1179,7 +1179,7 @@
       "type": "TEST",
       "description": "Verify all subcommands are properly wired up",
       "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml --release && apps/cli/target/release/speakmcp --help | grep -q servers && apps/cli/target/release/speakmcp --help | grep -q profiles && apps/cli/target/release/speakmcp --help | grep -q memories && apps/cli/target/release/speakmcp --help | grep -q health",
-      "passes": false,
+      "passes": true,
       "dependencies": ["1.3.1", "2.4.1", "3.3.1", "4.6.1", "5.3.1", "6.2.1", "7.3.1", "8.2.1", "10.3.1", "11.3.1", "12.2.1", "13.3.1"]
     },
     {

@@ -893,3 +893,13 @@ Completed: 2026-01-17T14:02:00Z
 Status: PASS
 Notes: Verified Phase 13 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. Phase 13 (health commands) is now complete.
 
+=== Task 9.1.1 ===
+Title: Final integration test: all commands defined
+Started: 2026-01-17T15:00:00Z
+Completed: 2026-01-17T15:05:00Z
+Status: PASS
+Notes: Verified all subcommands are properly wired up. Built CLI in release mode and checked --help output
+       confirms all required commands are present: servers, profiles, memories, health. Full help output shows:
+       chat, send, config, status, servers, profiles, tools, history, settings, stop, completions, memories,
+       presets, skills, health. Phase 9 final integration test passes.
+

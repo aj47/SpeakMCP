@@ -159,7 +159,7 @@
       "type": "RUST",
       "description": "Add McpServer struct matching GET /v1/mcp/servers response",
       "verificationCommand": "grep -q 'pub struct McpServer' apps/cli/src/types.rs && grep -q 'connected' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.4"]
     },
     {

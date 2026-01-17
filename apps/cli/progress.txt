@@ -99,3 +99,10 @@ Completed: 2026-01-17T22:02:00Z
 Status: PASS
 Notes: Added 'pub mod servers;' to commands/mod.rs to export the servers module. Cargo check passes (one warning about unused import in servers.rs is expected at this stage).
 
+=== Task 1.1.4 ===
+Title: Define McpServer struct in types.rs
+Started: 2026-01-17T22:30:00Z
+Completed: 2026-01-17T22:35:00Z
+Status: PASS
+Notes: Added McpServer struct matching GET /v1/mcp/servers response with fields: name, connected, tool_count, enabled, runtime_enabled, config_disabled, error (optional). Also added McpServersResponse wrapper struct. Used #[serde(rename_all = "camelCase")] for proper JSON deserialization from TypeScript API. Cargo check passes.
+

@@ -366,3 +366,10 @@ Completed: 2026-01-17T10:35:00Z
 Status: PASS
 Notes: Implemented export_conversation() function in commands/history.rs. Function fetches conversation using GET v1/conversations/:id, serializes to JSON using serde_json::to_string_pretty(), and writes to file using std::fs::write(). If no output path is specified, defaults to "conversation-{id}.json". Supports JSON output mode for displaying export details. Verification command (grep and cargo check) passes.
 
+=== Task 4.4.2 ===
+Title: Wire up 'history export' command in main.rs
+Started: 2026-01-17T11:00:00Z
+Completed: 2026-01-17T11:05:00Z
+Status: PASS
+Notes: Wired up HistoryCommand::Export in main.rs to call commands::history::export_conversation(). Replaced todo!() placeholder with actual function call that passes config, id, output.as_deref(), and json flag. Verification command (grep and cargo check) passes.
+

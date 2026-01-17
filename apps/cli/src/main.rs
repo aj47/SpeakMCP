@@ -303,8 +303,9 @@ async fn main() -> Result<()> {
             HistoryCommand::Delete { id } => {
                 commands::history::delete_conversation(&config, &id).await?;
             }
-            HistoryCommand::Export { id: _, output: _ } => {
-                todo!("history export command not yet implemented");
+            HistoryCommand::Export { id, output } => {
+                commands::history::export_conversation(&config, &id, output.as_deref(), cli.json)
+                    .await?;
             }
             HistoryCommand::Continue { id: _ } => {
                 todo!("history continue command not yet implemented");

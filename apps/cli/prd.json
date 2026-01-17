@@ -539,7 +539,7 @@
       "type": "RUST",
       "description": "Add match arm for History::Export that calls export_conversation()",
       "verificationCommand": "grep -qE 'Export.*id|history.*export' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["4.1.1", "4.4.1"]
     },
     {

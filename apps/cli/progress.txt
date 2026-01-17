@@ -722,3 +722,11 @@ Notes: Wired up PresetsCommand::Switch in main.rs to call commands::presets::swi
        actual function call that passes config, id, and json flag. Verification command passes
        (grep for 'Presets.*Switch|presets.*switch' and cargo check both succeed).
 
+
+=== Task 11.3.1 ===
+Title: Test: presets commands build successfully
+Started: 2026-01-17T21:56:08Z
+Completed: 2026-01-17T21:56:08Z
+Status: PASS
+Notes: Verified Phase 11 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. Phase 11 (presets commands) is now complete.
+

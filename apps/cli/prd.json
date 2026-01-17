@@ -779,7 +779,7 @@
       "type": "RUST",
       "description": "Update send_message to use streaming when --stream flag is set",
       "verificationCommand": "grep -qE 'stream.*chat_streaming|if.*stream' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["7.2.1", "7.2.2"]
     },
     {

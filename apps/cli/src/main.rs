@@ -18,6 +18,7 @@ mod types;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use std::io::{self, Write};
 
 use config::Config;
 
@@ -386,36 +387,98 @@ async fn send_message(
     config: &Config,
     message: &str,
     conversation_id: Option<&str>,
-    _stream: bool,
+    stream: bool,
 ) -> Result<()> {
     let client = api::ApiClient::from_config(config)?;
 
-    match client.chat(message, conversation_id).await {
-        Ok(response) => {
-            // Print tool calls if any
-            if config.show_tool_calls {
-                if let Some(history) = &response.conversation_history {
-                    for msg in history.iter().rev().take(5) {
-                        if let Some(tool_calls) = &msg.tool_calls {
-                            for tc in tool_calls {
-                                eprintln!("{} {}", "⚙".yellow(), tc.name.dimmed());
+    if stream {
+        // Use streaming mode - print tokens as they arrive
+        let mut last_streaming_text_len = 0;
+
+        let result = client
+            .chat_streaming(message, conversation_id, |event| {
+                match event {
+                    sse::SseEvent::Progress(progress) => {
+                        // Print tool calls if enabled
+                        if config.show_tool_calls {
+                            for step in &progress.steps {
+                                if step.status == "running" || step.status == "complete" {
+                                    if let Some(tool_call) = &step.tool_call {
+                                        eprintln!("{} {}", "⚙".yellow(), tool_call.name.dimmed());
+                                    }
+                                }
+                            }
+                        }
+
+                        // Print streaming content incrementally
+                        if let Some(streaming) = &progress.streaming_content {
+                            if streaming.is_streaming && streaming.text.len() > last_streaming_text_len
+                            {
+                                // Print only the new characters
+                                let new_text = &streaming.text[last_streaming_text_len..];
+                                print!("{}", new_text);
+                                let _ = io::stdout().flush();
+                                last_streaming_text_len = streaming.text.len();
+                            }
+                        }
+                    }
+                    sse::SseEvent::Done(done) => {
+                        // Print any remaining content not yet printed
+                        if last_streaming_text_len < done.content.len() {
+                            let remaining = &done.content[last_streaming_text_len..];
+                            print!("{}", remaining);
+                        }
+                        // Ensure final newline
+                        println!();
+
+                        // Print conversation ID to stderr for scripting
+                        if let Some(id) = &done.conversation_id {
+                            eprintln!("{}: {}", "conversation_id".dimmed(), id);
+                        }
+                    }
+                    sse::SseEvent::Error(err) => {
+                        eprintln!("\n{}: {}", "error".red(), err.message);
+                    }
+                    sse::SseEvent::Unknown(_) => {
+                        // Ignore unknown events
+                    }
+                }
+            })
+            .await;
+
+        if let Err(e) = result {
+            eprintln!("{}: {}", "error".red(), e);
+            std::process::exit(1);
+        }
+    } else {
+        // Non-streaming mode
+        match client.chat(message, conversation_id).await {
+            Ok(response) => {
+                // Print tool calls if any
+                if config.show_tool_calls {
+                    if let Some(history) = &response.conversation_history {
+                        for msg in history.iter().rev().take(5) {
+                            if let Some(tool_calls) = &msg.tool_calls {
+                                for tc in tool_calls {
+                                    eprintln!("{} {}", "⚙".yellow(), tc.name.dimmed());
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Print the response to stdout (for piping)
-            println!("{}", response.content);
+                // Print the response to stdout (for piping)
+                println!("{}", response.content);
 
-            // Print conversation ID to stderr for scripting
-            if let Some(id) = response.conversation_id {
-                eprintln!("{}: {}", "conversation_id".dimmed(), id);
+                // Print conversation ID to stderr for scripting
+                if let Some(id) = response.conversation_id {
+                    eprintln!("{}: {}", "conversation_id".dimmed(), id);
+                }
             }
-        }
-        Err(e) => {
-            eprintln!("{}: {}", "error".red(), e);
-            std::process::exit(1);
+            Err(e) => {
+                eprintln!("{}: {}", "error".red(), e);
+                std::process::exit(1);
+            }
         }
     }
 

@@ -607,3 +607,10 @@ Completed: 2026-01-17T15:35:00Z
 Status: PASS
 Notes: Uncommented 'pub mod memories;' in commands/mod.rs to export the memories module. Cargo check passes (one warning about unused import Memory in memories.rs is expected since the struct is imported but only used indirectly via MemoriesResponse).
 
+=== Task 10.1.5 ===
+Title: Implement list_memories() function
+Started: 2026-01-17T16:00:00Z
+Completed: 2026-01-17T16:05:00Z
+Status: PASS
+Notes: Function was already implemented in commands/memories.rs. Creates ApiClient from config, calls GET v1/memories using MemoriesResponse type, displays results in table format (ID, CONTENT, IMPORTANCE, TAGS, CREATED columns) or JSON format when --json flag is set. Includes format_timestamp() and truncate_string() helper functions for display formatting. Handles empty memories list case gracefully. Verification command passes (grep for 'pub async fn list_memories' and '/memories' both succeed, cargo check passes).
+

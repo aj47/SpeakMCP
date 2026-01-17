@@ -879,7 +879,7 @@
       "type": "RUST",
       "description": "Implement function to call GET /v1/memories",
       "verificationCommand": "grep -q 'pub async fn list_memories' apps/cli/src/commands/memories.rs && grep -q '/memories' apps/cli/src/commands/memories.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["10.1.3", "10.1.4", "0.2.1"]
     },
     {

@@ -240,3 +240,10 @@ Completed: 2026-01-17T23:35:00Z
 Status: PASS
 Notes: Created commands/tools.rs with module documentation and two stub async functions: list_tools() and call_tool(). Includes proper imports from crate modules (api::ApiClient, config::Config). Uses #![allow(dead_code)] since functions will be wired up in later phases. Verification command passes.
 
+=== Task 3.1.3 ===
+Title: Export tools module from commands/mod.rs
+Started: 2026-01-17T10:00:00Z
+Completed: 2026-01-17T10:05:00Z
+Status: PASS
+Notes: Uncommented 'pub mod tools;' in commands/mod.rs to export the tools module. Cargo check passes (one warning about unused import in tools.rs is expected at this stage).
+

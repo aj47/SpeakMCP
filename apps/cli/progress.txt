@@ -628,3 +628,11 @@ Completed: 2026-01-17T17:05:00Z
 Status: PASS
 Notes: Function was already implemented in commands/memories.rs. Creates ApiClient from config, calls DELETE v1/memories/:id using the delete() method from ApiClient. Prints success message with deleted memory ID. Verification command passes (grep for 'pub async fn delete_memory' succeeds, cargo check passes with one warning about unused import Memory - expected until all memories functions are wired up).
 
+
+=== Task 10.2.2 ===
+Title: Wire up 'memories delete' command in main.rs
+Started: 2026-01-17T00:00:00Z
+Completed: 2026-01-17T00:01:00Z
+Status: PASS
+Notes: Replaced TODO placeholder with call to commands::memories::delete_memory(&config, &id).await? in main.rs:417-419
+

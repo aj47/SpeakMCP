@@ -415,8 +415,7 @@ async fn main() -> Result<()> {
                 println!("Memories show command not yet implemented: {}", id);
             }
             MemoriesCommand::Delete { id } => {
-                // TODO: Implement delete_memory in a later task
-                println!("Memories delete command not yet implemented: {}", id);
+                commands::memories::delete_memory(&config, &id).await?;
             }
         },
 

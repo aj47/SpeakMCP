@@ -909,7 +909,7 @@
       "type": "RUST",
       "description": "Add match arm for Memories::Delete that calls delete_memory()",
       "verificationCommand": "grep -qE 'Memories.*Delete|memories.*delete' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["10.1.1", "10.2.1"]
     },
     {

@@ -303,3 +303,10 @@ Completed: 2026-01-17T18:05:00Z
 Status: PASS
 Notes: Created commands/history.rs with module documentation and five stub async functions: list_conversations(), show_conversation(), delete_conversation(), export_conversation(), and continue_conversation(). Includes proper imports from crate modules (api::ApiClient, config::Config, output). Uses #![allow(dead_code)] since functions will be wired up in later phases. Verification command passes.
 
+=== Task 4.1.3 ===
+Title: Export history module from commands/mod.rs
+Started: 2026-01-17T19:00:00Z
+Completed: 2026-01-17T19:05:00Z
+Status: PASS
+Notes: Uncommented 'pub mod history;' in commands/mod.rs to export the history module. Cargo check passes (warnings about unused imports in history.rs are expected at this stage since the functions are not yet fully implemented).
+

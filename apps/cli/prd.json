@@ -999,7 +999,7 @@
       "type": "RUST",
       "description": "Add match arm for Presets::Switch that calls switch_preset()",
       "verificationCommand": "grep -qE 'Presets.*Switch|presets.*switch' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["11.1.1", "11.2.1"]
     },
     {

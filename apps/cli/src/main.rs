@@ -450,8 +450,7 @@ async fn main() -> Result<()> {
                 println!("Presets current command not yet implemented");
             }
             PresetsCommand::Switch { id } => {
-                // TODO: Implement switch_preset in task 11.2.2
-                println!("Presets switch command not yet implemented: {}", id);
+                commands::presets::switch_preset(&config, &id, cli.json).await?;
             }
         },
 

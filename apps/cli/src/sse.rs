@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_parse_progress_event() {
-        let data = r#"{"type":"progress","data":{"sessionId":"abc123","currentIteration":1,"maxIteration":10,"steps":[],"isComplete":false}}"#;
+        let data = r#"{"type":"progress","data":{"sessionId":"abc123","currentIteration":1,"maxIterations":10,"steps":[],"isComplete":false}}"#;
         let event = parse_sse_event(data);
         assert!(matches!(event, Some(SseEvent::Progress(_))));
     }

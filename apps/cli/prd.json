@@ -1199,7 +1199,7 @@
       "type": "TEST",
       "description": "Ensure all tests pass",
       "verificationCommand": "cargo test --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["9.1.2"]
     },
     {

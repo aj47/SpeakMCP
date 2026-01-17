@@ -169,3 +169,11 @@ Completed: 2026-01-17T14:31:00Z
 Status: PASS
 Notes: Uncommented 'pub mod profiles;' in commands/mod.rs to export the profiles module. Cargo check passes (one warning about unused import in profiles.rs is expected at this stage).
 
+
+=== Task 2.1.4 ===
+Title: Define Profile struct in types.rs
+Started: 2026-01-17T15:00:00Z
+Completed: 2026-01-17T15:10:00Z
+Status: PASS
+Notes: Added Profile, ProfilesResponse, ProfileDetail, and SwitchProfileResponse structs to types.rs matching the GET /v1/profiles API response. Structs include proper serde(rename_all = "camelCase") annotations. Profile has fields: id, name, is_default, created_at (optional), updated_at (optional). ProfileDetail extends this with guidelines and system_prompt fields. Cargo check passes.
+

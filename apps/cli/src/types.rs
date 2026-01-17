@@ -24,6 +24,73 @@ pub struct McpServersResponse {
     pub servers: Vec<McpServer>,
 }
 
+/// Response wrapper for GET /v1/profiles
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfilesResponse {
+    pub profiles: Vec<Profile>,
+    pub current_profile_id: Option<String>,
+}
+
+/// User profile from GET /v1/profiles
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    /// Profile ID (unique identifier)
+    pub id: String,
+
+    /// Profile name
+    pub name: String,
+
+    /// Whether this is the default profile
+    pub is_default: bool,
+
+    /// Creation timestamp
+    #[serde(default)]
+    pub created_at: Option<u64>,
+
+    /// Last update timestamp
+    #[serde(default)]
+    pub updated_at: Option<u64>,
+}
+
+/// Detailed profile response from GET /v1/profiles/current
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileDetail {
+    /// Profile ID (unique identifier)
+    pub id: String,
+
+    /// Profile name
+    pub name: String,
+
+    /// Whether this is the default profile
+    pub is_default: bool,
+
+    /// Guidelines for the profile
+    #[serde(default)]
+    pub guidelines: Option<String>,
+
+    /// System prompt for the profile
+    #[serde(default)]
+    pub system_prompt: Option<String>,
+
+    /// Creation timestamp
+    #[serde(default)]
+    pub created_at: Option<u64>,
+
+    /// Last update timestamp
+    #[serde(default)]
+    pub updated_at: Option<u64>,
+}
+
+/// Response from POST /v1/profiles/current
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwitchProfileResponse {
+    pub success: bool,
+    pub profile: Profile,
+}
+
 /// MCP server status from GET /v1/mcp/servers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

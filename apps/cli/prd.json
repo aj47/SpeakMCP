@@ -589,7 +589,7 @@
       "type": "RUST",
       "description": "Create the settings command module file",
       "verificationCommand": "test -f apps/cli/src/commands/settings.rs && grep -q 'pub async fn' apps/cli/src/commands/settings.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

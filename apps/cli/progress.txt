@@ -401,3 +401,10 @@ Completed: 2026-01-17T15:10:00Z
 Status: PASS
 Notes: Added Settings variant to Commands enum with SettingsCommand subcommand enum containing Show and Set { key, value } variants. Added placeholder match arm in main() with temporary println! messages (to be implemented in later tasks 5.1.6, 5.2.2 after settings module is created). Cargo check passes.
 
+=== Task 5.1.2 ===
+Title: Create commands/settings.rs module
+Started: 2026-01-17T16:00:00Z
+Completed: 2026-01-17T16:15:00Z
+Status: PASS
+Notes: Created commands/settings.rs with module documentation and two async functions: show_settings() to call GET /v1/settings and display results in table/JSON format, and update_setting() to call POST /v1/settings with key-value pair. Added Settings struct import, UpdateSettingRequest struct for API call, and parse_value() helper for automatic type conversion (bool/int/float/string). Uses #![allow(dead_code)] since functions will be wired up in later phases.
+

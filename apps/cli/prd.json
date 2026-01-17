@@ -1299,7 +1299,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp --json servers list' and verify the output is valid JSON. This tests the --json global flag.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- --json servers list 2>&1 | grep -qE '^\\[|^{|error'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.3"]
     },
     {

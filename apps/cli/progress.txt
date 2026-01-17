@@ -985,3 +985,10 @@ Completed: 2026-01-17T14:05:00Z
 Status: PASS
 Notes: Verified send command works with the desktop app. Running 'speakmcp send hello' successfully connects to the desktop app's LLM API and receives a response ("Hello! How can I help you today?"). The conversation_id is also displayed. Note: macOS doesn't have the 'timeout' command by default, but the verification regex pattern matches correctly with the grep check for 'Hello|Hi|error|API key|response'.
 
+=== Task 14.3.1 ===
+Title: E2E Test: JSON output mode works
+Started: 2026-01-17T15:00:00Z
+Completed: 2026-01-17T15:05:00Z
+Status: PASS
+Notes: Verified --json flag outputs valid JSON for servers list command. Running 'speakmcp --json servers list' outputs a JSON array with 9 MCP server objects containing name, connected, toolCount, enabled, runtimeEnabled, configDisabled, and error fields. The output starts with '[' and is valid JSON. Verification command passes (grep -qE '^\[|^\{|error').
+

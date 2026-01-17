@@ -1229,7 +1229,7 @@
       "type": "RUST",
       "description": "Wire up the 'config import-from-desktop' subcommand to call the import function, update cli.toml with the imported values, and print success/error messages.",
       "verificationCommand": "grep -qE 'ImportFromDesktop|import_from_desktop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.1.2"]
     },
     {

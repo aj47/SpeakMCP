@@ -936,3 +936,10 @@ Completed: 2026-01-17T23:15:00Z
 Status: PASS
 Notes: Implemented desktop config reading logic in config.rs. Added DesktopConfig struct with serde camelCase rename for JSON parsing. Added get_desktop_config_path() function that returns platform-specific paths: ~/Library/Application Support/app.speakmcp/config.json (macOS), %APPDATA%/app.speakmcp/config.json (Windows), ~/.config/app.speakmcp/config.json (Linux). Added read_desktop_config() function that reads the JSON file and extracts remoteServerApiKey and remoteServerPort (default 3210). Updated import_from_desktop() to use these functions, update the CLI config with imported values, and save to cli.toml. Verification command passes (grep for 'app.speakmcp' and 'remote_server_api_key', cargo check passes with no errors or warnings).
 
+=== Task 14.1.3 ===
+Title: Wire up config import command in main.rs
+Started: 2026-01-17T23:20:00Z
+Completed: 2026-01-17T23:22:00Z
+Status: PASS
+Notes: Task was already implemented in previous work. The ConfigCommand::ImportFromDesktop match arm in handle_config_command() calls config::import_from_desktop() which reads the desktop app's config.json, extracts remoteServerApiKey and remoteServerPort, updates the CLI's cli.toml, and prints success/error messages with colored output. Verification command passes (grep for 'ImportFromDesktop|import_from_desktop' and cargo check both succeed).
+

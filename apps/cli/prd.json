@@ -889,7 +889,7 @@
       "type": "RUST",
       "description": "Add match arm for Memories::List that calls list_memories()",
       "verificationCommand": "grep -qE 'Memories.*List|MemoriesCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["10.1.1", "10.1.5"]
     },
     {

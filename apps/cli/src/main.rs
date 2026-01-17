@@ -408,8 +408,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Memories { command }) => match command {
             MemoriesCommand::List => {
-                // TODO: Implement list_memories in a later task
-                println!("Memories list command not yet implemented");
+                commands::memories::list_memories(&config, cli.json).await?;
             }
             MemoriesCommand::Show { id } => {
                 // TODO: Implement show_memory in a later task

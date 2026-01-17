@@ -373,3 +373,10 @@ Completed: 2026-01-17T11:05:00Z
 Status: PASS
 Notes: Wired up HistoryCommand::Export in main.rs to call commands::history::export_conversation(). Replaced todo!() placeholder with actual function call that passes config, id, output.as_deref(), and json flag. Verification command (grep and cargo check) passes.
 
+=== Task 4.5.1 ===
+Title: Implement continue_conversation() function
+Started: 2026-01-17T12:00:00Z
+Completed: 2026-01-17T12:15:00Z
+Status: PASS
+Notes: Implemented continue_conversation() function in commands/history.rs. Function fetches conversation by ID using GET v1/conversations/:id to verify it exists, prints a summary (title, message count, last updated), shows last 3 messages for context, and returns the conversation ID for the REPL to use. Changed return type from Result<()> to Result<String> to return the conversation ID. Verification command (grep and cargo check) passes.
+

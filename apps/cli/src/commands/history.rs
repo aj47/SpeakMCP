@@ -230,7 +230,43 @@ pub async fn export_conversation(
     Ok(())
 }
 
-/// Placeholder - continue_conversation will be implemented in task 4.5.1
-pub async fn continue_conversation(_config: &Config, _id: &str) -> Result<()> {
-    todo!("continue_conversation not yet implemented")
+/// Continue a past conversation in REPL mode
+///
+/// Fetches the conversation by ID to verify it exists, then returns its ID
+/// for the REPL to use. Prints a summary of the conversation being continued.
+pub async fn continue_conversation(config: &Config, id: &str) -> Result<String> {
+    let client = ApiClient::from_config(config)?;
+    let path = format!("v1/conversations/{}", id);
+    let conversation: Conversation = client.get(&path).await?;
+
+    // Print summary of the conversation being continued
+    println!(
+        "Continuing conversation: {}",
+        truncate_string(&conversation.title, 50)
+    );
+    println!(
+        "  {} messages, last updated: {}",
+        conversation.messages.len(),
+        format_timestamp(conversation.updated_at)
+    );
+
+    // Show last few messages for context
+    let recent_messages: Vec<_> = conversation.messages.iter().rev().take(3).collect();
+    if !recent_messages.is_empty() {
+        println!("\nRecent messages:");
+        for msg in recent_messages.iter().rev() {
+            let role_display = match msg.role.as_str() {
+                "user" => "You",
+                "assistant" => "Agent",
+                "system" => "System",
+                _ => &msg.role,
+            };
+            let content_preview = truncate_string(&msg.content, 60);
+            println!("  {}: {}", role_display, content_preview);
+        }
+    }
+
+    println!();
+
+    Ok(conversation.id)
 }

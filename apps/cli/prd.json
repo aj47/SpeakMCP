@@ -549,7 +549,7 @@
       "type": "RUST",
       "description": "Implement function to load and continue a past conversation in REPL",
       "verificationCommand": "grep -q 'pub async fn continue_conversation' apps/cli/src/commands/history.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["4.2.1"]
     },
     {

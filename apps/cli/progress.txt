@@ -15,3 +15,10 @@ Completed: 2026-01-17T12:12:00Z
 Status: PASS
 Notes: Created types.rs module with serde imports. Contains placeholder comments for types to be added in later phases (McpServer, Profile, Tool, etc.).
 
+=== Task 0.1.4 ===
+Title: Add types module to main.rs
+Started: 2026-01-17T12:15:00Z
+Completed: 2026-01-17T12:16:00Z
+Status: PASS
+Notes: Added 'mod types;' to main.rs. Cargo check passes (one warning about unused imports in types.rs is expected at this stage).
+

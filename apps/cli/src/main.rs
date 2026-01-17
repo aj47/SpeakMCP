@@ -10,6 +10,7 @@
 mod api;
 mod config;
 mod repl;
+mod types;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};

@@ -99,7 +99,7 @@
       "type": "RUST",
       "description": "Create output.rs with helper functions for table and JSON output",
       "verificationCommand": "test -f apps/cli/src/output.rs && grep -q 'pub fn print_' apps/cli/src/output.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {

@@ -57,3 +57,10 @@ Completed: 2026-01-17T17:05:00Z
 Status: PASS
 Notes: Added --json flag to the Cli struct in main.rs with global = true attribute for machine-readable output. Flag is a bool type. Cargo check passes with expected warnings for unused code in api.rs and types.rs.
 
+=== Task 0.3.2 ===
+Title: Create output.rs module for formatting
+Started: 2026-01-17T18:00:00Z
+Completed: 2026-01-17T18:10:00Z
+Status: PASS
+Notes: Created output.rs with helper functions for formatted output: print_json for JSON output, print_kv for key-value pairs, print_header for section headers, print_success/error/warning/dimmed for colored messages, and print_table for tabular data with automatic column width calculation. Includes unit tests. Cargo check passes.
+

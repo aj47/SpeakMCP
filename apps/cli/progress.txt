@@ -520,3 +520,10 @@ Completed: 2026-01-17T23:05:00Z
 Status: PASS
 Notes: Added 'mod sse;' declaration to main.rs module imports (alphabetically ordered with other modules: api, commands, config, output, repl, sse, types). Verification command passes - grep finds 'mod sse' and cargo check succeeds. Warnings about unused code in sse.rs are expected at this stage since the SSE types are not yet used by the streaming implementation.
 
+=== Task 7.2.1 ===
+Title: Add --stream flag to send command
+Started: 2026-01-17T23:15:00Z
+Completed: 2026-01-17T23:20:00Z
+Status: PASS
+Notes: Added --stream flag (bool) to Commands::Send variant in main.rs. Updated match arm to destructure the stream field. Updated send_message() function signature to accept _stream parameter (prefixed with underscore as it is not yet used - will be used in task 7.2.3). Also updated the call from the None branch to pass false for stream. Verification command passes (grep finds stream.*bool and cargo check succeeds with only expected warnings for unused SSE code).
+

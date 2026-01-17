@@ -759,7 +759,7 @@
       "type": "RUST",
       "description": "Add --stream flag to Commands::Send for streaming responses",
       "verificationCommand": "grep -qE 'stream.*bool|--stream' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["7.1.3"]
     },
     {

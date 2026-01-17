@@ -67,6 +67,10 @@ enum Commands {
         /// Conversation ID to continue
         #[arg(short, long)]
         conversation: Option<String>,
+
+        /// Enable streaming response (prints tokens as they arrive)
+        #[arg(long)]
+        stream: bool,
     },
 
     /// Manage configuration
@@ -258,6 +262,7 @@ async fn main() -> Result<()> {
         Some(Commands::Send {
             message,
             conversation,
+            stream,
         }) => {
             // Handle stdin input if message is "-"
             let message_text = if message == "-" {
@@ -270,7 +275,7 @@ async fn main() -> Result<()> {
             } else {
                 message
             };
-            send_message(&config, &message_text, conversation.as_deref()).await?;
+            send_message(&config, &message_text, conversation.as_deref(), stream).await?;
         }
 
         Some(Commands::Config {
@@ -365,7 +370,7 @@ async fn main() -> Result<()> {
         None => {
             // Default behavior: interactive mode or single message
             if let Some(message) = cli.message {
-                send_message(&config, &message, cli.conversation.as_deref()).await?;
+                send_message(&config, &message, cli.conversation.as_deref(), false).await?;
             } else {
                 config.default_conversation_id = cli.conversation;
                 repl::run(&config).await?;
@@ -377,7 +382,12 @@ async fn main() -> Result<()> {
 }
 
 /// Send a single message and print the response
-async fn send_message(config: &Config, message: &str, conversation_id: Option<&str>) -> Result<()> {
+async fn send_message(
+    config: &Config,
+    message: &str,
+    conversation_id: Option<&str>,
+    _stream: bool,
+) -> Result<()> {
     let client = api::ApiClient::from_config(config)?;
 
     match client.chat(message, conversation_id).await {

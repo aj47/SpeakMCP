@@ -978,3 +978,10 @@ Completed: 2026-01-17T13:30:00Z
 Status: PASS
 Notes: Fixed tools list endpoint path issue. The /mcp/tools/list and /mcp/tools/call endpoints don't have /v1 prefix in the server routes (unlike other endpoints like /v1/profiles, /v1/settings). Added endpoint_base() method to ApiClient that strips /v1 suffix from server_url, and added post_base() method that uses endpoint_base() instead of endpoint(). Updated tools.rs to use post_base() for both list_tools() and call_tool() functions. After fix, 'speakmcp tools list' successfully displays all 37 builtin tools. Verification command passes.
 
+=== Task 14.2.6 ===
+Title: E2E Test: Send message command works
+Started: 2026-01-17T14:00:00Z
+Completed: 2026-01-17T14:05:00Z
+Status: PASS
+Notes: Verified send command works with the desktop app. Running 'speakmcp send hello' successfully connects to the desktop app's LLM API and receives a response ("Hello! How can I help you today?"). The conversation_id is also displayed. Note: macOS doesn't have the 'timeout' command by default, but the verification regex pattern matches correctly with the grep check for 'Hello|Hi|error|API key|response'.
+

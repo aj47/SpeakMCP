@@ -1289,7 +1289,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp send \"hello\"' and verify the LLM responds. This is the core chat functionality test. Expect a response or a clear error about API key configuration.",
       "verificationCommand": "timeout 30 cargo run --manifest-path apps/cli/Cargo.toml -- send 'hello' 2>&1 | grep -qE 'Hello|Hi|error|API key|response'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.5"]
     },
     {

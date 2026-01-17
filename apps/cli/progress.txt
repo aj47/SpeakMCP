@@ -701,3 +701,14 @@ Notes: Wired up PresetsCommand::List in main.rs to call commands::presets::list_
        function call that passes config and json flag. Verification command (grep and cargo check)
        passes.
 
+=== Task 11.2.1 ===
+Title: Implement switch_preset() function
+Started: 2026-01-17T11:00:00Z
+Completed: 2026-01-17T11:05:00Z
+Status: PASS
+Notes: Function was already implemented in commands/presets.rs from task 11.1.2. The switch_preset()
+       function creates ApiClient from config, resolves preset name or ID via resolve_preset_id() helper,
+       calls PATCH v1/settings with currentModelPresetId using SwitchPresetRequest struct, and displays
+       success message with preset name and ID or JSON response. Uses SettingsUpdateResponse type from
+       types.rs. Verification command passes.
+

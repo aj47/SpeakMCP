@@ -989,7 +989,7 @@
       "type": "RUST",
       "description": "Implement function to call POST /v1/presets/current",
       "verificationCommand": "grep -q 'pub async fn switch_preset' apps/cli/src/commands/presets.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["11.1.3", "0.2.2"]
     },
     {

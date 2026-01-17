@@ -845,3 +845,13 @@ Notes: Added HealthStatus struct to types.rs matching GET /v1/health API respons
        Uses #[derive(Debug, Clone, Serialize, Deserialize)] for proper JSON handling.
        Cargo check passes.
 
+=== Task 13.1.5 ===
+Title: Implement check_health() function
+Started: 2026-01-17T11:00:00Z
+Completed: 2026-01-17T11:05:00Z
+Status: PASS
+Notes: Function was already implemented in commands/health.rs. Creates ApiClient from config,
+       calls GET v1/health using HealthStatus type, displays status, version, and uptime in
+       human-readable format or JSON format when --json flag is set. Verification command passes
+       (grep for 'pub async fn check_health' and '/health' both succeed, cargo check passes).
+

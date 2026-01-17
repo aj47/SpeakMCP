@@ -261,3 +261,10 @@ Completed: 2026-01-17T12:10:00Z
 Status: PASS
 Notes: Implemented list_tools() function in commands/tools.rs. Creates ApiClient from config, calls POST mcp/tools/list with empty request body, displays results in table format (with NAME, DESCRIPTION columns) or JSON format when --json flag is set. Uses ToolsListResponse type from types.rs and output utilities from output.rs. Description is truncated to 60 chars for table display. Cargo check passes.
 
+=== Task 3.1.6 ===
+Title: Wire up 'tools list' command in main.rs
+Started: 2026-01-17T13:00:00Z
+Completed: 2026-01-17T13:05:00Z
+Status: PASS
+Notes: Wired up ToolsCommand::List in main.rs to call commands::tools::list_tools(). Replaced placeholder eprintln message with actual function call that passes config and json flag. Call subcommand still has placeholder eprintln message (to be implemented in task 3.2.2). Verification command (grep and cargo check) passes.
+

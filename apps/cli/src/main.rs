@@ -245,8 +245,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Tools { command }) => match command {
             ToolsCommand::List => {
-                // TODO: Implement in task 3.1.6
-                eprintln!("tools list not yet implemented");
+                commands::tools::list_tools(&config, cli.json).await?;
             }
             ToolsCommand::Call { name: _, args: _ } => {
                 // TODO: Implement in task 3.2.2

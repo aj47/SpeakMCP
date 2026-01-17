@@ -3,6 +3,9 @@
 //! This module provides helper functions for formatting CLI output in both
 //! human-readable table format and machine-readable JSON format.
 
+// Allow dead code - these functions will be used when commands are implemented
+#![allow(dead_code)]
+
 use colored::Colorize;
 use serde::Serialize;
 

@@ -119,7 +119,7 @@
       "type": "TEST",
       "description": "Ensure all Phase 0 changes compile and pass linting",
       "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.5", "0.2.3", "0.3.3"]
     },
     {

@@ -3,6 +3,9 @@
 //! This module contains shared structs used across command modules for
 //! serializing/deserializing API responses from the SpeakMCP remote server.
 
+// Allow unused imports - these will be used when types are added in later phases
+#![allow(unused_imports)]
+
 use serde::{Deserialize, Serialize};
 
 // Types will be added as commands are implemented:

@@ -3,6 +3,9 @@
 //! This module implements the HTTP client that talks to the SpeakMCP
 //! desktop app's remote server at /v1/chat/completions
 
+// Allow dead code - ApiError and get/post methods will be used in later phases
+#![allow(dead_code)]
+
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;

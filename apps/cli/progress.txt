@@ -331,3 +331,10 @@ Completed: 2026-01-17T21:35:00Z
 Status: PASS
 Notes: Wired up HistoryCommand::List in main.rs to call commands::history::list_conversations(). Replaced todo!() placeholder with actual function call that passes config and json flag. Show, Delete, Export, and Continue subcommands still have placeholder todo!() macros (to be implemented in tasks 4.2.2, 4.3.2, 4.4.2, 4.5.2). Verification command (grep and cargo check) passes.
 
+=== Task 4.2.1 ===
+Title: Implement show_conversation() function
+Started: 2026-01-17T22:00:00Z
+Completed: 2026-01-17T22:15:00Z
+Status: PASS
+Notes: Implemented show_conversation() function in commands/history.rs. Creates ApiClient from config, calls GET v1/conversations/:id, displays full conversation with messages. Shows conversation header (title, ID, timestamps, message count, metadata), then each message with role, timestamp, content, tool calls, and tool results. Supports JSON output format. Uses Conversation type from types.rs and existing helper functions (format_timestamp, truncate_string). Cargo check passes.
+

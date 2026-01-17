@@ -11,7 +11,7 @@ use anyhow::Result;
 use crate::api::ApiClient;
 use crate::config::Config;
 use crate::output::{print_json, print_table, TableRow};
-use crate::types::ConversationsResponse;
+use crate::types::{Conversation, ConversationsResponse};
 
 /// List all conversations in history
 ///
@@ -88,9 +88,83 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
-/// Placeholder - show_conversation will be implemented in task 4.2.1
-pub async fn show_conversation(_config: &Config, _id: &str, _json: bool) -> Result<()> {
-    todo!("show_conversation not yet implemented")
+/// Show a specific conversation by ID
+///
+/// Calls GET /v1/conversations/:id and displays the full conversation with all messages.
+pub async fn show_conversation(config: &Config, id: &str, json: bool) -> Result<()> {
+    let client = ApiClient::from_config(config)?;
+    let path = format!("v1/conversations/{}", id);
+    let conversation: Conversation = client.get(&path).await?;
+
+    if json {
+        print_json(&conversation)?;
+    } else {
+        // Print conversation header
+        println!("Conversation: {}", conversation.title);
+        println!("ID: {}", conversation.id);
+        println!("Created: {}", format_timestamp(conversation.created_at));
+        println!("Updated: {}", format_timestamp(conversation.updated_at));
+        println!("Messages: {}", conversation.messages.len());
+
+        // Print metadata if present
+        if let Some(ref metadata) = conversation.metadata {
+            if let Some(ref model) = metadata.model {
+                println!("Model: {}", model);
+            }
+            if let Some(ref provider) = metadata.provider {
+                println!("Provider: {}", provider);
+            }
+            if let Some(tokens) = metadata.total_tokens {
+                println!("Total Tokens: {}", tokens);
+            }
+        }
+
+        println!("\n{}", "-".repeat(60));
+
+        // Print each message
+        for message in &conversation.messages {
+            let role_display = match message.role.as_str() {
+                "user" => "User",
+                "assistant" => "Assistant",
+                "system" => "System",
+                _ => &message.role,
+            };
+
+            let timestamp = format_timestamp(message.timestamp);
+            println!("\n[{}] {} ({})", role_display, timestamp, message.id);
+            println!("{}", message.content);
+
+            // Show tool calls if present
+            if let Some(ref tool_calls) = message.tool_calls {
+                for tool_call in tool_calls {
+                    println!("\n  → Tool Call: {}", tool_call.name);
+                    let args_str = serde_json::to_string_pretty(&tool_call.arguments)
+                        .unwrap_or_else(|_| tool_call.arguments.to_string());
+                    // Indent the arguments
+                    for line in args_str.lines() {
+                        println!("    {}", line);
+                    }
+                }
+            }
+
+            // Show tool results if present
+            if let Some(ref tool_results) = message.tool_results {
+                for result in tool_results {
+                    let status = if result.success { "✓" } else { "✗" };
+                    println!("\n  ← Tool Result: {}", status);
+                    let content_preview = truncate_string(&result.content, 200);
+                    println!("    {}", content_preview);
+                    if let Some(ref error) = result.error {
+                        println!("    Error: {}", error);
+                    }
+                }
+            }
+        }
+
+        println!("\n{}", "-".repeat(60));
+    }
+
+    Ok(())
 }
 
 /// Placeholder - delete_conversation will be implemented in task 4.3.1

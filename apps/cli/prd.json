@@ -859,7 +859,7 @@
       "type": "RUST",
       "description": "Add 'pub mod memories;' to commands/mod.rs",
       "verificationCommand": "grep -q 'pub mod memories' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["10.1.2"]
     },
     {

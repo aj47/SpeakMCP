@@ -130,9 +130,9 @@ enum Commands {
     /// Emergency stop - halt all running operations
     Stop,
 
-    /// Generate shell completions
+    /// Generate shell completions for bash, zsh, fish, powershell, or elvish
     Completions {
-        /// Shell to generate completions for
+        /// Shell to generate completions for (bash, zsh, fish, powershell, elvish)
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },

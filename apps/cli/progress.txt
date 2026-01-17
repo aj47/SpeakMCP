@@ -324,3 +324,10 @@ Completed: 2026-01-17T21:15:00Z
 Status: PASS
 Notes: Implemented list_conversations() function in commands/history.rs. Creates ApiClient from config, calls GET v1/conversations, displays results in table format (with ID, TITLE, MESSAGES, LAST UPDATED columns) or JSON format when --json flag is set. Uses ConversationsResponse type from types.rs. Added format_timestamp() helper to convert Unix milliseconds to readable date/time, and truncate_string() helper to truncate long titles. Handles empty conversation list case gracefully. Cargo check passes.
 
+=== Task 4.1.6 ===
+Title: Wire up 'history list' command in main.rs
+Started: 2026-01-17T21:30:00Z
+Completed: 2026-01-17T21:35:00Z
+Status: PASS
+Notes: Wired up HistoryCommand::List in main.rs to call commands::history::list_conversations(). Replaced todo!() placeholder with actual function call that passes config and json flag. Show, Delete, Export, and Continue subcommands still have placeholder todo!() macros (to be implemented in tasks 4.2.2, 4.3.2, 4.4.2, 4.5.2). Verification command (grep and cargo check) passes.
+

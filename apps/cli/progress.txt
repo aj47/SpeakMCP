@@ -296,3 +296,10 @@ Completed: 2026-01-17T17:10:00Z
 Status: PASS
 Notes: Added History variant to Commands enum with HistoryCommand subcommand enum containing List, Show { id }, Delete { id }, Export { id, output }, and Continue { id } variants. Added placeholder match arm in main() with todo!() macros for each subcommand (to be implemented in tasks 4.1.6, 4.2.2, 4.3.2, 4.4.2, 4.5.2). Cargo check passes.
 
+=== Task 4.1.2 ===
+Title: Create commands/history.rs module
+Started: 2026-01-17T18:00:00Z
+Completed: 2026-01-17T18:05:00Z
+Status: PASS
+Notes: Created commands/history.rs with module documentation and five stub async functions: list_conversations(), show_conversation(), delete_conversation(), export_conversation(), and continue_conversation(). Includes proper imports from crate modules (api::ApiClient, config::Config, output). Uses #![allow(dead_code)] since functions will be wired up in later phases. Verification command passes.
+

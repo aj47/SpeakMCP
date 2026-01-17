@@ -957,3 +957,10 @@ Completed: 2026-01-17T10:15:00Z
 Status: PASS
 Notes: Fixed the status command output to use lowercase "connected" (was "Connected") to match the verification regex pattern. The verification command expects 'connected|running|Connection refused|error' and the original output used capital "Connected" which didn't match. Updated check_status() function in main.rs to print "connected to" instead of "Connected to" for both success and 401 cases. Verification command now passes.
 
+=== Task 14.2.3 ===
+Title: E2E Test: Servers list command works
+Started: 2026-01-17T11:00:00Z
+Completed: 2026-01-17T11:30:00Z
+Status: PASS
+Notes: Fixed URL path doubling issue in all CLI commands. The server_url config includes "/v1" suffix (e.g., "http://localhost:3210/v1"), but API paths were also prefixed with "v1/" resulting in "/v1/v1/..." URLs. Fixed by removing the "v1/" prefix from all API paths in commands: servers.rs (mcp/servers), profiles.rs (profiles, profiles/current), presets.rs (settings), skills.rs (skills), settings.rs (settings), stop.rs (emergency-stop), history.rs (conversations), memories.rs (memories), health.rs (health, errors). The tools.rs file already used correct paths (mcp/tools/list, mcp/tools/call) since those don't have /v1/ prefix in the server routes. After fix, 'speakmcp servers list' successfully connects to the desktop app and displays 9 MCP servers (github, rube, exa, iterm, codebase context, status, MacOS, whatsapp, playwriter).
+

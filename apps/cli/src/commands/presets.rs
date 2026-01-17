@@ -18,7 +18,7 @@ use crate::types::{SettingsResponse, SettingsUpdateResponse};
 /// Calls GET /v1/settings and displays the available presets.
 pub async fn list_presets(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: SettingsResponse = client.get("v1/settings").await?;
+    let response: SettingsResponse = client.get("settings").await?;
 
     if json {
         print_json(&response.available_presets)?;
@@ -73,7 +73,7 @@ pub async fn switch_preset(config: &Config, preset_id: &str, json: bool) -> Resu
         current_model_preset_id: actual_preset_id.clone(),
     };
 
-    let response: SettingsUpdateResponse = client.patch("v1/settings", &request).await?;
+    let response: SettingsUpdateResponse = client.patch("settings", &request).await?;
 
     if json {
         print_json(&response)?;
@@ -101,7 +101,7 @@ pub async fn switch_preset(config: &Config, preset_id: &str, json: bool) -> Resu
 /// Otherwise, look up the preset by name.
 async fn resolve_preset_id(client: &ApiClient, name_or_id: &str) -> Result<String> {
     // Fetch settings to get presets list
-    let response: SettingsResponse = client.get("v1/settings").await?;
+    let response: SettingsResponse = client.get("settings").await?;
 
     // First check if it matches an ID exactly
     if response.available_presets.iter().any(|p| p.id == name_or_id) {

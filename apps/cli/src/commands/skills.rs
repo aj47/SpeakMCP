@@ -18,7 +18,7 @@ use crate::types::SkillsResponse;
 /// Calls GET /v1/skills and displays the results.
 pub async fn list_skills(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: SkillsResponse = client.get("v1/skills").await?;
+    let response: SkillsResponse = client.get("skills").await?;
 
     if json {
         print_json(&response.skills)?;

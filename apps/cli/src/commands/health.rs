@@ -18,7 +18,7 @@ use crate::types::HealthStatus;
 /// Calls GET /v1/health and displays diagnostic information.
 pub async fn check_health(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: HealthStatus = client.get("v1/health").await?;
+    let response: HealthStatus = client.get("health").await?;
 
     if json {
         print_json(&response)?;
@@ -53,7 +53,7 @@ struct ErrorEntry {
 /// Calls GET /v1/errors and displays the error log.
 pub async fn get_errors(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: ErrorsResponse = client.get("v1/errors").await?;
+    let response: ErrorsResponse = client.get("errors").await?;
 
     if json {
         print_json(&response.errors)?;

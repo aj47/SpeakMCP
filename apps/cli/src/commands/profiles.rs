@@ -18,7 +18,7 @@ use crate::types::{ProfileDetail, ProfilesResponse, SwitchProfileResponse};
 /// Calls GET /v1/profiles and displays the results.
 pub async fn list_profiles(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: ProfilesResponse = client.get("v1/profiles").await?;
+    let response: ProfilesResponse = client.get("profiles").await?;
 
     if json {
         print_json(&response.profiles)?;
@@ -55,7 +55,7 @@ pub async fn list_profiles(config: &Config, json: bool) -> Result<()> {
 /// Calls GET /v1/profiles/current and displays the profile details.
 pub async fn get_current_profile(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let profile: ProfileDetail = client.get("v1/profiles/current").await?;
+    let profile: ProfileDetail = client.get("profiles/current").await?;
 
     if json {
         print_json(&profile)?;
@@ -119,7 +119,7 @@ pub async fn switch_profile(config: &Config, profile_id: &str, json: bool) -> Re
         profile_id: actual_profile_id.clone(),
     };
 
-    let response: SwitchProfileResponse = client.post("v1/profiles/current", &request).await?;
+    let response: SwitchProfileResponse = client.post("profiles/current", &request).await?;
 
     if json {
         print_json(&response)?;
@@ -136,7 +136,7 @@ pub async fn switch_profile(config: &Config, profile_id: &str, json: bool) -> Re
 /// Otherwise, look up the profile by name.
 async fn resolve_profile_id(client: &ApiClient, name_or_id: &str) -> Result<String> {
     // Fetch profiles list
-    let response: ProfilesResponse = client.get("v1/profiles").await?;
+    let response: ProfilesResponse = client.get("profiles").await?;
 
     // First check if it matches an ID exactly
     if response.profiles.iter().any(|p| p.id == name_or_id) {

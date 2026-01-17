@@ -18,7 +18,7 @@ use crate::types::Settings;
 /// Calls GET /v1/settings and displays the results.
 pub async fn show_settings(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let settings: Settings = client.get("v1/settings").await?;
+    let settings: Settings = client.get("settings").await?;
 
     if json {
         print_json(&settings)?;
@@ -79,7 +79,7 @@ pub async fn update_setting(config: &Config, key: &str, value: &str) -> Result<(
     };
 
     // POST to update the setting
-    let _response: serde_json::Value = client.post("v1/settings", &request).await?;
+    let _response: serde_json::Value = client.post("settings", &request).await?;
 
     println!("Setting '{}' updated to '{}'", key, value);
 

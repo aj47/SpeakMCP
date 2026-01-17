@@ -18,7 +18,7 @@ use crate::types::MemoriesResponse;
 /// Calls GET /v1/memories and displays the results.
 pub async fn list_memories(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: MemoriesResponse = client.get("v1/memories").await?;
+    let response: MemoriesResponse = client.get("memories").await?;
 
     if json {
         print_json(&response.memories)?;
@@ -59,7 +59,7 @@ pub async fn list_memories(config: &Config, json: bool) -> Result<()> {
 /// Calls DELETE /v1/memories/:id to remove the memory.
 pub async fn delete_memory(config: &Config, id: &str) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let path = format!("v1/memories/{}", id);
+    let path = format!("memories/{}", id);
     client.delete(&path).await?;
 
     println!("Deleted memory: {}", id);

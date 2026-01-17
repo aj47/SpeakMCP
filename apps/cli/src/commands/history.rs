@@ -18,7 +18,7 @@ use crate::types::{Conversation, ConversationsResponse};
 /// Calls GET /v1/conversations and displays the results.
 pub async fn list_conversations(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: ConversationsResponse = client.get("v1/conversations").await?;
+    let response: ConversationsResponse = client.get("conversations").await?;
 
     if json {
         print_json(&response.conversations)?;
@@ -93,7 +93,7 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 /// Calls GET /v1/conversations/:id and displays the full conversation with all messages.
 pub async fn show_conversation(config: &Config, id: &str, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let path = format!("v1/conversations/{}", id);
+    let path = format!("conversations/{}", id);
     let conversation: Conversation = client.get(&path).await?;
 
     if json {
@@ -172,7 +172,7 @@ pub async fn show_conversation(config: &Config, id: &str, json: bool) -> Result<
 /// Calls DELETE /v1/conversations/:id to remove the conversation from history.
 pub async fn delete_conversation(config: &Config, id: &str) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let path = format!("v1/conversations/{}", id);
+    let path = format!("conversations/{}", id);
     client.delete(&path).await?;
 
     println!("Deleted conversation: {}", id);
@@ -193,7 +193,7 @@ pub async fn export_conversation(
     use std::path::PathBuf;
 
     let client = ApiClient::from_config(config)?;
-    let path = format!("v1/conversations/{}", id);
+    let path = format!("conversations/{}", id);
     let conversation: Conversation = client.get(&path).await?;
 
     // Determine output file path
@@ -236,7 +236,7 @@ pub async fn export_conversation(
 /// for the REPL to use. Prints a summary of the conversation being continued.
 pub async fn continue_conversation(config: &Config, id: &str) -> Result<String> {
     let client = ApiClient::from_config(config)?;
-    let path = format!("v1/conversations/{}", id);
+    let path = format!("conversations/{}", id);
     let conversation: Conversation = client.get(&path).await?;
 
     // Print summary of the conversation being continued

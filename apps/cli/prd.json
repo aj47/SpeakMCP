@@ -1259,7 +1259,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp servers list' and verify it returns a valid response (either a list of servers or an empty list). This tests the GET /v1/mcp/servers endpoint integration.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- servers list 2>&1 | grep -qE 'NAME|STATUS|TOOLS|No servers|error|Unauthorized'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.2"]
     },
     {

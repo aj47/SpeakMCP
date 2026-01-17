@@ -30,7 +30,7 @@ pub async fn emergency_stop(config: &Config) -> Result<()> {
     let client = ApiClient::from_config(config)?;
 
     let request = EmptyRequest {};
-    let response: StopResponse = client.post("v1/emergency-stop", &request).await?;
+    let response: StopResponse = client.post("emergency-stop", &request).await?;
 
     if response.success {
         println!("Emergency stop executed successfully");

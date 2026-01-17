@@ -18,7 +18,7 @@ use crate::types::McpServersResponse;
 /// Calls GET /v1/mcp/servers and displays the results.
 pub async fn list_servers(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let response: McpServersResponse = client.get("v1/mcp/servers").await?;
+    let response: McpServersResponse = client.get("mcp/servers").await?;
 
     if json {
         print_json(&response.servers)?;
@@ -71,7 +71,7 @@ struct ToggleResponse {
 /// Calls POST /v1/mcp/servers/:name/toggle with the desired state.
 pub async fn toggle_server(config: &Config, name: &str, enabled: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
-    let path = format!("v1/mcp/servers/{}/toggle", name);
+    let path = format!("mcp/servers/{}/toggle", name);
     let request = ToggleRequest { enabled };
 
     let response: ToggleResponse = client.post(&path, &request).await?;

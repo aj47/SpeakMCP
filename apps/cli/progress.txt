@@ -813,3 +813,15 @@ Notes: Added Health variant to Commands enum with HealthCommand subcommand enum 
        for each subcommand (to be implemented in tasks 13.1.6, 13.2.2). Verification command
        passes (grep for 'Health' and cargo check both succeed).
 
+=== Task 13.1.2 ===
+Title: Create commands/health.rs module
+Started: 2026-01-17T23:30:00Z
+Completed: 2026-01-17T23:35:00Z
+Status: PASS
+Notes: Created commands/health.rs with module documentation and two async functions: check_health()
+       to call GET /v1/health and display diagnostic info (status, version, uptime), and get_errors()
+       to call GET /v1/errors and display recent error log in table format. Added ErrorsResponse and
+       ErrorEntry structs for API response parsing. Uses HealthStatus type from types.rs (to be added
+       in task 13.1.4). File includes #![allow(dead_code)] since functions will be wired up in later
+       phases. Verification command passes.
+

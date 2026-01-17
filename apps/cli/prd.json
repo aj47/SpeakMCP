@@ -579,7 +579,7 @@
       "type": "RUST",
       "description": "Add Settings variant to Commands enum with show/set subcommands",
       "verificationCommand": "grep -q 'Settings' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.4.1"]
     },
     {

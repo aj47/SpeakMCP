@@ -113,6 +113,12 @@ enum Commands {
         #[command(subcommand)]
         command: HistoryCommand,
     },
+
+    /// Manage application settings
+    Settings {
+        #[command(subcommand)]
+        command: SettingsCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -199,6 +205,22 @@ enum HistoryCommand {
     Continue {
         /// Conversation ID
         id: String,
+    },
+}
+
+/// Subcommands for settings management
+#[derive(Subcommand)]
+enum SettingsCommand {
+    /// Show current settings
+    Show,
+
+    /// Set a setting value
+    Set {
+        /// Setting key (e.g., mcp_tools_provider, agent_mode_enabled)
+        key: String,
+
+        /// Value to set
+        value: String,
     },
 }
 
@@ -315,6 +337,20 @@ async fn main() -> Result<()> {
                 repl_config.default_conversation_id = Some(conversation_id);
                 // Start REPL with the conversation context
                 repl::run(&repl_config).await?;
+            }
+        },
+
+        Some(Commands::Settings { command }) => match command {
+            SettingsCommand::Show => {
+                // TODO: Implement show_settings in a later task
+                println!("Settings show command not yet implemented");
+            }
+            SettingsCommand::Set { key, value } => {
+                // TODO: Implement update_setting in a later task
+                println!(
+                    "Settings set command not yet implemented: {} = {}",
+                    key, value
+                );
             }
         },
 

@@ -394,3 +394,10 @@ Completed: 2026-01-17T14:05:00Z
 Status: PASS
 Notes: Verified Phase 4 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. All history commands (list, show, delete, export, continue) are fully implemented and wired up.
 
+=== Task 5.1.1 ===
+Title: Add Settings subcommand enum variant
+Started: 2026-01-17T15:00:00Z
+Completed: 2026-01-17T15:10:00Z
+Status: PASS
+Notes: Added Settings variant to Commands enum with SettingsCommand subcommand enum containing Show and Set { key, value } variants. Added placeholder match arm in main() with temporary println! messages (to be implemented in later tasks 5.1.6, 5.2.2 after settings module is created). Cargo check passes.
+

@@ -134,3 +134,10 @@ Completed: 2026-01-18T00:32:00Z
 Status: PASS
 Notes: Wired up ServersCommand::Enable in main.rs to call commands::servers::toggle_server(&config, &name, true). Replaced placeholder error message with actual function call. Cargo check passes.
 
+=== Task 1.2.3 ===
+Title: Wire up 'servers disable' command in main.rs
+Started: 2026-01-18T01:00:00Z
+Completed: 2026-01-18T01:02:00Z
+Status: PASS
+Notes: Wired up ServersCommand::Disable in main.rs to call commands::servers::toggle_server(&config, &name, false). Replaced placeholder error message with actual function call. Cargo check passes.
+

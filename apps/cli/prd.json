@@ -209,7 +209,7 @@
       "type": "RUST",
       "description": "Add match arm for Servers::Disable that calls toggle_server(name, false)",
       "verificationCommand": "grep -qE 'Disable.*name|disable.*toggle_server' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["1.1.1", "1.2.1"]
     },
     {

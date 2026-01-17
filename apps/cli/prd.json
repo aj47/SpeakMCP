@@ -419,7 +419,7 @@
       "type": "TEST",
       "description": "Verify all Phase 3 code compiles and passes clippy",
       "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["3.1.6", "3.2.2"]
     },
     {

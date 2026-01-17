@@ -282,3 +282,10 @@ Completed: 2026-01-17T15:05:00Z
 Status: PASS
 Notes: Wired up ToolsCommand::Call in main.rs to call commands::tools::call_tool(). Changed the match arm from placeholder eprintln message to actual function call with config, name, args (converted via .as_deref()), and json flag. Verification command (grep and cargo check) passes.
 
+=== Task 3.3.1 ===
+Title: Test: tools commands build successfully
+Started: 2026-01-17T16:00:00Z
+Completed: 2026-01-17T16:05:00Z
+Status: PASS
+Notes: Verified Phase 3 code compiles and passes clippy. Ran cargo build and cargo clippy -- -D warnings from apps/cli directory. Both succeeded with no errors or warnings. All tools commands (list, call) are fully implemented and wired up.
+

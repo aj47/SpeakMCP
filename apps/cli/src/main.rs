@@ -210,7 +210,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Profiles { command }) => match command {
             ProfilesCommand::List => {
-                todo!("profiles list not yet implemented")
+                commands::profiles::list_profiles(&config, cli.json).await?;
             }
             ProfilesCommand::Current => {
                 todo!("profiles current not yet implemented")

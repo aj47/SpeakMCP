@@ -184,3 +184,10 @@ Completed: 2026-01-17T16:15:00Z
 Status: PASS
 Notes: Implemented list_profiles() function in commands/profiles.rs. Creates ApiClient from config, calls GET v1/profiles, displays results in table format (with NAME, ID, DEFAULT, CURRENT columns) or JSON format when --json flag is set. Uses ProfilesResponse type from types.rs. Added #![allow(dead_code)] to types.rs to suppress warnings for ProfileDetail and SwitchProfileResponse structs that will be used in later tasks. Cargo check and clippy pass.
 
+=== Task 2.1.6 ===
+Title: Wire up 'profiles list' command in main.rs
+Started: 2026-01-17T17:00:00Z
+Completed: 2026-01-17T17:05:00Z
+Status: PASS
+Notes: Wired up ProfilesCommand::List in main.rs to call commands::profiles::list_profiles(). Updated match arm from todo!() placeholder to properly dispatch to list_profiles with config and json flag. Current and Switch subcommands still have placeholder todo!() macros (to be implemented in tasks 2.2.2, 2.3.2). Cargo check passes.
+

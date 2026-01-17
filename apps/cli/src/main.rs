@@ -469,8 +469,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Skills { command }) => match command {
             SkillsCommand::List => {
-                // TODO: Implement list_skills in task 12.1.6
-                println!("Skills list command not yet implemented");
+                commands::skills::list_skills(&config, cli.json).await?;
             }
         },
 

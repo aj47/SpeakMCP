@@ -349,7 +349,7 @@
       "type": "RUST",
       "description": "Create the tools command module file",
       "verificationCommand": "test -f apps/cli/src/commands/tools.rs && grep -q 'pub async fn' apps/cli/src/commands/tools.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

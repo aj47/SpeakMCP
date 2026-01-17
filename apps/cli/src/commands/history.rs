@@ -167,9 +167,16 @@ pub async fn show_conversation(config: &Config, id: &str, json: bool) -> Result<
     Ok(())
 }
 
-/// Placeholder - delete_conversation will be implemented in task 4.3.1
-pub async fn delete_conversation(_config: &Config, _id: &str) -> Result<()> {
-    todo!("delete_conversation not yet implemented")
+/// Delete a conversation by ID
+///
+/// Calls DELETE /v1/conversations/:id to remove the conversation from history.
+pub async fn delete_conversation(config: &Config, id: &str) -> Result<()> {
+    let client = ApiClient::from_config(config)?;
+    let path = format!("v1/conversations/{}", id);
+    client.delete(&path).await?;
+
+    println!("Deleted conversation: {}", id);
+    Ok(())
 }
 
 /// Placeholder - export_conversation will be implemented in task 4.4.1

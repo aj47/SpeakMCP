@@ -345,3 +345,10 @@ Completed: 2026-01-17T22:35:00Z
 Status: PASS
 Notes: Wired up HistoryCommand::Show in main.rs to call commands::history::show_conversation(). Replaced todo!() placeholder with actual function call that passes config, id, and json flag. Delete, Export, and Continue subcommands still have placeholder todo!() macros (to be implemented in tasks 4.3.2, 4.4.2, 4.5.2). Verification command (grep and cargo check) passes.
 
+=== Task 4.3.1 ===
+Title: Implement delete_conversation() function
+Started: 2026-01-17T23:00:00Z
+Completed: 2026-01-17T23:10:00Z
+Status: PASS
+Notes: Implemented delete_conversation() function in commands/history.rs. Creates ApiClient from config, calls DELETE v1/conversations/:id to remove the conversation from history. Added delete() method to ApiClient in api.rs for DELETE HTTP requests. Prints success message with deleted conversation ID. Verification command (grep and cargo check) passes.
+

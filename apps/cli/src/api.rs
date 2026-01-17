@@ -217,6 +217,27 @@ impl ApiClient {
             .context("Failed to parse API response")
     }
 
+    /// Perform a DELETE request (returns no body)
+    pub async fn delete(&self, path: &str) -> Result<()> {
+        let url = self.endpoint(path);
+
+        let response = self
+            .client
+            .delete(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!("API error ({}): {}", status, body));
+        }
+
+        Ok(())
+    }
+
     /// Send a chat message and get a response
     pub async fn chat(&self, message: &str, conversation_id: Option<&str>) -> Result<ChatResponse> {
         let url = self.endpoint("chat/completions");

@@ -1169,7 +1169,7 @@
       "type": "TEST",
       "description": "Verify Phase 13 code compiles and passes clippy",
       "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["13.1.6", "13.2.2"]
     },
     {

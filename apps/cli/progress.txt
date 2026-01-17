@@ -885,3 +885,11 @@ Notes: Wired up HealthCommand::Errors in main.rs to call commands::health::get_e
        json flag. Verification command passes (grep for 'Errors|health.*errors' and cargo check
        both succeed).
 
+
+=== Task 13.3.1 ===
+Title: Test: health commands build successfully
+Started: 2026-01-17T14:00:00Z
+Completed: 2026-01-17T14:02:00Z
+Status: PASS
+Notes: Verified Phase 13 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. Phase 13 (health commands) is now complete.
+

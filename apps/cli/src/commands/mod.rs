@@ -4,7 +4,7 @@
 //! to a group of related commands (e.g., servers, profiles, tools).
 
 // Command modules will be added here as they are implemented:
-// pub mod servers;    // MCP server management (Phase 1)
+pub mod servers; // MCP server management (Phase 1)
 // pub mod profiles;   // Profile management (Phase 2)
 // pub mod tools;      // Tool listing and execution (Phase 3)
 // pub mod history;    // Conversation history (Phase 4)

@@ -148,6 +148,12 @@ enum Commands {
         #[command(subcommand)]
         command: PresetsCommand,
     },
+
+    /// Manage skills (custom automation workflows)
+    Skills {
+        #[command(subcommand)]
+        command: SkillsCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -286,6 +292,13 @@ enum PresetsCommand {
         /// ID of the preset to switch to
         id: String,
     },
+}
+
+/// Subcommands for skills management
+#[derive(Subcommand)]
+enum SkillsCommand {
+    /// List all available skills
+    List,
 }
 
 #[tokio::main]
@@ -451,6 +464,13 @@ async fn main() -> Result<()> {
             }
             PresetsCommand::Switch { id } => {
                 commands::presets::switch_preset(&config, &id, cli.json).await?;
+            }
+        },
+
+        Some(Commands::Skills { command }) => match command {
+            SkillsCommand::List => {
+                // TODO: Implement list_skills in task 12.1.6
+                println!("Skills list command not yet implemented");
             }
         },
 

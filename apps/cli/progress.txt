@@ -730,3 +730,13 @@ Completed: 2026-01-17T21:56:08Z
 Status: PASS
 Notes: Verified Phase 11 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. Phase 11 (presets commands) is now complete.
 
+=== Task 12.1.1 ===
+Title: Add Skills subcommand enum variant
+Started: 2026-01-17T22:00:00Z
+Completed: 2026-01-17T22:10:00Z
+Status: PASS
+Notes: Added Skills variant to Commands enum with SkillsCommand subcommand enum containing List
+       variant. Added placeholder match arm in main() with println! message (to be wired up to
+       list_skills() in task 12.1.6). Verification command passes (grep for 'Skills' and cargo
+       check both succeed).
+

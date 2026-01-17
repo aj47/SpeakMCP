@@ -739,7 +739,7 @@
       "type": "RUST",
       "description": "Create module with SSE event parsing and handling",
       "verificationCommand": "test -f apps/cli/src/sse.rs && grep -q 'pub struct' apps/cli/src/sse.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["7.1.1"]
     },
     {

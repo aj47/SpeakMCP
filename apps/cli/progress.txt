@@ -971,3 +971,10 @@ Completed: 2026-01-17T12:10:00Z
 Status: PASS
 Notes: Fixed Profile struct deserialization. The API only includes `isDefault` field when it's true (omits the field for non-default profiles). Added #[serde(default)] attribute to `is_default` field in both Profile and ProfileDetail structs so it defaults to false when not present in the JSON response. After fix, 'speakmcp profiles list' successfully displays all 9 profiles with correct default status and current profile marker (*). Verification command passes.
 
+=== Task 14.2.5 ===
+Title: E2E Test: Tools list command works
+Started: 2026-01-17T13:00:00Z
+Completed: 2026-01-17T13:30:00Z
+Status: PASS
+Notes: Fixed tools list endpoint path issue. The /mcp/tools/list and /mcp/tools/call endpoints don't have /v1 prefix in the server routes (unlike other endpoints like /v1/profiles, /v1/settings). Added endpoint_base() method to ApiClient that strips /v1 suffix from server_url, and added post_base() method that uses endpoint_base() instead of endpoint(). Updated tools.rs to use post_base() for both list_tools() and call_tool() functions. After fix, 'speakmcp tools list' successfully displays all 37 builtin tools. Verification command passes.
+

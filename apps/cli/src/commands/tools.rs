@@ -22,10 +22,11 @@ struct ListToolsRequest {}
 /// List all available MCP tools
 ///
 /// Calls POST /mcp/tools/list and displays the results.
+/// Note: /mcp/tools/list endpoint doesn't have /v1 prefix, so we use post_base.
 pub async fn list_tools(config: &Config, json: bool) -> Result<()> {
     let client = ApiClient::from_config(config)?;
     let request = ListToolsRequest {};
-    let response: ToolsListResponse = client.post("mcp/tools/list", &request).await?;
+    let response: ToolsListResponse = client.post_base("mcp/tools/list", &request).await?;
 
     if json {
         print_json(&response.tools)?;
@@ -86,7 +87,8 @@ pub async fn call_tool(config: &Config, name: &str, args: Option<&str>, json: bo
         arguments,
     };
 
-    let response: ToolCallResponse = client.post("mcp/tools/call", &request).await?;
+    // Note: /mcp/tools/call endpoint doesn't have /v1 prefix, so we use post_base.
+    let response: ToolCallResponse = client.post_base("mcp/tools/call", &request).await?;
 
     if json {
         print_json(&response)?;

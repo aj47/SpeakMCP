@@ -166,6 +166,16 @@ impl ApiClient {
         format!("{}/{}", base, suffix)
     }
 
+    /// Get endpoint URL relative to base URL (without /v1 prefix)
+    /// Use this for endpoints like /mcp/tools/list that don't have /v1 prefix
+    fn endpoint_base(&self, path: &str) -> String {
+        let base = self.server_url.trim_end_matches('/');
+        // Remove /v1 suffix if present to get the base URL
+        let base = base.trim_end_matches("/v1");
+        let suffix = path.trim_start_matches('/');
+        format!("{}/{}", base, suffix)
+    }
+
     /// Perform a generic GET request and deserialize the response
     pub async fn get<T>(&self, path: &str) -> Result<T>
     where
@@ -200,6 +210,37 @@ impl ApiClient {
         R: serde::de::DeserializeOwned,
     {
         let url = self.endpoint(path);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to connect to {}", url))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!("API error ({}): {}", status, body));
+        }
+
+        response
+            .json::<R>()
+            .await
+            .context("Failed to parse API response")
+    }
+
+    /// Perform a POST request to base URL (without /v1 prefix)
+    /// Use this for endpoints like /mcp/tools/list that don't have /v1 prefix
+    pub async fn post_base<T, R>(&self, path: &str, body: &T) -> Result<R>
+    where
+        T: Serialize,
+        R: serde::de::DeserializeOwned,
+    {
+        let url = self.endpoint_base(path);
 
         let response = self
             .client

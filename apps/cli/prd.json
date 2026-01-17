@@ -1279,7 +1279,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp tools list' and verify it returns tool information or empty list. This tests the POST /mcp/tools/list endpoint integration.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- tools list 2>&1 | grep -qE 'TOOL|NAME|No tools|error|Unauthorized'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.4"]
     },
     {

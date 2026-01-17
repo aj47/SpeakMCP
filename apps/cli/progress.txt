@@ -212,3 +212,10 @@ Completed: 2026-01-17T20:05:00Z
 Status: PASS
 Notes: The switch_profile() function was already implemented in profiles.rs. It calls POST /v1/profiles/current with profileId, includes resolve_profile_id() helper for name-to-ID lookup, and uses SwitchProfileRequest struct with proper camelCase serialization. Verification command passes (grep for 'pub async fn switch_profile' and 'profileId' both succeed, cargo check passes).
 
+=== Task 2.3.2 ===
+Title: Wire up 'profiles switch' command in main.rs
+Started: 2026-01-17T21:00:00Z
+Completed: 2026-01-17T21:05:00Z
+Status: PASS
+Notes: Wired up ProfilesCommand::Switch in main.rs to call commands::profiles::switch_profile(). Replaced todo!() placeholder with actual function call that passes config, name, and json flag. Cargo check passes. All profile commands (list, current, switch) are now fully wired up.
+

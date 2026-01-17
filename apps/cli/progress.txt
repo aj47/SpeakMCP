@@ -219,3 +219,10 @@ Completed: 2026-01-17T21:05:00Z
 Status: PASS
 Notes: Wired up ProfilesCommand::Switch in main.rs to call commands::profiles::switch_profile(). Replaced todo!() placeholder with actual function call that passes config, name, and json flag. Cargo check passes. All profile commands (list, current, switch) are now fully wired up.
 
+=== Task 2.4.1 ===
+Title: Test: profiles commands build successfully
+Started: 2026-01-17T22:00:00Z
+Completed: 2026-01-17T22:05:00Z
+Status: PASS
+Notes: Verified Phase 2 code compiles and passes clippy. Ran cargo build and cargo clippy -- -D warnings from apps/cli directory. Both succeeded with no errors or warnings. All profiles commands (list, current, switch) are fully implemented and wired up.
+

@@ -78,3 +78,10 @@ Completed: 2026-01-17T19:05:00Z
 Status: PASS
 Notes: Added #![allow(dead_code)] and #![allow(unused_imports)] attributes to types.rs, api.rs, output.rs, and commands/placeholder.rs to suppress warnings for infrastructure code that will be used in later phases. Both cargo build and cargo clippy -D warnings now pass with no errors or warnings.
 
+=== Task 1.1.1 ===
+Title: Add Servers subcommand enum variant
+Started: 2026-01-17T20:00:00Z
+Completed: 2026-01-17T20:10:00Z
+Status: PASS
+Notes: Added Servers variant to Commands enum with ServersCommand subcommand enum containing List, Enable { name: String }, and Disable { name: String } variants. Added placeholder match arm in main() that returns error (to be implemented in tasks 1.1.5, 1.1.6, 1.2.2, 1.2.3). Cargo check passes.
+

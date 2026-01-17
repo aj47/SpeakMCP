@@ -89,6 +89,32 @@ enum Commands {
 
     /// Check connection to the server
     Status,
+
+    /// Manage MCP servers
+    Servers {
+        #[command(subcommand)]
+        command: ServersCommand,
+    },
+}
+
+/// Subcommands for MCP server management
+#[derive(Subcommand)]
+#[allow(dead_code)]
+enum ServersCommand {
+    /// List all MCP servers
+    List,
+
+    /// Enable an MCP server
+    Enable {
+        /// Name of the server to enable
+        name: String,
+    },
+
+    /// Disable an MCP server
+    Disable {
+        /// Name of the server to disable
+        name: String,
+    },
 }
 
 #[tokio::main]
@@ -147,6 +173,12 @@ async fn main() -> Result<()> {
 
         Some(Commands::Status) => {
             check_status(&config).await?;
+        }
+
+        Some(Commands::Servers { command: _ }) => {
+            // TODO: Implement in Phase 1 tasks 1.1.5, 1.1.6, 1.2.2, 1.2.3
+            eprintln!("{}: servers command not yet implemented", "error".red());
+            std::process::exit(1);
         }
 
         None => {

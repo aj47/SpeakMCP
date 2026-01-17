@@ -1,3 +1,10 @@
 # SpeakMCP CLI Progress Log
 # Format: Append task completion entries below
 
+=== Task 0.1.2 ===
+Title: Create commands/mod.rs with public exports
+Started: 2026-01-17T12:00:00Z
+Completed: 2026-01-17T12:05:00Z
+Status: PASS
+Notes: Created commands/mod.rs with pub mod placeholder statement. Added placeholder.rs module for initial structure. Code compiles successfully.
+

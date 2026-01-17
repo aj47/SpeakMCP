@@ -1,6 +1,6 @@
 {
   "project": "speakmcp-cli",
-  "description": "Rust CLI for SpeakMCP - feature parity with remote server API",
+  "description": "Rust CLI for SpeakMCP - complete feature parity with Electron desktop app",
   "userStories": [
     {
       "id": "0.1.1",
@@ -9,7 +9,7 @@
       "type": "RUST",
       "description": "Create the commands directory structure for organizing subcommand handlers",
       "verificationCommand": "test -d apps/cli/src/commands",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {
@@ -19,7 +19,7 @@
       "type": "RUST",
       "description": "Create mod.rs that will export all command modules",
       "verificationCommand": "test -f apps/cli/src/commands/mod.rs && grep -q 'pub mod' apps/cli/src/commands/mod.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.1"]
     },
     {
@@ -505,12 +505,72 @@
     {
       "id": "4.3.1",
       "phase": 4,
+      "title": "Implement delete_conversation() function",
+      "type": "RUST",
+      "description": "Implement function to call DELETE /v1/conversations/:id",
+      "verificationCommand": "grep -q 'pub async fn delete_conversation' apps/cli/src/commands/history.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.3", "0.2.1"]
+    },
+    {
+      "id": "4.3.2",
+      "phase": 4,
+      "title": "Wire up 'history delete' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for History::Delete that calls delete_conversation()",
+      "verificationCommand": "grep -qE 'Delete.*id|history.*delete' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.1", "4.3.1"]
+    },
+    {
+      "id": "4.4.1",
+      "phase": 4,
+      "title": "Implement export_conversation() function",
+      "type": "RUST",
+      "description": "Implement function to export conversation to JSON file",
+      "verificationCommand": "grep -q 'pub async fn export_conversation' apps/cli/src/commands/history.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.2.1"]
+    },
+    {
+      "id": "4.4.2",
+      "phase": 4,
+      "title": "Wire up 'history export' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for History::Export that calls export_conversation()",
+      "verificationCommand": "grep -qE 'Export.*id|history.*export' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.1", "4.4.1"]
+    },
+    {
+      "id": "4.5.1",
+      "phase": 4,
+      "title": "Implement continue_conversation() function",
+      "type": "RUST",
+      "description": "Implement function to load and continue a past conversation in REPL",
+      "verificationCommand": "grep -q 'pub async fn continue_conversation' apps/cli/src/commands/history.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.2.1"]
+    },
+    {
+      "id": "4.5.2",
+      "phase": 4,
+      "title": "Wire up 'history continue' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for History::Continue that starts REPL with conversation context",
+      "verificationCommand": "grep -qE 'Continue.*id|history.*continue' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.1", "4.5.1"]
+    },
+    {
+      "id": "4.6.1",
+      "phase": 4,
       "title": "Test: history commands build successfully",
       "type": "TEST",
       "description": "Verify all Phase 4 code compiles and passes clippy",
-      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
       "passes": false,
-      "dependencies": ["4.1.6", "4.2.2"]
+      "dependencies": ["4.1.6", "4.2.2", "4.3.2", "4.4.2", "4.5.2"]
     },
     {
       "id": "5.1.1",
@@ -575,12 +635,32 @@
     {
       "id": "5.2.1",
       "phase": 5,
+      "title": "Implement update_setting() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /v1/settings with key-value update",
+      "verificationCommand": "grep -q 'pub async fn update_setting' apps/cli/src/commands/settings.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["5.1.3", "0.2.2"]
+    },
+    {
+      "id": "5.2.2",
+      "phase": 5,
+      "title": "Wire up 'settings set' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Settings::Set that calls update_setting(key, value)",
+      "verificationCommand": "grep -qE 'Set.*key.*value|settings.*set' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["5.1.1", "5.2.1"]
+    },
+    {
+      "id": "5.3.1",
+      "phase": 5,
       "title": "Test: settings commands build successfully",
       "type": "TEST",
       "description": "Verify all Phase 5 code compiles and passes clippy",
-      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
       "passes": false,
-      "dependencies": ["5.1.6"]
+      "dependencies": ["5.1.6", "5.2.2"]
     },
     {
       "id": "6.1.1",
@@ -748,9 +828,349 @@
       "title": "Test: completions command builds successfully",
       "type": "TEST",
       "description": "Verify Phase 8 code compiles and passes clippy",
-      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
       "passes": false,
       "dependencies": ["8.1.3"]
+    },
+    {
+      "id": "10.1.1",
+      "phase": 10,
+      "title": "Add Memories subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Memories variant to Commands enum with list/show/delete subcommands",
+      "verificationCommand": "grep -q 'Memories' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "10.1.2",
+      "phase": 10,
+      "title": "Create commands/memories.rs module",
+      "type": "RUST",
+      "description": "Create the memories command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/memories.rs && grep -q 'pub async fn' apps/cli/src/commands/memories.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "10.1.3",
+      "phase": 10,
+      "title": "Export memories module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod memories;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod memories' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["10.1.2"]
+    },
+    {
+      "id": "10.1.4",
+      "phase": 10,
+      "title": "Define Memory struct in types.rs",
+      "type": "RUST",
+      "description": "Add Memory struct with id, content, importance, tags, createdAt, profileId",
+      "verificationCommand": "grep -q 'pub struct Memory' apps/cli/src/types.rs && grep -q 'importance' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "10.1.5",
+      "phase": 10,
+      "title": "Implement list_memories() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/memories",
+      "verificationCommand": "grep -q 'pub async fn list_memories' apps/cli/src/commands/memories.rs && grep -q '/memories' apps/cli/src/commands/memories.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["10.1.3", "10.1.4", "0.2.1"]
+    },
+    {
+      "id": "10.1.6",
+      "phase": 10,
+      "title": "Wire up 'memories list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Memories::List that calls list_memories()",
+      "verificationCommand": "grep -qE 'Memories.*List|MemoriesCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["10.1.1", "10.1.5"]
+    },
+    {
+      "id": "10.2.1",
+      "phase": 10,
+      "title": "Implement delete_memory() function",
+      "type": "RUST",
+      "description": "Implement function to call DELETE /v1/memories/:id",
+      "verificationCommand": "grep -q 'pub async fn delete_memory' apps/cli/src/commands/memories.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["10.1.3", "0.2.1"]
+    },
+    {
+      "id": "10.2.2",
+      "phase": 10,
+      "title": "Wire up 'memories delete' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Memories::Delete that calls delete_memory()",
+      "verificationCommand": "grep -qE 'Memories.*Delete|memories.*delete' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["10.1.1", "10.2.1"]
+    },
+    {
+      "id": "10.3.1",
+      "phase": 10,
+      "title": "Test: memories commands build successfully",
+      "type": "TEST",
+      "description": "Verify Phase 10 code compiles and passes clippy",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
+      "passes": false,
+      "dependencies": ["10.1.6", "10.2.2"]
+    },
+    {
+      "id": "11.1.1",
+      "phase": 11,
+      "title": "Add Presets subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Presets variant to Commands enum with list/current/switch subcommands",
+      "verificationCommand": "grep -q 'Presets' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "11.1.2",
+      "phase": 11,
+      "title": "Create commands/presets.rs module",
+      "type": "RUST",
+      "description": "Create the presets command module file for model preset management",
+      "verificationCommand": "test -f apps/cli/src/commands/presets.rs && grep -q 'pub async fn' apps/cli/src/commands/presets.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "11.1.3",
+      "phase": 11,
+      "title": "Export presets module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod presets;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod presets' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["11.1.2"]
+    },
+    {
+      "id": "11.1.4",
+      "phase": 11,
+      "title": "Define ModelPreset struct in types.rs",
+      "type": "RUST",
+      "description": "Add ModelPreset struct with id, name, baseUrl, isBuiltIn fields",
+      "verificationCommand": "grep -q 'pub struct ModelPreset' apps/cli/src/types.rs && grep -q 'isBuiltIn' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "11.1.5",
+      "phase": 11,
+      "title": "Implement list_presets() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/presets",
+      "verificationCommand": "grep -q 'pub async fn list_presets' apps/cli/src/commands/presets.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["11.1.3", "11.1.4", "0.2.1"]
+    },
+    {
+      "id": "11.1.6",
+      "phase": 11,
+      "title": "Wire up 'presets list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Presets::List that calls list_presets()",
+      "verificationCommand": "grep -qE 'Presets.*List|PresetsCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["11.1.1", "11.1.5"]
+    },
+    {
+      "id": "11.2.1",
+      "phase": 11,
+      "title": "Implement switch_preset() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /v1/presets/current",
+      "verificationCommand": "grep -q 'pub async fn switch_preset' apps/cli/src/commands/presets.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["11.1.3", "0.2.2"]
+    },
+    {
+      "id": "11.2.2",
+      "phase": 11,
+      "title": "Wire up 'presets switch' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Presets::Switch that calls switch_preset()",
+      "verificationCommand": "grep -qE 'Presets.*Switch|presets.*switch' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["11.1.1", "11.2.1"]
+    },
+    {
+      "id": "11.3.1",
+      "phase": 11,
+      "title": "Test: presets commands build successfully",
+      "type": "TEST",
+      "description": "Verify Phase 11 code compiles and passes clippy",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
+      "passes": false,
+      "dependencies": ["11.1.6", "11.2.2"]
+    },
+    {
+      "id": "12.1.1",
+      "phase": 12,
+      "title": "Add Skills subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Skills variant to Commands enum with list subcommand",
+      "verificationCommand": "grep -q 'Skills' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "12.1.2",
+      "phase": 12,
+      "title": "Create commands/skills.rs module",
+      "type": "RUST",
+      "description": "Create the skills command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/skills.rs && grep -q 'pub async fn' apps/cli/src/commands/skills.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "12.1.3",
+      "phase": 12,
+      "title": "Export skills module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod skills;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod skills' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["12.1.2"]
+    },
+    {
+      "id": "12.1.4",
+      "phase": 12,
+      "title": "Define Skill struct in types.rs",
+      "type": "RUST",
+      "description": "Add Skill struct with id, name, description, enabled fields",
+      "verificationCommand": "grep -q 'pub struct Skill' apps/cli/src/types.rs && grep -q 'enabled' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "12.1.5",
+      "phase": 12,
+      "title": "Implement list_skills() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/skills",
+      "verificationCommand": "grep -q 'pub async fn list_skills' apps/cli/src/commands/skills.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["12.1.3", "12.1.4", "0.2.1"]
+    },
+    {
+      "id": "12.1.6",
+      "phase": 12,
+      "title": "Wire up 'skills list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Skills::List that calls list_skills()",
+      "verificationCommand": "grep -qE 'Skills.*List|SkillsCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["12.1.1", "12.1.5"]
+    },
+    {
+      "id": "12.2.1",
+      "phase": 12,
+      "title": "Test: skills commands build successfully",
+      "type": "TEST",
+      "description": "Verify Phase 12 code compiles and passes clippy",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
+      "passes": false,
+      "dependencies": ["12.1.6"]
+    },
+    {
+      "id": "13.1.1",
+      "phase": 13,
+      "title": "Add Health subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Health variant to Commands enum for diagnostics",
+      "verificationCommand": "grep -q 'Health' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "13.1.2",
+      "phase": 13,
+      "title": "Create commands/health.rs module",
+      "type": "RUST",
+      "description": "Create the health command module file for diagnostics",
+      "verificationCommand": "test -f apps/cli/src/commands/health.rs && grep -q 'pub async fn' apps/cli/src/commands/health.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "13.1.3",
+      "phase": 13,
+      "title": "Export health module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod health;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod health' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["13.1.2"]
+    },
+    {
+      "id": "13.1.4",
+      "phase": 13,
+      "title": "Define HealthStatus struct in types.rs",
+      "type": "RUST",
+      "description": "Add HealthStatus struct for diagnostic info",
+      "verificationCommand": "grep -q 'pub struct HealthStatus' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "13.1.5",
+      "phase": 13,
+      "title": "Implement check_health() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/health with detailed diagnostics",
+      "verificationCommand": "grep -q 'pub async fn check_health' apps/cli/src/commands/health.rs && grep -q '/health' apps/cli/src/commands/health.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["13.1.3", "13.1.4", "0.2.1"]
+    },
+    {
+      "id": "13.1.6",
+      "phase": 13,
+      "title": "Wire up 'health' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Commands::Health that calls check_health()",
+      "verificationCommand": "grep -qE 'Health.*=>|Commands::Health' apps/cli/src/main.rs && grep -q 'check_health' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["13.1.1", "13.1.5"]
+    },
+    {
+      "id": "13.2.1",
+      "phase": 13,
+      "title": "Implement get_errors() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/errors for recent error log",
+      "verificationCommand": "grep -q 'pub async fn get_errors' apps/cli/src/commands/health.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["13.1.3", "0.2.1"]
+    },
+    {
+      "id": "13.2.2",
+      "phase": 13,
+      "title": "Wire up 'health errors' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Health::Errors that calls get_errors()",
+      "verificationCommand": "grep -qE 'Errors|health.*errors' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["13.1.1", "13.2.1"]
+    },
+    {
+      "id": "13.3.1",
+      "phase": 13,
+      "title": "Test: health commands build successfully",
+      "type": "TEST",
+      "description": "Verify Phase 13 code compiles and passes clippy",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
+      "passes": false,
+      "dependencies": ["13.1.6", "13.2.2"]
     },
     {
       "id": "9.1.1",
@@ -758,9 +1178,9 @@
       "title": "Final integration test: all commands defined",
       "type": "TEST",
       "description": "Verify all subcommands are properly wired up",
-      "verificationCommand": "cargo build -p speakmcp-cli --release && ./apps/cli/target/release/speakmcp --help | grep -q servers && ./apps/cli/target/release/speakmcp --help | grep -q profiles",
+      "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml --release && apps/cli/target/release/speakmcp --help | grep -q servers && apps/cli/target/release/speakmcp --help | grep -q profiles && apps/cli/target/release/speakmcp --help | grep -q memories && apps/cli/target/release/speakmcp --help | grep -q health",
       "passes": false,
-      "dependencies": ["1.3.1", "2.4.1", "3.3.1", "4.3.1", "5.2.1", "6.2.1"]
+      "dependencies": ["1.3.1", "2.4.1", "3.3.1", "4.6.1", "5.3.1", "6.2.1", "7.3.1", "8.2.1", "10.3.1", "11.3.1", "12.2.1", "13.3.1"]
     },
     {
       "id": "9.1.2",
@@ -768,7 +1188,7 @@
       "title": "Final clippy: zero warnings",
       "type": "TEST",
       "description": "Ensure no clippy warnings in the entire crate",
-      "verificationCommand": "cargo clippy -p speakmcp-cli -- -D warnings 2>&1 | grep -v 'Compiling' | grep -v 'Finished' | grep -c warning || true | grep -q '^0$' || cargo clippy -p speakmcp-cli -- -D warnings",
+      "verificationCommand": "cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
       "passes": false,
       "dependencies": ["9.1.1"]
     },

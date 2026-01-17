@@ -101,6 +101,11 @@ cargo test --manifest-path apps/cli/Cargo.toml test_name
 # Exit code 0 = success
 ```
 
+## After each task passes verification:
+1. Set passes=true in prd.json
+2. Append summary to progress.txt
+3. Commit: `git add -A && git commit -m "feat(cli): <task title>"`
+
 ### 5. Update prd.json
 Set `"passes": true` for task `0.1.2`
 
@@ -149,3 +154,4 @@ Before marking a task complete:
 - Check existing code in `src/` for patterns
 - Reference the desktop app in `apps/desktop/src/main/` for API details
 - See `apps/desktop/src/main/remote-server.ts` for endpoint specs
+

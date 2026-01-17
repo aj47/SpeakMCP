@@ -178,10 +178,8 @@ async fn main() -> Result<()> {
             ServersCommand::List => {
                 commands::servers::list_servers(&config, cli.json).await?;
             }
-            ServersCommand::Enable { name: _ } => {
-                // TODO: Implement in task 1.2.2
-                eprintln!("{}: enable command not yet implemented", "error".red());
-                std::process::exit(1);
+            ServersCommand::Enable { name } => {
+                commands::servers::toggle_server(&config, &name, true).await?;
             }
             ServersCommand::Disable { name: _ } => {
                 // TODO: Implement in task 1.2.3

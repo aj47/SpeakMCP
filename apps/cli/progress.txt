@@ -127,3 +127,10 @@ Completed: 2026-01-18T00:10:00Z
 Status: PASS
 Notes: Implemented toggle_server() function in commands/servers.rs. Added ToggleRequest and ToggleResponse structs for the API call. Function creates ApiClient from config, calls POST /v1/mcp/servers/:name/toggle with enabled boolean, and displays success message showing server name and action (enabled/disabled). Cargo check passes.
 
+=== Task 1.2.2 ===
+Title: Wire up 'servers enable' command in main.rs
+Started: 2026-01-18T00:30:00Z
+Completed: 2026-01-18T00:32:00Z
+Status: PASS
+Notes: Wired up ServersCommand::Enable in main.rs to call commands::servers::toggle_server(&config, &name, true). Replaced placeholder error message with actual function call. Cargo check passes.
+

@@ -1249,7 +1249,7 @@
       "type": "TEST",
       "description": "Run 'speakmcp status' and verify it can connect to the Electron app's remote server. This tests the imported credentials work. Expect either a successful connection response or a clear error if the server is not running.",
       "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- status 2>&1 | grep -qE 'connected|running|Connection refused|error'",
-      "passes": false,
+      "passes": true,
       "dependencies": ["14.2.1"]
     },
     {

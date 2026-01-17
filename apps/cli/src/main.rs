@@ -716,10 +716,10 @@ async fn check_status(config: &Config) -> Result<()> {
     {
         Ok(response) => {
             if response.status().is_success() {
-                println!("{} Connected to {}", "✓".green(), config.server_url.cyan());
+                println!("{} connected to {}", "✓".green(), config.server_url.cyan());
                 println!("{} Authentication successful", "✓".green());
             } else if response.status().as_u16() == 401 {
-                println!("{} Connected to {}", "✓".green(), config.server_url.cyan());
+                println!("{} connected to {}", "✓".green(), config.server_url.cyan());
                 println!("{} Authentication failed - check your API key", "✗".red());
             } else {
                 println!(

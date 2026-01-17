@@ -679,7 +679,7 @@
       "type": "RUST",
       "description": "Create the stop command module file",
       "verificationCommand": "test -f apps/cli/src/commands/stop.rs && grep -q 'pub async fn' apps/cli/src/commands/stop.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

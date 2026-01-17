@@ -464,3 +464,10 @@ Completed: 2026-01-17T19:05:00Z
 Status: PASS
 Notes: Added Stop variant to Commands enum for emergency stop functionality. Added placeholder match arm in main() with temporary println! message (to be wired up to emergency_stop() in task 6.1.5). Cargo check passes.
 
+=== Task 6.1.2 ===
+Title: Create commands/stop.rs module
+Started: 2026-01-17T19:30:00Z
+Completed: 2026-01-17T19:35:00Z
+Status: PASS
+Notes: Created commands/stop.rs with module documentation and emergency_stop() async function. Function creates ApiClient from config, calls POST v1/emergency-stop with empty request body, and displays success/message response. Added EmptyRequest and StopResponse structs for API call. Verification command passes (file exists with 'pub async fn').
+

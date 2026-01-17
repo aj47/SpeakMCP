@@ -387,3 +387,10 @@ Completed: 2026-01-17T13:10:00Z
 Status: PASS
 Notes: Wired up HistoryCommand::Continue in main.rs to call commands::history::continue_conversation(). Replaced todo!() placeholder with actual implementation that: (1) calls continue_conversation() to verify the conversation exists and get its ID, (2) clones the config and sets default_conversation_id to the returned ID, (3) starts the REPL with the updated config. This enables users to continue past conversations in interactive mode. Verification command (grep and cargo check) passes.
 
+=== Task 4.6.1 ===
+Title: Test: history commands build successfully
+Started: 2026-01-17T14:00:00Z
+Completed: 2026-01-17T14:05:00Z
+Status: PASS
+Notes: Verified Phase 4 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both commands completed successfully with no errors or warnings. All history commands (list, show, delete, export, continue) are fully implemented and wired up.
+

@@ -569,7 +569,7 @@
       "type": "TEST",
       "description": "Verify all Phase 4 code compiles and passes clippy",
       "verificationCommand": "cargo build --manifest-path apps/cli/Cargo.toml && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["4.1.6", "4.2.2", "4.3.2", "4.4.2", "4.5.2"]
     },
     {

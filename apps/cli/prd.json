@@ -1189,7 +1189,7 @@
       "type": "TEST",
       "description": "Ensure no clippy warnings in the entire crate",
       "verificationCommand": "cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings",
-      "passes": false,
+      "passes": true,
       "dependencies": ["9.1.1"]
     },
     {

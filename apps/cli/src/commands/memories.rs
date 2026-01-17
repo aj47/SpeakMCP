@@ -11,7 +11,7 @@ use anyhow::Result;
 use crate::api::ApiClient;
 use crate::config::Config;
 use crate::output::{print_json, print_table, TableRow};
-use crate::types::{MemoriesResponse, Memory};
+use crate::types::MemoriesResponse;
 
 /// List all memories
 ///

@@ -636,3 +636,10 @@ Completed: 2026-01-17T00:01:00Z
 Status: PASS
 Notes: Replaced TODO placeholder with call to commands::memories::delete_memory(&config, &id).await? in main.rs:417-419
 
+=== Task 10.3.1 ===
+Title: Test: memories commands build successfully
+Started: 2026-01-17T10:00:00Z
+Completed: 2026-01-17T10:05:00Z
+Status: PASS
+Notes: Fixed unused import warning in commands/memories.rs by removing unused 'Memory' import from line 14. The Memory type was imported but only used indirectly via MemoriesResponse iteration, so Rust considered it unused. After fix, both cargo build and cargo clippy -- -D warnings pass successfully with no errors or warnings. Phase 10 (memories commands) is now complete.
+

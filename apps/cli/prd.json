@@ -1,0 +1,786 @@
+{
+  "project": "speakmcp-cli",
+  "description": "Rust CLI for SpeakMCP - feature parity with remote server API",
+  "userStories": [
+    {
+      "id": "0.1.1",
+      "phase": 0,
+      "title": "Create commands/ module directory",
+      "type": "RUST",
+      "description": "Create the commands directory structure for organizing subcommand handlers",
+      "verificationCommand": "test -d apps/cli/src/commands",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.1.2",
+      "phase": 0,
+      "title": "Create commands/mod.rs with public exports",
+      "type": "RUST",
+      "description": "Create mod.rs that will export all command modules",
+      "verificationCommand": "test -f apps/cli/src/commands/mod.rs && grep -q 'pub mod' apps/cli/src/commands/mod.rs",
+      "passes": false,
+      "dependencies": ["0.1.1"]
+    },
+    {
+      "id": "0.1.3",
+      "phase": 0,
+      "title": "Create types.rs for shared API response types",
+      "type": "RUST",
+      "description": "Create a types module for shared structs used across commands",
+      "verificationCommand": "test -f apps/cli/src/types.rs && grep -q 'use serde' apps/cli/src/types.rs",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.1.4",
+      "phase": 0,
+      "title": "Add types module to main.rs",
+      "type": "RUST",
+      "description": "Import the types module in main.rs",
+      "verificationCommand": "grep -q 'mod types' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.3"]
+    },
+    {
+      "id": "0.1.5",
+      "phase": 0,
+      "title": "Add commands module to main.rs",
+      "type": "RUST",
+      "description": "Import the commands module in main.rs",
+      "verificationCommand": "grep -q 'mod commands' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "0.2.1",
+      "phase": 0,
+      "title": "Add generic GET method to ApiClient",
+      "type": "RUST",
+      "description": "Add a generic get<T>() method to ApiClient for typed GET requests",
+      "verificationCommand": "grep -q 'pub async fn get<T>' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.2.2",
+      "phase": 0,
+      "title": "Add generic POST method to ApiClient",
+      "type": "RUST",
+      "description": "Add a generic post<T, R>() method to ApiClient for typed POST requests",
+      "verificationCommand": "grep -q 'pub async fn post<' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.2.3",
+      "phase": 0,
+      "title": "Add ApiError enum for typed errors",
+      "type": "RUST",
+      "description": "Create an ApiError enum with variants for 401, 404, 500, and network errors",
+      "verificationCommand": "grep -q 'pub enum ApiError' apps/cli/src/api.rs && grep -q 'Unauthorized' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.3.1",
+      "phase": 0,
+      "title": "Add --json global flag to CLI",
+      "type": "RUST",
+      "description": "Add a --json flag to the CLI struct for machine-readable output",
+      "verificationCommand": "grep -q 'json.*bool' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.3.2",
+      "phase": 0,
+      "title": "Create output.rs module for formatting",
+      "type": "RUST",
+      "description": "Create output.rs with helper functions for table and JSON output",
+      "verificationCommand": "test -f apps/cli/src/output.rs && grep -q 'pub fn print_' apps/cli/src/output.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "0.3.3",
+      "phase": 0,
+      "title": "Add output module to main.rs",
+      "type": "RUST",
+      "description": "Import the output module in main.rs",
+      "verificationCommand": "grep -q 'mod output' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.3.2"]
+    },
+    {
+      "id": "0.4.1",
+      "phase": 0,
+      "title": "Verify project builds and passes clippy",
+      "type": "TEST",
+      "description": "Ensure all Phase 0 changes compile and pass linting",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["0.1.5", "0.2.3", "0.3.3"]
+    },
+    {
+      "id": "1.1.1",
+      "phase": 1,
+      "title": "Add Servers subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Servers variant to Commands enum with list/enable/disable subcommands",
+      "verificationCommand": "grep -q 'Servers' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "1.1.2",
+      "phase": 1,
+      "title": "Create commands/servers.rs module",
+      "type": "RUST",
+      "description": "Create the servers command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/servers.rs && grep -q 'pub async fn' apps/cli/src/commands/servers.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "1.1.3",
+      "phase": 1,
+      "title": "Export servers module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod servers;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod servers' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["1.1.2"]
+    },
+    {
+      "id": "1.1.4",
+      "phase": 1,
+      "title": "Define McpServer struct in types.rs",
+      "type": "RUST",
+      "description": "Add McpServer struct matching GET /v1/mcp/servers response",
+      "verificationCommand": "grep -q 'pub struct McpServer' apps/cli/src/types.rs && grep -q 'connected' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "1.1.5",
+      "phase": 1,
+      "title": "Implement list_servers() function",
+      "type": "RUST",
+      "description": "Implement the function to call GET /v1/mcp/servers and display results",
+      "verificationCommand": "grep -q 'pub async fn list_servers' apps/cli/src/commands/servers.rs && grep -q 'mcp/servers' apps/cli/src/commands/servers.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["1.1.3", "1.1.4", "0.2.1"]
+    },
+    {
+      "id": "1.1.6",
+      "phase": 1,
+      "title": "Wire up 'servers list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Servers::List that calls list_servers()",
+      "verificationCommand": "grep -qE 'Servers.*List|ServersCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["1.1.1", "1.1.5"]
+    },
+    {
+      "id": "1.2.1",
+      "phase": 1,
+      "title": "Implement toggle_server() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /v1/mcp/servers/:name/toggle",
+      "verificationCommand": "grep -q 'pub async fn toggle_server' apps/cli/src/commands/servers.rs && grep -q '/toggle' apps/cli/src/commands/servers.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["1.1.3", "0.2.2"]
+    },
+    {
+      "id": "1.2.2",
+      "phase": 1,
+      "title": "Wire up 'servers enable' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Servers::Enable that calls toggle_server(name, true)",
+      "verificationCommand": "grep -qE 'Enable.*name|enable.*toggle_server' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["1.1.1", "1.2.1"]
+    },
+    {
+      "id": "1.2.3",
+      "phase": 1,
+      "title": "Wire up 'servers disable' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Servers::Disable that calls toggle_server(name, false)",
+      "verificationCommand": "grep -qE 'Disable.*name|disable.*toggle_server' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["1.1.1", "1.2.1"]
+    },
+    {
+      "id": "1.3.1",
+      "phase": 1,
+      "title": "Test: servers commands build successfully",
+      "type": "TEST",
+      "description": "Verify all Phase 1 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["1.1.6", "1.2.2", "1.2.3"]
+    },
+    {
+      "id": "2.1.1",
+      "phase": 2,
+      "title": "Add Profiles subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Profiles variant to Commands enum with list/current/switch subcommands",
+      "verificationCommand": "grep -q 'Profiles' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "2.1.2",
+      "phase": 2,
+      "title": "Create commands/profiles.rs module",
+      "type": "RUST",
+      "description": "Create the profiles command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/profiles.rs && grep -q 'pub async fn' apps/cli/src/commands/profiles.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "2.1.3",
+      "phase": 2,
+      "title": "Export profiles module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod profiles;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod profiles' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.2"]
+    },
+    {
+      "id": "2.1.4",
+      "phase": 2,
+      "title": "Define Profile struct in types.rs",
+      "type": "RUST",
+      "description": "Add Profile struct matching GET /v1/profiles response",
+      "verificationCommand": "grep -q 'pub struct Profile' apps/cli/src/types.rs && grep -q 'is_default' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "2.1.5",
+      "phase": 2,
+      "title": "Implement list_profiles() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/profiles and display results",
+      "verificationCommand": "grep -q 'pub async fn list_profiles' apps/cli/src/commands/profiles.rs && grep -q '/profiles' apps/cli/src/commands/profiles.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.3", "2.1.4", "0.2.1"]
+    },
+    {
+      "id": "2.1.6",
+      "phase": 2,
+      "title": "Wire up 'profiles list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Profiles::List that calls list_profiles()",
+      "verificationCommand": "grep -qE 'Profiles.*List|ProfilesCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.1", "2.1.5"]
+    },
+    {
+      "id": "2.2.1",
+      "phase": 2,
+      "title": "Implement get_current_profile() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/profiles/current",
+      "verificationCommand": "grep -q 'pub async fn get_current_profile' apps/cli/src/commands/profiles.rs && grep -q 'profiles/current' apps/cli/src/commands/profiles.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.3", "0.2.1"]
+    },
+    {
+      "id": "2.2.2",
+      "phase": 2,
+      "title": "Wire up 'profiles current' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Profiles::Current that calls get_current_profile()",
+      "verificationCommand": "grep -qE 'Current.*get_current|profiles.*current' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.1", "2.2.1"]
+    },
+    {
+      "id": "2.3.1",
+      "phase": 2,
+      "title": "Implement switch_profile() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /v1/profiles/current",
+      "verificationCommand": "grep -q 'pub async fn switch_profile' apps/cli/src/commands/profiles.rs && grep -q 'profileId' apps/cli/src/commands/profiles.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.3", "0.2.2"]
+    },
+    {
+      "id": "2.3.2",
+      "phase": 2,
+      "title": "Wire up 'profiles switch' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Profiles::Switch that calls switch_profile()",
+      "verificationCommand": "grep -qE 'Switch.*name|switch.*profile' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["2.1.1", "2.3.1"]
+    },
+    {
+      "id": "2.4.1",
+      "phase": 2,
+      "title": "Test: profiles commands build successfully",
+      "type": "TEST",
+      "description": "Verify all Phase 2 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["2.1.6", "2.2.2", "2.3.2"]
+    },
+    {
+      "id": "3.1.1",
+      "phase": 3,
+      "title": "Add Tools subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Tools variant to Commands enum with list subcommand",
+      "verificationCommand": "grep -q 'Tools' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "3.1.2",
+      "phase": 3,
+      "title": "Create commands/tools.rs module",
+      "type": "RUST",
+      "description": "Create the tools command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/tools.rs && grep -q 'pub async fn' apps/cli/src/commands/tools.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "3.1.3",
+      "phase": 3,
+      "title": "Export tools module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod tools;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod tools' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["3.1.2"]
+    },
+    {
+      "id": "3.1.4",
+      "phase": 3,
+      "title": "Define Tool struct in types.rs",
+      "type": "RUST",
+      "description": "Add Tool struct for tool listing",
+      "verificationCommand": "grep -q 'pub struct Tool' apps/cli/src/types.rs && grep -q 'description' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "3.1.5",
+      "phase": 3,
+      "title": "Implement list_tools() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /mcp/tools/list",
+      "verificationCommand": "grep -q 'pub async fn list_tools' apps/cli/src/commands/tools.rs && grep -q 'mcp/tools/list' apps/cli/src/commands/tools.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["3.1.3", "3.1.4", "0.2.2"]
+    },
+    {
+      "id": "3.1.6",
+      "phase": 3,
+      "title": "Wire up 'tools list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Tools::List that calls list_tools()",
+      "verificationCommand": "grep -qE 'Tools.*List|ToolsCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["3.1.1", "3.1.5"]
+    },
+    {
+      "id": "3.2.1",
+      "phase": 3,
+      "title": "Implement call_tool() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /mcp/tools/call",
+      "verificationCommand": "grep -q 'pub async fn call_tool' apps/cli/src/commands/tools.rs && grep -q 'mcp/tools/call' apps/cli/src/commands/tools.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["3.1.3", "0.2.2"]
+    },
+    {
+      "id": "3.2.2",
+      "phase": 3,
+      "title": "Wire up 'tools call' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Tools::Call that calls call_tool()",
+      "verificationCommand": "grep -qE 'Call.*name|call.*tool' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["3.1.1", "3.2.1"]
+    },
+    {
+      "id": "3.3.1",
+      "phase": 3,
+      "title": "Test: tools commands build successfully",
+      "type": "TEST",
+      "description": "Verify all Phase 3 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["3.1.6", "3.2.2"]
+    },
+    {
+      "id": "4.1.1",
+      "phase": 4,
+      "title": "Add History subcommand enum variant",
+      "type": "RUST",
+      "description": "Add History variant to Commands enum with list/show subcommands",
+      "verificationCommand": "grep -q 'History' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "4.1.2",
+      "phase": 4,
+      "title": "Create commands/history.rs module",
+      "type": "RUST",
+      "description": "Create the history command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/history.rs && grep -q 'pub async fn' apps/cli/src/commands/history.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "4.1.3",
+      "phase": 4,
+      "title": "Export history module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod history;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod history' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.2"]
+    },
+    {
+      "id": "4.1.4",
+      "phase": 4,
+      "title": "Define Conversation struct in types.rs",
+      "type": "RUST",
+      "description": "Add Conversation and ConversationSummary structs",
+      "verificationCommand": "grep -q 'pub struct Conversation' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "4.1.5",
+      "phase": 4,
+      "title": "Implement list_conversations() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/conversations",
+      "verificationCommand": "grep -q 'pub async fn list_conversations' apps/cli/src/commands/history.rs && grep -q '/conversations' apps/cli/src/commands/history.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.3", "4.1.4", "0.2.1"]
+    },
+    {
+      "id": "4.1.6",
+      "phase": 4,
+      "title": "Wire up 'history list' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for History::List that calls list_conversations()",
+      "verificationCommand": "grep -qE 'History.*List|HistoryCommand.*List' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.1", "4.1.5"]
+    },
+    {
+      "id": "4.2.1",
+      "phase": 4,
+      "title": "Implement show_conversation() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/conversations/:id",
+      "verificationCommand": "grep -q 'pub async fn show_conversation' apps/cli/src/commands/history.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.3", "4.1.4", "0.2.1"]
+    },
+    {
+      "id": "4.2.2",
+      "phase": 4,
+      "title": "Wire up 'history show' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for History::Show that calls show_conversation()",
+      "verificationCommand": "grep -qE 'Show.*id|history.*show' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["4.1.1", "4.2.1"]
+    },
+    {
+      "id": "4.3.1",
+      "phase": 4,
+      "title": "Test: history commands build successfully",
+      "type": "TEST",
+      "description": "Verify all Phase 4 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["4.1.6", "4.2.2"]
+    },
+    {
+      "id": "5.1.1",
+      "phase": 5,
+      "title": "Add Settings subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Settings variant to Commands enum with show/set subcommands",
+      "verificationCommand": "grep -q 'Settings' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "5.1.2",
+      "phase": 5,
+      "title": "Create commands/settings.rs module",
+      "type": "RUST",
+      "description": "Create the settings command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/settings.rs && grep -q 'pub async fn' apps/cli/src/commands/settings.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "5.1.3",
+      "phase": 5,
+      "title": "Export settings module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod settings;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod settings' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["5.1.2"]
+    },
+    {
+      "id": "5.1.4",
+      "phase": 5,
+      "title": "Define Settings struct in types.rs",
+      "type": "RUST",
+      "description": "Add Settings struct matching GET /v1/settings response",
+      "verificationCommand": "grep -q 'pub struct Settings' apps/cli/src/types.rs && grep -q 'mcp_tools_provider' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.1.4"]
+    },
+    {
+      "id": "5.1.5",
+      "phase": 5,
+      "title": "Implement show_settings() function",
+      "type": "RUST",
+      "description": "Implement function to call GET /v1/settings",
+      "verificationCommand": "grep -q 'pub async fn show_settings' apps/cli/src/commands/settings.rs && grep -q '/settings' apps/cli/src/commands/settings.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["5.1.3", "5.1.4", "0.2.1"]
+    },
+    {
+      "id": "5.1.6",
+      "phase": 5,
+      "title": "Wire up 'settings show' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Settings::Show that calls show_settings()",
+      "verificationCommand": "grep -qE 'Settings.*Show|SettingsCommand.*Show' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["5.1.1", "5.1.5"]
+    },
+    {
+      "id": "5.2.1",
+      "phase": 5,
+      "title": "Test: settings commands build successfully",
+      "type": "TEST",
+      "description": "Verify all Phase 5 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["5.1.6"]
+    },
+    {
+      "id": "6.1.1",
+      "phase": 6,
+      "title": "Add Stop subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Stop variant to Commands enum for emergency stop",
+      "verificationCommand": "grep -q 'Stop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "6.1.2",
+      "phase": 6,
+      "title": "Create commands/stop.rs module",
+      "type": "RUST",
+      "description": "Create the stop command module file",
+      "verificationCommand": "test -f apps/cli/src/commands/stop.rs && grep -q 'pub async fn' apps/cli/src/commands/stop.rs",
+      "passes": false,
+      "dependencies": ["0.1.2"]
+    },
+    {
+      "id": "6.1.3",
+      "phase": 6,
+      "title": "Export stop module from commands/mod.rs",
+      "type": "RUST",
+      "description": "Add 'pub mod stop;' to commands/mod.rs",
+      "verificationCommand": "grep -q 'pub mod stop' apps/cli/src/commands/mod.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["6.1.2"]
+    },
+    {
+      "id": "6.1.4",
+      "phase": 6,
+      "title": "Implement emergency_stop() function",
+      "type": "RUST",
+      "description": "Implement function to call POST /v1/emergency-stop",
+      "verificationCommand": "grep -q 'pub async fn emergency_stop' apps/cli/src/commands/stop.rs && grep -q 'emergency-stop' apps/cli/src/commands/stop.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["6.1.3", "0.2.2"]
+    },
+    {
+      "id": "6.1.5",
+      "phase": 6,
+      "title": "Wire up 'stop' command in main.rs",
+      "type": "RUST",
+      "description": "Add match arm for Commands::Stop that calls emergency_stop()",
+      "verificationCommand": "grep -qE 'Stop.*=>|Commands::Stop' apps/cli/src/main.rs && grep -q 'emergency_stop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["6.1.1", "6.1.4"]
+    },
+    {
+      "id": "6.2.1",
+      "phase": 6,
+      "title": "Test: stop command builds successfully",
+      "type": "TEST",
+      "description": "Verify Phase 6 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["6.1.5"]
+    },
+    {
+      "id": "7.1.1",
+      "phase": 7,
+      "title": "Add reqwest-eventsource crate to Cargo.toml",
+      "type": "RUST",
+      "description": "Add SSE client crate for streaming responses",
+      "verificationCommand": "grep -q 'eventsource' apps/cli/Cargo.toml && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "7.1.2",
+      "phase": 7,
+      "title": "Create sse.rs module for SSE handling",
+      "type": "RUST",
+      "description": "Create module with SSE event parsing and handling",
+      "verificationCommand": "test -f apps/cli/src/sse.rs && grep -q 'pub struct' apps/cli/src/sse.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["7.1.1"]
+    },
+    {
+      "id": "7.1.3",
+      "phase": 7,
+      "title": "Add sse module to main.rs",
+      "type": "RUST",
+      "description": "Import the sse module in main.rs",
+      "verificationCommand": "grep -q 'mod sse' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["7.1.2"]
+    },
+    {
+      "id": "7.2.1",
+      "phase": 7,
+      "title": "Add --stream flag to send command",
+      "type": "RUST",
+      "description": "Add --stream flag to Commands::Send for streaming responses",
+      "verificationCommand": "grep -qE 'stream.*bool|--stream' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["7.1.3"]
+    },
+    {
+      "id": "7.2.2",
+      "phase": 7,
+      "title": "Implement streaming chat in api.rs",
+      "type": "RUST",
+      "description": "Add chat_streaming() method to ApiClient that handles SSE",
+      "verificationCommand": "grep -q 'pub async fn chat_streaming' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["7.1.3"]
+    },
+    {
+      "id": "7.2.3",
+      "phase": 7,
+      "title": "Wire up streaming in send_message()",
+      "type": "RUST",
+      "description": "Update send_message to use streaming when --stream flag is set",
+      "verificationCommand": "grep -qE 'stream.*chat_streaming|if.*stream' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["7.2.1", "7.2.2"]
+    },
+    {
+      "id": "7.3.1",
+      "phase": 7,
+      "title": "Test: streaming commands build successfully",
+      "type": "TEST",
+      "description": "Verify Phase 7 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["7.2.3"]
+    },
+    {
+      "id": "8.1.1",
+      "phase": 8,
+      "title": "Add Completions subcommand enum variant",
+      "type": "RUST",
+      "description": "Add Completions variant to Commands enum for shell completions",
+      "verificationCommand": "grep -q 'Completions' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["0.4.1"]
+    },
+    {
+      "id": "8.1.2",
+      "phase": 8,
+      "title": "Add clap_complete crate to Cargo.toml",
+      "type": "RUST",
+      "description": "Add clap_complete for shell completion generation",
+      "verificationCommand": "grep -q 'clap_complete' apps/cli/Cargo.toml && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": []
+    },
+    {
+      "id": "8.1.3",
+      "phase": 8,
+      "title": "Implement generate_completions() function",
+      "type": "RUST",
+      "description": "Implement function to generate shell completions for bash/zsh/fish",
+      "verificationCommand": "grep -q 'clap_complete' apps/cli/src/main.rs && grep -qE 'bash|zsh|fish' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["8.1.1", "8.1.2"]
+    },
+    {
+      "id": "8.2.1",
+      "phase": 8,
+      "title": "Test: completions command builds successfully",
+      "type": "TEST",
+      "description": "Verify Phase 8 code compiles and passes clippy",
+      "verificationCommand": "cargo build -p speakmcp-cli && cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["8.1.3"]
+    },
+    {
+      "id": "9.1.1",
+      "phase": 9,
+      "title": "Final integration test: all commands defined",
+      "type": "TEST",
+      "description": "Verify all subcommands are properly wired up",
+      "verificationCommand": "cargo build -p speakmcp-cli --release && ./apps/cli/target/release/speakmcp --help | grep -q servers && ./apps/cli/target/release/speakmcp --help | grep -q profiles",
+      "passes": false,
+      "dependencies": ["1.3.1", "2.4.1", "3.3.1", "4.3.1", "5.2.1", "6.2.1"]
+    },
+    {
+      "id": "9.1.2",
+      "phase": 9,
+      "title": "Final clippy: zero warnings",
+      "type": "TEST",
+      "description": "Ensure no clippy warnings in the entire crate",
+      "verificationCommand": "cargo clippy -p speakmcp-cli -- -D warnings 2>&1 | grep -v 'Compiling' | grep -v 'Finished' | grep -c warning || true | grep -q '^0$' || cargo clippy -p speakmcp-cli -- -D warnings",
+      "passes": false,
+      "dependencies": ["9.1.1"]
+    },
+    {
+      "id": "9.1.3",
+      "phase": 9,
+      "title": "Final test: cargo test passes",
+      "type": "TEST",
+      "description": "Ensure all tests pass",
+      "verificationCommand": "cargo test --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["9.1.2"]
+    }
+  ]
+}

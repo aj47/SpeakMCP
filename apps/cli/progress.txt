@@ -1,0 +1,3 @@
+# SpeakMCP CLI Progress Log
+# Format: Append task completion entries below
+

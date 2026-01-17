@@ -136,6 +136,31 @@ Wait for next iteration
 | 7 | Enhanced REPL - Advanced interactive features |
 | 8 | Streaming & Output - SSE, progress, formatting |
 | 9 | Final Testing - Integration tests, polish |
+| 10-13 | Additional Commands - Memories, Presets, Skills, Health |
+| 14 | End-to-End Testing - Integration with Electron desktop app |
+
+## Phase 14: End-to-End Testing
+
+Phase 14 tests the CLI against the running Electron desktop app by:
+
+1. **Importing credentials from desktop app**: The `config import-from-desktop` command reads the Electron app's `config.json` to get `remoteServerApiKey` and `remoteServerPort`, then updates the CLI's `cli.toml`.
+
+2. **Desktop config locations**:
+   - macOS: `~/Library/Application Support/app.speakmcp/config.json`
+   - Windows: `%APPDATA%/app.speakmcp/config.json`
+   - Linux: `~/.config/app.speakmcp/config.json`
+
+3. **E2E tests verify**:
+   - Config import works
+   - Status command connects to desktop app
+   - servers/profiles/tools list commands work
+   - send command communicates with LLM
+   - JSON output mode works
+   - Help commands work
+
+**Prerequisites for Phase 14**:
+- The Electron desktop app must have been run at least once (to create config.json)
+- For full E2E testing, the desktop app should be running with remote server enabled
 
 ## Code Quality Checklist
 

@@ -5,6 +5,8 @@
 
 // Allow unused imports - these will be used when types are added in later phases
 #![allow(unused_imports)]
+// Allow dead code - types are added incrementally as commands are implemented
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 

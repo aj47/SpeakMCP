@@ -177,3 +177,10 @@ Completed: 2026-01-17T15:10:00Z
 Status: PASS
 Notes: Added Profile, ProfilesResponse, ProfileDetail, and SwitchProfileResponse structs to types.rs matching the GET /v1/profiles API response. Structs include proper serde(rename_all = "camelCase") annotations. Profile has fields: id, name, is_default, created_at (optional), updated_at (optional). ProfileDetail extends this with guidelines and system_prompt fields. Cargo check passes.
 
+=== Task 2.1.5 ===
+Title: Implement list_profiles() function
+Started: 2026-01-17T16:00:00Z
+Completed: 2026-01-17T16:15:00Z
+Status: PASS
+Notes: Implemented list_profiles() function in commands/profiles.rs. Creates ApiClient from config, calls GET v1/profiles, displays results in table format (with NAME, ID, DEFAULT, CURRENT columns) or JSON format when --json flag is set. Uses ProfilesResponse type from types.rs. Added #![allow(dead_code)] to types.rs to suppress warnings for ProfileDetail and SwitchProfileResponse structs that will be used in later tasks. Cargo check and clippy pass.
+

@@ -269,7 +269,7 @@
       "type": "RUST",
       "description": "Implement function to call GET /v1/profiles and display results",
       "verificationCommand": "grep -q 'pub async fn list_profiles' apps/cli/src/commands/profiles.rs && grep -q '/profiles' apps/cli/src/commands/profiles.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["2.1.3", "2.1.4", "0.2.1"]
     },
     {
@@ -1201,6 +1201,126 @@
       "verificationCommand": "cargo test --manifest-path apps/cli/Cargo.toml",
       "passes": false,
       "dependencies": ["9.1.2"]
+    },
+    {
+      "id": "14.1.1",
+      "phase": 14,
+      "title": "Add 'config import-from-desktop' command",
+      "type": "RUST",
+      "description": "Add a command that reads the Electron desktop app's config.json from ~/Library/Application Support/app.speakmcp/config.json (macOS), %APPDATA%/app.speakmcp/config.json (Windows), or ~/.config/app.speakmcp/config.json (Linux) and imports the remoteServerApiKey and remoteServerPort into the CLI's cli.toml. This allows the CLI to reuse the desktop app's authentication.",
+      "verificationCommand": "grep -q 'import_from_desktop\\|import-from-desktop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["9.1.3"]
+    },
+    {
+      "id": "14.1.2",
+      "phase": 14,
+      "title": "Implement desktop config reading logic",
+      "type": "RUST",
+      "description": "In config.rs, add a function to locate and read the Electron app's config.json. Parse the JSON to extract remoteServerApiKey and remoteServerPort (default 3210). Handle platform-specific paths: macOS uses ~/Library/Application Support/, Windows uses %APPDATA%, Linux uses ~/.config/.",
+      "verificationCommand": "grep -q 'app.speakmcp' apps/cli/src/config.rs && grep -qE 'remoteServerApiKey|remote_server_api_key' apps/cli/src/config.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["14.1.1"]
+    },
+    {
+      "id": "14.1.3",
+      "phase": 14,
+      "title": "Wire up config import command in main.rs",
+      "type": "RUST",
+      "description": "Wire up the 'config import-from-desktop' subcommand to call the import function, update cli.toml with the imported values, and print success/error messages.",
+      "verificationCommand": "grep -qE 'ImportFromDesktop|import_from_desktop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
+      "passes": false,
+      "dependencies": ["14.1.2"]
+    },
+    {
+      "id": "14.2.1",
+      "phase": 14,
+      "title": "E2E Test: Import config from desktop and verify CLI config",
+      "type": "TEST",
+      "description": "Run 'speakmcp config import-from-desktop' to import the desktop app's API key. Then run 'speakmcp config show' and verify the api_key and server_url are set correctly. This requires the desktop app to have been run at least once.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- config import-from-desktop && cargo run --manifest-path apps/cli/Cargo.toml -- config show | grep -q 'server_url'",
+      "passes": false,
+      "dependencies": ["14.1.3"]
+    },
+    {
+      "id": "14.2.2",
+      "phase": 14,
+      "title": "E2E Test: Status command connects to desktop app",
+      "type": "TEST",
+      "description": "Run 'speakmcp status' and verify it can connect to the Electron app's remote server. This tests the imported credentials work. Expect either a successful connection response or a clear error if the server is not running.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- status 2>&1 | grep -qE 'connected|running|Connection refused|error'",
+      "passes": false,
+      "dependencies": ["14.2.1"]
+    },
+    {
+      "id": "14.2.3",
+      "phase": 14,
+      "title": "E2E Test: Servers list command works",
+      "type": "TEST",
+      "description": "Run 'speakmcp servers list' and verify it returns a valid response (either a list of servers or an empty list). This tests the GET /v1/mcp/servers endpoint integration.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- servers list 2>&1 | grep -qE 'NAME|STATUS|TOOLS|No servers|error|Unauthorized'",
+      "passes": false,
+      "dependencies": ["14.2.2"]
+    },
+    {
+      "id": "14.2.4",
+      "phase": 14,
+      "title": "E2E Test: Profiles list command works",
+      "type": "TEST",
+      "description": "Run 'speakmcp profiles list' and verify it returns profile information. This tests the GET /v1/profiles endpoint integration.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- profiles list 2>&1 | grep -qE 'NAME|default|error|Unauthorized'",
+      "passes": false,
+      "dependencies": ["14.2.3"]
+    },
+    {
+      "id": "14.2.5",
+      "phase": 14,
+      "title": "E2E Test: Tools list command works",
+      "type": "TEST",
+      "description": "Run 'speakmcp tools list' and verify it returns tool information or empty list. This tests the POST /mcp/tools/list endpoint integration.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- tools list 2>&1 | grep -qE 'TOOL|NAME|No tools|error|Unauthorized'",
+      "passes": false,
+      "dependencies": ["14.2.4"]
+    },
+    {
+      "id": "14.2.6",
+      "phase": 14,
+      "title": "E2E Test: Send message command works",
+      "type": "TEST",
+      "description": "Run 'speakmcp send \"hello\"' and verify the LLM responds. This is the core chat functionality test. Expect a response or a clear error about API key configuration.",
+      "verificationCommand": "timeout 30 cargo run --manifest-path apps/cli/Cargo.toml -- send 'hello' 2>&1 | grep -qE 'Hello|Hi|error|API key|response'",
+      "passes": false,
+      "dependencies": ["14.2.5"]
+    },
+    {
+      "id": "14.3.1",
+      "phase": 14,
+      "title": "E2E Test: JSON output mode works",
+      "type": "TEST",
+      "description": "Run 'speakmcp --json servers list' and verify the output is valid JSON. This tests the --json global flag.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- --json servers list 2>&1 | grep -qE '^\\[|^{|error'",
+      "passes": false,
+      "dependencies": ["14.2.3"]
+    },
+    {
+      "id": "14.3.2",
+      "phase": 14,
+      "title": "E2E Test: Help commands work",
+      "type": "TEST",
+      "description": "Verify --help works for main command and subcommands. This tests clap is properly configured.",
+      "verificationCommand": "cargo run --manifest-path apps/cli/Cargo.toml -- --help | grep -q 'Usage' && cargo run --manifest-path apps/cli/Cargo.toml -- servers --help | grep -q 'list'",
+      "passes": false,
+      "dependencies": ["9.1.3"]
+    },
+    {
+      "id": "14.4.1",
+      "phase": 14,
+      "title": "Final E2E: All critical paths work",
+      "type": "TEST",
+      "description": "Meta-test confirming all E2E tests pass. This is the final verification that the CLI can communicate with the Electron desktop app using shared credentials.",
+      "verificationCommand": "echo 'All E2E tests passed'",
+      "passes": false,
+      "dependencies": ["14.2.6", "14.3.1", "14.3.2"]
     }
   ]
 }

@@ -10,12 +10,43 @@ use anyhow::Result;
 
 use crate::api::ApiClient;
 use crate::config::Config;
+use crate::output::{print_json, print_table, TableRow};
+use crate::types::ProfilesResponse;
 
-/// Placeholder for profile listing
+/// List all profiles and their status
 ///
-/// This function will be implemented to call GET /v1/profiles
-pub async fn list_profiles(_config: &Config, _json: bool) -> Result<()> {
-    // TODO: Implement in task 2.1.5
+/// Calls GET /v1/profiles and displays the results.
+pub async fn list_profiles(config: &Config, json: bool) -> Result<()> {
+    let client = ApiClient::from_config(config)?;
+    let response: ProfilesResponse = client.get("v1/profiles").await?;
+
+    if json {
+        print_json(&response.profiles)?;
+    } else {
+        let headers = &["NAME", "ID", "DEFAULT", "CURRENT"];
+        let rows: Vec<TableRow> = response
+            .profiles
+            .iter()
+            .map(|profile| {
+                let is_default = if profile.is_default { "yes" } else { "no" };
+                let is_current = response
+                    .current_profile_id
+                    .as_ref()
+                    .is_some_and(|id| id == &profile.id);
+                let current_marker = if is_current { "*" } else { "" };
+
+                TableRow::new(vec![
+                    profile.name.clone(),
+                    profile.id.clone(),
+                    is_default.to_string(),
+                    current_marker.to_string(),
+                ])
+            })
+            .collect();
+
+        print_table(headers, &rows);
+    }
+
     Ok(())
 }
 

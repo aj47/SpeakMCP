@@ -369,7 +369,7 @@
       "type": "RUST",
       "description": "Add Tool struct for tool listing",
       "verificationCommand": "grep -q 'pub struct Tool' apps/cli/src/types.rs && grep -q 'description' apps/cli/src/types.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.4"]
     },
     {

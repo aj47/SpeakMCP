@@ -93,6 +93,51 @@ pub struct SwitchProfileResponse {
     pub profile: Profile,
 }
 
+/// Response wrapper for POST /mcp/tools/list
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolsListResponse {
+    pub tools: Vec<Tool>,
+}
+
+/// MCP Tool from POST /mcp/tools/list
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tool {
+    /// Tool name (unique identifier)
+    pub name: String,
+
+    /// Tool description
+    pub description: String,
+
+    /// JSON Schema for tool input parameters
+    #[serde(default)]
+    pub input_schema: Option<serde_json::Value>,
+}
+
+/// Response wrapper for POST /mcp/tools/call
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolCallResponse {
+    /// Content returned by the tool
+    pub content: Vec<ToolContent>,
+
+    /// Whether the tool execution resulted in an error
+    #[serde(default)]
+    pub is_error: bool,
+}
+
+/// Content item from a tool call response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolContent {
+    /// Content type (usually "text")
+    #[serde(rename = "type")]
+    pub content_type: String,
+
+    /// The actual content text
+    #[serde(default)]
+    pub text: Option<String>,
+}
+
 /// MCP server status from GET /v1/mcp/servers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

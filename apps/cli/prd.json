@@ -109,7 +109,7 @@
       "type": "RUST",
       "description": "Import the output module in main.rs",
       "verificationCommand": "grep -q 'mod output' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.3.2"]
     },
     {

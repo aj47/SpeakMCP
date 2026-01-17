@@ -10,6 +10,7 @@
 mod api;
 mod commands;
 mod config;
+mod output;
 mod repl;
 mod types;
 

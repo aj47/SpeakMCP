@@ -148,3 +148,10 @@ Completed: 2026-01-17T12:14:00Z
 Status: PASS
 Notes: Verified Phase 1 code compiles and passes clippy. Ran cargo build --manifest-path apps/cli/Cargo.toml and cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings. Both succeeded with no errors or warnings. The verification command in prd.json uses -p flag which requires workspace Cargo.toml, but the equivalent --manifest-path commands pass.
 
+=== Task 2.1.1 ===
+Title: Add Profiles subcommand enum variant
+Started: 2026-01-17T13:00:00Z
+Completed: 2026-01-17T13:05:00Z
+Status: PASS
+Notes: Added Profiles variant to Commands enum with ProfilesCommand subcommand enum containing List, Current, and Switch { name: String } variants. Added placeholder match arm in main() using todo!() macros for each subcommand (to be implemented in later tasks). Cargo check passes.
+

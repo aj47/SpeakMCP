@@ -95,6 +95,12 @@ enum Commands {
         #[command(subcommand)]
         command: ServersCommand,
     },
+
+    /// Manage profiles
+    Profiles {
+        #[command(subcommand)]
+        command: ProfilesCommand,
+    },
 }
 
 /// Subcommands for MCP server management
@@ -112,6 +118,22 @@ enum ServersCommand {
     /// Disable an MCP server
     Disable {
         /// Name of the server to disable
+        name: String,
+    },
+}
+
+/// Subcommands for profile management
+#[derive(Subcommand)]
+enum ProfilesCommand {
+    /// List all profiles
+    List,
+
+    /// Show current profile
+    Current,
+
+    /// Switch to a different profile
+    Switch {
+        /// Name of the profile to switch to
         name: String,
     },
 }
@@ -183,6 +205,18 @@ async fn main() -> Result<()> {
             }
             ServersCommand::Disable { name } => {
                 commands::servers::toggle_server(&config, &name, false).await?;
+            }
+        },
+
+        Some(Commands::Profiles { command }) => match command {
+            ProfilesCommand::List => {
+                todo!("profiles list not yet implemented")
+            }
+            ProfilesCommand::Current => {
+                todo!("profiles current not yet implemented")
+            }
+            ProfilesCommand::Switch { name: _ } => {
+                todo!("profiles switch not yet implemented")
             }
         },
 

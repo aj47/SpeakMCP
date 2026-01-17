@@ -79,7 +79,7 @@
       "type": "RUST",
       "description": "Create an ApiError enum with variants for 401, 404, 500, and network errors",
       "verificationCommand": "grep -q 'pub enum ApiError' apps/cli/src/api.rs && grep -q 'Unauthorized' apps/cli/src/api.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": []
     },
     {

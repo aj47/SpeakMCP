@@ -43,3 +43,10 @@ Completed: 2026-01-17T15:05:00Z
 Status: PASS
 Notes: Added generic post<T, R>() method to ApiClient in api.rs. Method takes a path string and a reference to a body of type T (where T: Serialize) and returns Result<R> where R: DeserializeOwned. Follows same error handling pattern as get() and chat() methods. Cargo check passes.
 
+=== Task 0.2.3 ===
+Title: Add ApiError enum for typed errors
+Started: 2026-01-17T16:00:00Z
+Completed: 2026-01-17T16:10:00Z
+Status: PASS
+Notes: Added ApiError enum to api.rs with variants: Unauthorized (401), NotFound (404), InternalServerError (500), NetworkError, HttpError (generic with status code), and ParseError. Implemented Display and std::error::Error traits. Cargo check passes with expected warnings for unused code (normal at this infrastructure phase).
+

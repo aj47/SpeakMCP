@@ -5,6 +5,39 @@
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// Typed API errors for better error handling
+#[derive(Debug)]
+pub enum ApiError {
+    /// 401 Unauthorized - invalid or missing API key
+    Unauthorized(String),
+    /// 404 Not Found - resource does not exist
+    NotFound(String),
+    /// 500 Internal Server Error
+    InternalServerError(String),
+    /// Network error - connection failed, timeout, etc.
+    NetworkError(String),
+    /// Other HTTP errors (with status code and message)
+    HttpError { status: u16, message: String },
+    /// Failed to parse response
+    ParseError(String),
+}
+
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ApiError::Unauthorized(msg) => write!(f, "Unauthorized (401): {}", msg),
+            ApiError::NotFound(msg) => write!(f, "Not Found (404): {}", msg),
+            ApiError::InternalServerError(msg) => write!(f, "Internal Server Error (500): {}", msg),
+            ApiError::NetworkError(msg) => write!(f, "Network Error: {}", msg),
+            ApiError::HttpError { status, message } => write!(f, "HTTP Error ({}): {}", status, message),
+            ApiError::ParseError(msg) => write!(f, "Parse Error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ApiError {}
 
 use crate::config::Config;
 

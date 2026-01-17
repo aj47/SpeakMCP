@@ -709,7 +709,7 @@
       "type": "RUST",
       "description": "Add match arm for Commands::Stop that calls emergency_stop()",
       "verificationCommand": "grep -qE 'Stop.*=>|Commands::Stop' apps/cli/src/main.rs && grep -q 'emergency_stop' apps/cli/src/main.rs && cargo check --manifest-path apps/cli/Cargo.toml",
-      "passes": false,
+      "passes": true,
       "dependencies": ["6.1.1", "6.1.4"]
     },
     {

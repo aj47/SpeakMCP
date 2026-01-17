@@ -358,8 +358,7 @@ async fn main() -> Result<()> {
         },
 
         Some(Commands::Stop) => {
-            // TODO: Implement emergency_stop in a later task
-            println!("Stop command not yet implemented");
+            commands::stop::emergency_stop(&config).await?;
         }
 
         None => {

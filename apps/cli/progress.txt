@@ -485,3 +485,10 @@ Completed: 2026-01-17T20:35:00Z
 Status: PASS
 Notes: Function was already implemented in commands/stop.rs. Creates ApiClient from config, calls POST v1/emergency-stop with empty request body via EmptyRequest struct, parses StopResponse with success and message fields, and displays appropriate success/status message. Verification command passes (grep for 'pub async fn emergency_stop' and 'emergency-stop' both succeed, cargo check passes with warnings for unused code - expected until task 6.1.5 wires up the command).
 
+=== Task 6.1.5 ===
+Title: Wire up 'stop' command in main.rs
+Started: 2026-01-17T21:00:00Z
+Completed: 2026-01-17T21:05:00Z
+Status: PASS
+Notes: Wired up Commands::Stop in main.rs to call commands::stop::emergency_stop(). Replaced TODO placeholder comment and println! with actual function call that passes config and awaits the result. Verification command passes (grep for both 'Commands::Stop' and 'emergency_stop' succeed, cargo check passes).
+

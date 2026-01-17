@@ -443,8 +443,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Presets { command }) => match command {
             PresetsCommand::List => {
-                // TODO: Implement list_presets in task 11.1.6
-                println!("Presets list command not yet implemented");
+                commands::presets::list_presets(&config, cli.json).await?;
             }
             PresetsCommand::Current => {
                 // TODO: Implement get_current_preset in a later task

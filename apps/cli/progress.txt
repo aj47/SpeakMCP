@@ -690,3 +690,14 @@ Notes: Function was already implemented in commands/presets.rs from task 11.1.2.
        BUILT-IN, CURRENT columns) or JSON format when --json flag is set. Uses ModelPreset type from
        types.rs. Verification command passes.
 
+
+=== Task 11.1.6 ===
+Title: Wire up 'presets list' command in main.rs
+Started: 2026-01-17T10:00:00Z
+Completed: 2026-01-17T10:05:00Z
+Status: PASS
+Notes: Wired up PresetsCommand::List in main.rs to call commands::presets::list_presets().
+       Replaced placeholder println!("Presets list command not yet implemented") with actual
+       function call that passes config and json flag. Verification command (grep and cargo check)
+       passes.
+

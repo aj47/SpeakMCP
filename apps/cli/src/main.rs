@@ -247,9 +247,8 @@ async fn main() -> Result<()> {
             ToolsCommand::List => {
                 commands::tools::list_tools(&config, cli.json).await?;
             }
-            ToolsCommand::Call { name: _, args: _ } => {
-                // TODO: Implement in task 3.2.2
-                eprintln!("tools call not yet implemented");
+            ToolsCommand::Call { name, args } => {
+                commands::tools::call_tool(&config, &name, args.as_deref(), cli.json).await?;
             }
         },
 

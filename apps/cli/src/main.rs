@@ -491,8 +491,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::Health { command }) => match command {
             HealthCommand::Check => {
-                // TODO: Implement check_health in a later task
-                println!("Health check command not yet implemented");
+                commands::health::check_health(&config, cli.json).await?;
             }
             HealthCommand::Errors => {
                 // TODO: Implement get_errors in a later task

@@ -855,3 +855,13 @@ Notes: Function was already implemented in commands/health.rs. Creates ApiClient
        human-readable format or JSON format when --json flag is set. Verification command passes
        (grep for 'pub async fn check_health' and '/health' both succeed, cargo check passes).
 
+=== Task 13.1.6 ===
+Title: Wire up 'health' command in main.rs
+Started: 2026-01-17T12:00:00Z
+Completed: 2026-01-17T12:05:00Z
+Status: PASS
+Notes: Wired up HealthCommand::Check in main.rs to call commands::health::check_health().
+       Replaced TODO placeholder with actual function call that passes config and json flag.
+       Verification command passes (grep for 'Health.*=>|Commands::Health' and 'check_health'
+       both succeed, cargo check passes).
+

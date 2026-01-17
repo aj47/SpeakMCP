@@ -7,8 +7,12 @@
 #![allow(dead_code)]
 
 use anyhow::{anyhow, Context, Result};
+use futures_util::StreamExt;
+use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use crate::sse::{parse_sse_event, SseEvent};
 
 /// Typed API errors for better error handling
 #[derive(Debug)]
@@ -83,6 +87,8 @@ struct ChatRequest {
     messages: Vec<RequestMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     conversation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stream: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -249,6 +255,7 @@ impl ApiClient {
                 content: message.to_string(),
             }],
             conversation_id: conversation_id.map(|s| s.to_string()),
+            stream: None,
         };
 
         let response = self
@@ -285,5 +292,98 @@ impl ApiClient {
             conversation_history: raw_response.conversation_history,
             queued: None, // Not currently used by server
         })
+    }
+
+    /// Send a chat message with SSE streaming and call the callback for each event
+    ///
+    /// This method connects to the chat/completions endpoint with `stream: true`
+    /// and processes SSE events as they arrive, calling the provided callback
+    /// for each event.
+    ///
+    /// Returns the final ChatResponse once the stream completes.
+    pub async fn chat_streaming<F>(
+        &self,
+        message: &str,
+        conversation_id: Option<&str>,
+        mut on_event: F,
+    ) -> Result<ChatResponse>
+    where
+        F: FnMut(SseEvent),
+    {
+        let url = self.endpoint("chat/completions");
+
+        let request = ChatRequest {
+            model: "gpt-4o".to_string(),
+            messages: vec![RequestMessage {
+                role: "user".to_string(),
+                content: message.to_string(),
+            }],
+            conversation_id: conversation_id.map(|s| s.to_string()),
+            stream: Some(true),
+        };
+
+        // Build the request with SSE headers
+        let request_builder = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
+            .json(&request);
+
+        // Create EventSource from the request builder
+        let mut es = EventSource::new(request_builder)
+            .context("Failed to create SSE connection")?;
+
+        let mut final_response: Option<ChatResponse> = None;
+
+        // Process SSE events
+        while let Some(event) = es.next().await {
+            match event {
+                Ok(Event::Open) => {
+                    // Connection opened, nothing to do
+                }
+                Ok(Event::Message(message)) => {
+                    // Parse the SSE data
+                    if let Some(sse_event) = parse_sse_event(&message.data) {
+                        // Check if this is a done or error event before calling callback
+                        let is_done = matches!(&sse_event, SseEvent::Done(_));
+                        let error_message = match &sse_event {
+                            SseEvent::Error(err) => Some(err.message.clone()),
+                            _ => None,
+                        };
+
+                        // Extract final response data if this is a done event
+                        if let SseEvent::Done(done) = &sse_event {
+                            final_response = Some(ChatResponse {
+                                content: done.content.clone(),
+                                conversation_id: done.conversation_id.clone(),
+                                conversation_history: done.conversation_history.clone(),
+                                queued: None,
+                            });
+                        }
+
+                        // Call the callback (moves sse_event)
+                        on_event(sse_event);
+
+                        // Handle stream termination
+                        if is_done {
+                            es.close();
+                            break;
+                        }
+                        if let Some(err_msg) = error_message {
+                            es.close();
+                            return Err(anyhow!("Server error: {}", err_msg));
+                        }
+                    }
+                }
+                Err(err) => {
+                    es.close();
+                    return Err(anyhow!("SSE stream error: {}", err));
+                }
+            }
+        }
+
+        final_response.ok_or_else(|| anyhow!("Stream ended without receiving a done event"))
     }
 }

@@ -85,3 +85,10 @@ Completed: 2026-01-17T20:10:00Z
 Status: PASS
 Notes: Added Servers variant to Commands enum with ServersCommand subcommand enum containing List, Enable { name: String }, and Disable { name: String } variants. Added placeholder match arm in main() that returns error (to be implemented in tasks 1.1.5, 1.1.6, 1.2.2, 1.2.3). Cargo check passes.
 
+=== Task 1.1.2 ===
+Title: Create commands/servers.rs module
+Started: 2026-01-17T21:00:00Z
+Completed: 2026-01-17T21:05:00Z
+Status: PASS
+Notes: Created commands/servers.rs with module documentation and two stub async functions: list_servers() and toggle_server(). Includes proper imports from crate modules (api::ApiClient, config::Config). Uses #![allow(dead_code)] since functions will be wired up in later phases.
+

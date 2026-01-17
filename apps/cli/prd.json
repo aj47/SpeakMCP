@@ -139,7 +139,7 @@
       "type": "RUST",
       "description": "Create the servers command module file",
       "verificationCommand": "test -f apps/cli/src/commands/servers.rs && grep -q 'pub async fn' apps/cli/src/commands/servers.rs",
-      "passes": false,
+      "passes": true,
       "dependencies": ["0.1.2"]
     },
     {

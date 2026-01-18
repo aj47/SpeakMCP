@@ -96,24 +96,29 @@ function sanitizeToolName(name: string, suffix?: string): string {
  * Falls back to simple replacement if no map is provided (for JSON response parsing).
  *
  * Note: Some LLM proxies (e.g., certain OpenAI-compatible gateways) may prepend
- * "proxy_" to tool names in responses. We strip this prefix to ensure correct mapping.
+ * "proxy_" to tool names in responses. We strip this prefix only as a fallback
+ * when the exact name isn't found, to avoid conflicts with legitimate tools
+ * whose names actually start with "proxy_".
  */
 function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
-  // Some LLM proxies prepend "proxy_" to tool names - strip it for lookup
-  const cleanedName = sanitizedName.startsWith("proxy_")
-    ? sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
-    : sanitizedName
-
-  // If we have a map, use it for exact lookup (preferred method)
-  if (toolNameMap && toolNameMap.has(cleanedName)) {
-    return toolNameMap.get(cleanedName)!
-  }
-  // Also try the original name in case it wasn't prefixed
+  // First, try exact match with the sanitized name (handles legitimate "proxy_" prefixed tools)
   if (toolNameMap && toolNameMap.has(sanitizedName)) {
     return toolNameMap.get(sanitizedName)!
   }
+
+  // If no exact match and name starts with "proxy_", try stripping the prefix
+  // This handles LLM proxies that prepend "proxy_" to tool names in responses
+  if (sanitizedName.startsWith("proxy_")) {
+    const cleanedName = sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
+    if (toolNameMap && toolNameMap.has(cleanedName)) {
+      return toolNameMap.get(cleanedName)!
+    }
+    // Fallback: reverse the sanitization for JSON responses where we don't have the map
+    return cleanedName.replace(/__COLON__/g, ":")
+  }
+
   // Fallback: reverse the sanitization for JSON responses where we don't have the map
-  return cleanedName.replace(/__COLON__/g, ":")
+  return sanitizedName.replace(/__COLON__/g, ":")
 }
 
 /**

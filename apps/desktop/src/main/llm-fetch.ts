@@ -96,8 +96,8 @@ function sanitizeToolName(name: string, suffix?: string): string {
  * Falls back to simple replacement if no map is provided (for JSON response parsing).
  *
  * Note: Some LLM proxies (e.g., certain OpenAI-compatible gateways) may prepend
- * "proxy_" to tool names in responses. We strip this prefix only as a fallback
- * when the exact name isn't found, to avoid conflicts with legitimate tools
+ * "proxy_" to tool names in responses. We strip this prefix only when we have
+ * a toolNameMap to verify the mapping, to avoid conflicts with legitimate tools
  * whose names actually start with "proxy_".
  */
 function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
@@ -106,18 +106,18 @@ function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string
     return toolNameMap.get(sanitizedName)!
   }
 
-  // If no exact match and name starts with "proxy_", try stripping the prefix
+  // If no exact match, we have a map, and name starts with "proxy_", try stripping the prefix
   // This handles LLM proxies that prepend "proxy_" to tool names in responses
-  if (sanitizedName.startsWith("proxy_")) {
+  // We only do this when toolNameMap is provided so we can verify the stripped name exists
+  if (toolNameMap && sanitizedName.startsWith("proxy_")) {
     const cleanedName = sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
-    if (toolNameMap && toolNameMap.has(cleanedName)) {
+    if (toolNameMap.has(cleanedName)) {
       return toolNameMap.get(cleanedName)!
     }
-    // Fallback: reverse the sanitization for JSON responses where we don't have the map
-    return cleanedName.replace(/__COLON__/g, ":")
   }
 
   // Fallback: reverse the sanitization for JSON responses where we don't have the map
+  // We don't strip "proxy_" here since we can't verify if it's a legitimate tool name
   return sanitizedName.replace(/__COLON__/g, ":")
 }
 

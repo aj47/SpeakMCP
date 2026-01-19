@@ -249,7 +249,9 @@ export function useSessions(): SessionStore {
   }, [sessions, currentSessionId]);
 
   const getSessionList = useCallback((): SessionListItem[] => {
-    return sessions.map(sessionToListItem);
+    // Sort sessions by updatedAt in descending order (most recently active first)
+    const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    return sortedSessions.map(sessionToListItem);
   }, [sessions]);
 
   const addMessage = useCallback(async (

@@ -358,6 +358,9 @@ export default function ChatScreen({ route, navigation }: any) {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
+  // Track which individual tool calls are fully expanded to show all input/output details
+  // Key format: "messageId-toolCallIndex" (messageId falls back to message array index if undefined)
+  const [expandedToolCalls, setExpandedToolCalls] = useState<Record<string, boolean>>({});
   // Track the last failed message for retry functionality
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
@@ -472,6 +475,12 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
 
+    // Reset expandedMessages and expandedToolCalls on ANY session switch to ensure consistent
+    // "final response expanded" behavior per chat and prevent stale UI state from leaking
+    // across sessions (fixes review comment about keys like "0-0" leaking across chats)
+    setExpandedMessages({});
+    setExpandedToolCalls({});
+
     let currentSession = sessionStore.getCurrentSession();
 
     // If we have an existing session, always load its messages regardless of deletions
@@ -500,10 +509,6 @@ export default function ChatScreen({ route, navigation }: any) {
 
     currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
-
-    // Reset expandedMessages on session switch to ensure consistent "final response expanded"
-    // behavior per chat and prevent stale entries from affecting the new session
-    setExpandedMessages({});
 
     if (currentSession.messages.length > 0) {
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
@@ -545,6 +550,12 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
+  }, []);
+
+  // Toggle expansion of individual tool call details (input params and results)
+  const toggleToolCallExpansion = useCallback((messageId: string, toolCallIndex: number) => {
+    const key = `${messageId}-${toolCallIndex}`;
+    setExpandedToolCalls(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
   // Auto-expand only the final assistant message (the last one in the conversation)
@@ -2010,15 +2021,38 @@ export default function ChatScreen({ route, navigation }: any) {
                             {m.toolCalls?.map((toolCall, idx) => {
                               const result = m.toolResults?.[idx];
                               const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
+                              // Use message id or fallback to array index to ensure stable, unique keys
+                              // that won't collide when m.id is undefined (which is common)
+                              const stableMessageKey = m.id ?? String(i);
+                              const toolCallKey = `${stableMessageKey}-${idx}`;
+                              const isToolCallFullyExpanded = expandedToolCalls[toolCallKey] ?? false;
                               return (
                                 <View key={idx} style={styles.toolCallSection}>
-                                  {/* Tool name heading */}
-                                  <Text style={styles.toolName}>{toolCall.name}</Text>
+                                  {/* Tool name heading - tappable to toggle full expansion */}
+                                  <Pressable
+                                    onPress={() => toggleToolCallExpansion(stableMessageKey, idx)}
+                                    style={({ pressed }) => [
+                                      styles.toolCallHeader,
+                                      pressed && styles.toolCallHeaderPressed,
+                                    ]}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ expanded: isToolCallFullyExpanded }}
+                                    accessibilityHint={isToolCallFullyExpanded ? 'Collapse tool details' : 'Expand to show full input/output'}
+                                  >
+                                    <Text style={styles.toolName}>{toolCall.name}</Text>
+                                    <Text style={styles.toolCallExpandHint}>
+                                      {isToolCallFullyExpanded ? '▼ Collapse' : '▶ Full Details'}
+                                    </Text>
+                                  </Pressable>
 
                                   {/* Parameters */}
                                   {toolCall.arguments && (
                                     <View style={styles.toolParamsSection}>
-                                      <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
+                                      <Text style={styles.toolSectionLabel}>Input:</Text>
+                                      <ScrollView
+                                        style={isToolCallFullyExpanded ? styles.toolParamsScrollExpanded : styles.toolParamsScroll}
+                                        nestedScrollEnabled
+                                      >
                                         <Text style={styles.toolParamsCode}>
                                           {formatToolArguments(toolCall.arguments)}
                                         </Text>
@@ -2030,6 +2064,7 @@ export default function ChatScreen({ route, navigation }: any) {
                                   {result ? (
                                     <View style={styles.toolResultItem}>
                                       <View style={styles.toolResultHeader}>
+                                        <Text style={styles.toolSectionLabel}>Output:</Text>
                                         <Text style={[
                                           styles.toolResultBadge,
                                           result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
@@ -2040,7 +2075,10 @@ export default function ChatScreen({ route, navigation }: any) {
                                           {(result.content?.length || 0).toLocaleString()} chars
                                         </Text>
                                       </View>
-                                      <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
+                                      <ScrollView
+                                        style={isToolCallFullyExpanded ? styles.toolResultScrollExpanded : styles.toolResultScroll}
+                                        nestedScrollEnabled
+                                      >
                                         <Text style={styles.toolResultCode}>
                                           {result.content || 'No content returned'}
                                         </Text>
@@ -2720,10 +2758,38 @@ function createStyles(theme: Theme) {
       fontWeight: '600',
       color: theme.colors.primary,
       fontSize: 10,
-      marginBottom: 1,
+      flex: 1,
+    },
+    toolCallHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    toolCallHeaderPressed: {
+      opacity: 0.7,
+    },
+    toolCallExpandHint: {
+      fontSize: 9,
+      color: theme.colors.mutedForeground,
+      fontWeight: '500',
+    },
+    toolSectionLabel: {
+      fontSize: 8,
+      fontWeight: '600',
+      color: theme.colors.mutedForeground,
+      marginBottom: 2,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     toolParamsScroll: {
       maxHeight: 80,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
+    },
+    toolParamsScrollExpanded: {
+      maxHeight: 400,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
@@ -2794,6 +2860,11 @@ function createStyles(theme: Theme) {
     },
     toolResultScroll: {
       maxHeight: 80,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
+    },
+    toolResultScrollExpanded: {
+      maxHeight: 400,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },

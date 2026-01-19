@@ -504,9 +504,10 @@ export default function ChatScreen({ route, navigation }: any) {
     currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
 
-    // Reset expandedMessages on session switch to ensure consistent "final response expanded"
-    // behavior per chat and prevent stale entries from affecting the new session
+    // Reset expandedMessages and expandedToolCalls on session switch to ensure consistent
+    // "final response expanded" behavior per chat and prevent stale entries from affecting the new session
     setExpandedMessages({});
+    setExpandedToolCalls({});
 
     if (currentSession.messages.length > 0) {
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({

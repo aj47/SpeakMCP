@@ -552,8 +552,8 @@ export default function ChatScreen({ route, navigation }: any) {
   }, []);
 
   // Toggle expansion of individual tool call details (input params and results)
-  const toggleToolCallExpansion = useCallback((messageIndex: number, toolCallIndex: number) => {
-    const key = `${messageIndex}-${toolCallIndex}`;
+  const toggleToolCallExpansion = useCallback((messageId: string, toolCallIndex: number) => {
+    const key = `${messageId}-${toolCallIndex}`;
     setExpandedToolCalls(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
@@ -2020,18 +2020,19 @@ export default function ChatScreen({ route, navigation }: any) {
                             {m.toolCalls?.map((toolCall, idx) => {
                               const result = m.toolResults?.[idx];
                               const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
-                              const toolCallKey = `${i}-${idx}`;
+                              const toolCallKey = `${m.id}-${idx}`;
                               const isToolCallFullyExpanded = expandedToolCalls[toolCallKey] ?? false;
                               return (
                                 <View key={idx} style={styles.toolCallSection}>
                                   {/* Tool name heading - tappable to toggle full expansion */}
                                   <Pressable
-                                    onPress={() => toggleToolCallExpansion(i, idx)}
+                                    onPress={() => toggleToolCallExpansion(m.id ?? '', idx)}
                                     style={({ pressed }) => [
                                       styles.toolCallHeader,
                                       pressed && styles.toolCallHeaderPressed,
                                     ]}
                                     accessibilityRole="button"
+                                    accessibilityState={{ expanded: isToolCallFullyExpanded }}
                                     accessibilityHint={isToolCallFullyExpanded ? 'Collapse tool details' : 'Expand to show full input/output'}
                                   >
                                     <Text style={styles.toolName}>{toolCall.name}</Text>

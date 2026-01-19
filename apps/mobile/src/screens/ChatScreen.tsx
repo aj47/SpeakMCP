@@ -359,7 +359,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   // Track which individual tool calls are fully expanded to show all input/output details
-  // Key format: "messageIndex-toolCallIndex"
+  // Key format: "messageId-toolCallIndex" (messageId falls back to empty string if undefined)
   const [expandedToolCalls, setExpandedToolCalls] = useState<Record<string, boolean>>({});
   // Track the last failed message for retry functionality
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
@@ -2020,7 +2020,7 @@ export default function ChatScreen({ route, navigation }: any) {
                             {m.toolCalls?.map((toolCall, idx) => {
                               const result = m.toolResults?.[idx];
                               const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
-                              const toolCallKey = `${m.id}-${idx}`;
+                              const toolCallKey = `${m.id ?? ''}-${idx}`;
                               const isToolCallFullyExpanded = expandedToolCalls[toolCallKey] ?? false;
                               return (
                                 <View key={idx} style={styles.toolCallSection}>

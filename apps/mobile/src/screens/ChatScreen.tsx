@@ -475,6 +475,12 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
 
+    // Reset expandedMessages and expandedToolCalls on ANY session switch to ensure consistent
+    // "final response expanded" behavior per chat and prevent stale UI state from leaking
+    // across sessions (fixes review comment about keys like "0-0" leaking across chats)
+    setExpandedMessages({});
+    setExpandedToolCalls({});
+
     let currentSession = sessionStore.getCurrentSession();
 
     // If we have an existing session, always load its messages regardless of deletions
@@ -503,11 +509,6 @@ export default function ChatScreen({ route, navigation }: any) {
 
     currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
-
-    // Reset expandedMessages and expandedToolCalls on session switch to ensure consistent
-    // "final response expanded" behavior per chat and prevent stale entries from affecting the new session
-    setExpandedMessages({});
-    setExpandedToolCalls({});
 
     if (currentSession.messages.length > 0) {
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({

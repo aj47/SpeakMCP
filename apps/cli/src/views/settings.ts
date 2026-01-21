@@ -464,21 +464,52 @@ export class SettingsView extends BaseView {
   async handleKeyPress(key: string): Promise<void> {
     switch (key.toLowerCase()) {
       case 's':
+      case 'enter':
         await this.saveSettings()
         break
       case 'r':
+      case 'escape':
         await this.resetSettings()
         break
       case ' ':
         this.toggleSelectedServer()
         break
       case 'j':
-      case 'arrowdown':
+      case 'down':
         this.selectNextServer()
         break
       case 'k':
-      case 'arrowup':
+      case 'up':
         this.selectPrevServer()
+        break
+      case 'tab':
+        this.focusNextField()
+        break
+    }
+  }
+
+  private focusNextField(): void {
+    const fields: Array<'provider' | 'model' | 'maxIter' | 'servers' | 'buttons'> =
+      ['provider', 'model', 'maxIter', 'servers', 'buttons']
+    const currentIndex = fields.indexOf(this.focusedField)
+    this.focusedField = fields[(currentIndex + 1) % fields.length]
+
+    // Focus the appropriate component
+    switch (this.focusedField) {
+      case 'provider':
+        this.providerSelect?.focus()
+        break
+      case 'model':
+        this.modelSelect?.focus()
+        break
+      case 'maxIter':
+        this.maxIterInput?.focus()
+        break
+      case 'servers':
+        this.highlightSelectedServer()
+        break
+      case 'buttons':
+        // Visual indication only
         break
     }
   }

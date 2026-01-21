@@ -7,6 +7,7 @@ import {
   TextRenderable,
   InputRenderable,
   InputRenderableEvents,
+  type KeyEvent,
 } from '@opentui/core'
 
 import { BaseView } from './base'
@@ -488,6 +489,39 @@ export class ChatView extends BaseView {
     if (this.inputField) {
       this.inputField.focus()
     }
+  }
+
+  // Handle keyboard shortcuts
+  handleKeyPress(key: KeyEvent): void {
+    if (!this.messageContainer) return
+
+    switch (key.name) {
+      case 'up':
+        // Scroll up
+        this.scrollMessages(-1)
+        break
+      case 'down':
+        // Scroll down
+        this.scrollMessages(1)
+        break
+      case 'pageup':
+        // Scroll up by page
+        this.scrollMessages(-10)
+        break
+      case 'pagedown':
+        // Scroll down by page
+        this.scrollMessages(10)
+        break
+    }
+  }
+
+  private scrollMessages(lines: number): void {
+    if (!this.messageContainer) return
+    // The message container has overflow: 'scroll', so we can scroll it
+    // OpenTUI handles scroll internally, but we can try to trigger scroll
+    // by adjusting scroll offset if the container supports it
+    // For now, the container should auto-scroll with overflow: 'scroll'
+    // This is a placeholder for future scroll implementation
   }
 }
 

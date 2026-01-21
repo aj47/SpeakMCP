@@ -7,6 +7,9 @@ import {
   TextRenderable,
   SelectRenderable,
   SelectRenderableEvents,
+  InputRenderable,
+  InputRenderableEvents,
+  type KeyEvent,
 } from '@opentui/core'
 
 import { BaseView } from './base'
@@ -14,7 +17,13 @@ import type { Conversation } from '../types'
 
 export class SessionsView extends BaseView {
   private sessions: Conversation[] = []
+  private filteredSessions: Conversation[] = []
   private selectList: SelectRenderable | null = null
+  private selectedIndex: number = 0
+  private searchMode: boolean = false
+  private searchInput: InputRenderable | null = null
+  private searchQuery: string = ''
+  private onSwitchToChat?: (conversationId?: string) => Promise<void>
 
   async show(): Promise<void> {
     if (this.isVisible) return
@@ -49,7 +58,7 @@ export class SessionsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'sessions-header-text',
-      content: ' 📋 Sessions                                      [N] New',
+      content: ' 📋 Sessions                         [/] Search  [N] New',
       fg: '#FFFFFF',
     })
     header.add(headerText)
@@ -117,8 +126,10 @@ export class SessionsView extends BaseView {
     try {
       const result = await this.client.getConversations()
       this.sessions = result.conversations || []
+      this.filteredSessions = [...this.sessions]
     } catch {
       this.sessions = []
+      this.filteredSessions = []
     }
   }
 
@@ -154,6 +165,118 @@ export class SessionsView extends BaseView {
   private resumeSession(id: string): void {
     this.state.currentConversationId = id
     // Note: We'd need a callback to switch views - for now just set the ID
+  }
+
+  // Set callback for switching to chat view
+  setSwitchToChatCallback(callback: (conversationId?: string) => Promise<void>): void {
+    this.onSwitchToChat = callback
+  }
+
+  // Handle keyboard shortcuts
+  handleKeyPress(key: KeyEvent): void {
+    // If in search mode, let the input handle it
+    if (this.searchMode && key.name !== 'escape') {
+      return
+    }
+
+    switch (key.name) {
+      case 'up':
+        this.navigateUp()
+        break
+      case 'down':
+        this.navigateDown()
+        break
+      case 'enter':
+        this.resumeSelectedSession()
+        break
+      case 'n':
+        this.handleNewConversation()
+        break
+      case 'd':
+        this.deleteSelectedSession()
+        break
+      case '/':
+        this.enterSearchMode()
+        break
+      case 'escape':
+        if (this.searchMode) {
+          this.exitSearchMode()
+        }
+        break
+    }
+  }
+
+  private navigateUp(): void {
+    if (this.filteredSessions.length === 0) return
+    this.selectedIndex = Math.max(0, this.selectedIndex - 1)
+    if (this.selectList) {
+      this.selectList.setSelectedIndex(this.selectedIndex)
+    }
+  }
+
+  private navigateDown(): void {
+    if (this.filteredSessions.length === 0) return
+    this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + 1)
+    if (this.selectList) {
+      this.selectList.setSelectedIndex(this.selectedIndex)
+    }
+  }
+
+  private resumeSelectedSession(): void {
+    const session = this.filteredSessions[this.selectedIndex]
+    if (session) {
+      this.resumeSession(session.id)
+      if (this.onSwitchToChat) {
+        this.onSwitchToChat(session.id)
+      }
+    }
+  }
+
+  private handleNewConversation(): void {
+    this.state.currentConversationId = undefined
+    if (this.onSwitchToChat) {
+      this.onSwitchToChat()
+    }
+  }
+
+  private async deleteSelectedSession(): Promise<void> {
+    const session = this.filteredSessions[this.selectedIndex]
+    if (!session) return
+
+    try {
+      await this.client.deleteConversation(session.id)
+      // Reload sessions
+      await this.loadSessions()
+      this.filterSessions()
+      await this.refresh()
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  private enterSearchMode(): void {
+    this.searchMode = true
+    // Would need to add search input to the view and focus it
+    // For now, this is a placeholder
+  }
+
+  private exitSearchMode(): void {
+    this.searchMode = false
+    this.searchQuery = ''
+    this.filterSessions()
+  }
+
+  private filterSessions(): void {
+    if (!this.searchQuery) {
+      this.filteredSessions = [...this.sessions]
+    } else {
+      const query = this.searchQuery.toLowerCase()
+      this.filteredSessions = this.sessions.filter(s => {
+        const title = this.getSessionTitle(s).toLowerCase()
+        return title.includes(query)
+      })
+    }
+    this.selectedIndex = 0
   }
 }
 

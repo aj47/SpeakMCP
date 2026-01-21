@@ -218,6 +218,9 @@ export class App {
     this.settingsView = new SettingsView(this.renderer, this.client, this.state, this.contentContainer)
     this.toolsView = new ToolsView(this.renderer, this.client, this.state, this.contentContainer)
 
+    // Wire up sessions view callback
+    this.sessionsView.setSwitchToChatCallback((conversationId?: string) => this.switchToChat(conversationId))
+
     // Show initial view
     await this.chatView.show()
   }

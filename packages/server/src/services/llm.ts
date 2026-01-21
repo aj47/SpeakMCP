@@ -364,6 +364,7 @@ export async function processTranscriptWithAgentMode(
       isComplete: update.isComplete ?? false,
       finalContent: update.finalContent,
       conversationHistory: update.conversationHistory ?? formatConversationForProgress(conversationHistory),
+      streamingContent: update.streamingContent,
     })
   }
 
@@ -627,6 +628,7 @@ export async function processTranscriptWithAgentMode(
             steps: progressSteps.slice(-3),
             isComplete: true,
             finalContent: content,
+            streamingContent: { text: content, isStreaming: false },
           })
           break
         }
@@ -639,6 +641,7 @@ export async function processTranscriptWithAgentMode(
           maxIterations,
           steps: progressSteps.slice(-3),
           isComplete: false,
+          streamingContent: { text: content, isStreaming: true },
         })
 
         // If needsMoreWork is explicitly undefined (not set), check if we should continue
@@ -658,6 +661,7 @@ export async function processTranscriptWithAgentMode(
             steps: progressSteps.slice(-3),
             isComplete: true,
             finalContent: content,
+            streamingContent: { text: content, isStreaming: false },
           })
           break
         }

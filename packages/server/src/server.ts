@@ -337,13 +337,48 @@ export async function startServer(options: ServerOptions = {}): Promise<{
           reply.raw.write(`data: ${JSON.stringify(data)}\n\n`)
         }
 
+        // Track previously emitted content length for delta calculation
+        let lastEmittedLength = 0
+        const streamId = `chatcmpl-${Date.now()}`
+
+        // Helper to emit OpenAI-compatible streaming chunks
+        const emitOpenAIChunk = (content: string, isComplete: boolean = false) => {
+          const chunk = {
+            id: streamId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: resolveActiveModelId(configStore.get() as Record<string, unknown>),
+            choices: [{
+              index: 0,
+              delta: isComplete ? {} : { content },
+              finish_reason: isComplete ? "stop" : null,
+            }],
+          }
+          writeSSE(chunk)
+        }
+
         const onProgress = (update: AgentProgressUpdate) => {
+          // Always emit custom progress event for mobile app compatibility
           writeSSE({ type: "progress", data: update })
+
+          // Also emit OpenAI-compatible delta chunks for CLI compatibility
+          if (update.streamingContent?.text) {
+            const fullText = update.streamingContent.text
+            if (fullText.length > lastEmittedLength) {
+              // Emit only the delta (new content since last emit)
+              const delta = fullText.slice(lastEmittedLength)
+              emitOpenAIChunk(delta)
+              lastEmittedLength = fullText.length
+            }
+          }
         }
 
         try {
           const result = await runAgent({ prompt, conversationId, onProgress })
           const model = resolveActiveModelId(configStore.get() as Record<string, unknown>)
+
+          // Emit final OpenAI chunk with finish_reason
+          emitOpenAIChunk("", true)
 
           writeSSE({
             type: "done",

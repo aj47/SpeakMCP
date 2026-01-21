@@ -246,6 +246,10 @@ export interface AgentProgressUpdate {
     toolName: string
     arguments: any
   }
+  streamingContent?: {
+    text: string
+    isStreaming: boolean
+  }
 }
 
 // ACP types

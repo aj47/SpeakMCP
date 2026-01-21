@@ -10,7 +10,14 @@ import {
 } from '@opentui/core'
 
 import { BaseView } from './base'
-import type { ChatMessage, ConversationMessage } from '../types'
+import type { ChatMessage, ConversationMessage, AgentProgressUpdate, AgentProgressStep } from '../types'
+
+// Progress tracking state
+interface ProgressState {
+  currentIteration: number
+  maxIterations: number
+  steps: AgentProgressStep[]
+}
 
 export class ChatView extends BaseView {
   private messageContainer: BoxRenderable | null = null
@@ -18,6 +25,8 @@ export class ChatView extends BaseView {
   private messages: ConversationMessage[] = []
   private streamingContent: string = ''
   private streamingText: TextRenderable | null = null
+  private progressState: ProgressState | null = null
+  private progressContainer: BoxRenderable | null = null
 
   async show(): Promise<void> {
     if (this.isVisible) return
@@ -179,9 +188,10 @@ export class ChatView extends BaseView {
       content: m.content,
     }))
 
-    // Create streaming placeholder
+    // Initialize progress state
     this.streamingContent = ''
-    this.addStreamingMessage()
+    this.progressState = null
+    let hasProgressEvents = false
 
     try {
       this.state.isProcessing = true
@@ -190,21 +200,45 @@ export class ChatView extends BaseView {
       for await (const event of this.client.chatStream(chatMessages, this.state.currentConversationId)) {
         switch (event.type) {
           case 'chunk': {
+            // If we haven't seen progress events, use simple streaming display
+            if (!hasProgressEvents && !this.streamingText) {
+              this.addStreamingMessage()
+            }
             const delta = event.data.choices[0]?.delta?.content
             if (delta) {
               this.streamingContent += delta
-              this.updateStreamingMessage()
+              if (hasProgressEvents) {
+                this.updateProgressDisplay()
+              } else {
+                this.updateStreamingMessage()
+              }
             }
             break
           }
           case 'progress': {
-            // Progress events contain agent iteration info - could display tool calls, etc.
-            // For now, just show streaming content if present
-            const streamData = event.data as { streamingContent?: { text: string } }
-            if (streamData.streamingContent?.text) {
-              this.streamingContent = streamData.streamingContent.text
-              this.updateStreamingMessage()
+            hasProgressEvents = true
+            const progressData = event.data as AgentProgressUpdate
+
+            // Initialize progress display on first progress event
+            if (!this.progressState) {
+              this.removeStreamingMessage()
+              this.addProgressDisplay()
             }
+
+            // Update progress state
+            this.progressState = {
+              currentIteration: progressData.currentIteration,
+              maxIterations: progressData.maxIterations,
+              steps: progressData.steps,
+            }
+
+            // Extract streaming content from the latest streaming step
+            const streamingStep = progressData.steps.find(s => s.type === 'streaming')
+            if (streamingStep?.streamContent) {
+              this.streamingContent = streamingStep.streamContent
+            }
+
+            this.updateProgressDisplay()
             break
           }
           case 'done': {
@@ -218,13 +252,20 @@ export class ChatView extends BaseView {
         }
       }
 
-      // Finalize message
+      // Remove progress display and finalize message
+      if (hasProgressEvents) {
+        this.removeProgressDisplay()
+      }
       this.messages.push({ role: 'assistant', content: this.streamingContent })
       this.streamingContent = ''
       this.streamingText = null
       this.renderMessages()
 
     } catch (err) {
+      // Clean up progress display on error
+      if (hasProgressEvents) {
+        this.removeProgressDisplay()
+      }
       // Show error
       const errorMsg = err instanceof Error ? err.message : 'Unknown error'
       this.messages.push({
@@ -270,6 +311,174 @@ export class ChatView extends BaseView {
     if (this.streamingText) {
       this.streamingText.content = this.streamingContent + '▌'
     }
+  }
+
+  private removeStreamingMessage(): void {
+    if (!this.messageContainer) return
+    this.messageContainer.remove('streaming-msg')
+    this.streamingText = null
+  }
+
+  private addProgressDisplay(): void {
+    if (!this.messageContainer) return
+
+    // Create or get progress container
+    this.progressContainer = new BoxRenderable(this.renderer, {
+      id: 'progress-container',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#4a4a8a',
+      marginBottom: 1,
+      padding: 1,
+      flexDirection: 'column',
+    })
+
+    const headerText = new TextRenderable(this.renderer, {
+      id: 'progress-header',
+      content: '─ Assistant ─ (processing...)',
+      fg: '#8888CC',
+    })
+    this.progressContainer.add(headerText)
+
+    this.messageContainer.add(this.progressContainer)
+  }
+
+  private updateProgressDisplay(): void {
+    if (!this.progressContainer || !this.progressState) return
+
+    // Clear existing progress content (keep header)
+    const children = this.progressContainer.getChildren()
+    for (const child of children) {
+      if (child.id !== 'progress-header') {
+        this.progressContainer.remove(child.id)
+      }
+    }
+
+    const { currentIteration, maxIterations, steps } = this.progressState
+
+    // Iteration counter
+    const iterText = new TextRenderable(this.renderer, {
+      id: 'progress-iteration',
+      content: `⏳ Iteration ${currentIteration}/${maxIterations}`,
+      fg: '#AAAAFF',
+    })
+    this.progressContainer.add(iterText)
+
+    // Render each step
+    for (const step of steps) {
+      const stepContent = this.formatProgressStep(step)
+      const stepText = new TextRenderable(this.renderer, {
+        id: `step-${step.id}`,
+        content: stepContent,
+        fg: this.getStepColor(step),
+      })
+      this.progressContainer.add(stepText)
+    }
+
+    // Show streaming content if available
+    if (this.streamingContent) {
+      const contentText = new TextRenderable(this.renderer, {
+        id: 'progress-content',
+        content: this.streamingContent + '▌',
+        fg: '#FFFFFF',
+      })
+      this.progressContainer.add(contentText)
+    }
+  }
+
+  private formatProgressStep(step: AgentProgressStep): string {
+    const icon = this.getStepIcon(step)
+
+    switch (step.type) {
+      case 'thinking':
+        return `${icon} ${step.title}`
+
+      case 'tool_call': {
+        const toolName = step.toolName || 'tool'
+        const args = step.toolInput
+          ? ` ${this.truncateArgs(step.toolInput)}`
+          : ''
+        return `${icon} ${toolName}${args}`
+      }
+
+      case 'tool_result': {
+        const result = step.toolOutput
+          ? ` → ${this.truncate(step.toolOutput, 60)}`
+          : ''
+        return `${icon} Result${result}`
+      }
+
+      case 'error':
+        return `${icon} Error: ${step.description || step.title}`
+
+      case 'retry':
+        return `${icon} Retry #${step.retryCount || 1}: ${step.retryReason || step.title}`
+
+      case 'completion':
+        return `${icon} ${step.title}`
+
+      default:
+        return `${icon} ${step.title}`
+    }
+  }
+
+  private getStepIcon(step: AgentProgressStep): string {
+    switch (step.type) {
+      case 'thinking':
+        return '💭'
+
+      case 'tool_call':
+        if (step.status === 'running') return '▶'
+        if (step.status === 'complete') return '✓'
+        if (step.status === 'error') return '❌'
+        return '⏳'
+
+      case 'tool_result':
+        return step.isError ? '❌' : '✅'
+
+      case 'error':
+        return '❌'
+
+      case 'retry':
+        return '🔄'
+
+      case 'completion':
+        return '✅'
+
+      default:
+        return '•'
+    }
+  }
+
+  private getStepColor(step: AgentProgressStep): string {
+    if (step.status === 'error' || step.isError) return '#FF6666'
+    if (step.status === 'running') return '#FFAA66'
+    if (step.status === 'complete') return '#66FF88'
+    if (step.type === 'thinking') return '#AAAAFF'
+    if (step.type === 'tool_call') return '#FFCC66'
+    if (step.type === 'tool_result') return '#88CCFF'
+    return '#CCCCCC'
+  }
+
+  private truncateArgs(args: unknown): string {
+    try {
+      const str = typeof args === 'string' ? args : JSON.stringify(args)
+      return this.truncate(str, 50)
+    } catch {
+      return ''
+    }
+  }
+
+  private truncate(str: string, maxLen: number): string {
+    if (str.length <= maxLen) return str
+    return str.slice(0, maxLen - 3) + '...'
+  }
+
+  private removeProgressDisplay(): void {
+    if (!this.messageContainer || !this.progressContainer) return
+    this.messageContainer.remove('progress-container')
+    this.progressContainer = null
+    this.progressState = null
   }
 
   async newConversation(): Promise<void> {

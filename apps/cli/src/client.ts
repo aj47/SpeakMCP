@@ -22,7 +22,9 @@ import type {
 export class SpeakMcpClient {
   private baseUrl: string
   private apiKey: string
-  
+  private maxRetries = 3
+  private baseDelay = 1000
+
   constructor(config: CliConfig) {
     this.baseUrl = config.serverUrl.replace(/\/$/, '')
     this.apiKey = config.apiKey
@@ -58,7 +60,47 @@ export class SpeakMcpClient {
     
     return response.json() as Promise<T>
   }
-  
+
+  /**
+   * Make a request with automatic retry and exponential backoff
+   */
+  private async requestWithRetry<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    let lastError: Error | null = null
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await this.request<T>(method, path, body)
+      } catch (error) {
+        lastError = error as Error
+        if (!this.isRetryable(error) || attempt === this.maxRetries) {
+          throw error
+        }
+        const delay = this.baseDelay * Math.pow(2, attempt)
+        await new Promise(r => setTimeout(r, delay))
+      }
+    }
+    throw lastError
+  }
+
+  /**
+   * Check if an error is retryable (network errors, 5xx, 429)
+   */
+  private isRetryable(error: unknown): boolean {
+    // Network errors (TypeError from fetch)
+    if (error instanceof TypeError) return true
+
+    if (error instanceof Error) {
+      const msg = error.message
+      // Server errors (5xx) and rate limiting (429) are retryable
+      return msg.includes('HTTP 5') || msg.includes('HTTP 429')
+    }
+    return false
+  }
+
   // Models
   async getModels(): Promise<{ models: Model[] }> {
     return this.request('GET', '/v1/models')
@@ -263,14 +305,47 @@ export class SpeakMcpClient {
     }
   }
   
-  // Health check
+  // Health check - uses retry logic for resilience
   async isHealthy(): Promise<boolean> {
     try {
-      await this.getModels()
+      await this.requestWithRetry('GET', '/v1/models')
       return true
     } catch {
       return false
     }
+  }
+
+  /**
+   * Check health with a callback for state transitions
+   * @returns Connection state: 'online', 'reconnecting', or 'offline'
+   */
+  async checkHealthWithState(
+    onReconnecting?: () => void
+  ): Promise<'online' | 'reconnecting' | 'offline'> {
+    let lastError: Error | null = null
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        await this.request('GET', '/v1/models')
+        return 'online'
+      } catch (error) {
+        lastError = error as Error
+
+        if (!this.isRetryable(error) || attempt === this.maxRetries) {
+          return 'offline'
+        }
+
+        // Notify that we're reconnecting
+        if (attempt === 0 && onReconnecting) {
+          onReconnecting()
+        }
+
+        const delay = this.baseDelay * Math.pow(2, attempt)
+        await new Promise(r => setTimeout(r, delay))
+      }
+    }
+
+    return lastError ? 'offline' : 'online'
   }
 }
 

@@ -23,6 +23,7 @@ export interface Profile {
   description?: string
   mcpServers?: Record<string, McpServerConfig>
   userGuidelines?: string
+  isActive?: boolean
 }
 
 export interface McpServerConfig {
@@ -209,11 +210,14 @@ export type SSEEvent = SSEProgressEvent | SSEDoneEvent | SSEErrorEvent | SSEChun
 // View state
 export type ViewName = 'chat' | 'sessions' | 'settings' | 'tools'
 
+// Connection state for status indicator
+export type ConnectionState = 'online' | 'reconnecting' | 'offline'
+
 export interface AppState {
   currentView: ViewName
   currentProfile?: Profile
   currentConversationId?: string
-  isConnected: boolean
+  connectionState: ConnectionState
   isProcessing: boolean
 }
 

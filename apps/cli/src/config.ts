@@ -18,15 +18,18 @@ interface CliArgs {
   conversationId?: string
   help?: boolean
   version?: boolean
+  embedded?: boolean
+  serverOnly?: boolean
+  port?: number
 }
 
 export function parseArgs(args: string[]): CliArgs {
-  const result: CliArgs = {}
-  
+  const result: CliArgs = { embedded: true } // Default to embedded mode
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     const nextArg = args[i + 1]
-    
+
     switch (arg) {
       case '-h':
       case '--help':
@@ -39,6 +42,7 @@ export function parseArgs(args: string[]): CliArgs {
       case '-u':
       case '--url':
         result.url = nextArg
+        result.embedded = false // Explicit URL disables embedded mode
         i++
         break
       case '-k':
@@ -51,34 +55,52 @@ export function parseArgs(args: string[]): CliArgs {
         result.conversationId = nextArg
         i++
         break
+      case '-p':
+      case '--port':
+        if (nextArg) {
+          result.port = parseInt(nextArg, 10)
+          i++
+        }
+        break
+      case '--no-embedded':
+        result.embedded = false
+        break
+      case '--server-only':
+        result.serverOnly = true
+        break
     }
   }
-  
+
   return result
 }
 
 export function showHelp(): void {
   console.log(`
-SpeakMCP CLI - Terminal UI for SpeakMCP
+SpeakMCP - AI Agent with MCP Tools
 
 Usage: speakmcp [options]
 
 Options:
   -h, --help              Show this help message
   -v, --version           Show version number
-  -u, --url <url>         Server URL (default: auto-discover)
+  -p, --port <port>       Port for embedded server (default: 3210)
   -k, --api-key <key>     API key for authentication
   -c, --conversation <id> Resume specific conversation
+  -u, --url <url>         Connect to external server (disables embedded mode)
+  --no-embedded           Don't start embedded server, connect to existing
+  --server-only           Only start the server, no TUI
 
 Environment Variables:
-  SPEAKMCP_URL            Server URL
+  SPEAKMCP_URL            Server URL (disables embedded mode)
   SPEAKMCP_API_KEY        API key for authentication
+  SPEAKMCP_PORT           Port for embedded server
   SPEAKMCP_CONVERSATION   Default conversation ID
 
 Examples:
-  speakmcp
-  speakmcp --url http://localhost:3210 --api-key mykey
-  SPEAKMCP_API_KEY=mykey speakmcp
+  speakmcp                              # Start server + TUI (default)
+  speakmcp --port 8080                  # Use custom port
+  speakmcp --server-only                # Server only, no TUI
+  speakmcp --url http://localhost:3210  # Connect to existing server
 `)
 }
 
@@ -128,33 +150,51 @@ async function autoDiscoverServer(): Promise<string | null> {
 
 export async function loadConfig(cliArgs: CliArgs): Promise<CliConfig> {
   const fileConfig = loadConfigFile()
-  
+
   // Environment variables
   const envUrl = process.env.SPEAKMCP_URL
   const envApiKey = process.env.SPEAKMCP_API_KEY
   const envConversation = process.env.SPEAKMCP_CONVERSATION
-  
-  // Resolve server URL (priority: CLI > env > file > auto-discover)
-  let serverUrl: string | undefined = cliArgs.url || envUrl || fileConfig.serverUrl
+  const envPort = process.env.SPEAKMCP_PORT ? parseInt(process.env.SPEAKMCP_PORT, 10) : undefined
 
-  if (!serverUrl) {
-    const discovered = await autoDiscoverServer()
-    if (!discovered) {
-      throw new Error(
-        'Could not find SpeakMCP server. Please start the server or specify --url'
-      )
+  // Determine if we should use embedded mode
+  // Embedded is disabled if: --no-embedded, --url provided, or SPEAKMCP_URL set
+  const embedded = cliArgs.embedded !== false && !envUrl
+
+  // Resolve port for embedded server
+  const port = cliArgs.port || envPort || 3210
+
+  // Resolve server URL
+  let serverUrl: string | undefined
+
+  if (embedded) {
+    // In embedded mode, we'll start the server ourselves
+    serverUrl = `http://127.0.0.1:${port}`
+  } else {
+    // In external mode, discover or use provided URL
+    serverUrl = cliArgs.url || envUrl || fileConfig.serverUrl
+    if (!serverUrl) {
+      const discovered = await autoDiscoverServer()
+      if (!discovered) {
+        throw new Error(
+          'Could not find SpeakMCP server. Please start the server or specify --url'
+        )
+      }
+      serverUrl = discovered
     }
-    serverUrl = discovered
   }
-  
+
   // Resolve API key (priority: CLI > env > file)
   const apiKey = cliArgs.apiKey || envApiKey || fileConfig.apiKey || ''
-  
+
   return {
     serverUrl,
     apiKey,
     conversationId: cliArgs.conversationId || envConversation || fileConfig.conversationId,
-    theme: fileConfig.theme || 'dark'
+    theme: fileConfig.theme || 'dark',
+    embedded,
+    serverOnly: cliArgs.serverOnly,
+    port
   }
 }
 

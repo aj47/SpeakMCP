@@ -16,6 +16,9 @@ importers:
       '@opentui/core':
         specifier: ^0.1.74
         version: 0.1.74(stage-js@1.0.0-alpha.17)(typescript@5.9.3)(web-tree-sitter@0.25.10)
+      '@speakmcp/server':
+        specifier: workspace:*
+        version: link:../../packages/server
     devDependencies:
       '@types/bun':
         specifier: ^1.2.14

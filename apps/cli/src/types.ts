@@ -8,6 +8,9 @@ export interface CliConfig {
   apiKey: string
   conversationId?: string
   theme: 'dark' | 'light'
+  embedded?: boolean
+  serverOnly?: boolean
+  port?: number
 }
 
 // API Response Types

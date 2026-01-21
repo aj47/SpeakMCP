@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opentui/core": "^0.1.74"
+    "@opentui/core": "^0.1.74",
+    "@speakmcp/server": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.2.14",

@@ -267,7 +267,9 @@ export async function startServer(options: ServerOptions = {}): Promise<{
 
   // Generate API key if not provided
   const apiKey = options.apiKey || (cfg.remoteServerApiKey as string) || crypto.randomBytes(32).toString("hex")
-  if (!cfg.remoteServerApiKey) {
+
+  // Always save the API key to config so auth hook uses the same key
+  if (cfg.remoteServerApiKey !== apiKey) {
     configStore.save({ ...cfg, remoteServerApiKey: apiKey })
   }
 

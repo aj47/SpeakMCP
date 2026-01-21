@@ -11,6 +11,7 @@ export interface CliConfig {
   embedded?: boolean
   serverOnly?: boolean
   port?: number
+  debug?: boolean
 }
 
 // API Response Types

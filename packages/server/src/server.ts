@@ -265,6 +265,18 @@ export async function startServer(options: ServerOptions = {}): Promise<{
 }> {
   const cfg = configStore.get() as Record<string, unknown>
 
+  // Log config source when DEBUG is enabled or log level is debug
+  const isDebug = process.env.DEBUG === '1' || process.env.DEBUG === 'true' || options.logLevel === 'debug'
+  if (isDebug) {
+    const { getDataDir, getConfigPath } = await import('./config/paths')
+    console.log(`[server] Data directory: ${getDataDir()}`)
+    console.log(`[server] Config file: ${getConfigPath()}`)
+    console.log(`[server] Provider: ${cfg.mcpToolsProviderId || 'openai (default)'}`)
+    console.log(`[server] Model (OpenAI): ${cfg.mcpToolsOpenaiModel || 'gpt-4o-mini (default)'}`)
+    console.log(`[server] Model (Groq): ${cfg.mcpToolsGroqModel || 'llama-3.3-70b-versatile (default)'}`)
+    console.log(`[server] Model (Gemini): ${cfg.mcpToolsGeminiModel || 'gemini-1.5-flash-002 (default)'}`)
+  }
+
   // Generate API key if not provided
   const apiKey = options.apiKey || (cfg.remoteServerApiKey as string) || crypto.randomBytes(32).toString("hex")
 

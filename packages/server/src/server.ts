@@ -132,9 +132,8 @@ async function runAgent(options: {
   // Initialize MCP service
   await mcpService.initialize()
 
-  // Get available tools from MCP service and merge with builtins
-  const mcpTools = mcpService.getAvailableTools()
-  const allTools = [...mcpTools, ...builtinTools]
+  // Get available tools from MCP service (already includes builtin tools with proper prefix)
+  const allTools = mcpService.getAvailableTools()
 
   // Generate conversation ID if not provided
   const conversationId = inputConversationId || `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`

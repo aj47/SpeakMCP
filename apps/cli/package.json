@@ -1,0 +1,27 @@
+{
+  "name": "@speakmcp/cli",
+  "version": "1.0.0",
+  "description": "Terminal UI client for SpeakMCP",
+  "type": "module",
+  "bin": {
+    "speakmcp": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "dev:bun": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build:binary": "bun build src/index.ts --compile --outfile speakmcp",
+    "build:macos": "bun build src/index.ts --compile --outfile speakmcp-macos",
+    "build:linux": "bun build src/index.ts --compile --target=bun-linux-x64 --outfile speakmcp-linux",
+    "build:windows": "bun build src/index.ts --compile --target=bun-windows-x64 --outfile speakmcp.exe",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.74"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.14",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.3"
+  }
+}

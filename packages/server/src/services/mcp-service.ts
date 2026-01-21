@@ -547,26 +547,23 @@ function cancelAllSamplingRequests(serverName?: string): void {
 }
 
 // ============================================================================
-// BUILTIN TOOLS STUBS (to be implemented later)
+// BUILTIN TOOLS - re-exported from builtin-tools.ts
 // ============================================================================
 
-export const BUILTIN_SERVER_NAME = "speakmcp-settings"
+import {
+  builtinTools,
+  BUILTIN_SERVER_NAME,
+  isBuiltinTool,
+  executeBuiltinTool,
+  getBuiltinToolNames,
+} from './builtin-tools'
 
-export const builtinTools: MCPTool[] = []
-
-export function isBuiltinTool(toolName: string): boolean {
-  return toolName.startsWith(`${BUILTIN_SERVER_NAME}:`)
-}
-
-export async function executeBuiltinTool(toolName: string, args: unknown): Promise<MCPToolResult> {
-  return {
-    content: [{ type: 'text', text: `Built-in tool ${toolName} not implemented in server mode` }],
-    isError: true,
-  }
-}
-
-export function getBuiltinToolNames(): string[] {
-  return builtinTools.map(t => `${BUILTIN_SERVER_NAME}:${t.name}`)
+export {
+  builtinTools,
+  BUILTIN_SERVER_NAME,
+  isBuiltinTool,
+  executeBuiltinTool,
+  getBuiltinToolNames,
 }
 
 // ============================================================================

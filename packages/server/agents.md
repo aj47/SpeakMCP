@@ -108,3 +108,56 @@ const model = cfg.mcpToolsOpenaiModel || 'gpt-4o'
 - MCP servers filtered: `speakmcp-settings` is internal-only
 - Empty LLM responses trigger early loop termination (prevent infinite loops)
 
+## Tool Name Format
+
+Tools use a `servername:toolname` format (e.g., `speakmcp-settings:list_mcp_servers`).
+
+**LLM Provider Sanitization**: OpenAI/Groq reject colons in tool names:
+- `sanitizeToolName()` converts `:` → `__COLON__` before sending to LLM
+- `restoreToolName()` converts back for tool execution
+- This happens transparently in `llm-fetch.ts`
+
+**Builtin Tools**: All built-in tools are prefixed with `speakmcp-settings:`:
+- `list_mcp_servers`, `toggle_mcp_server`
+- `list_profiles`, `switch_profile`, `get_current_profile`
+- `get_settings`, `execute_command`, `kill_all_agents`
+
+**Critical**: `mcpService.getAvailableTools()` already includes builtin tools with proper prefix. Do NOT add `builtinTools` array separately or you'll get duplicate tools without prefixes.
+
+## Debugging Tips
+
+### Debug Flags
+```bash
+speakmcp-server --debug        # All debug logging
+speakmcp-server -dl            # LLM calls only
+speakmcp-server -dt            # Tool execution only
+```
+
+### Verify Tools Loading
+Check server logs for:
+```
+hasTools: true, toolCount: 8   # ✅ Tools loaded correctly
+hasTools: false, toolCount: 0  # ❌ No tools - check builtin-tools.ts imports
+```
+
+### Common Tool Errors
+| Error | Cause |
+|-------|-------|
+| `Invalid tool name format: X` | Tool missing `servername:` prefix |
+| `Tool not found` | Tool not in `getAvailableTools()` result |
+| `toolCount: 0` | Builtin tools not imported in mcp-service.ts |
+
+### Testing Tool Calls
+```bash
+# Test via curl
+curl -s http://127.0.0.1:3211/v1/chat/completions \
+  -H "Authorization: Bearer <key>" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "List MCP servers"}], "stream": false}'
+
+# Direct tool call (bypasses LLM)
+curl -X POST http://127.0.0.1:3211/mcp/tools/call \
+  -H "Authorization: Bearer <key>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "speakmcp-settings:list_mcp_servers", "arguments": {}}'
+```

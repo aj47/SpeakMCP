@@ -131,6 +131,81 @@ export interface ApiError {
   statusCode?: number
 }
 
+// Agent progress types (matches server's AgentProgressUpdate)
+export interface AgentProgressStep {
+  id: string
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'completion' | 'error' | 'retry' | 'context_reduction' | 'tool_processing' | 'verification' | 'streaming' | 'acp_delegation'
+  title: string
+  description?: string
+  status: 'pending' | 'running' | 'complete' | 'error'
+  timestamp: number
+  toolName?: string
+  toolInput?: unknown
+  toolOutput?: string
+  isError?: boolean
+  retryCount?: number
+  retryReason?: string
+  streamContent?: string
+}
+
+export interface AgentProgressUpdate {
+  sessionId: string
+  conversationId?: string
+  conversationTitle?: string
+  currentIteration: number
+  maxIterations: number
+  steps: AgentProgressStep[]
+  isComplete?: boolean
+  finalContent?: string
+  conversationHistory?: Array<{
+    role: 'user' | 'assistant' | 'tool'
+    content: string
+    toolCalls?: unknown[]
+    toolResults?: unknown[]
+  }>
+  pendingToolApproval?: {
+    approvalId: string
+    toolName: string
+    arguments: unknown
+  }
+}
+
+// SSE Event types for streaming chat
+export interface SSEProgressEvent {
+  type: 'progress'
+  data: AgentProgressUpdate
+}
+
+export interface SSEDoneEvent {
+  type: 'done'
+  data: {
+    content: string
+    conversation_id?: string
+    conversation_history?: Array<{
+      role: 'user' | 'assistant' | 'tool'
+      content: string
+      toolCalls?: unknown[]
+      toolResults?: unknown[]
+      timestamp?: number
+    }>
+    model?: string
+  }
+}
+
+export interface SSEErrorEvent {
+  type: 'error'
+  data: {
+    message: string
+  }
+}
+
+export interface SSEChunkEvent {
+  type: 'chunk'
+  data: ChatCompletionChunk
+}
+
+export type SSEEvent = SSEProgressEvent | SSEDoneEvent | SSEErrorEvent | SSEChunkEvent
+
 // View state
 export type ViewName = 'chat' | 'sessions' | 'settings' | 'tools'
 

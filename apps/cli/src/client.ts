@@ -14,7 +14,9 @@ import type {
   ChatMessage,
   ChatCompletionChunk,
   ChatCompletionResponse,
-  ApiError
+  ApiError,
+  SSEEvent,
+  AgentProgressUpdate
 } from './types'
 
 export class SpeakMcpClient {
@@ -61,20 +63,40 @@ export class SpeakMcpClient {
   async getModels(): Promise<{ models: Model[] }> {
     return this.request('GET', '/v1/models')
   }
-  
+
+  async getModelsForProvider(providerId: string): Promise<{
+    providerId: string
+    models: Array<{
+      id: string
+      name: string
+      description?: string
+      context_length?: number
+    }>
+  }> {
+    return this.request('GET', `/v1/models/${encodeURIComponent(providerId)}`)
+  }
+
   // Profiles
   async getProfiles(): Promise<{ profiles: Profile[]; currentProfileId: string }> {
     return this.request('GET', '/v1/profiles')
   }
-  
+
   async getCurrentProfile(): Promise<Profile> {
     return this.request('GET', '/v1/profiles/current')
   }
-  
+
   async switchProfile(profileId: string): Promise<{ success: boolean }> {
-    return this.request('POST', '/v1/profiles/switch', { profileId })
+    return this.request('POST', '/v1/profiles/current', { profileId })
   }
-  
+
+  async exportProfile(profileId: string): Promise<{ profileJson: string }> {
+    return this.request('GET', `/v1/profiles/${encodeURIComponent(profileId)}/export`)
+  }
+
+  async importProfile(profileJson: string): Promise<{ success: boolean; profile: Profile }> {
+    return this.request('POST', '/v1/profiles/import', { profileJson })
+  }
+
   // Settings
   async getSettings(): Promise<Settings> {
     return this.request('GET', '/v1/settings')
@@ -99,16 +121,27 @@ export class SpeakMcpClient {
   }): Promise<Conversation> {
     return this.request('POST', '/v1/conversations', data)
   }
-  
+
+  async deleteConversation(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/conversations/${id}`)
+  }
+
   // MCP
   async getMcpServers(): Promise<{ servers: McpServer[] }> {
     return this.request('GET', '/v1/mcp/servers')
   }
-  
+
+  async toggleMcpServer(
+    serverName: string,
+    enabled: boolean
+  ): Promise<{ success: boolean; server: string; enabled: boolean }> {
+    return this.request('POST', `/v1/mcp/servers/${encodeURIComponent(serverName)}/toggle`, { enabled })
+  }
+
   async listMcpTools(): Promise<{ tools: McpTool[] }> {
     return this.request('POST', '/mcp/tools/list', {})
   }
-  
+
   async callMcpTool(
     name: string,
     args: Record<string, unknown>
@@ -133,13 +166,13 @@ export class SpeakMcpClient {
     })
   }
   
-  // Chat - streaming (SSE)
+  // Chat - streaming (SSE) - yields typed SSEEvent objects
   async *chatStream(
     messages: ChatMessage[],
     conversationId?: string
-  ): AsyncGenerator<ChatCompletionChunk> {
+  ): AsyncGenerator<SSEEvent> {
     const url = `${this.baseUrl}/v1/chat/completions`
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: this.headers,
@@ -149,40 +182,78 @@ export class SpeakMcpClient {
         conversation_id: conversationId
       })
     })
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({})) as ApiError
       throw new Error(error.error || error.message || `HTTP ${response.status}`)
     }
-    
+
     if (!response.body) {
       throw new Error('No response body for streaming')
     }
-    
+
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    
+
     try {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        
+
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
-        
+
         for (const line of lines) {
           const trimmed = line.trim()
           if (!trimmed || !trimmed.startsWith('data: ')) continue
-          
+
           const data = trimmed.slice(6)
           if (data === '[DONE]') return
-          
+
           try {
-            const chunk = JSON.parse(data) as ChatCompletionChunk
-            yield chunk
-          } catch {
+            const parsed = JSON.parse(data) as Record<string, unknown>
+
+            // Handle typed events from the server
+            if (parsed.type === 'error') {
+              const errorData = parsed.data as { message: string }
+              throw new Error(errorData?.message || 'Unknown streaming error')
+            }
+
+            if (parsed.type === 'progress') {
+              yield {
+                type: 'progress',
+                data: parsed.data as AgentProgressUpdate
+              }
+              continue
+            }
+
+            if (parsed.type === 'done') {
+              yield {
+                type: 'done',
+                data: parsed.data as SSEEvent extends { type: 'done'; data: infer D } ? D : never
+              }
+              return
+            }
+
+            // Handle OpenAI-compatible chunks with choices[].delta.content
+            if (parsed.choices && Array.isArray(parsed.choices)) {
+              yield {
+                type: 'chunk',
+                data: parsed as unknown as ChatCompletionChunk
+              }
+              continue
+            }
+
+            // Unknown event type - skip
+          } catch (e) {
+            if (e instanceof Error && e.message !== 'Unknown streaming error') {
+              // Re-throw actual errors from type: 'error' events
+              if (e.message.includes('streaming error') || !data.startsWith('{')) {
+                throw e
+              }
+            }
             // Skip malformed JSON
           }
         }

@@ -186,12 +186,35 @@ export class ChatView extends BaseView {
     try {
       this.state.isProcessing = true
 
-      // Stream the response
-      for await (const chunk of this.client.chatStream(chatMessages, this.state.currentConversationId)) {
-        const delta = chunk.choices[0]?.delta?.content
-        if (delta) {
-          this.streamingContent += delta
-          this.updateStreamingMessage()
+      // Stream the response - handling typed SSE events
+      for await (const event of this.client.chatStream(chatMessages, this.state.currentConversationId)) {
+        switch (event.type) {
+          case 'chunk': {
+            const delta = event.data.choices[0]?.delta?.content
+            if (delta) {
+              this.streamingContent += delta
+              this.updateStreamingMessage()
+            }
+            break
+          }
+          case 'progress': {
+            // Progress events contain agent iteration info - could display tool calls, etc.
+            // For now, just show streaming content if present
+            const streamData = event.data as { streamingContent?: { text: string } }
+            if (streamData.streamingContent?.text) {
+              this.streamingContent = streamData.streamingContent.text
+              this.updateStreamingMessage()
+            }
+            break
+          }
+          case 'done': {
+            // Final content from done event
+            if (event.data.content) {
+              this.streamingContent = event.data.content
+            }
+            break
+          }
+          // error events are thrown as exceptions and caught below
         }
       }
 

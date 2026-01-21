@@ -520,9 +520,11 @@ export class App {
     if (this.profileSwitcher) return
 
     // Load profiles
+    let currentProfileId: string | undefined
     try {
       const result = await this.client.getProfiles()
       this.profiles = result.profiles || []
+      currentProfileId = result.currentProfileId
     } catch {
       this.profiles = []
     }
@@ -566,12 +568,12 @@ export class App {
       height: Math.min(this.profiles.length * 2, 10),
       options: this.profiles.map(p => ({
         name: p.name,
-        description: p.isActive ? '(current)' : '',
+        description: p.id === currentProfileId ? '(current)' : '',
       })),
     })
 
     // Set current profile as selected
-    const currentIndex = this.profiles.findIndex(p => p.isActive)
+    const currentIndex = this.profiles.findIndex(p => p.id === currentProfileId)
     if (currentIndex >= 0) {
       profileSelect.setSelectedIndex(currentIndex)
     }

@@ -47,6 +47,10 @@ export const TTS_PROVIDERS = [
     label: "Gemini",
     value: "gemini",
   },
+  {
+    label: "Kitten (Local)",
+    value: "kitten",
+  },
 ] as const
 
 export type TTS_PROVIDER_ID = (typeof TTS_PROVIDERS)[number]["value"]

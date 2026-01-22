@@ -998,6 +998,10 @@ export type Config = {
   geminiTtsVoice?: string
   geminiTtsLanguage?: string
 
+  // Kitten (Local) TTS Configuration
+  kittenModelDownloaded?: boolean // Whether model has been downloaded
+  kittenVoiceId?: number // Voice ID 0-7 (default: 5 for calm male voice)
+
   // TTS Text Preprocessing Configuration
   ttsPreprocessingEnabled?: boolean
   ttsRemoveCodeBlocks?: boolean

@@ -384,10 +384,18 @@ function KittenProviderSection({
   const modelDownloaded = (modelStatusQuery.data as { downloaded: boolean } | undefined)?.downloaded ?? false
   const handleTestVoice = async () => {
     try {
-      await window.electron.ipcRenderer.invoke("synthesizeWithKitten", {
+      const result = await window.electron.ipcRenderer.invoke("synthesizeWithKitten", {
         text: "Hello! This is a test of the Kitten text to speech voice.",
         voiceId,
-      })
+      }) as { audio: string; sampleRate: number }
+      // Decode base64 WAV audio and play it
+      const audioData = Uint8Array.from(atob(result.audio), c => c.charCodeAt(0))
+      const blob = new Blob([audioData], { type: "audio/wav" })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      audio.onerror = () => URL.revokeObjectURL(url)
+      await audio.play()
     } catch (error) {
       console.error("Failed to test Kitten voice:", error)
     }

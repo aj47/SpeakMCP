@@ -70,6 +70,52 @@ import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
 import * as parakeetStt from "./parakeet-stt"
 
+/**
+ * Convert Float32Array audio samples to WAV format buffer
+ */
+function float32ToWav(samples: Float32Array, sampleRate: number): Buffer {
+  const numChannels = 1
+  const bitsPerSample = 16
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8)
+  const blockAlign = numChannels * (bitsPerSample / 8)
+  const dataSize = samples.length * (bitsPerSample / 8)
+  const headerSize = 44
+  const totalSize = headerSize + dataSize
+
+  const buffer = Buffer.alloc(totalSize)
+  let offset = 0
+
+  // RIFF header
+  buffer.write('RIFF', offset); offset += 4
+  buffer.writeUInt32LE(totalSize - 8, offset); offset += 4
+  buffer.write('WAVE', offset); offset += 4
+
+  // fmt subchunk
+  buffer.write('fmt ', offset); offset += 4
+  buffer.writeUInt32LE(16, offset); offset += 4 // subchunk1Size (16 for PCM)
+  buffer.writeUInt16LE(1, offset); offset += 2  // audioFormat (1 = PCM)
+  buffer.writeUInt16LE(numChannels, offset); offset += 2
+  buffer.writeUInt32LE(sampleRate, offset); offset += 4
+  buffer.writeUInt32LE(byteRate, offset); offset += 4
+  buffer.writeUInt16LE(blockAlign, offset); offset += 2
+  buffer.writeUInt16LE(bitsPerSample, offset); offset += 2
+
+  // data subchunk
+  buffer.write('data', offset); offset += 4
+  buffer.writeUInt32LE(dataSize, offset); offset += 4
+
+  // Convert Float32 samples to 16-bit PCM
+  for (let i = 0; i < samples.length; i++) {
+    // Clamp to [-1, 1] and scale to 16-bit signed integer range
+    const sample = Math.max(-1, Math.min(1, samples[i]))
+    const intSample = Math.round(sample * 32767)
+    buffer.writeInt16LE(intSample, offset)
+    offset += 2
+  }
+
+  return buffer
+}
+
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
 
@@ -1041,9 +1087,11 @@ export const router = {
   downloadKittenModel: t.procedure.mutation(async () => {
     const { downloadKittenModel } = await import('./kitten-tts')
     await downloadKittenModel((progress) => {
-      // Send progress to renderer via webContents
+      // Send progress to renderer via webContents, guarding against destroyed windows
       BrowserWindow.getAllWindows().forEach(win => {
-        win.webContents.send('kitten-model-download-progress', progress)
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+          win.webContents.send('kitten-model-download-progress', progress)
+        }
       })
     })
     return { success: true }
@@ -1058,11 +1106,11 @@ export const router = {
     .mutation(async ({ input }) => {
       const { synthesize } = await import('./kitten-tts')
       const result = await synthesize(input.text, input.voiceId, input.speed)
-      // Return base64-encoded audio for the renderer to play
-      // Use byteOffset and byteLength to correctly handle typed array views
+      // Convert Float32Array samples to WAV format
+      const wavBuffer = float32ToWav(result.samples, result.sampleRate)
       return {
-        audio: Buffer.from(result.samples.buffer, result.samples.byteOffset, result.samples.byteLength).toString('base64'),
-        sampleRate: result.sampleRate  // Use actual sample rate from synthesis
+        audio: wavBuffer.toString('base64'),
+        sampleRate: result.sampleRate
       }
     }),
 
@@ -2510,6 +2558,13 @@ export const router = {
           audioBuffer = await generateGroqTTS(processedText, input, config)
         } else if (providerId === "gemini") {
           audioBuffer = await generateGeminiTTS(processedText, input, config)
+        } else if (providerId === "kitten") {
+          const { synthesize } = await import('./kitten-tts')
+          const voiceId = config.kittenVoiceId ?? 5 // Default to Male Calm
+          const result = await synthesize(processedText, voiceId, input.speed)
+          const wavBuffer = float32ToWav(result.samples, result.sampleRate)
+          // Convert Buffer to ArrayBuffer
+          audioBuffer = new Uint8Array(wavBuffer).buffer
         } else {
           throw new Error(`Unsupported TTS provider: ${providerId}`)
         }

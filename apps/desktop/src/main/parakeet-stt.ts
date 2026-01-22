@@ -73,6 +73,7 @@ let modelStatus: ModelStatus = {
 // Lazily loaded sherpa-onnx module and recognizer
 let sherpaModule: SherpaOnnxModule | null = null
 let recognizer: OfflineRecognizerType | null = null
+let recognizerNumThreads: number | null = null // Track current config for reuse
 let sherpaLoadError: string | null = null
 
 /**
@@ -319,6 +320,11 @@ export async function downloadModel(
       // Ignore cleanup errors
     }
 
+    // Verify extraction was successful by checking all required files exist
+    if (!isModelReady()) {
+      throw new Error("Model extraction failed: required files not found after extraction")
+    }
+
     modelStatus.downloaded = true
     modelStatus.progress = 1
     modelStatus.downloading = false
@@ -406,11 +412,17 @@ function downloadFile(
 }
 
 /**
- * Initialize the recognizer with the downloaded model
+ * Initialize the recognizer with the downloaded model.
+ * Reuses existing recognizer if already initialized with the same numThreads.
  */
 export async function initializeRecognizer(numThreads = 2): Promise<void> {
   if (!isModelReady()) {
     throw new Error("Model not downloaded. Call downloadModel() first.")
+  }
+
+  // Reuse existing recognizer if already initialized with the same config
+  if (recognizer && recognizerNumThreads === numThreads) {
+    return
   }
 
   if (recognizer) {
@@ -441,6 +453,7 @@ export async function initializeRecognizer(numThreads = 2): Promise<void> {
   }
 
   recognizer = new sherpa.OfflineRecognizer(config)
+  recognizerNumThreads = numThreads
 }
 
 /**
@@ -480,5 +493,6 @@ export async function transcribe(
  */
 export function disposeRecognizer(): void {
   recognizer = null
+  recognizerNumThreads = null
 }
 

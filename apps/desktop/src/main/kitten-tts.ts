@@ -379,6 +379,11 @@ export async function downloadKittenModel(
       // Ignore cleanup errors
     }
 
+    // Verify extraction was successful by checking all required files exist
+    if (!isModelReady()) {
+      throw new Error("Model extraction failed: required files not found after extraction")
+    }
+
     downloadState.progress = 1
     onProgress?.(1)
   } catch (error) {

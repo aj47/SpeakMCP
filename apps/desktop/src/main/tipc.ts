@@ -2948,7 +2948,7 @@ export const router = {
       transcriptPostProcessingGroqModel?: string
       transcriptPostProcessingGeminiModel?: string
       // TTS Provider settings
-      ttsProviderId?: "openai" | "groq" | "gemini"
+      ttsProviderId?: "openai" | "groq" | "gemini" | "kitten"
     }>()
     .action(async ({ input }) => {
         return profileService.updateProfileModelConfig(input.profileId, {

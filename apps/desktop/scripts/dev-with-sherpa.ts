@@ -1,5 +1,7 @@
-#!/usr/bin/env npx tsx
 /**
+ * NOTE: This file should be run via `npx tsx scripts/dev-with-sherpa.ts`
+ * or through the npm script `pnpm dev-sherpa`. Do not invoke directly.
+ *
  * Development launcher that configures environment for sherpa-onnx native module.
  *
  * The sherpa-onnx-node package requires platform-specific native libraries.

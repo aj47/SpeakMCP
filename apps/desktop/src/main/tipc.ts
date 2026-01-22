@@ -1079,12 +1079,12 @@ export const router = {
     }),
 
   // Kitten (local) TTS model management
-  getKittenModelStatus: t.procedure.query(async () => {
+  getKittenModelStatus: t.procedure.action(async () => {
     const { getKittenModelStatus } = await import('./kitten-tts')
     return getKittenModelStatus()
   }),
 
-  downloadKittenModel: t.procedure.mutation(async () => {
+  downloadKittenModel: t.procedure.action(async () => {
     const { downloadKittenModel } = await import('./kitten-tts')
     await downloadKittenModel((progress) => {
       // Send progress to renderer via webContents, guarding against destroyed windows
@@ -1103,7 +1103,7 @@ export const router = {
       voiceId?: number
       speed?: number
     }>()
-    .mutation(async ({ input }) => {
+    .action(async ({ input }) => {
       const { synthesize } = await import('./kitten-tts')
       const result = await synthesize(input.text, input.voiceId, input.speed)
       // Convert Float32Array samples to WAV format

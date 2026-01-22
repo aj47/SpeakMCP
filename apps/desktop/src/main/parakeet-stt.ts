@@ -15,9 +15,20 @@ import * as https from "https"
 import * as os from "os"
 import * as tar from "tar"
 
-// Type imports only - actual module loaded dynamically
-type SherpaOnnxModule = typeof import("sherpa-onnx-node")
-type OfflineRecognizerType = import("sherpa-onnx-node").OfflineRecognizer
+// Type definitions for sherpa-onnx-node (optional dependency, loaded dynamically)
+// These mirror the actual types but allow compilation without the package installed
+interface SherpaOnnxOfflineRecognizer {
+  createStream(): SherpaOnnxOfflineStream
+  decode(stream: SherpaOnnxOfflineStream): void
+  getResult(stream: SherpaOnnxOfflineStream): { text: string }
+}
+interface SherpaOnnxOfflineStream {
+  acceptWaveform(data: { samples: Float32Array; sampleRate: number }): void
+}
+interface SherpaOnnxModule {
+  OfflineRecognizer: new (config: unknown) => SherpaOnnxOfflineRecognizer
+}
+type OfflineRecognizerType = SherpaOnnxOfflineRecognizer
 
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2"
@@ -164,6 +175,7 @@ async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
     configureSherpaLibraryPath()
 
     // Dynamic import - handle CommonJS interop
+    // @ts-expect-error - sherpa-onnx-node is an optional dependency that may not be installed
     const imported = await import("sherpa-onnx-node")
     // For CommonJS modules imported in ESM, exports are on .default
     sherpaModule = (imported.default ?? imported) as SherpaOnnxModule

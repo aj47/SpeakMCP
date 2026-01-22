@@ -15,9 +15,16 @@ import * as https from "https"
 import * as os from "os"
 import * as tar from "tar"
 
-// Type imports only - actual module loaded dynamically
-type SherpaOnnxModule = typeof import("sherpa-onnx-node")
-type OfflineTtsType = import("sherpa-onnx-node").OfflineTts
+// Type definitions for sherpa-onnx-node (optional dependency, loaded dynamically)
+// These mirror the actual types but allow compilation without the package installed
+interface SherpaOnnxOfflineTts {
+  generate(data: { text: string; sid?: number; speed?: number }): { samples: Float32Array; sampleRate: number }
+  sampleRate: number
+}
+interface SherpaOnnxModule {
+  OfflineTts: new (config: unknown) => SherpaOnnxOfflineTts
+}
+type OfflineTtsType = SherpaOnnxOfflineTts
 
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kitten-nano-en-v0_1-fp16.tar.bz2"
@@ -169,6 +176,7 @@ async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
 
   try {
     configureSherpaLibraryPath()
+    // @ts-expect-error - sherpa-onnx-node is an optional dependency that may not be installed
     const imported = await import("sherpa-onnx-node")
     sherpaModule = (imported.default ?? imported) as SherpaOnnxModule
     console.log("[Kitten] sherpa-onnx-node loaded successfully")

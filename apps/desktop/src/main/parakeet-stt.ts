@@ -466,7 +466,10 @@ export async function transcribe(
   audioBuffer: ArrayBuffer,
   sampleRate = 16000
 ): Promise<string> {
-  if (!recognizer) {
+  // Capture recognizer into a local const to avoid race conditions if
+  // initializeRecognizer() runs concurrently and swaps the global
+  const currentRecognizer = recognizer
+  if (!currentRecognizer) {
     throw new Error("Recognizer not initialized. Call initializeRecognizer() first.")
   }
 
@@ -474,16 +477,16 @@ export async function transcribe(
   const samples = new Float32Array(audioBuffer)
 
   // Create a stream for this transcription
-  const stream = recognizer.createStream()
+  const stream = currentRecognizer.createStream()
 
   // Accept the waveform
   stream.acceptWaveform({ samples, sampleRate })
 
   // Decode
-  recognizer.decode(stream)
+  currentRecognizer.decode(stream)
 
   // Get result
-  const result = recognizer.getResult(stream)
+  const result = currentRecognizer.getResult(stream)
 
   return result.text || ""
 }

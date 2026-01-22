@@ -241,6 +241,13 @@ function downloadFile(
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath)
 
+    // Helper to close file and clean up before rejecting
+    const cleanupAndReject = (err: Error) => {
+      file.destroy()
+      fs.unlink(destPath, () => {})
+      reject(err)
+    }
+
     const request = (currentUrl: string) => {
       https
         .get(currentUrl, (response) => {
@@ -250,12 +257,14 @@ function downloadFile(
             response.statusCode < 400 &&
             response.headers.location
           ) {
-            request(response.headers.location)
+            // Resolve relative redirect URLs against current URL
+            const redirectUrl = new URL(response.headers.location, currentUrl).toString()
+            request(redirectUrl)
             return
           }
 
           if (response.statusCode !== 200) {
-            reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`))
+            cleanupAndReject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`))
             return
           }
 
@@ -277,13 +286,11 @@ function downloadFile(
           })
 
           file.on("error", (err) => {
-            fs.unlink(destPath, () => {})
-            reject(err)
+            cleanupAndReject(err)
           })
         })
         .on("error", (err) => {
-          fs.unlink(destPath, () => {})
-          reject(err)
+          cleanupAndReject(err)
         })
     }
 

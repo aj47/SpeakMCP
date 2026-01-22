@@ -110,7 +110,11 @@ function ParakeetModelDownload() {
   const modelStatusQuery = useQuery({
     queryKey: ["parakeetModelStatus"],
     queryFn: () => window.electron.ipcRenderer.invoke("getParakeetModelStatus"),
-    refetchInterval: isDownloading ? 500 : false,
+    // Poll while downloading (either local state or server state) to keep progress updated
+    refetchInterval: (query) => {
+      const status = query.state.data as { downloading?: boolean } | undefined
+      return (isDownloading || status?.downloading) ? 500 : false
+    },
   })
 
   const handleDownload = async () => {
@@ -118,11 +122,12 @@ function ParakeetModelDownload() {
     setDownloadProgress(0)
     try {
       await window.electron.ipcRenderer.invoke("downloadParakeetModel")
-      queryClient.invalidateQueries({ queryKey: ["parakeetModelStatus"] })
     } catch (error) {
       console.error("Failed to download Parakeet model:", error)
     } finally {
       setIsDownloading(false)
+      // Always invalidate to show final state (success or error)
+      queryClient.invalidateQueries({ queryKey: ["parakeetModelStatus"] })
     }
   }
 
@@ -289,7 +294,11 @@ function KittenModelDownload() {
   const modelStatusQuery = useQuery({
     queryKey: ["kittenModelStatus"],
     queryFn: () => window.electron.ipcRenderer.invoke("getKittenModelStatus"),
-    refetchInterval: isDownloading ? 500 : false,
+    // Poll while downloading (either local state or server state) to keep progress updated
+    refetchInterval: (query) => {
+      const status = query.state.data as { downloading?: boolean } | undefined
+      return (isDownloading || status?.downloading) ? 500 : false
+    },
   })
 
   const handleDownload = async () => {
@@ -297,11 +306,12 @@ function KittenModelDownload() {
     setDownloadProgress(0)
     try {
       await window.electron.ipcRenderer.invoke("downloadKittenModel")
-      queryClient.invalidateQueries({ queryKey: ["kittenModelStatus"] })
     } catch (error) {
       console.error("Failed to download Kitten model:", error)
     } finally {
       setIsDownloading(false)
+      // Always invalidate to show final state (success or error)
+      queryClient.invalidateQueries({ queryKey: ["kittenModelStatus"] })
     }
   }
 

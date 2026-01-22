@@ -67,7 +67,7 @@ import { profileService } from "./profile-service"
 import { agentProfileService } from "./agent-profile-service"
 import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
-import { fetchModelsDevData, getModelFromModelsDevByProviderId, refreshModelsDevCache } from "./models-dev-service"
+import { fetchModelsDevData, getModelFromModelsDevByProviderId, findBestModelMatch, refreshModelsDevCache } from "./models-dev-service"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -2448,10 +2448,16 @@ export const router = {
 
   // Get enhanced model info from models.dev
   getModelInfo: t.procedure
-    .input<{ modelId: string; providerId: string }>()
+    .input<{ modelId: string; providerId?: string }>()
     .action(async ({ input }) => {
-      const model = getModelFromModelsDevByProviderId(input.modelId, input.providerId)
-      return model || null
+      // If providerId is given, use specific provider lookup
+      if (input.providerId) {
+        const model = getModelFromModelsDevByProviderId(input.modelId, input.providerId)
+        return model || null
+      }
+      // Otherwise, search across ALL providers using fuzzy matching
+      const matchResult = findBestModelMatch(input.modelId)
+      return matchResult?.model || null
     }),
 
   // Get all models.dev data

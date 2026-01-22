@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { Label } from "./ui/label"
 import {
   Select,
@@ -42,17 +42,7 @@ interface PresetModelSelectorProps {
   disabled?: boolean
 }
 
-/** Map baseUrl to models.dev provider ID */
-function getModelsDevProviderId(baseUrl: string): string {
-  if (baseUrl.includes("openrouter.ai")) return "openrouter"
-  if (baseUrl.includes("api.openai.com")) return "openai"
-  if (baseUrl.includes("api.together.xyz")) return "together"
-  if (baseUrl.includes("api.cerebras.ai")) return "cerebras"
-  if (baseUrl.includes("api.perplexity.ai")) return "perplexity"
-  if (baseUrl.includes("api.groq.com")) return "groq"
-  // Default to openai for unknown providers
-  return "openai"
-}
+
 
 /** Format price in a compact way */
 function formatPrice(price: number | undefined): string | null {
@@ -86,8 +76,6 @@ export function PresetModelSelector({
   const [error, setError] = useState<string | null>(null)
   const [modelsDevData, setModelsDevData] = useState<Record<string, ModelsDevModel>>({})
 
-  const providerId = useMemo(() => getModelsDevProviderId(baseUrl), [baseUrl])
-
   const fetchModels = async () => {
     if (!baseUrl || !apiKey) {
       setModels([])
@@ -112,23 +100,33 @@ export function PresetModelSelector({
     }
   }
 
-  // Fetch models.dev data for enriched display
+  // Fetch models.dev data for enriched display using backend fuzzy matching
   useEffect(() => {
     const fetchModelsDevInfo = async () => {
       if (models.length === 0) return
 
-      try {
-        const data = await tipcClient.getModelsDevData()
-        if (data && data[providerId]?.models) {
-          setModelsDevData(data[providerId].models)
-        }
-      } catch {
-        // Silently fail - models.dev data is optional enhancement
-      }
+      // Fetch enhanced info for each model using fuzzy matching
+      const enrichedData: Record<string, ModelsDevModel> = {}
+
+      await Promise.all(
+        models.map(async (model) => {
+          try {
+            // Use backend fuzzy matching - no providerId to search across ALL providers
+            const info = await tipcClient.getModelInfo({ modelId: model.id })
+            if (info) {
+              enrichedData[model.id] = info
+            }
+          } catch {
+            // Silently ignore - enrichment is optional
+          }
+        })
+      )
+
+      setModelsDevData(enrichedData)
     }
 
     fetchModelsDevInfo()
-  }, [models, providerId])
+  }, [models])
 
   useEffect(() => {
     if (baseUrl && apiKey) {
@@ -140,16 +138,7 @@ export function PresetModelSelector({
 
   /** Get models.dev info for a specific model */
   const getModelInfo = (modelId: string): ModelsDevModel | undefined => {
-    // Try exact match first
-    if (modelsDevData[modelId]) return modelsDevData[modelId]
-
-    // For OpenRouter models (format: provider/model), try the model part
-    if (modelId.includes("/")) {
-      const modelPart = modelId.split("/")[1]
-      if (modelsDevData[modelPart]) return modelsDevData[modelPart]
-    }
-
-    return undefined
+    return modelsDevData[modelId]
   }
 
   /** Render model item with pricing and capabilities */

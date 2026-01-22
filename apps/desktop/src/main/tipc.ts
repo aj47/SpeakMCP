@@ -67,6 +67,7 @@ import { profileService } from "./profile-service"
 import { agentProfileService } from "./agent-profile-service"
 import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
+import { fetchModelsDevData, getModelFromModelsDevByProviderId, refreshModelsDevCache } from "./models-dev-service"
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -2444,6 +2445,25 @@ export const router = {
       const { fetchModelsForPreset } = await import("./models-service")
       return fetchModelsForPreset(input.baseUrl, input.apiKey)
     }),
+
+  // Get enhanced model info from models.dev
+  getModelInfo: t.procedure
+    .input<{ modelId: string; providerId: string }>()
+    .action(async ({ input }) => {
+      const model = getModelFromModelsDevByProviderId(input.modelId, input.providerId)
+      return model || null
+    }),
+
+  // Get all models.dev data
+  getModelsDevData: t.procedure.action(async () => {
+    return await fetchModelsDevData()
+  }),
+
+  // Force refresh models.dev cache
+  refreshModelsData: t.procedure.mutation(async () => {
+    await refreshModelsDevCache()
+    return { success: true }
+  }),
 
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {

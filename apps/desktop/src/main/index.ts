@@ -29,6 +29,7 @@ import {
   startNamedCloudflareTunnel,
   checkCloudflaredInstalled,
 } from "./cloudflare-tunnel"
+import { initModelsDevService } from "./models-dev-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -146,6 +147,10 @@ app.whenReady().then(() => {
       )
       logApp("Failed to initialize MCP service on startup:", error)
     })
+
+  // Initialize models.dev service (fetches model metadata in background)
+  initModelsDevService()
+  logApp("Models.dev service initialization started")
 
   // Initialize ACP service (spawns auto-start agents)
   acpService

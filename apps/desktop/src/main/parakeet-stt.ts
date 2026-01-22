@@ -13,7 +13,21 @@ import * as fs from "fs"
 import * as path from "path"
 import * as https from "https"
 import * as os from "os"
-import * as tar from "tar"
+
+// tar is an optional dependency, loaded dynamically when needed
+type TarModule = { x: (opts: { file: string; cwd: string; filter?: (path: string) => boolean }) => Promise<void> }
+let tarModule: TarModule | null = null
+
+async function loadTarModule(): Promise<TarModule> {
+  if (tarModule) return tarModule
+  try {
+    const imported = await import("tar")
+    tarModule = imported as TarModule
+    return tarModule
+  } catch (error) {
+    throw new Error(`Failed to load tar module. Please install optional dependencies: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
 
 // Type definitions for sherpa-onnx-node (optional dependency, loaded dynamically)
 // These mirror the actual types but allow compilation without the package installed
@@ -280,6 +294,7 @@ export async function downloadModel(
     modelStatus.progress = 0.8
     onProgress?.(0.8)
 
+    const tar = await loadTarModule()
     await tar.x({
       file: archivePath,
       cwd: modelsPath,

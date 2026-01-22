@@ -133,12 +133,13 @@ export const GEMINI_TTS_MODELS = [
 ] as const
 
 // Kitten TTS Voice Options (8 voices, sid 0-7)
+// Matches the voice definitions in kitten-tts.ts
 export const KITTEN_TTS_VOICES = [
-  { label: "Female Friendly", value: 0 },
-  { label: "Female Serious", value: 1 },
+  { label: "Female Energetic", value: 0 },
+  { label: "Female Calm", value: 1 },
   { label: "Female Cheerful", value: 2 },
-  { label: "Female Energetic", value: 3 },
-  { label: "Male Friendly", value: 4 },
+  { label: "Female Serious", value: 3 },
+  { label: "Male Energetic", value: 4 },
   { label: "Male Calm (Default)", value: 5 },
   { label: "Male Cheerful", value: 6 },
   { label: "Male Serious", value: 7 },

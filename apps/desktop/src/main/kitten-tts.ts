@@ -52,6 +52,9 @@ export interface Voice {
 
 export interface KittenModelStatus {
   downloaded: boolean
+  downloading: boolean
+  progress: number
+  error?: string
   path?: string
 }
 
@@ -220,6 +223,9 @@ export function getKittenModelStatus(): KittenModelStatus {
   const downloaded = isModelReady()
   return {
     downloaded,
+    downloading: downloadState.downloading,
+    progress: downloadState.progress,
+    error: downloadState.error,
     path: downloaded ? path.join(getModelsPath(), MODEL_DIR_NAME) : undefined,
   }
 }
@@ -287,7 +293,12 @@ function downloadFile(
 
 
 
-let downloading = false
+// Module-level state for download tracking
+const downloadState = {
+  downloading: false,
+  progress: 0,
+  error: undefined as string | undefined,
+}
 
 /**
  * Download the Kitten TTS model from GitHub releases
@@ -295,7 +306,7 @@ let downloading = false
 export async function downloadKittenModel(
   onProgress?: (progress: number) => void
 ): Promise<void> {
-  if (downloading) {
+  if (downloadState.downloading) {
     throw new Error("Model download already in progress")
   }
 
@@ -303,7 +314,9 @@ export async function downloadKittenModel(
     return
   }
 
-  downloading = true
+  downloadState.downloading = true
+  downloadState.progress = 0
+  downloadState.error = undefined
 
   const modelsPath = getModelsPath()
   fs.mkdirSync(modelsPath, { recursive: true })
@@ -313,9 +326,11 @@ export async function downloadKittenModel(
   try {
     // Download the archive
     await downloadFile(MODEL_URL, archivePath, (progress) => {
-      onProgress?.(progress * 0.8) // 80% for download
+      downloadState.progress = progress * 0.8 // 80% for download
+      onProgress?.(downloadState.progress)
     })
 
+    downloadState.progress = 0.8
     onProgress?.(0.8)
 
     // Extract the archive
@@ -324,6 +339,7 @@ export async function downloadKittenModel(
       cwd: modelsPath,
     })
 
+    downloadState.progress = 0.95
     onProgress?.(0.95)
 
     // Clean up archive
@@ -333,8 +349,10 @@ export async function downloadKittenModel(
       // Ignore cleanup errors
     }
 
+    downloadState.progress = 1
     onProgress?.(1)
   } catch (error) {
+    downloadState.error = error instanceof Error ? error.message : String(error)
     // Clean up partial download
     try {
       fs.unlinkSync(archivePath)
@@ -343,7 +361,7 @@ export async function downloadKittenModel(
     }
     throw error
   } finally {
-    downloading = false
+    downloadState.downloading = false
   }
 }
 

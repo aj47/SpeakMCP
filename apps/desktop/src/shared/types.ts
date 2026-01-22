@@ -423,7 +423,7 @@ export type ProfileModelConfig = {
   transcriptPostProcessingGroqModel?: string
   transcriptPostProcessingGeminiModel?: string
   // TTS Provider settings
-  ttsProviderId?: "openai" | "groq" | "gemini"
+  ttsProviderId?: "openai" | "groq" | "gemini" | "kitten"
 }
 
 // Per-profile skills configuration

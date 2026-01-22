@@ -1034,12 +1034,12 @@ export const router = {
 
   // Kitten (local) TTS model management
   getKittenModelStatus: t.procedure.query(async () => {
-    const { getKittenModelStatus } = await import('./kitten-tts.js')
+    const { getKittenModelStatus } = await import('./kitten-tts')
     return getKittenModelStatus()
   }),
 
   downloadKittenModel: t.procedure.mutation(async () => {
-    const { downloadKittenModel } = await import('./kitten-tts.js')
+    const { downloadKittenModel } = await import('./kitten-tts')
     await downloadKittenModel((progress) => {
       // Send progress to renderer via webContents
       BrowserWindow.getAllWindows().forEach(win => {
@@ -1056,11 +1056,12 @@ export const router = {
       speed?: number
     }>()
     .mutation(async ({ input }) => {
-      const { synthesize } = await import('./kitten-tts.js')
+      const { synthesize } = await import('./kitten-tts')
       const result = await synthesize(input.text, input.voiceId, input.speed)
       // Return base64-encoded audio for the renderer to play
+      // Use byteOffset and byteLength to correctly handle typed array views
       return {
-        audio: Buffer.from(result.samples.buffer).toString('base64'),
+        audio: Buffer.from(result.samples.buffer, result.samples.byteOffset, result.samples.byteLength).toString('base64'),
         sampleRate: result.sampleRate  // Use actual sample rate from synthesis
       }
     }),

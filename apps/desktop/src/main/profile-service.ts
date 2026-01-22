@@ -13,6 +13,8 @@ const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 const VALID_PROVIDER_IDS = ["openai", "groq", "gemini"]
 // STT supports openai, groq, and parakeet (local)
 const VALID_STT_PROVIDER_IDS = ["openai", "groq", "parakeet"]
+// TTS supports openai, groq, gemini, and kitten (local)
+const VALID_TTS_PROVIDER_IDS = ["openai", "groq", "gemini", "kitten"]
 
 /**
  * Validates the shape of an imported MCP server config
@@ -193,7 +195,6 @@ function isValidModelConfig(config: unknown): boolean {
   const providerIdFields = [
     "mcpToolsProviderId",
     "transcriptPostProcessingProviderId",
-    "ttsProviderId",
   ]
 
   // Validate provider ID fields against allowed enums
@@ -205,9 +206,16 @@ function isValidModelConfig(config: unknown): boolean {
     }
   }
 
-  // sttProviderId only supports openai and groq (no gemini)
+  // sttProviderId supports openai, groq, and parakeet (local)
   if (c.sttProviderId !== undefined) {
     if (typeof c.sttProviderId !== "string" || !VALID_STT_PROVIDER_IDS.includes(c.sttProviderId as string)) {
+      return false
+    }
+  }
+
+  // ttsProviderId supports openai, groq, gemini, and kitten (local)
+  if (c.ttsProviderId !== undefined) {
+    if (typeof c.ttsProviderId !== "string" || !VALID_TTS_PROVIDER_IDS.includes(c.ttsProviderId as string)) {
       return false
     }
   }

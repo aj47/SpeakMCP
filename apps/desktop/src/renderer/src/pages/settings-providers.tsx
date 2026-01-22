@@ -368,7 +368,6 @@ function KittenProviderSection({
   usageBadges,
   voiceId,
   onVoiceIdChange,
-  modelDownloaded,
 }: {
   isActive: boolean
   isCollapsed: boolean
@@ -376,8 +375,13 @@ function KittenProviderSection({
   usageBadges: { label: string; icon: React.ElementType }[]
   voiceId: number
   onVoiceIdChange: (value: number) => void
-  modelDownloaded: boolean
 }) {
+  // Query model status to determine if voice controls should be shown
+  const modelStatusQuery = useQuery({
+    queryKey: ["kittenModelStatus"],
+    queryFn: () => window.electron.ipcRenderer.invoke("getKittenModelStatus"),
+  })
+  const modelDownloaded = (modelStatusQuery.data as { downloaded: boolean } | undefined)?.downloaded ?? false
   const handleTestVoice = async () => {
     try {
       await window.electron.ipcRenderer.invoke("synthesizeWithKitten", {
@@ -1068,11 +1072,10 @@ export function Component() {
           <KittenProviderSection
             isActive={true}
             isCollapsed={configQuery.data.providerSectionCollapsedKitten ?? true}
-            onToggleCollapse={() => saveConfig({ providerSectionCollapsedKitten: !configQuery.data.providerSectionCollapsedKitten })}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedKitten: !(configQuery.data.providerSectionCollapsedKitten ?? true) })}
             usageBadges={activeProviders.kitten}
             voiceId={configQuery.data.kittenVoiceId ?? 5}
             onVoiceIdChange={(value) => saveConfig({ kittenVoiceId: value })}
-            modelDownloaded={configQuery.data.kittenModelDownloaded ?? false}
           />
         )}
 
@@ -1320,11 +1323,10 @@ export function Component() {
           <KittenProviderSection
             isActive={false}
             isCollapsed={configQuery.data.providerSectionCollapsedKitten ?? true}
-            onToggleCollapse={() => saveConfig({ providerSectionCollapsedKitten: !configQuery.data.providerSectionCollapsedKitten })}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedKitten: !(configQuery.data.providerSectionCollapsedKitten ?? true) })}
             usageBadges={activeProviders.kitten}
             voiceId={configQuery.data.kittenVoiceId ?? 5}
             onVoiceIdChange={(value) => saveConfig({ kittenVoiceId: value })}
-            modelDownloaded={configQuery.data.kittenModelDownloaded ?? false}
           />
         )}
 

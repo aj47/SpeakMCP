@@ -672,38 +672,23 @@ export async function fetchAvailableModels(
 }
 
 /**
- * Hardcoded fallback models when both API calls and models.dev fail
+ * Minimal hardcoded fallback models - only used when BOTH provider API
+ * AND models.dev cache are unavailable. Keep this list minimal since
+ * models.dev is the primary source for fallback model data.
  */
 const HARDCODED_FALLBACK_MODELS: Record<string, ModelInfo[]> = {
   openai: [
-    { id: "gpt-4o", name: "GPT-4o" },
     { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-    { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
-    { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
   ],
   openrouter: [
-    { id: "gpt-4o", name: "GPT-4o" },
-    { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini (OpenAI)" },
     { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (Anthropic)" },
-    { id: "anthropic/claude-3-opus", name: "Claude 3 Opus (Anthropic)" },
-    { id: "meta-llama/llama-3.1-405b-instruct", name: "Llama 3.1 405B Instruct (Meta)" },
-    { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B Instruct (Meta)" },
-    { id: "google/gemini-1.5-pro", name: "Gemini 1.5 Pro (Google)" },
-    { id: "mistralai/mixtral-8x22b-instruct", name: "Mixtral 8x22B Instruct (Mistral)" },
   ],
   groq: [
-    { id: "moonshotai/kimi-k2-instruct", name: "Kimi K2 Instruct (Moonshot AI)" },
-    { id: "gemma2-9b-it", name: "Gemma2 9B IT" },
     { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
-    { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B Versatile" },
-    { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
-    { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B (OpenAI)" },
-    { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B (OpenAI)" },
   ],
   google: [
-    { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash" },
-    { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-    { id: "gemini-1.0-pro", name: "Gemini 1.0 Pro" },
+    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
   ],
 }
 

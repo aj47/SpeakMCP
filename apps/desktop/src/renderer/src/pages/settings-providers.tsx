@@ -1056,7 +1056,7 @@ export function Component() {
           <ParakeetProviderSection
             isActive={true}
             isCollapsed={configQuery.data.providerSectionCollapsedParakeet ?? true}
-            onToggleCollapse={() => saveConfig({ providerSectionCollapsedParakeet: !configQuery.data.providerSectionCollapsedParakeet })}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedParakeet: !(configQuery.data.providerSectionCollapsedParakeet ?? true) })}
             usageBadges={activeProviders.parakeet}
             numThreads={configQuery.data.parakeetNumThreads || 2}
             onNumThreadsChange={(value) => saveConfig({ parakeetNumThreads: value })}
@@ -1308,7 +1308,7 @@ export function Component() {
           <ParakeetProviderSection
             isActive={false}
             isCollapsed={configQuery.data.providerSectionCollapsedParakeet ?? true}
-            onToggleCollapse={() => saveConfig({ providerSectionCollapsedParakeet: !configQuery.data.providerSectionCollapsedParakeet })}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedParakeet: !(configQuery.data.providerSectionCollapsedParakeet ?? true) })}
             usageBadges={activeProviders.parakeet}
             numThreads={configQuery.data.parakeetNumThreads || 2}
             onNumThreadsChange={(value) => saveConfig({ parakeetNumThreads: value })}

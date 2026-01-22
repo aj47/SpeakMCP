@@ -272,9 +272,13 @@ export async function downloadModel(
       file: archivePath,
       cwd: modelsPath,
       filter: (entryPath) => {
-        // Only extract the files we need
+        // Only extract the files we need, plus directories containing them
         const basename = path.basename(entryPath)
-        return REQUIRED_FILES.includes(basename) || entryPath.includes("/")
+        // Allow directories (needed for tar extraction to work)
+        if (entryPath.endsWith("/")) {
+          return true
+        }
+        return REQUIRED_FILES.includes(basename)
       },
     })
 
@@ -376,7 +380,8 @@ export async function initializeRecognizer(numThreads = 2): Promise<void> {
   }
 
   if (recognizer) {
-    return // Already initialized
+    // Dispose of existing recognizer to allow reconfiguration (e.g., numThreads change)
+    disposeRecognizer()
   }
 
   // Load the sherpa-onnx module dynamically

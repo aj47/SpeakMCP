@@ -1,4 +1,5 @@
-import { useCallback, useMemo } from "react"
+import { useCallback, useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Control, ControlGroup, ControlLabel } from "@renderer/components/ui/control"
 import { Input } from "@renderer/components/ui/input"
 import {
@@ -9,6 +10,7 @@ import {
   SelectValue,
 } from "@renderer/components/ui/select"
 import { Switch } from "@renderer/components/ui/switch"
+import { Button } from "@renderer/components/ui/button"
 import {
   useConfigQuery,
   useSaveConfigMutation,
@@ -18,7 +20,7 @@ import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
 import { PresetModelSelector } from "@renderer/components/preset-model-selector"
 import { ProfileBadgeCompact } from "@renderer/components/profile-badge"
-import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight, Brain, Zap, BookOpen, Settings2 } from "lucide-react"
+import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight, Brain, Zap, BookOpen, Settings2, Cpu, Download, Loader2 } from "lucide-react"
 
 import {
   STT_PROVIDERS,
@@ -98,6 +100,185 @@ function ProviderSelector({
   )
 }
 
+// Parakeet Model Download Component
+function ParakeetModelDownload() {
+  const queryClient = useQueryClient()
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
+
+  const modelStatusQuery = useQuery({
+    queryKey: ["parakeetModelStatus"],
+    queryFn: () => window.electron.ipcRenderer.invoke("getParakeetModelStatus"),
+    refetchInterval: isDownloading ? 500 : false,
+  })
+
+  const handleDownload = async () => {
+    setIsDownloading(true)
+    setDownloadProgress(0)
+    try {
+      await window.electron.ipcRenderer.invoke("downloadParakeetModel")
+      queryClient.invalidateQueries({ queryKey: ["parakeetModelStatus"] })
+    } catch (error) {
+      console.error("Failed to download Parakeet model:", error)
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  const status = modelStatusQuery.data as { downloaded: boolean; downloading: boolean; progress: number; error?: string } | undefined
+
+  if (modelStatusQuery.isLoading) {
+    return <span className="text-xs text-muted-foreground">Checking...</span>
+  }
+
+  if (status?.downloaded) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-green-600">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Model Ready
+      </span>
+    )
+  }
+
+  if (status?.downloading || isDownloading) {
+    const progress = status?.progress ?? downloadProgress
+    return (
+      <div className="flex flex-col gap-1.5 w-full">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          <span className="text-xs text-muted-foreground">
+            Downloading... {Math.round(progress * 100)}%
+          </span>
+        </div>
+        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-200"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (status?.error) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-destructive">{status.error}</span>
+        <Button size="sm" variant="outline" onClick={handleDownload}>
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Retry Download
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <Button size="sm" variant="outline" onClick={handleDownload}>
+      <Download className="h-3.5 w-3.5 mr-1.5" />
+      Download Model (~200MB)
+    </Button>
+  )
+}
+
+// Parakeet Provider Section Component
+function ParakeetProviderSection({
+  isActive,
+  isCollapsed,
+  onToggleCollapse,
+  usageBadges,
+  numThreads,
+  onNumThreadsChange,
+}: {
+  isActive: boolean
+  isCollapsed: boolean
+  onToggleCollapse: () => void
+  usageBadges: { label: string; icon: React.ElementType }[]
+  numThreads: number
+  onNumThreadsChange: (value: number) => void
+}) {
+  return (
+    <div className={`rounded-lg border ${isActive ? 'border-primary/30 bg-primary/5' : ''}`}>
+      <button
+        type="button"
+        className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+        onClick={onToggleCollapse}
+        aria-expanded={!isCollapsed}
+        aria-controls="parakeet-provider-content"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+          <Cpu className="h-4 w-4" />
+          Parakeet (Local)
+          {isActive && (
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+          )}
+        </span>
+        {isActive && usageBadges.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            {usageBadges.map((badge) => (
+              <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
+            ))}
+          </div>
+        )}
+      </button>
+      {!isCollapsed && (
+        <div id="parakeet-provider-content" className="divide-y border-t">
+          <div className="px-3 py-2 bg-muted/30 border-b">
+            <p className="text-xs text-muted-foreground">
+              {isActive
+                ? "Local speech-to-text using NVIDIA Parakeet. No API key required - runs entirely on your device."
+                : "This provider is not currently selected for any feature. Select it above to use it."}
+            </p>
+          </div>
+
+          {/* Model Download Section */}
+          <Control
+            label={
+              <ControlLabel
+                label="Model Status"
+                tooltip="Download the Parakeet model (~200MB) for local transcription"
+              />
+            }
+            className="px-3"
+          >
+            <ParakeetModelDownload />
+          </Control>
+
+          {/* Thread Count */}
+          <Control
+            label={
+              <ControlLabel
+                label="CPU Threads"
+                tooltip="Number of CPU threads to use for transcription (higher = faster but uses more resources)"
+              />
+            }
+            className="px-3"
+          >
+            <Select
+              value={String(numThreads)}
+              onValueChange={(value) => onNumThreadsChange(parseInt(value))}
+            >
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 thread</SelectItem>
+                <SelectItem value="2">2 threads</SelectItem>
+                <SelectItem value="4">4 threads</SelectItem>
+                <SelectItem value="8">8 threads</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Component() {
   const configQuery = useConfigQuery()
 
@@ -117,7 +298,7 @@ export function Component() {
 
   // Compute which providers are actively being used for each function
   const activeProviders = useMemo(() => {
-    if (!configQuery.data) return { openai: [], groq: [], gemini: [] }
+    if (!configQuery.data) return { openai: [], groq: [], gemini: [], parakeet: [] }
 
     const stt = configQuery.data.sttProviderId || "openai"
     const transcript = configQuery.data.transcriptPostProcessingProviderId || "openai"
@@ -142,12 +323,16 @@ export function Component() {
         ...(mcp === "gemini" ? [{ label: "Agent", icon: Bot }] : []),
         ...(tts === "gemini" ? [{ label: "TTS", icon: Volume2 }] : []),
       ],
+      parakeet: [
+        ...(stt === "parakeet" ? [{ label: "STT", icon: Mic }] : []),
+      ],
     }
   }, [configQuery.data])
 
   // Determine which providers are active (selected for at least one feature)
   const isGroqActive = activeProviders.groq.length > 0
   const isGeminiActive = activeProviders.gemini.length > 0
+  const isParakeetActive = activeProviders.parakeet.length > 0
 
   // Get all available presets for dual-model selection
   const allPresets = useMemo(() => {
@@ -648,6 +833,18 @@ export function Component() {
           </div>
         )}
 
+        {/* Parakeet (Local) Provider Section */}
+        {isParakeetActive && (
+          <ParakeetProviderSection
+            isActive={true}
+            isCollapsed={configQuery.data.providerSectionCollapsedParakeet ?? true}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedParakeet: !configQuery.data.providerSectionCollapsedParakeet })}
+            usageBadges={activeProviders.parakeet}
+            numThreads={configQuery.data.parakeetNumThreads || 2}
+            onNumThreadsChange={(value) => saveConfig({ parakeetNumThreads: value })}
+          />
+        )}
+
         {/* Inactive Groq Provider Section - shown at bottom when not selected */}
         {!isGroqActive && (
           <div className="rounded-lg border">
@@ -873,6 +1070,18 @@ export function Component() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Inactive Parakeet Provider Section - shown at bottom when not selected */}
+        {!isParakeetActive && (
+          <ParakeetProviderSection
+            isActive={false}
+            isCollapsed={configQuery.data.providerSectionCollapsedParakeet ?? true}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedParakeet: !configQuery.data.providerSectionCollapsedParakeet })}
+            usageBadges={activeProviders.parakeet}
+            numThreads={configQuery.data.parakeetNumThreads || 2}
+            onNumThreadsChange={(value) => saveConfig({ parakeetNumThreads: value })}
+          />
         )}
 
         {/* Dual-Model Agent Mode Section */}

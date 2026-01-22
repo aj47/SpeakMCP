@@ -3,14 +3,21 @@
  *
  * Provides local speech-to-text transcription using the Parakeet model
  * via sherpa-onnx. Handles model download, extraction, and transcription.
+ *
+ * Note: The sherpa-onnx-node package requires platform-specific native libraries.
+ * This module uses dynamic imports and configures library paths before loading.
  */
 
 import { app } from "electron"
 import * as fs from "fs"
 import * as path from "path"
 import * as https from "https"
-import { OfflineRecognizer } from "sherpa-onnx-node"
+import * as os from "os"
 import * as tar from "tar"
+
+// Type imports only - actual module loaded dynamically
+type SherpaOnnxModule = typeof import("sherpa-onnx-node")
+type OfflineRecognizerType = import("sherpa-onnx-node").OfflineRecognizer
 
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2"
@@ -38,7 +45,151 @@ let modelStatus: ModelStatus = {
   progress: 0,
 }
 
-let recognizer: OfflineRecognizer | null = null
+// Lazily loaded sherpa-onnx module and recognizer
+let sherpaModule: SherpaOnnxModule | null = null
+let recognizer: OfflineRecognizerType | null = null
+let sherpaLoadError: string | null = null
+
+/**
+ * Get the path to the sherpa-onnx platform-specific package.
+ * Handles both regular node_modules and pnpm virtual store layouts,
+ * as well as packaged Electron apps.
+ */
+function getSherpaLibraryPath(): string | null {
+  const platform = os.platform() === "win32" ? "win" : os.platform()
+  const arch = os.arch()
+  const platformPackage = `sherpa-onnx-${platform}-${arch}`
+
+  const possiblePaths: string[] = []
+
+  // For packaged app, check resources directory
+  if (app.isPackaged) {
+    // In packaged app, node_modules is in resources/app/node_modules
+    possiblePaths.push(
+      path.join(process.resourcesPath, "app", "node_modules", platformPackage)
+    )
+  }
+
+  // Try pnpm virtual store in app's node_modules
+  const appNodeModules = path.join(__dirname, "..", "..", "node_modules")
+  const pnpmBase = path.join(appNodeModules, ".pnpm")
+  if (fs.existsSync(pnpmBase)) {
+    try {
+      const dirs = fs.readdirSync(pnpmBase)
+      const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`))
+      if (platformDir) {
+        possiblePaths.push(path.join(pnpmBase, platformDir, "node_modules", platformPackage))
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  // Standard node_modules layout
+  possiblePaths.push(path.join(appNodeModules, platformPackage))
+
+  // Root monorepo node_modules (development)
+  const rootPnpmBase = path.join(process.cwd(), "node_modules", ".pnpm")
+  if (fs.existsSync(rootPnpmBase)) {
+    try {
+      const dirs = fs.readdirSync(rootPnpmBase)
+      const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`))
+      if (platformDir) {
+        possiblePaths.push(path.join(rootPnpmBase, platformDir, "node_modules", platformPackage))
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  possiblePaths.push(path.join(process.cwd(), "node_modules", platformPackage))
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      console.log(`[Parakeet] Found sherpa-onnx at: ${p}`)
+      return p
+    }
+  }
+
+  console.warn(`[Parakeet] Could not find ${platformPackage} in any of:`, possiblePaths)
+  return null
+}
+
+/**
+ * Configure library path environment variables for native module loading.
+ * This must be called before the first import of sherpa-onnx-node.
+ */
+function configureSherpaLibraryPath(): void {
+  const sherpaPath = getSherpaLibraryPath()
+  if (!sherpaPath) {
+    console.warn("[Parakeet] Could not find sherpa-onnx platform-specific package")
+    return
+  }
+
+  console.log(`[Parakeet] Found sherpa-onnx native libraries at: ${sherpaPath}`)
+
+  if (os.platform() === "darwin") {
+    const current = process.env.DYLD_LIBRARY_PATH || ""
+    if (!current.includes(sherpaPath)) {
+      process.env.DYLD_LIBRARY_PATH = sherpaPath + (current ? `:${current}` : "")
+    }
+  } else if (os.platform() === "linux") {
+    const current = process.env.LD_LIBRARY_PATH || ""
+    if (!current.includes(sherpaPath)) {
+      process.env.LD_LIBRARY_PATH = sherpaPath + (current ? `:${current}` : "")
+    }
+  }
+  // Windows uses PATH, but native modules usually handle this automatically
+}
+
+/**
+ * Lazily load the sherpa-onnx-node module.
+ * Configures library paths and handles errors gracefully.
+ *
+ * Note: sherpa-onnx-node is a CommonJS module, so when using dynamic import
+ * the exports are on the `default` property, not as named exports.
+ */
+async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
+  if (sherpaModule) {
+    return sherpaModule
+  }
+
+  if (sherpaLoadError) {
+    // Don't retry if we've already failed
+    return null
+  }
+
+  try {
+    // Configure library paths before first import
+    configureSherpaLibraryPath()
+
+    // Dynamic import - handle CommonJS interop
+    const imported = await import("sherpa-onnx-node")
+    // For CommonJS modules imported in ESM, exports are on .default
+    sherpaModule = (imported.default ?? imported) as SherpaOnnxModule
+    console.log("[Parakeet] sherpa-onnx-node loaded successfully")
+    return sherpaModule
+  } catch (error) {
+    sherpaLoadError = error instanceof Error ? error.message : String(error)
+    console.error("[Parakeet] Failed to load sherpa-onnx-node:", sherpaLoadError)
+    return null
+  }
+}
+
+/**
+ * Check if the sherpa-onnx native module is available.
+ */
+export async function isSherpaAvailable(): Promise<boolean> {
+  const module = await loadSherpaModule()
+  return module !== null
+}
+
+/**
+ * Get the error message if sherpa-onnx failed to load.
+ */
+export function getSherpaLoadError(): string | null {
+  return sherpaLoadError
+}
 
 /**
  * Get the base path for model storage
@@ -228,6 +379,12 @@ export async function initializeRecognizer(numThreads = 2): Promise<void> {
     return // Already initialized
   }
 
+  // Load the sherpa-onnx module dynamically
+  const sherpa = await loadSherpaModule()
+  if (!sherpa) {
+    throw new Error(`Failed to load sherpa-onnx-node: ${sherpaLoadError || "Unknown error"}`)
+  }
+
   const modelPath = path.join(getModelsPath(), MODEL_DIR_NAME)
 
   const config = {
@@ -244,7 +401,7 @@ export async function initializeRecognizer(numThreads = 2): Promise<void> {
     },
   }
 
-  recognizer = new OfflineRecognizer(config)
+  recognizer = new sherpa.OfflineRecognizer(config)
 }
 
 /**

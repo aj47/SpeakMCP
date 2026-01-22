@@ -1073,6 +1073,7 @@ export type Config = {
   providerSectionCollapsedOpenai?: boolean
   providerSectionCollapsedGroq?: boolean
   providerSectionCollapsedGemini?: boolean
+  providerSectionCollapsedParakeet?: boolean
 
   // Panel Position Configuration
   panelPosition?:

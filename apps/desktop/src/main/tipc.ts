@@ -3744,18 +3744,6 @@ export const router = {
     .action(async ({ input }) => {
       return summarizationService.getImportantSummaries(input.sessionId)
     }),
-
-  // Parakeet STT handlers
-  getParakeetModelStatus: t.procedure.action(async () => {
-    const { getModelStatus } = await import("./parakeet-stt")
-    return getModelStatus()
-  }),
-
-  downloadParakeetModel: t.procedure.action(async () => {
-    const { downloadModel } = await import("./parakeet-stt")
-    await downloadModel()
-    return { success: true }
-  }),
 }
 
 // TTS Provider Implementation Functions

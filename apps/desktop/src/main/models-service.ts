@@ -1,15 +1,9 @@
 import { configStore } from "./config"
 import { diagnosticsService } from "./diagnostics"
+import type { ModelInfo } from "../shared/types"
 
-export interface ModelInfo {
-  id: string
-  name: string
-  description?: string
-  context_length?: number
-  created?: number
-  /** Whether this model supports speech-to-text transcription */
-  supportsTranscription?: boolean
-}
+// Re-export ModelInfo for backward compatibility
+export type { ModelInfo } from "../shared/types"
 
 interface ModelsResponse {
   data: ModelInfo[]

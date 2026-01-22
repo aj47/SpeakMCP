@@ -882,6 +882,194 @@ export interface ModelPreset {
   summarizationModel?: string  // Model for dual-model summarization (weak model)
 }
 
+// ============================================================================
+// Model Information Types
+// ============================================================================
+
+/**
+ * Basic model information returned from provider APIs (OpenAI, Groq, Gemini).
+ * This is the minimal structure for displaying and selecting models.
+ */
+export interface ModelInfo {
+  id: string
+  name: string
+  description?: string
+  context_length?: number
+  created?: number
+  /** Whether this model supports speech-to-text transcription */
+  supportsTranscription?: boolean
+}
+
+// ============================================================================
+// Models.dev API Types
+// Types for enhanced model information from https://models.dev API
+// ============================================================================
+
+/**
+ * Cost information for a model (USD per million tokens).
+ */
+export interface ModelsDevCost {
+  /** Cost per million input tokens */
+  input: number
+  /** Cost per million output tokens */
+  output: number
+  /** Cost per million reasoning tokens (optional) */
+  reasoning?: number
+  /** Cost per million cache read tokens (optional) */
+  cache_read?: number
+  /** Cost per million cache write tokens (optional) */
+  cache_write?: number
+}
+
+/**
+ * Token limits for a model.
+ */
+export interface ModelsDevLimit {
+  /** Maximum context window size (tokens) */
+  context: number
+  /** Maximum output tokens */
+  output: number
+  /** Maximum input tokens (optional, usually same as context) */
+  input?: number
+}
+
+/**
+ * Input/output modalities supported by a model.
+ */
+export interface ModelsDevModalities {
+  /** Input modalities (e.g., ["text", "image", "audio"]) */
+  input: string[]
+  /** Output modalities (e.g., ["text", "image"]) */
+  output: string[]
+}
+
+/**
+ * Model information from models.dev API.
+ * Contains detailed metadata about model capabilities and pricing.
+ */
+export interface ModelsDevModel {
+  /** Model identifier (e.g., "gpt-4o", "claude-3-opus") */
+  id: string
+  /** Human-readable model name */
+  name: string
+  /** Model family (optional, e.g., "GPT-4", "Claude 3") */
+  family?: string
+
+  // Capability flags
+  /** Whether the model supports file/image attachments */
+  attachment: boolean
+  /** Whether the model supports reasoning/chain-of-thought */
+  reasoning: boolean
+  /** Whether the model supports tool/function calling */
+  tool_call: boolean
+  /** Whether the model supports structured output (JSON mode) */
+  structured_output: boolean
+  /** Whether the model supports temperature parameter */
+  temperature: boolean
+
+  // Metadata
+  /** Knowledge cutoff date (optional) */
+  knowledge?: string
+  /** Release date (optional) */
+  release_date?: string
+  /** Last updated date (optional) */
+  last_updated?: string
+  /** Whether model weights are publicly available */
+  open_weights: boolean
+
+  /** Pricing information (USD per million tokens) */
+  cost: ModelsDevCost
+  /** Token limits */
+  limit: ModelsDevLimit
+  /** Supported input/output modalities */
+  modalities: ModelsDevModalities
+}
+
+/**
+ * Provider information from models.dev API.
+ * Contains metadata about an LLM provider and its available models.
+ */
+export interface ModelsDevProvider {
+  /** Provider identifier (e.g., "openai", "anthropic") */
+  id: string
+  /** Human-readable provider name */
+  name: string
+  /** NPM package name for the provider SDK */
+  npm: string
+  /** API endpoint (optional) */
+  api?: string
+  /** Environment variable for API key */
+  env: string
+  /** Documentation URL */
+  doc: string
+  /** Available models from this provider */
+  models: Record<string, ModelsDevModel>
+}
+
+/**
+ * Complete models.dev data structure.
+ * Maps provider IDs to their provider information and models.
+ */
+export type ModelsDevData = Record<string, ModelsDevProvider>
+
+/**
+ * Enhanced model information combining basic ModelInfo with models.dev data.
+ * Used when we have additional metadata from the models.dev API.
+ * Backward compatible - all enhanced fields are optional.
+ */
+export interface EnhancedModelInfo extends ModelInfo {
+  /** Model family (e.g., "GPT-4", "Claude 3") */
+  family?: string
+
+  // Capability flags from models.dev
+  /** Whether the model supports file/image attachments */
+  supportsAttachment?: boolean
+  /** Whether the model supports reasoning/chain-of-thought */
+  supportsReasoning?: boolean
+  /** Whether the model supports tool/function calling */
+  supportsToolCalls?: boolean
+  /** Whether the model supports structured output (JSON mode) */
+  supportsStructuredOutput?: boolean
+  /** Whether the model supports temperature parameter */
+  supportsTemperature?: boolean
+
+  // Metadata from models.dev
+  /** Knowledge cutoff date */
+  knowledge?: string
+  /** Release date */
+  releaseDate?: string
+  /** Last updated date */
+  lastUpdated?: string
+  /** Whether model weights are publicly available */
+  openWeights?: boolean
+
+  // Pricing (USD per million tokens)
+  /** Cost per million input tokens */
+  inputCost?: number
+  /** Cost per million output tokens */
+  outputCost?: number
+  /** Cost per million reasoning tokens */
+  reasoningCost?: number
+  /** Cost per million cache read tokens */
+  cacheReadCost?: number
+  /** Cost per million cache write tokens */
+  cacheWriteCost?: number
+
+  // Limits
+  /** Maximum context window size (tokens) */
+  contextLimit?: number
+  /** Maximum input tokens */
+  inputLimit?: number
+  /** Maximum output tokens */
+  outputLimit?: number
+
+  // Modalities
+  /** Input modalities (e.g., ["text", "image", "audio"]) */
+  inputModalities?: string[]
+  /** Output modalities (e.g., ["text", "image"]) */
+  outputModalities?: string[]
+}
+
 // ACP Agent Configuration Types
 export type ACPConnectionType = "stdio" | "remote" | "internal"
 

@@ -2460,7 +2460,7 @@ export const router = {
   }),
 
   // Force refresh models.dev cache
-  refreshModelsData: t.procedure.mutation(async () => {
+  refreshModelsData: t.procedure.action(async () => {
     await refreshModelsDevCache()
     return { success: true }
   }),

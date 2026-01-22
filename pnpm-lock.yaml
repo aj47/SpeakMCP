@@ -67,6 +67,12 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+      sherpa-onnx-node:
+        specifier: ^1.12.23
+        version: 1.12.23
+      tar:
+        specifier: ^7.5.6
+        version: 7.5.6
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -6034,6 +6040,34 @@ packages:
     resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
     engines: {node: '>= 0.4'}
 
+  sherpa-onnx-darwin-arm64@1.12.23:
+    resolution: {integrity: sha512-zbjNUUH/IXhjRyRJ9mpcWVOGIVr31a/qXBPsfOYc7U8cgwcq33Vmj2OzoLYWQF6T+puqCAE4nMxFAxJvdZekhg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  sherpa-onnx-darwin-x64@1.12.23:
+    resolution: {integrity: sha512-hgPhBG85bgULJo5xS5xvh1A9+D6GBPwhZ8QCvWvh7YP1kF9UZTF1r5hWBOzZiR2Ax0gQMbxVvw1t/NpR2N7HWA==}
+    cpu: [x64]
+    os: [darwin]
+
+  sherpa-onnx-linux-x64@1.12.23:
+    resolution: {integrity: sha512-pUZIdDvPtyRXQDGo9R9MIBf2AFUzfgcGmutoulsEdH3hpK6JteR7Z/5pfrZIIqe/O99djAjEHK4AlwLHC2jiZw==}
+    cpu: [x64]
+    os: [linux]
+
+  sherpa-onnx-node@1.12.23:
+    resolution: {integrity: sha512-09SRixVSjsajxeCV8Hy9R5J4IHPtw7vNgaIcEokdh/LpU7sY+e12z9uHHIMMMgNiInyGEH74wIwjLXms+W7qRA==}
+
+  sherpa-onnx-win-ia32@1.12.23:
+    resolution: {integrity: sha512-MyLsK7r6dd7paglyTgb8UHTXTEFqOzA91u6VDV64Lq8rDGuOFVYioxX7vlwmGe1A9o7VhuOPNaKcRjEPtVDhBQ==}
+    cpu: [ia32]
+    os: [win32]
+
+  sherpa-onnx-win-x64@1.12.23:
+    resolution: {integrity: sha512-pdHEYMJiYy8+xzH2WkBVS4/hnRwqjY8FaWnjs0NBgQZnPmc/k4M+TAiauTOuFDNK4GPwFQnjwrCGx6jI9AOkOg==}
+    cpu: [x64]
+    os: [win32]
+
   side-channel-list@1.0.0:
     resolution: {integrity: sha512-FCLHtRD/gnpCiCHEiJLOwdmFP+wzCmDEkc9y7NsYxeF4u7Btsn1ZuwgwJGxImImHicJArLP4R0yX4c2KCrMrTA==}
     engines: {node: '>= 0.4'}
@@ -6297,9 +6331,15 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
 
   tar@7.5.2:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
+    engines: {node: '>=18'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
+
+  tar@7.5.6:
+    resolution: {integrity: sha512-xqUeu2JAIJpXyvskvU3uvQW8PAmHrtXp2KDuMJwQqW8Sqq0CaZBAQ+dKS3RBXVhU4wC5NjAdKrmh84241gO9cA==}
     engines: {node: '>=18'}
 
   temp-dir@2.0.0:
@@ -13734,6 +13774,29 @@ snapshots:
 
   shell-quote@1.8.3: {}
 
+  sherpa-onnx-darwin-arm64@1.12.23:
+    optional: true
+
+  sherpa-onnx-darwin-x64@1.12.23:
+    optional: true
+
+  sherpa-onnx-linux-x64@1.12.23:
+    optional: true
+
+  sherpa-onnx-node@1.12.23:
+    optionalDependencies:
+      sherpa-onnx-darwin-arm64: 1.12.23
+      sherpa-onnx-darwin-x64: 1.12.23
+      sherpa-onnx-linux-x64: 1.12.23
+      sherpa-onnx-win-ia32: 1.12.23
+      sherpa-onnx-win-x64: 1.12.23
+
+  sherpa-onnx-win-ia32@1.12.23:
+    optional: true
+
+  sherpa-onnx-win-x64@1.12.23:
+    optional: true
+
   side-channel-list@1.0.0:
     dependencies:
       es-errors: 1.3.0
@@ -14024,6 +14087,14 @@ snapshots:
       yallist: 4.0.0
 
   tar@7.5.2:
+    dependencies:
+      '@isaacs/fs-minipass': 4.0.1
+      chownr: 3.0.0
+      minipass: 7.1.2
+      minizlib: 3.1.0
+      yallist: 5.0.0
+
+  tar@7.5.6:
     dependencies:
       '@isaacs/fs-minipass': 4.0.1
       chownr: 3.0.0

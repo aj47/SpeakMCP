@@ -27,6 +27,7 @@ import {
   shell,
   systemPreferences,
   dialog,
+  BrowserWindow,
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder, conversationsFolder } from "./config"
@@ -1029,6 +1030,39 @@ export const router = {
     .action(async ({ input }) => {
       await parakeetStt.initializeRecognizer(input.numThreads)
       return { success: true }
+    }),
+
+  // Kitten (local) TTS model management
+  getKittenModelStatus: t.procedure.query(async () => {
+    const { getKittenModelStatus } = await import('./kitten-tts.js')
+    return getKittenModelStatus()
+  }),
+
+  downloadKittenModel: t.procedure.mutation(async () => {
+    const { downloadKittenModel } = await import('./kitten-tts.js')
+    await downloadKittenModel((progress) => {
+      // Send progress to renderer via webContents
+      BrowserWindow.getAllWindows().forEach(win => {
+        win.webContents.send('kitten-model-download-progress', progress)
+      })
+    })
+    return { success: true }
+  }),
+
+  synthesizeWithKitten: t.procedure
+    .input<{
+      text: string
+      voiceId?: number
+      speed?: number
+    }>()
+    .mutation(async ({ input }) => {
+      const { synthesize } = await import('./kitten-tts.js')
+      const result = await synthesize(input.text, input.voiceId, input.speed)
+      // Return base64-encoded audio for the renderer to play
+      return {
+        audio: Buffer.from(result.samples.buffer).toString('base64'),
+        sampleRate: result.sampleRate  // Use actual sample rate from synthesis
+      }
     }),
 
   createRecording: t.procedure

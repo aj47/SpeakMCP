@@ -2788,7 +2788,7 @@ export const router = {
       mcpToolsGeminiModel?: string
       currentModelPresetId?: string
       // STT Provider settings
-      sttProviderId?: "openai" | "groq"
+      sttProviderId?: "openai" | "groq" | "parakeet"
       // Transcript Post-Processing settings
       transcriptPostProcessingProviderId?: "openai" | "groq" | "gemini"
       transcriptPostProcessingOpenaiModel?: string

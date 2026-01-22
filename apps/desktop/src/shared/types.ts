@@ -416,7 +416,7 @@ export type ProfileModelConfig = {
   mcpToolsGeminiModel?: string
   currentModelPresetId?: string
   // STT Provider settings
-  sttProviderId?: "openai" | "groq"
+  sttProviderId?: "openai" | "groq" | "parakeet"
   // Transcript Post-Processing settings
   transcriptPostProcessingProviderId?: "openai" | "groq" | "gemini"
   transcriptPostProcessingOpenaiModel?: string
@@ -972,6 +972,11 @@ export type Config = {
   sttLanguage?: string
   openaiSttLanguage?: string
   groqSttLanguage?: string
+
+  // Parakeet (Local) STT Configuration
+  parakeetModelPath?: string // Optional custom model path
+  parakeetNumThreads?: number // Number of threads (default: 2)
+  parakeetModelDownloaded?: boolean // Whether model has been downloaded
 
   // Text-to-Speech Configuration
   ttsEnabled?: boolean

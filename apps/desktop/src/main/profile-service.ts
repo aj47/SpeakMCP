@@ -11,8 +11,8 @@ const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 
 // Valid provider IDs that are supported by the application
 const VALID_PROVIDER_IDS = ["openai", "groq", "gemini"]
-// STT only supports openai and groq (no gemini support for STT)
-const VALID_STT_PROVIDER_IDS = ["openai", "groq"]
+// STT supports openai, groq, and parakeet (local)
+const VALID_STT_PROVIDER_IDS = ["openai", "groq", "parakeet"]
 
 /**
  * Validates the shape of an imported MCP server config

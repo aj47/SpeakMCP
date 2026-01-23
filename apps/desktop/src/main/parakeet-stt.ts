@@ -54,20 +54,33 @@ async function loadUnbzip2StreamModule(): Promise<Unbzip2Stream> {
   }
 }
 
-// Type definitions for sherpa-onnx-node (optional dependency, loaded dynamically)
-// These mirror the actual types but allow compilation without the package installed
+// Type definitions for sherpa-onnx native addon
+// These mirror the native addon exports for direct loading
+interface SherpaOnnxNativeAddon {
+  createOfflineRecognizer: (config: unknown) => unknown
+  createOfflineStream: (recognizerHandle: unknown) => unknown
+  acceptWaveformOffline: (streamHandle: unknown, data: { samples: Float32Array; sampleRate: number }) => void
+  decodeOfflineStream: (recognizerHandle: unknown, streamHandle: unknown) => void
+  getOfflineStreamResultAsJson: (streamHandle: unknown) => string
+}
+
+// High-level interfaces for the wrapper classes
 interface SherpaOnnxOfflineRecognizer {
   createStream(): SherpaOnnxOfflineStream
   decode(stream: SherpaOnnxOfflineStream): void
   getResult(stream: SherpaOnnxOfflineStream): { text: string }
 }
 interface SherpaOnnxOfflineStream {
+  handle: unknown
   acceptWaveform(data: { samples: Float32Array; sampleRate: number }): void
 }
 interface SherpaOnnxModule {
   OfflineRecognizer: new (config: unknown) => SherpaOnnxOfflineRecognizer
 }
 type OfflineRecognizerType = SherpaOnnxOfflineRecognizer
+
+// Cache for the native addon
+let nativeAddon: SherpaOnnxNativeAddon | null = null
 
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2"
@@ -200,11 +213,96 @@ function configureSherpaLibraryPath(): void {
 }
 
 /**
- * Lazily load the sherpa-onnx-node module.
- * Configures library paths and handles errors gracefully.
- *
- * Note: sherpa-onnx-node is a CommonJS module, so when using dynamic import
- * the exports are on the `default` property, not as named exports.
+ * Load the native sherpa-onnx addon directly from the platform-specific package.
+ * This bypasses sherpa-onnx-node's addon.js which has path resolution issues in pnpm/Vite.
+ */
+function loadNativeAddon(): SherpaOnnxNativeAddon | null {
+  if (nativeAddon) {
+    return nativeAddon
+  }
+
+  const sherpaPath = getSherpaLibraryPath()
+  if (!sherpaPath) {
+    console.error("[Parakeet] Could not find sherpa-onnx platform-specific package")
+    return null
+  }
+
+  const nodePath = path.join(sherpaPath, "sherpa-onnx.node")
+  if (!fs.existsSync(nodePath)) {
+    console.error(`[Parakeet] Native addon not found at: ${nodePath}`)
+    return null
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    nativeAddon = require(nodePath) as SherpaOnnxNativeAddon
+    console.log(`[Parakeet] Native addon loaded from: ${nodePath}`)
+    return nativeAddon
+  } catch (error) {
+    console.error(`[Parakeet] Failed to load native addon: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
+/**
+ * OfflineStream wrapper class that mirrors sherpa-onnx-node's OfflineStream class.
+ */
+class OfflineStreamWrapper implements SherpaOnnxOfflineStream {
+  public handle: unknown
+
+  constructor(handle: unknown) {
+    this.handle = handle
+  }
+
+  acceptWaveform(data: { samples: Float32Array; sampleRate: number }): void {
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Native addon not loaded")
+    }
+    addon.acceptWaveformOffline(this.handle, data)
+  }
+}
+
+/**
+ * OfflineRecognizer wrapper class that mirrors sherpa-onnx-node's OfflineRecognizer class.
+ */
+class OfflineRecognizerWrapper implements SherpaOnnxOfflineRecognizer {
+  private recognizerHandle: unknown
+
+  constructor(config: unknown, addon: SherpaOnnxNativeAddon) {
+    this.recognizerHandle = addon.createOfflineRecognizer(config)
+  }
+
+  createStream(): SherpaOnnxOfflineStream {
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Native addon not loaded")
+    }
+    const streamHandle = addon.createOfflineStream(this.recognizerHandle)
+    return new OfflineStreamWrapper(streamHandle)
+  }
+
+  decode(stream: SherpaOnnxOfflineStream): void {
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Native addon not loaded")
+    }
+    addon.decodeOfflineStream(this.recognizerHandle, stream.handle)
+  }
+
+  getResult(stream: SherpaOnnxOfflineStream): { text: string } {
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Native addon not loaded")
+    }
+    const jsonStr = addon.getOfflineStreamResultAsJson(stream.handle)
+    return JSON.parse(jsonStr)
+  }
+}
+
+/**
+ * Lazily load the sherpa-onnx module by loading the native addon directly.
+ * This bypasses sherpa-onnx-node's addon.js which has path resolution issues in pnpm/Vite.
  */
 async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
   if (sherpaModule) {
@@ -217,14 +315,42 @@ async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
   }
 
   try {
-    // Configure library paths before first import
+    // Configure library paths before loading native addon
     configureSherpaLibraryPath()
 
-    // Dynamic import - handle CommonJS interop
-    const imported = await import("sherpa-onnx-node")
-    // For CommonJS modules imported in ESM, exports are on .default
-    sherpaModule = (imported.default ?? imported) as SherpaOnnxModule
-    console.log("[Parakeet] sherpa-onnx-node loaded successfully")
+    // Load native addon directly
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Failed to load sherpa-onnx native addon")
+    }
+
+    // Capture the addon in a local const that TypeScript knows is not null
+    const capturedAddon: SherpaOnnxNativeAddon = addon
+
+    // Create a module object that provides the OfflineRecognizer constructor
+    sherpaModule = {
+      OfflineRecognizer: class implements SherpaOnnxOfflineRecognizer {
+        private wrapper: OfflineRecognizerWrapper
+
+        constructor(config: unknown) {
+          this.wrapper = new OfflineRecognizerWrapper(config, capturedAddon)
+        }
+
+        createStream(): SherpaOnnxOfflineStream {
+          return this.wrapper.createStream()
+        }
+
+        decode(stream: SherpaOnnxOfflineStream): void {
+          this.wrapper.decode(stream)
+        }
+
+        getResult(stream: SherpaOnnxOfflineStream): { text: string } {
+          return this.wrapper.getResult(stream)
+        }
+      }
+    }
+
+    console.log("[Parakeet] sherpa-onnx module loaded successfully")
     return sherpaModule
   } catch (error) {
     sherpaLoadError = error instanceof Error ? error.message : String(error)

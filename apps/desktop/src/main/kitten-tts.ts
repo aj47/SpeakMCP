@@ -13,32 +13,69 @@ import * as fs from "fs"
 import * as path from "path"
 import * as https from "https"
 import * as os from "os"
+import { pipeline } from "stream/promises"
 
 // tar is an optional dependency, loaded dynamically when needed
-type TarModule = { x: (opts: { file: string; cwd: string; filter?: (path: string) => boolean }) => Promise<void> }
+// We use the Unpack class for streaming extraction with bz2 decompression
+type TarUnpack = import("tar").Unpack
+type TarUnpackOptions = {
+  cwd: string
+  filter?: (path: string, entry: unknown) => boolean
+}
+type TarModule = {
+  x: (opts: { file: string; cwd: string; filter?: (path: string) => boolean }) => Promise<void>
+  Unpack: new (opts: TarUnpackOptions) => TarUnpack
+}
 let tarModule: TarModule | null = null
 
 async function loadTarModule(): Promise<TarModule> {
   if (tarModule) return tarModule
   try {
     const imported = await import("tar")
-    tarModule = imported as TarModule
+    tarModule = imported as unknown as TarModule
     return tarModule
   } catch (error) {
     throw new Error(`Failed to load tar module. Please install optional dependencies: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
-// Type definitions for sherpa-onnx-node (optional dependency, loaded dynamically)
-// These mirror the actual types but allow compilation without the package installed
+// unbzip2-stream is an optional dependency for decompressing .tar.bz2 files
+type Unbzip2Stream = () => NodeJS.ReadWriteStream
+let unbzip2StreamModule: Unbzip2Stream | null = null
+
+async function loadUnbzip2StreamModule(): Promise<Unbzip2Stream> {
+  if (unbzip2StreamModule) return unbzip2StreamModule
+  try {
+    const imported = await import("unbzip2-stream")
+    unbzip2StreamModule = (imported.default ?? imported) as Unbzip2Stream
+    return unbzip2StreamModule
+  } catch (error) {
+    throw new Error(`Failed to load unbzip2-stream module. Please install optional dependencies: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+// Type definitions for sherpa-onnx native addon
+// These mirror the native addon exports and the OfflineTts wrapper class
+interface SherpaOnnxNativeAddon {
+  createOfflineTts: (config: unknown) => unknown
+  getOfflineTtsSampleRate: (handle: unknown) => number
+  getOfflineTtsNumSpeakers: (handle: unknown) => number
+  offlineTtsGenerate: (handle: unknown, request: { text: string; sid?: number; speed?: number; enableExternalBuffer?: boolean }) => { samples: Float32Array; sampleRate: number }
+}
+
 interface SherpaOnnxOfflineTts {
   generate(data: { text: string; sid?: number; speed?: number }): { samples: Float32Array; sampleRate: number }
   sampleRate: number
+  numSpeakers: number
 }
+
 interface SherpaOnnxModule {
   OfflineTts: new (config: unknown) => SherpaOnnxOfflineTts
 }
 type OfflineTtsType = SherpaOnnxOfflineTts
+
+// Cache for the native addon
+let nativeAddon: SherpaOnnxNativeAddon | null = null
 
 const MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kitten-nano-en-v0_1-fp16.tar.bz2"
@@ -124,21 +161,27 @@ function getSherpaLibraryPath(): string | null {
   // Standard node_modules layout
   possiblePaths.push(path.join(appNodeModules, platformPackage))
 
-  // Root monorepo node_modules (development)
-  const rootPnpmBase = path.join(process.cwd(), "node_modules", ".pnpm")
-  if (fs.existsSync(rootPnpmBase)) {
-    try {
-      const dirs = fs.readdirSync(rootPnpmBase)
-      const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`))
-      if (platformDir) {
-        possiblePaths.push(path.join(rootPnpmBase, platformDir, "node_modules", platformPackage))
+  // Root monorepo node_modules (development) - check both cwd and parent directories
+  // In monorepo, sherpa-onnx is hoisted to root node_modules
+  const cwdPnpmBase = path.join(process.cwd(), "node_modules", ".pnpm")
+  const monorepoRootPnpmBase = path.join(process.cwd(), "..", "..", "node_modules", ".pnpm")
+
+  for (const rootPnpmBase of [cwdPnpmBase, monorepoRootPnpmBase]) {
+    if (fs.existsSync(rootPnpmBase)) {
+      try {
+        const dirs = fs.readdirSync(rootPnpmBase)
+        const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`))
+        if (platformDir) {
+          possiblePaths.push(path.join(rootPnpmBase, platformDir, "node_modules", platformPackage))
+        }
+      } catch {
+        // Ignore read errors
       }
-    } catch {
-      // Ignore read errors
     }
   }
 
   possiblePaths.push(path.join(process.cwd(), "node_modules", platformPackage))
+  possiblePaths.push(path.join(process.cwd(), "..", "..", "node_modules", platformPackage))
 
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
@@ -177,7 +220,72 @@ function configureSherpaLibraryPath(): void {
 }
 
 /**
- * Lazily load the sherpa-onnx-node module.
+ * Load the native sherpa-onnx addon directly from the platform-specific package.
+ * This bypasses sherpa-onnx-node's addon.js which has path resolution issues in pnpm/Vite.
+ */
+function loadNativeAddon(): SherpaOnnxNativeAddon | null {
+  if (nativeAddon) {
+    return nativeAddon
+  }
+
+  const sherpaPath = getSherpaLibraryPath()
+  if (!sherpaPath) {
+    console.error("[Kitten] Could not find sherpa-onnx platform-specific package")
+    return null
+  }
+
+  const nodePath = path.join(sherpaPath, "sherpa-onnx.node")
+  if (!fs.existsSync(nodePath)) {
+    console.error(`[Kitten] Native addon not found at: ${nodePath}`)
+    return null
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    nativeAddon = require(nodePath) as SherpaOnnxNativeAddon
+    console.log(`[Kitten] Native addon loaded from: ${nodePath}`)
+    return nativeAddon
+  } catch (error) {
+    console.error(`[Kitten] Failed to load native addon: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
+/**
+ * OfflineTts wrapper class that mirrors sherpa-onnx-node's OfflineTts class.
+ * This wraps the native addon functions to provide a clean API.
+ */
+class OfflineTtsWrapper implements SherpaOnnxOfflineTts {
+  private handle: unknown
+  public sampleRate: number
+  public numSpeakers: number
+
+  constructor(config: unknown, addon: SherpaOnnxNativeAddon) {
+    this.handle = addon.createOfflineTts(config)
+    this.sampleRate = addon.getOfflineTtsSampleRate(this.handle)
+    this.numSpeakers = addon.getOfflineTtsNumSpeakers(this.handle)
+  }
+
+  generate(data: { text: string; sid?: number; speed?: number }): { samples: Float32Array; sampleRate: number } {
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Native addon not loaded")
+    }
+    // Pass enableExternalBuffer: false to avoid "External buffers are not allowed" error in Electron >= 21
+    // See: https://k2-fsa.github.io/sherpa/onnx/faqs/index.html
+    const result = addon.offlineTtsGenerate(this.handle, {
+      ...data,
+      enableExternalBuffer: false,
+    })
+    return {
+      samples: result.samples,
+      sampleRate: result.sampleRate,
+    }
+  }
+}
+
+/**
+ * Lazily load the sherpa-onnx module by loading the native addon directly.
  */
 async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
   if (sherpaModule) {
@@ -190,14 +298,37 @@ async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
 
   try {
     configureSherpaLibraryPath()
-    // @ts-expect-error - sherpa-onnx-node is an optional dependency that may not be installed
-    const imported = await import("sherpa-onnx-node")
-    sherpaModule = (imported.default ?? imported) as SherpaOnnxModule
-    console.log("[Kitten] sherpa-onnx-node loaded successfully")
+    const addon = loadNativeAddon()
+    if (!addon) {
+      throw new Error("Could not load native addon")
+    }
+
+    // Capture the addon in a local const that TypeScript knows is not null
+    const capturedAddon: SherpaOnnxNativeAddon = addon
+
+    // Create a module object that provides the OfflineTts constructor
+    sherpaModule = {
+      OfflineTts: class implements SherpaOnnxOfflineTts {
+        private wrapper: OfflineTtsWrapper
+        public sampleRate: number
+        public numSpeakers: number
+
+        constructor(config: unknown) {
+          this.wrapper = new OfflineTtsWrapper(config, capturedAddon)
+          this.sampleRate = this.wrapper.sampleRate
+          this.numSpeakers = this.wrapper.numSpeakers
+        }
+
+        generate(data: { text: string; sid?: number; speed?: number }): { samples: Float32Array; sampleRate: number } {
+          return this.wrapper.generate(data)
+        }
+      }
+    }
+    console.log("[Kitten] sherpa-onnx module loaded successfully")
     return sherpaModule
   } catch (error) {
     sherpaLoadError = error instanceof Error ? error.message : String(error)
-    console.error("[Kitten] Failed to load sherpa-onnx-node:", sherpaLoadError)
+    console.error("[Kitten] Failed to load sherpa-onnx:", sherpaLoadError)
     return null
   }
 }
@@ -362,12 +493,20 @@ export async function downloadKittenModel(
     downloadState.progress = 0.8
     onProgress?.(0.8)
 
-    // Extract the archive
+    // Extract the archive - use streaming bz2 decompression since node-tar
+    // doesn't natively support bzip2 compression
     const tar = await loadTarModule()
-    await tar.x({
-      file: archivePath,
-      cwd: modelsPath,
-    })
+    const unbzip2 = await loadUnbzip2StreamModule()
+
+    // Create a read stream from the downloaded archive
+    const readStream = fs.createReadStream(archivePath)
+    // Create a bz2 decompression stream
+    const decompressStream = unbzip2()
+    // Create a tar extraction stream
+    const extractStream = new tar.Unpack({ cwd: modelsPath })
+
+    // Pipe: read archive -> decompress bz2 -> extract tar
+    await pipeline(readStream, decompressStream, extractStream)
 
     downloadState.progress = 0.95
     onProgress?.(0.95)
@@ -452,16 +591,13 @@ export async function synthesize(
 ): Promise<SynthesisResult> {
   const tts = await initializeTts()
 
-  const audio = tts.generate({
+  // The generate() method already copies the samples to JS-owned memory
+  // to avoid "External buffers are not allowed" error with Electron IPC
+  return tts.generate({
     text,
     sid: voiceId,
     speed,
   })
-
-  return {
-    samples: audio.samples,
-    sampleRate: audio.sampleRate,
-  }
 }
 
 /**

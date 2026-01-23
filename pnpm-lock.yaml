@@ -67,12 +67,6 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
-      sherpa-onnx-node:
-        specifier: ^1.12.23
-        version: 1.12.23
-      tar:
-        specifier: ^7.5.6
-        version: 7.5.6
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -83,6 +77,15 @@ importers:
       langfuse:
         specifier: ^3.38.6
         version: 3.38.6
+      sherpa-onnx-node:
+        specifier: ^1.12.23
+        version: 1.12.23
+      tar:
+        specifier: ^7.5.6
+        version: 7.5.6
+      unbzip2-stream:
+        specifier: ^1.4.3
+        version: 1.4.3
     devDependencies:
       '@egoist/tailwindcss-icons':
         specifier: ^1.8.1
@@ -6375,6 +6378,9 @@ packages:
   throat@5.0.0:
     resolution: {integrity: sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA==}
 
+  through@2.3.8:
+    resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
+
   tiny-conventional-commits-parser@0.0.1:
     resolution: {integrity: sha512-N5+AZWdBeHNSgTIaxvx0+9mFrnW4H1BbjQ84H7i3TuWSkno8Hju886hLaHZhE/hYEKrfrfl/uHurqpZJHDuYGQ==}
 
@@ -6530,6 +6536,9 @@ packages:
   uint8array-extras@1.5.0:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
     engines: {node: '>=18'}
+
+  unbzip2-stream@1.4.3:
+    resolution: {integrity: sha512-mlExGW4w71ebDJviH16lQLtZS32VKqsSfk80GCfUlwT/4/hNRFsoscrF/c++9xinkMzECL1uL9DDwXqFWkruPg==}
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -13790,6 +13799,7 @@ snapshots:
       sherpa-onnx-linux-x64: 1.12.23
       sherpa-onnx-win-ia32: 1.12.23
       sherpa-onnx-win-x64: 1.12.23
+    optional: true
 
   sherpa-onnx-win-ia32@1.12.23:
     optional: true
@@ -14101,6 +14111,7 @@ snapshots:
       minipass: 7.1.2
       minizlib: 3.1.0
       yallist: 5.0.0
+    optional: true
 
   temp-dir@2.0.0: {}
 
@@ -14140,6 +14151,9 @@ snapshots:
       real-require: 0.2.0
 
   throat@5.0.0: {}
+
+  through@2.3.8:
+    optional: true
 
   tiny-conventional-commits-parser@0.0.1: {}
 
@@ -14263,6 +14277,12 @@ snapshots:
   ufo@1.6.1: {}
 
   uint8array-extras@1.5.0: {}
+
+  unbzip2-stream@1.4.3:
+    dependencies:
+      buffer: 5.7.1
+      through: 2.3.8
+    optional: true
 
   undici-types@6.21.0: {}
 

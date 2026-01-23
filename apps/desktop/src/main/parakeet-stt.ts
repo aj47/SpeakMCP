@@ -13,19 +13,44 @@ import * as fs from "fs"
 import * as path from "path"
 import * as https from "https"
 import * as os from "os"
+import { pipeline } from "stream/promises"
 
 // tar is an optional dependency, loaded dynamically when needed
-type TarModule = { x: (opts: { file: string; cwd: string; filter?: (path: string) => boolean }) => Promise<void> }
+// We use the Unpack class for streaming extraction with bz2 decompression
+type TarUnpack = import("tar").Unpack
+type TarUnpackOptions = {
+  cwd: string
+  filter?: (path: string, entry: unknown) => boolean
+}
+type TarModule = {
+  x: (opts: { file: string; cwd: string; filter?: (path: string) => boolean }) => Promise<void>
+  Unpack: new (opts: TarUnpackOptions) => TarUnpack
+}
 let tarModule: TarModule | null = null
 
 async function loadTarModule(): Promise<TarModule> {
   if (tarModule) return tarModule
   try {
     const imported = await import("tar")
-    tarModule = imported as TarModule
+    tarModule = imported as unknown as TarModule
     return tarModule
   } catch (error) {
     throw new Error(`Failed to load tar module. Please install optional dependencies: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+// unbzip2-stream is an optional dependency for decompressing .tar.bz2 files
+type Unbzip2Stream = () => NodeJS.ReadWriteStream
+let unbzip2StreamModule: Unbzip2Stream | null = null
+
+async function loadUnbzip2StreamModule(): Promise<Unbzip2Stream> {
+  if (unbzip2StreamModule) return unbzip2StreamModule
+  try {
+    const imported = await import("unbzip2-stream")
+    unbzip2StreamModule = (imported.default ?? imported) as Unbzip2Stream
+    return unbzip2StreamModule
+  } catch (error) {
+    throw new Error(`Failed to load unbzip2-stream module. Please install optional dependencies: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -114,21 +139,27 @@ function getSherpaLibraryPath(): string | null {
   // Standard node_modules layout
   possiblePaths.push(path.join(appNodeModules, platformPackage))
 
-  // Root monorepo node_modules (development)
-  const rootPnpmBase = path.join(process.cwd(), "node_modules", ".pnpm")
-  if (fs.existsSync(rootPnpmBase)) {
-    try {
-      const dirs = fs.readdirSync(rootPnpmBase)
-      const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`))
-      if (platformDir) {
-        possiblePaths.push(path.join(rootPnpmBase, platformDir, "node_modules", platformPackage))
+  // Root monorepo node_modules (development) - check both cwd and parent directories
+  // In monorepo, sherpa-onnx is hoisted to root node_modules
+  const cwdPnpmBase = path.join(process.cwd(), "node_modules", ".pnpm")
+  const monorepoRootPnpmBase = path.join(process.cwd(), "..", "..", "node_modules", ".pnpm")
+
+  for (const rootPnpmBase of [cwdPnpmBase, monorepoRootPnpmBase]) {
+    if (fs.existsSync(rootPnpmBase)) {
+      try {
+        const dirs = fs.readdirSync(rootPnpmBase)
+        const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`))
+        if (platformDir) {
+          possiblePaths.push(path.join(rootPnpmBase, platformDir, "node_modules", platformPackage))
+        }
+      } catch {
+        // Ignore read errors
       }
-    } catch {
-      // Ignore read errors
     }
   }
 
   possiblePaths.push(path.join(process.cwd(), "node_modules", platformPackage))
+  possiblePaths.push(path.join(process.cwd(), "..", "..", "node_modules", platformPackage))
 
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
@@ -190,7 +221,6 @@ async function loadSherpaModule(): Promise<SherpaOnnxModule | null> {
     configureSherpaLibraryPath()
 
     // Dynamic import - handle CommonJS interop
-    // @ts-expect-error - sherpa-onnx-node is an optional dependency that may not be installed
     const imported = await import("sherpa-onnx-node")
     // For CommonJS modules imported in ESM, exports are on .default
     sherpaModule = (imported.default ?? imported) as SherpaOnnxModule
@@ -291,15 +321,22 @@ export async function downloadModel(
       onProgress?.(modelStatus.progress)
     })
 
-    // Extract the archive
+    // Extract the archive - use streaming bz2 decompression since node-tar
+    // doesn't natively support bzip2 compression
     modelStatus.progress = 0.8
     onProgress?.(0.8)
 
     const tar = await loadTarModule()
-    await tar.x({
-      file: archivePath,
+    const unbzip2 = await loadUnbzip2StreamModule()
+
+    // Create a read stream from the downloaded archive
+    const readStream = fs.createReadStream(archivePath)
+    // Create a bz2 decompression stream
+    const decompressStream = unbzip2()
+    // Create a tar extraction stream with filter to only extract needed files
+    const extractStream = new tar.Unpack({
       cwd: modelsPath,
-      filter: (entryPath) => {
+      filter: (entryPath: string) => {
         // Only extract the files we need, plus directories containing them
         const basename = path.basename(entryPath)
         // Allow directories (needed for tar extraction to work)
@@ -309,6 +346,9 @@ export async function downloadModel(
         return REQUIRED_FILES.includes(basename)
       },
     })
+
+    // Pipe: read archive -> decompress bz2 -> extract tar
+    await pipeline(readStream, decompressStream, extractStream)
 
     modelStatus.progress = 0.95
     onProgress?.(0.95)

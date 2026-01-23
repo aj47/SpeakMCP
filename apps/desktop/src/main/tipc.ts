@@ -2560,7 +2560,7 @@ export const router = {
           audioBuffer = await generateGeminiTTS(processedText, input, config)
         } else if (providerId === "kitten") {
           const { synthesize } = await import('./kitten-tts')
-          const voiceId = config.kittenVoiceId ?? 5 // Default to Male Calm
+          const voiceId = config.kittenVoiceId ?? 0 // Default to Voice 2 - Male
           const result = await synthesize(processedText, voiceId, input.speed)
           const wavBuffer = float32ToWav(result.samples, result.sampleRate)
           // Convert Buffer to ArrayBuffer

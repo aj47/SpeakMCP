@@ -1000,7 +1000,7 @@ export type Config = {
 
   // Kitten (Local) TTS Configuration
   kittenModelDownloaded?: boolean // Whether model has been downloaded
-  kittenVoiceId?: number // Voice ID 0-7 (default: 5 for calm male voice)
+  kittenVoiceId?: number // Voice ID 0-7 (default: 0 for Voice 2 - Male)
 
   // TTS Text Preprocessing Configuration
   ttsPreprocessingEnabled?: boolean

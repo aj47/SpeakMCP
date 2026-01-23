@@ -90,15 +90,17 @@ const REQUIRED_FILES = [
 ]
 
 // Voice definitions (sid 0-7)
+// Based on official docs: https://k2-fsa.github.io/sherpa/onnx/tts/all/English/kitten-nano-en-v0_1.html
+// Even IDs (0,2,4,6) are male (expr-voice-X-m), odd IDs (1,3,5,7) are female (expr-voice-X-f)
 const VOICES = [
-  { id: 0, label: "Female Energetic", gender: "female", style: "energetic" },
-  { id: 1, label: "Female Calm", gender: "female", style: "calm" },
-  { id: 2, label: "Female Cheerful", gender: "female", style: "cheerful" },
-  { id: 3, label: "Female Serious", gender: "female", style: "serious" },
-  { id: 4, label: "Male Energetic", gender: "male", style: "energetic" },
-  { id: 5, label: "Male Calm", gender: "male", style: "calm" },
-  { id: 6, label: "Male Cheerful", gender: "male", style: "cheerful" },
-  { id: 7, label: "Male Serious", gender: "male", style: "serious" },
+  { id: 0, label: "Voice 2 - Male", gender: "male", style: "expr-voice-2" },
+  { id: 1, label: "Voice 2 - Female", gender: "female", style: "expr-voice-2" },
+  { id: 2, label: "Voice 3 - Male", gender: "male", style: "expr-voice-3" },
+  { id: 3, label: "Voice 3 - Female", gender: "female", style: "expr-voice-3" },
+  { id: 4, label: "Voice 4 - Male", gender: "male", style: "expr-voice-4" },
+  { id: 5, label: "Voice 4 - Female", gender: "female", style: "expr-voice-4" },
+  { id: 6, label: "Voice 5 - Male", gender: "male", style: "expr-voice-5" },
+  { id: 7, label: "Voice 5 - Female", gender: "female", style: "expr-voice-5" },
 ] as const
 
 export interface Voice {

@@ -133,16 +133,17 @@ export const GEMINI_TTS_MODELS = [
 ] as const
 
 // Kitten TTS Voice Options (8 voices, sid 0-7)
-// Matches the voice definitions in kitten-tts.ts
+// Based on official docs: https://k2-fsa.github.io/sherpa/onnx/tts/all/English/kitten-nano-en-v0_1.html
+// Even IDs (0,2,4,6) are male (-m), odd IDs (1,3,5,7) are female (-f)
 export const KITTEN_TTS_VOICES = [
-  { label: "Female Energetic", value: 0 },
-  { label: "Female Calm", value: 1 },
-  { label: "Female Cheerful", value: 2 },
-  { label: "Female Serious", value: 3 },
-  { label: "Male Energetic", value: 4 },
-  { label: "Male Calm (Default)", value: 5 },
-  { label: "Male Cheerful", value: 6 },
-  { label: "Male Serious", value: 7 },
+  { label: "Voice 2 - Male (Default)", value: 0 },
+  { label: "Voice 2 - Female", value: 1 },
+  { label: "Voice 3 - Male", value: 2 },
+  { label: "Voice 3 - Female", value: 3 },
+  { label: "Voice 4 - Male", value: 4 },
+  { label: "Voice 4 - Female", value: 5 },
+  { label: "Voice 5 - Male", value: 6 },
+  { label: "Voice 5 - Female", value: 7 },
 ] as const
 
 // OpenAI Compatible Provider Presets

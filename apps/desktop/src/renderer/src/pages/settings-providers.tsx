@@ -1092,7 +1092,7 @@ export function Component() {
             isCollapsed={configQuery.data.providerSectionCollapsedKitten ?? true}
             onToggleCollapse={() => saveConfig({ providerSectionCollapsedKitten: !(configQuery.data.providerSectionCollapsedKitten ?? true) })}
             usageBadges={activeProviders.kitten}
-            voiceId={configQuery.data.kittenVoiceId ?? 5}
+            voiceId={configQuery.data.kittenVoiceId ?? 0}
             onVoiceIdChange={(value) => saveConfig({ kittenVoiceId: value })}
           />
         )}
@@ -1343,7 +1343,7 @@ export function Component() {
             isCollapsed={configQuery.data.providerSectionCollapsedKitten ?? true}
             onToggleCollapse={() => saveConfig({ providerSectionCollapsedKitten: !(configQuery.data.providerSectionCollapsedKitten ?? true) })}
             usageBadges={activeProviders.kitten}
-            voiceId={configQuery.data.kittenVoiceId ?? 5}
+            voiceId={configQuery.data.kittenVoiceId ?? 0}
             onVoiceIdChange={(value) => saveConfig({ kittenVoiceId: value })}
           />
         )}

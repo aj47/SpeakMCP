@@ -506,8 +506,27 @@ export async function downloadKittenModel(
     const readStream = fs.createReadStream(archivePath)
     // Create a bz2 decompression stream
     const decompressStream = unbzip2()
-    // Create a tar extraction stream
-    const extractStream = new tar.Unpack({ cwd: modelsPath })
+    // Create a tar extraction stream with filter to only extract needed files
+    const extractStream = new tar.Unpack({
+      cwd: modelsPath,
+      filter: (entryPath: string) => {
+        // Only extract the files we need, plus directories containing them
+        const basename = path.basename(entryPath)
+        // Allow directories (needed for tar extraction to work)
+        if (entryPath.endsWith("/")) {
+          return true
+        }
+        // Allow required model files
+        if (REQUIRED_FILES.includes(basename)) {
+          return true
+        }
+        // Allow espeak-ng-data files (required for phoneme synthesis)
+        if (entryPath.includes("espeak-ng-data/")) {
+          return true
+        }
+        return false
+      },
+    })
 
     // Pipe: read archive -> decompress bz2 -> extract tar
     await pipeline(readStream, decompressStream, extractStream)

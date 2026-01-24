@@ -2112,7 +2112,10 @@ Return ONLY JSON per schema.`,
       //
       // IMPORTANT: Track total nudges to prevent infinite loops. After MAX_NUDGES,
       // accept the current response as complete rather than nudging forever.
-      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
+      //
+      // EXCEPTION: If the model explicitly sets needsMoreWork=true, skip nudging entirely
+      // and let it continue its multi-step answer naturally.
+      if (config.mcpVerifyCompletionEnabled && llmResponse.needsMoreWork !== true && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
         // Check if we've exceeded max nudges - if so, accept the response as complete
         if (totalNudgeCount >= MAX_NUDGES) {
           const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
@@ -2169,27 +2172,28 @@ Return ONLY JSON per schema.`,
         continue
       }
 
+      // Handle needsMoreWork=true: the model explicitly wants to continue its multi-step answer.
+      // This applies regardless of verification setting - respect the model's explicit signal.
+      if (llmResponse.needsMoreWork === true) {
+        if (isDebugLLM()) {
+          logLLM("Model explicitly set needsMoreWork=true - continuing loop", {
+            mcpVerifyCompletionEnabled: config.mcpVerifyCompletionEnabled,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.trim().substring(0, 100),
+          })
+        }
+        // Add the partial response to history if non-empty
+        if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
+          addMessage("assistant", contentText)
+        }
+        noOpCount = 0 // Reset since the LLM explicitly signaled it needs more work
+        continue
+      }
+
       // When verification is disabled, handle text-only responses:
-      // - If needsMoreWork is explicitly true, continue the loop (respect the LLM's request)
-      // - Otherwise, accept the response as complete
+      // Accept the response as complete since we've already handled needsMoreWork=true above.
       // This prevents infinite loops when mcpVerifyCompletionEnabled is false.
       if (!config.mcpVerifyCompletionEnabled) {
-        if (llmResponse.needsMoreWork === true) {
-          // LLM explicitly wants to continue - add response and give it another iteration
-          if (isDebugLLM()) {
-            logLLM("Verification disabled but needsMoreWork=true - continuing loop", {
-              responseLength: contentText.trim().length,
-              responsePreview: contentText.trim().substring(0, 100),
-            })
-          }
-          // Add the partial response to history if non-empty
-          if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
-            addMessage("assistant", contentText)
-          }
-          noOpCount = 0 // Reset since the LLM explicitly signaled it needs more work
-          continue
-        }
-
         // Accept text-only response as complete
         const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
         if (isDebugLLM()) {

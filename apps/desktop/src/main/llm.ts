@@ -2169,14 +2169,33 @@ Return ONLY JSON per schema.`,
         continue
       }
 
-      // When verification is disabled and we have a text-only response (no tool calls),
-      // accept it as complete rather than falling through to the tool execution section.
+      // When verification is disabled, handle text-only responses:
+      // - If needsMoreWork is explicitly true, continue the loop (respect the LLM's request)
+      // - Otherwise, accept the response as complete
       // This prevents infinite loops when mcpVerifyCompletionEnabled is false.
       if (!config.mcpVerifyCompletionEnabled) {
+        if (llmResponse.needsMoreWork === true) {
+          // LLM explicitly wants to continue - add response and give it another iteration
+          if (isDebugLLM()) {
+            logLLM("Verification disabled but needsMoreWork=true - continuing loop", {
+              responseLength: contentText.trim().length,
+              responsePreview: contentText.trim().substring(0, 100),
+            })
+          }
+          // Add the partial response to history if non-empty
+          if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
+            addMessage("assistant", contentText)
+          }
+          noOpCount = 0 // Reset since the LLM explicitly signaled it needs more work
+          continue
+        }
+
+        // Accept text-only response as complete
         const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
         if (isDebugLLM()) {
           logLLM("Verification disabled - accepting text-only response as complete", {
             hasValidContent,
+            needsMoreWork: llmResponse.needsMoreWork,
             responseLength: contentText.trim().length,
             responsePreview: contentText.trim().substring(0, 100),
           })

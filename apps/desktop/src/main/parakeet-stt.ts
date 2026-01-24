@@ -536,6 +536,8 @@ function downloadFile(
             response.statusCode < 400 &&
             response.headers.location
           ) {
+            // Drain and destroy the redirect response to avoid leaking sockets
+            response.resume()
             // Resolve relative redirect URLs against current URL
             const redirectUrl = new URL(response.headers.location, currentUrl).toString()
             request(redirectUrl)

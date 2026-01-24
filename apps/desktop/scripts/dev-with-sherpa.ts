@@ -1,6 +1,6 @@
 /**
  * NOTE: This file should be run via `npx tsx scripts/dev-with-sherpa.ts`
- * or through the npm script `pnpm dev-sherpa`. Do not invoke directly.
+ * or through the npm script `pnpm dev`. Do not invoke directly.
  *
  * Development launcher that configures environment for sherpa-onnx native module.
  *

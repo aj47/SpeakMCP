@@ -1234,6 +1234,8 @@ Return ONLY JSON per schema.`,
   })
 
   let noOpCount = 0 // Track iterations without meaningful progress
+  let totalNudgeCount = 0 // Track total nudges to prevent infinite nudge loops
+  const MAX_NUDGES = 3 // Max nudges before accepting text response as complete
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
   const toolFailureCount = new Map<string, number>() // Track failures per tool name
   const MAX_TOOL_FAILURES = 3 // Max times a tool can fail before being excluded
@@ -1962,14 +1964,22 @@ Return ONLY JSON per schema.`,
       const trimmedContent = contentText.trim()
 
       // IMPORTANT: If the LLM provides a substantive response without calling tools,
-      // accept it as complete. This prevents infinite loops for simple Q&A like "hi"
-      // where the LLM just responds without tool calls.
-      // The LLM choosing NOT to use tools is a valid decision - trust it.
-      // We use a lower threshold here (any non-empty response) because short greetings
-      // like "Hi." or "Hello." are valid complete responses to simple greetings.
+      // and indicates it's done (needsMoreWork !== true), accept it as complete ONLY if:
+      // 1. There are no actionable tools for this request (simple Q&A), OR
+      // 2. The LLM explicitly set needsMoreWork to false (not just undefined)
+      //
+      // This prevents infinite loops for simple Q&A like "hi" while still allowing
+      // nudge logic to push the LLM to use tools for actionable requests when
+      // needsMoreWork is undefined (plain text response without explicit completion).
+      //
       // EXCEPTION: If tools were executed in this turn, we should run verification (handled below).
       const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
-      if (hasAnyResponse && llmResponse.needsMoreWork !== true && !hasToolResultsInCurrentTurn) {
+      const shouldExitWithoutNudge = hasAnyResponse &&
+        llmResponse.needsMoreWork !== true &&
+        !hasToolResultsInCurrentTurn &&
+        // Only exit immediately if: no tools available OR explicitly complete (false, not undefined)
+        (!isActionableRequest || llmResponse.needsMoreWork === false)
+      if (shouldExitWithoutNudge) {
         if (isDebugLLM()) {
           logLLM("Substantive response without tool calls - accepting as complete", {
             responseLength: trimmedContent.length,
@@ -2092,7 +2102,33 @@ Return ONLY JSON per schema.`,
       // For actionable requests (with relevant tools), nudge immediately.
       // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
       // giving the LLM a chance to self-correct.
+      //
+      // IMPORTANT: Track total nudges to prevent infinite loops. After MAX_NUDGES,
+      // accept the current response as complete rather than nudging forever.
       if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1))) {
+        // Check if we've exceeded max nudges - if so, accept the response as complete
+        if (totalNudgeCount >= MAX_NUDGES) {
+          if (isDebugLLM()) {
+            logLLM("Max nudges reached - accepting response as complete", {
+              totalNudgeCount,
+              MAX_NUDGES,
+              responseLength: contentText.trim().length,
+              responsePreview: contentText.trim().substring(0, 100),
+            })
+          }
+          finalContent = contentText
+          addMessage("assistant", contentText)
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        }
+
         // Add nudge to push the agent forward
         // Only add assistant message if non-empty to avoid blank entries
         if (contentText.trim().length > 0) {
@@ -2106,6 +2142,14 @@ Return ONLY JSON per schema.`,
         addMessage("user", nudgeMessage)
 
         noOpCount = 0 // Reset counter after nudge
+        totalNudgeCount++ // Track total nudges to prevent infinite loops
+        if (isDebugLLM()) {
+          logLLM("Nudging LLM for tool usage or complete answer", {
+            totalNudgeCount,
+            MAX_NUDGES,
+            isActionableRequest,
+          })
+        }
         continue
       }
     } else {

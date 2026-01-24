@@ -1973,12 +1973,18 @@ Return ONLY JSON per schema.`,
       // nudge logic to push the LLM to use tools when tools are available and
       // needsMoreWork is undefined (plain text response without explicit completion).
       //
+      // NOTE: hasToolsAvailable checks if tools are configured, not whether they're relevant
+      // to the current prompt. However, if the LLM explicitly sets needsMoreWork=false, that
+      // override takes precedence regardless of tool availability. This allows pure Q&A prompts
+      // to complete immediately when the LLM signals completion, even in sessions with tools.
+      //
       // EXCEPTION: If tools were executed in this turn, we should run verification (handled below).
       const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
       const shouldExitWithoutNudge = hasAnyResponse &&
         llmResponse.needsMoreWork !== true &&
         !hasToolResultsInCurrentTurn &&
-        // Only exit immediately if: no tools available OR explicitly complete (false, not undefined)
+        // Exit immediately if: no tools available, OR LLM explicitly signaled completion (false)
+        // When needsMoreWork is undefined (not explicitly set) and tools exist, we nudge
         (!hasToolsAvailable || llmResponse.needsMoreWork === false)
       if (shouldExitWithoutNudge) {
         if (isDebugLLM()) {
@@ -2109,18 +2115,24 @@ Return ONLY JSON per schema.`,
       if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
         // Check if we've exceeded max nudges - if so, accept the response as complete
         if (totalNudgeCount >= MAX_NUDGES) {
+          const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
           if (isDebugLLM()) {
             logLLM("Max nudges reached - accepting response as complete", {
               totalNudgeCount,
               MAX_NUDGES,
+              hasValidContent,
               responseLength: contentText.trim().length,
               responsePreview: contentText.trim().substring(0, 100),
             })
           }
-          finalContent = contentText
-          // Only add assistant message if non-empty and not a placeholder to avoid blank entries
-          if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
+          // Only use contentText if it's non-empty and not a placeholder
+          // Otherwise provide a fallback message to avoid empty completion
+          if (hasValidContent) {
+            finalContent = contentText
             addMessage("assistant", contentText)
+          } else {
+            finalContent = "I was unable to complete the request. Please try rephrasing your question or provide more details."
+            addMessage("assistant", finalContent)
           }
           emit({
             currentIteration: iteration,

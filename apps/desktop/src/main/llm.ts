@@ -1944,9 +1944,10 @@ Return ONLY JSON per schema.`,
     if (!hasToolCalls && !explicitlyComplete) {
       noOpCount++
 
-      // Check if this is an actionable request that should have executed tools
-      // Use activeTools (filtered for failures) to avoid nudging for excluded tools
-      const isActionableRequest = activeTools.length > 0
+      // Check if tools are available for this session (filtered for failures)
+      // When tools are available, we give the LLM a chance to use them via nudges.
+      // The nudge loop is bounded by MAX_NUDGES to prevent infinite loops.
+      const hasToolsAvailable = activeTools.length > 0
       const contentText = llmResponse.content || ""
 
       // Check if tools have already been executed for THIS user prompt (current turn)
@@ -1965,11 +1966,11 @@ Return ONLY JSON per schema.`,
 
       // IMPORTANT: If the LLM provides a substantive response without calling tools,
       // and indicates it's done (needsMoreWork !== true), accept it as complete ONLY if:
-      // 1. There are no actionable tools for this request (simple Q&A), OR
+      // 1. There are no tools configured for this session (simple Q&A), OR
       // 2. The LLM explicitly set needsMoreWork to false (not just undefined)
       //
       // This prevents infinite loops for simple Q&A like "hi" while still allowing
-      // nudge logic to push the LLM to use tools for actionable requests when
+      // nudge logic to push the LLM to use tools when tools are available and
       // needsMoreWork is undefined (plain text response without explicit completion).
       //
       // EXCEPTION: If tools were executed in this turn, we should run verification (handled below).
@@ -1978,7 +1979,7 @@ Return ONLY JSON per schema.`,
         llmResponse.needsMoreWork !== true &&
         !hasToolResultsInCurrentTurn &&
         // Only exit immediately if: no tools available OR explicitly complete (false, not undefined)
-        (!isActionableRequest || llmResponse.needsMoreWork === false)
+        (!hasToolsAvailable || llmResponse.needsMoreWork === false)
       if (shouldExitWithoutNudge) {
         if (isDebugLLM()) {
           logLLM("Substantive response without tool calls - accepting as complete", {
@@ -2099,13 +2100,13 @@ Return ONLY JSON per schema.`,
 
       // Nudge the model to either use tools or provide a complete answer.
       // Only nudge when verification is enabled - when disabled, trust the LLM's decision.
-      // For actionable requests (with relevant tools), nudge immediately.
-      // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
+      // When tools are available, nudge immediately (after 1 no-op).
+      // When no tools are configured (simple Q&A), allow 2 no-ops before nudging,
       // giving the LLM a chance to self-correct.
       //
       // IMPORTANT: Track total nudges to prevent infinite loops. After MAX_NUDGES,
       // accept the current response as complete rather than nudging forever.
-      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1))) {
+      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
         // Check if we've exceeded max nudges - if so, accept the response as complete
         if (totalNudgeCount >= MAX_NUDGES) {
           if (isDebugLLM()) {
@@ -2117,7 +2118,10 @@ Return ONLY JSON per schema.`,
             })
           }
           finalContent = contentText
-          addMessage("assistant", contentText)
+          // Only add assistant message if non-empty and not a placeholder to avoid blank entries
+          if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
+            addMessage("assistant", contentText)
+          }
           emit({
             currentIteration: iteration,
             maxIterations,
@@ -2130,12 +2134,12 @@ Return ONLY JSON per schema.`,
         }
 
         // Add nudge to push the agent forward
-        // Only add assistant message if non-empty to avoid blank entries
-        if (contentText.trim().length > 0) {
+        // Only add assistant message if non-empty and not a placeholder to avoid blank entries
+        if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
           addMessage("assistant", contentText)
         }
 
-        const nudgeMessage = isActionableRequest
+        const nudgeMessage = hasToolsAvailable
           ? "You have relevant tools available for this request. Please either call the tools directly using the native function calling interface, or provide a complete answer if the task cannot be accomplished with the available tools."
           : "Please provide a complete answer to the request. If you need to use tools, call them directly using the native function calling interface."
 
@@ -2147,7 +2151,7 @@ Return ONLY JSON per schema.`,
           logLLM("Nudging LLM for tool usage or complete answer", {
             totalNudgeCount,
             MAX_NUDGES,
-            isActionableRequest,
+            hasToolsAvailable,
           })
         }
         continue

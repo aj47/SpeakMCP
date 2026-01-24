@@ -2168,6 +2168,37 @@ Return ONLY JSON per schema.`,
         }
         continue
       }
+
+      // When verification is disabled and we have a text-only response (no tool calls),
+      // accept it as complete rather than falling through to the tool execution section.
+      // This prevents infinite loops when mcpVerifyCompletionEnabled is false.
+      if (!config.mcpVerifyCompletionEnabled) {
+        const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
+        if (isDebugLLM()) {
+          logLLM("Verification disabled - accepting text-only response as complete", {
+            hasValidContent,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.trim().substring(0, 100),
+          })
+        }
+        if (hasValidContent) {
+          finalContent = contentText
+          addMessage("assistant", contentText)
+        } else {
+          // Provide a fallback message if no valid content
+          finalContent = "I was unable to complete the request. Please try rephrasing your question or provide more details."
+          addMessage("assistant", finalContent)
+        }
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
     } else {
       // Reset no-op counter when tools are called
       noOpCount = 0

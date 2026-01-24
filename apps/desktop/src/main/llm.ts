@@ -1234,6 +1234,8 @@ Return ONLY JSON per schema.`,
   })
 
   let noOpCount = 0 // Track iterations without meaningful progress
+  let totalNudgeCount = 0 // Track total nudges to prevent infinite nudge loops
+  const MAX_NUDGES = 3 // Max nudges before accepting text response as complete
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
   const toolFailureCount = new Map<string, number>() // Track failures per tool name
   const MAX_TOOL_FAILURES = 3 // Max times a tool can fail before being excluded
@@ -1942,9 +1944,10 @@ Return ONLY JSON per schema.`,
     if (!hasToolCalls && !explicitlyComplete) {
       noOpCount++
 
-      // Check if this is an actionable request that should have executed tools
-      // Use activeTools (filtered for failures) to avoid nudging for excluded tools
-      const isActionableRequest = activeTools.length > 0
+      // Check if tools are available for this session (filtered for failures)
+      // When tools are available, we give the LLM a chance to use them via nudges.
+      // The nudge loop is bounded by MAX_NUDGES to prevent infinite loops.
+      const hasToolsAvailable = activeTools.length > 0
       const contentText = llmResponse.content || ""
 
       // Check if tools have already been executed for THIS user prompt (current turn)
@@ -1962,14 +1965,28 @@ Return ONLY JSON per schema.`,
       const trimmedContent = contentText.trim()
 
       // IMPORTANT: If the LLM provides a substantive response without calling tools,
-      // accept it as complete. This prevents infinite loops for simple Q&A like "hi"
-      // where the LLM just responds without tool calls.
-      // The LLM choosing NOT to use tools is a valid decision - trust it.
-      // We use a lower threshold here (any non-empty response) because short greetings
-      // like "Hi." or "Hello." are valid complete responses to simple greetings.
+      // and indicates it's done (needsMoreWork !== true), accept it as complete ONLY if:
+      // 1. There are no tools configured for this session (simple Q&A), OR
+      // 2. The LLM explicitly set needsMoreWork to false (not just undefined)
+      //
+      // This prevents infinite loops for simple Q&A like "hi" while still allowing
+      // nudge logic to push the LLM to use tools when tools are available and
+      // needsMoreWork is undefined (plain text response without explicit completion).
+      //
+      // NOTE: hasToolsAvailable checks if tools are configured, not whether they're relevant
+      // to the current prompt. However, if the LLM explicitly sets needsMoreWork=false, that
+      // override takes precedence regardless of tool availability. This allows pure Q&A prompts
+      // to complete immediately when the LLM signals completion, even in sessions with tools.
+      //
       // EXCEPTION: If tools were executed in this turn, we should run verification (handled below).
       const hasAnyResponse = trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)
-      if (hasAnyResponse && llmResponse.needsMoreWork !== true && !hasToolResultsInCurrentTurn) {
+      const shouldExitWithoutNudge = hasAnyResponse &&
+        llmResponse.needsMoreWork !== true &&
+        !hasToolResultsInCurrentTurn &&
+        // Exit immediately if: no tools available, OR LLM explicitly signaled completion (false)
+        // When needsMoreWork is undefined (not explicitly set) and tools exist, we nudge
+        (!hasToolsAvailable || llmResponse.needsMoreWork === false)
+      if (shouldExitWithoutNudge) {
         if (isDebugLLM()) {
           logLLM("Substantive response without tool calls - accepting as complete", {
             responseLength: trimmedContent.length,
@@ -2089,28 +2106,132 @@ Return ONLY JSON per schema.`,
 
       // Nudge the model to either use tools or provide a complete answer.
       // Only nudge when verification is enabled - when disabled, trust the LLM's decision.
-      // For actionable requests (with relevant tools), nudge immediately.
-      // For non-actionable requests (simple Q&A), allow 1 no-op before nudging,
+      // When tools are available, nudge immediately (after 1 no-op).
+      // When no tools are configured (simple Q&A), allow 2 no-ops before nudging,
       // giving the LLM a chance to self-correct.
-      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (isActionableRequest && noOpCount >= 1))) {
+      //
+      // IMPORTANT: Track total nudges to prevent infinite loops. After MAX_NUDGES,
+      // accept the current response as complete rather than nudging forever.
+      //
+      // EXCEPTION: If the model explicitly sets needsMoreWork=true, skip nudging entirely
+      // and let it continue its multi-step answer naturally.
+      if (config.mcpVerifyCompletionEnabled && llmResponse.needsMoreWork !== true && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
+        // Check if we've exceeded max nudges - if so, accept the response as complete
+        if (totalNudgeCount >= MAX_NUDGES) {
+          const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
+          if (isDebugLLM()) {
+            logLLM("Max nudges reached - accepting response as complete", {
+              totalNudgeCount,
+              MAX_NUDGES,
+              hasValidContent,
+              responseLength: contentText.trim().length,
+              responsePreview: contentText.trim().substring(0, 100),
+            })
+          }
+          // Only use contentText if it's non-empty and not a placeholder
+          // Otherwise provide a fallback message to avoid empty completion
+          if (hasValidContent) {
+            finalContent = contentText
+            addMessage("assistant", contentText)
+          } else {
+            finalContent = "I was unable to complete the request. Please try rephrasing your question or provide more details."
+            addMessage("assistant", finalContent)
+          }
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: true,
+            finalContent,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+          break
+        }
+
         // Add nudge to push the agent forward
-        // Only add assistant message if non-empty to avoid blank entries
-        if (contentText.trim().length > 0) {
+        // Only add assistant message if non-empty and not a placeholder to avoid blank entries
+        if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
           addMessage("assistant", contentText)
         }
 
-        const nudgeMessage = isActionableRequest
+        const nudgeMessage = hasToolsAvailable
           ? "You have relevant tools available for this request. Please either call the tools directly using the native function calling interface, or provide a complete answer if the task cannot be accomplished with the available tools."
           : "Please provide a complete answer to the request. If you need to use tools, call them directly using the native function calling interface."
 
         addMessage("user", nudgeMessage)
 
         noOpCount = 0 // Reset counter after nudge
+        totalNudgeCount++ // Track total nudges to prevent infinite loops
+        if (isDebugLLM()) {
+          logLLM("Nudging LLM for tool usage or complete answer", {
+            totalNudgeCount,
+            MAX_NUDGES,
+            hasToolsAvailable,
+          })
+        }
         continue
+      }
+
+      // Handle needsMoreWork=true: the model explicitly wants to continue its multi-step answer.
+      // This applies regardless of verification setting - respect the model's explicit signal.
+      if (llmResponse.needsMoreWork === true) {
+        if (isDebugLLM()) {
+          logLLM("Model explicitly set needsMoreWork=true - continuing loop", {
+            mcpVerifyCompletionEnabled: config.mcpVerifyCompletionEnabled,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.trim().substring(0, 100),
+          })
+        }
+        // Add the partial response to history if non-empty
+        if (contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)) {
+          addMessage("assistant", contentText)
+        }
+        noOpCount = 0 // Reset since the LLM explicitly signaled it needs more work
+        // Reset nudge count since the model is making explicit progress - this allows
+        // nudging to work per "stuck segment" rather than globally across the run.
+        totalNudgeCount = 0
+        continue
+      }
+
+      // When verification is disabled, handle text-only responses:
+      // Accept the response as complete since we've already handled needsMoreWork=true above.
+      // This prevents infinite loops when mcpVerifyCompletionEnabled is false.
+      if (!config.mcpVerifyCompletionEnabled) {
+        // Accept text-only response as complete
+        const hasValidContent = contentText.trim().length > 0 && !isToolCallPlaceholder(contentText)
+        if (isDebugLLM()) {
+          logLLM("Verification disabled - accepting text-only response as complete", {
+            hasValidContent,
+            needsMoreWork: llmResponse.needsMoreWork,
+            responseLength: contentText.trim().length,
+            responsePreview: contentText.trim().substring(0, 100),
+          })
+        }
+        if (hasValidContent) {
+          finalContent = contentText
+          addMessage("assistant", contentText)
+        } else {
+          // Provide a fallback message if no valid content
+          finalContent = "I was unable to complete the request. Please try rephrasing your question or provide more details."
+          addMessage("assistant", finalContent)
+        }
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
       }
     } else {
       // Reset no-op counter when tools are called
       noOpCount = 0
+      // Reset nudge count when tools are actually being used - this allows
+      // nudging to work per "stuck segment" rather than globally across the run.
+      // If the agent gets stuck again later, it should have a fresh nudge budget.
+      totalNudgeCount = 0
     }
 
     // Execute tool calls with enhanced error handling

@@ -115,7 +115,11 @@ const getConfig = () => {
     // Theme preference defaults
     themePreference: "system",
 
-	    // App behavior
+    // Parakeet STT defaults
+    parakeetNumThreads: 2,
+    parakeetModelDownloaded: false,
+
+    // App behavior
 	    launchAtLogin: false,
 	    hideDockIcon: false,
 

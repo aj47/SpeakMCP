@@ -416,14 +416,14 @@ export type ProfileModelConfig = {
   mcpToolsGeminiModel?: string
   currentModelPresetId?: string
   // STT Provider settings
-  sttProviderId?: "openai" | "groq"
+  sttProviderId?: "openai" | "groq" | "parakeet"
   // Transcript Post-Processing settings
   transcriptPostProcessingProviderId?: "openai" | "groq" | "gemini"
   transcriptPostProcessingOpenaiModel?: string
   transcriptPostProcessingGroqModel?: string
   transcriptPostProcessingGeminiModel?: string
   // TTS Provider settings
-  ttsProviderId?: "openai" | "groq" | "gemini"
+  ttsProviderId?: "openai" | "groq" | "gemini" | "kitten"
 }
 
 // Per-profile skills configuration
@@ -973,6 +973,11 @@ export type Config = {
   openaiSttLanguage?: string
   groqSttLanguage?: string
 
+  // Parakeet (Local) STT Configuration
+  parakeetModelPath?: string // Optional custom model path
+  parakeetNumThreads?: number // Number of threads (default: 2)
+  parakeetModelDownloaded?: boolean // Whether model has been downloaded
+
   // Text-to-Speech Configuration
   ttsEnabled?: boolean
   ttsAutoPlay?: boolean
@@ -992,6 +997,10 @@ export type Config = {
   geminiTtsModel?: "gemini-2.5-flash-preview-tts" | "gemini-2.5-pro-preview-tts"
   geminiTtsVoice?: string
   geminiTtsLanguage?: string
+
+  // Kitten (Local) TTS Configuration
+  kittenModelDownloaded?: boolean // Whether model has been downloaded
+  kittenVoiceId?: number // Voice ID 0-7 (default: 0 for Voice 2 - Male)
 
   // TTS Text Preprocessing Configuration
   ttsPreprocessingEnabled?: boolean
@@ -1068,6 +1077,8 @@ export type Config = {
   providerSectionCollapsedOpenai?: boolean
   providerSectionCollapsedGroq?: boolean
   providerSectionCollapsedGemini?: boolean
+  providerSectionCollapsedParakeet?: boolean
+  providerSectionCollapsedKitten?: boolean
 
   // Panel Position Configuration
   panelPosition?:

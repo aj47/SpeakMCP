@@ -9,6 +9,10 @@ export const STT_PROVIDERS = [
     label: "Groq",
     value: "groq",
   },
+  {
+    label: "Parakeet (Local)",
+    value: "parakeet",
+  },
 ] as const
 
 export type STT_PROVIDER_ID = (typeof STT_PROVIDERS)[number]["value"]
@@ -42,6 +46,10 @@ export const TTS_PROVIDERS = [
   {
     label: "Gemini",
     value: "gemini",
+  },
+  {
+    label: "Kitten (Local)",
+    value: "kitten",
   },
 ] as const
 
@@ -122,6 +130,20 @@ export const GEMINI_TTS_VOICES = [
 export const GEMINI_TTS_MODELS = [
   { label: "Gemini 2.5 Flash TTS", value: "gemini-2.5-flash-preview-tts" },
   { label: "Gemini 2.5 Pro TTS", value: "gemini-2.5-pro-preview-tts" },
+] as const
+
+// Kitten TTS Voice Options (8 voices, sid 0-7)
+// Based on official docs: https://k2-fsa.github.io/sherpa/onnx/tts/all/English/kitten-nano-en-v0_1.html
+// Even IDs (0,2,4,6) are male (-m), odd IDs (1,3,5,7) are female (-f)
+export const KITTEN_TTS_VOICES = [
+  { label: "Voice 2 - Male (Default)", value: 0 },
+  { label: "Voice 2 - Female", value: 1 },
+  { label: "Voice 3 - Male", value: 2 },
+  { label: "Voice 3 - Female", value: 3 },
+  { label: "Voice 4 - Male", value: 4 },
+  { label: "Voice 4 - Female", value: 5 },
+  { label: "Voice 5 - Male", value: 6 },
+  { label: "Voice 5 - Female", value: 7 },
 ] as const
 
 // OpenAI Compatible Provider Presets

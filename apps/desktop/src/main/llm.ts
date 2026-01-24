@@ -2187,6 +2187,9 @@ Return ONLY JSON per schema.`,
           addMessage("assistant", contentText)
         }
         noOpCount = 0 // Reset since the LLM explicitly signaled it needs more work
+        // Reset nudge count since the model is making explicit progress - this allows
+        // nudging to work per "stuck segment" rather than globally across the run.
+        totalNudgeCount = 0
         continue
       }
 
@@ -2225,6 +2228,10 @@ Return ONLY JSON per schema.`,
     } else {
       // Reset no-op counter when tools are called
       noOpCount = 0
+      // Reset nudge count when tools are actually being used - this allows
+      // nudging to work per "stuck segment" rather than globally across the run.
+      // If the agent gets stuck again later, it should have a fresh nudge budget.
+      totalNudgeCount = 0
     }
 
     // Execute tool calls with enhanced error handling

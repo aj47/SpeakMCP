@@ -1094,6 +1094,10 @@ export type Config = {
   panelCustomSize?: { width: number; height: number }
   panelProgressSize?: { width: number; height: number }
 
+  // Notch Overlay Configuration (macOS only)
+  // When true, shows a small clickable indicator under the webcam notch area
+  notchOverlayEnabled?: boolean
+
   // Floating Panel Auto-Show Configuration
   // When false, the floating panel will not automatically appear during agent sessions
   // Users can still manually access the panel via hotkeys, tray menu, or UI

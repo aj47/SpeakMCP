@@ -16,7 +16,7 @@ import { calculatePanelPosition } from "./panel-position"
 import { setupConsoleLogger } from "./console-logger"
 import { emergencyStopAll } from "./emergency-stop"
 
-type WINDOW_ID = "main" | "panel" | "setup"
+type WINDOW_ID = "main" | "panel" | "setup" | "notch"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
@@ -592,6 +592,86 @@ export function createPanelWindow() {
   // Ensure correct z-order for our panel-like window
   ensurePanelZOrder(win)
 
+  return win
+}
+
+// --- Notch overlay window (macOS only) ---
+// A small transparent clickable pill that sits centered at the top of the primary display,
+// right under the webcam notch area. Clicking opens the latest conversation.
+
+const NOTCH_WIDTH = 200
+const NOTCH_HEIGHT = 32
+
+function getNotchPosition(): { x: number; y: number } {
+  const primaryDisplay = screen.getPrimaryDisplay()
+  // Use full display bounds (not workArea) to position in the menu bar / notch zone
+  const { x, y, width } = primaryDisplay.bounds
+  return {
+    x: Math.floor(x + (width - NOTCH_WIDTH) / 2),
+    y: y, // Top of display, in the notch/menu bar area
+  }
+}
+
+function ensureNotchZOrder(win: BrowserWindow) {
+  try {
+    // @ts-ignore - macOS-only options
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    // Use "status" level to sit in the menu bar zone, above most windows
+    // @ts-ignore - level arg is macOS-specific
+    win.setAlwaysOnTop(true, "status", 1)
+  } catch (e) {
+    logApp("[window.ts] ensureNotchZOrder error:", e)
+    try {
+      win.setAlwaysOnTop(true)
+    } catch {}
+  }
+}
+
+export function createNotchWindow() {
+  if (process.platform !== "darwin") return undefined
+
+  logApp("Creating notch overlay window...")
+
+  const position = getNotchPosition()
+
+  const win = createBaseWindow({
+    id: "notch",
+    url: "/notch",
+    showWhenReady: true,
+    windowOptions: {
+      // macOS-specific: transparent, frameless overlay
+      hiddenInMissionControl: true,
+      transparent: true,
+      frame: false,
+      hasShadow: false,
+      skipTaskbar: true,
+      closable: false,
+      maximizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      resizable: false,
+      focusable: false,
+      alwaysOnTop: true,
+      width: NOTCH_WIDTH,
+      height: NOTCH_HEIGHT,
+      x: position.x,
+      y: position.y,
+      // Allow clicks to pass through transparent regions
+      paintWhenInitiallyHidden: true,
+    },
+  })
+
+  // Make clicks pass through transparent parts of the window
+  win.setIgnoreMouseEvents(true, { forward: true })
+
+  // Maintain z-order across lifecycle events
+  win.on("show", () => ensureNotchZOrder(win))
+  win.on("blur", () => ensureNotchZOrder(win))
+  win.on("focus", () => ensureNotchZOrder(win))
+
+  ensureNotchZOrder(win)
+
+  logApp("[window.ts] Notch overlay window created at", position)
   return win
 }
 

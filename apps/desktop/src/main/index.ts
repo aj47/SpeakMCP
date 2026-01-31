@@ -3,6 +3,7 @@ import { electronApp, optimizer } from "@electron-toolkit/utils"
 import {
   createMainWindow,
   createPanelWindow,
+  createNotchWindow,
   createSetupWindow,
   makePanelWindowClosable,
   WINDOWS,
@@ -126,6 +127,15 @@ app.whenReady().then(() => {
 
   createPanelWindow()
   logApp("Panel window created")
+
+  // Create notch overlay window (macOS only, when enabled)
+  if (process.platform === "darwin") {
+    const cfg = configStore.get()
+    if (cfg.notchOverlayEnabled !== false) {
+      createNotchWindow()
+      logApp("Notch overlay window created")
+    }
+  }
 
   listenToKeyboardEvents()
   logApp("Keyboard event listener started")

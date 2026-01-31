@@ -92,4 +92,8 @@ export const router: ReturnType<typeof createBrowserRouter> =
       path: "/panel",
       lazy: () => import("./pages/panel"),
     },
+    {
+      path: "/notch",
+      lazy: () => import("./pages/notch"),
+    },
   ])

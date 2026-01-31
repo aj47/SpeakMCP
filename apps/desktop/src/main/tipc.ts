@@ -3834,6 +3834,47 @@ export const router = {
     .action(async ({ input }) => {
       return summarizationService.getImportantSummaries(input.sessionId)
     }),
+
+  // --- Notch overlay handlers (macOS only) ---
+
+  notchSetIgnoreMouse: t.procedure
+    .input<{ ignore: boolean }>()
+    .action(async ({ input }) => {
+      const win = WINDOWS.get("notch")
+      if (!win) return
+      try {
+        if (input.ignore) {
+          win.setIgnoreMouseEvents(true, { forward: true })
+        } else {
+          win.setIgnoreMouseEvents(false)
+        }
+      } catch (e) {
+        logApp("[tipc] notchSetIgnoreMouse error:", e)
+      }
+    }),
+
+  openLatestConversation: t.procedure
+    .action(async () => {
+      // Find the most recent active session or conversation and open it
+      const activeSessions = agentSessionTracker.getActiveSessions()
+
+      if (activeSessions.length > 0 && activeSessions[0].conversationId) {
+        // Open the most recent active session's conversation
+        showMainWindow(`/${activeSessions[0].id}`)
+        return { opened: "active-session", id: activeSessions[0].id }
+      }
+
+      // Fall back to conversation history (most recent first)
+      const history = await conversationService.getConversationHistory()
+      if (history.length > 0) {
+        showMainWindow(`/history/${history[0].id}`)
+        return { opened: "conversation", id: history[0].id }
+      }
+
+      // No conversations at all - just open main window (blank)
+      showMainWindow("/")
+      return { opened: "blank" }
+    }),
 }
 
 // TTS Provider Implementation Functions

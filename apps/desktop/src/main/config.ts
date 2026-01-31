@@ -112,6 +112,8 @@ const getConfig = () => {
     floatingPanelAutoShow: true,
     // Hide floating panel when main app is focused (default: enabled)
     hidePanelWhenMainFocused: true,
+    // Notch overlay (macOS only) - show clickable pill under webcam notch
+    notchOverlayEnabled: process.platform === "darwin",
     // Theme preference defaults
     themePreference: "system",
 

@@ -12,10 +12,13 @@ const DEFAULT_PORTS = [3210, 3211, 3212, 8080]
 const CONFIG_DIR = join(homedir(), '.speakmcp')
 const CONFIG_FILE = join(CONFIG_DIR, 'cli.json')
 
-interface CliArgs {
+export interface CliArgs {
   url?: string
   apiKey?: string
   conversationId?: string
+  port?: number
+  noServer?: boolean
+  debug?: boolean
   help?: boolean
   version?: boolean
 }
@@ -51,6 +54,22 @@ export function parseArgs(args: string[]): CliArgs {
         result.conversationId = nextArg
         i++
         break
+      case '-p':
+      case '--port':
+        if (nextArg && !nextArg.startsWith('-')) {
+          const port = parseInt(nextArg, 10)
+          if (!isNaN(port) && port > 0 && port < 65536) {
+            result.port = port
+          }
+          i++
+        }
+        break
+      case '--no-server':
+        result.noServer = true
+        break
+      case '--debug':
+        result.debug = true
+        break
     }
   }
   
@@ -63,22 +82,29 @@ SpeakMCP CLI - Terminal UI for SpeakMCP
 
 Usage: speakmcp [options]
 
+By default, starts an embedded server automatically. Use --url to connect
+to an external server instead.
+
 Options:
   -h, --help              Show this help message
   -v, --version           Show version number
-  -u, --url <url>         Server URL (default: auto-discover)
+  -u, --url <url>         Server URL (skips embedded server)
   -k, --api-key <key>     API key for authentication
   -c, --conversation <id> Resume specific conversation
+  -p, --port <port>       Port for embedded server (default: 3211)
+  --no-server             Don't start embedded server, only connect to external
+  --debug                 Enable debug logging
 
 Environment Variables:
-  SPEAKMCP_URL            Server URL
+  SPEAKMCP_URL            Server URL (skips embedded server)
   SPEAKMCP_API_KEY        API key for authentication
   SPEAKMCP_CONVERSATION   Default conversation ID
 
 Examples:
-  speakmcp
-  speakmcp --url http://localhost:3210 --api-key mykey
-  SPEAKMCP_API_KEY=mykey speakmcp
+  speakmcp                                          # Start with embedded server
+  speakmcp --port 8080                              # Embedded server on port 8080
+  speakmcp --url http://localhost:3210 --api-key k  # Connect to external server
+  speakmcp --no-server                              # Only auto-discover, no embedded
 `)
 }
 
@@ -116,7 +142,7 @@ async function probeServer(url: string): Promise<boolean> {
   }
 }
 
-async function autoDiscoverServer(): Promise<string | null> {
+export async function autoDiscoverServer(): Promise<string | null> {
   for (const port of DEFAULT_PORTS) {
     const url = `http://127.0.0.1:${port}`
     if (await probeServer(url)) {
@@ -128,28 +154,19 @@ async function autoDiscoverServer(): Promise<string | null> {
 
 export async function loadConfig(cliArgs: CliArgs): Promise<CliConfig> {
   const fileConfig = loadConfigFile()
-  
+
   // Environment variables
   const envUrl = process.env.SPEAKMCP_URL
   const envApiKey = process.env.SPEAKMCP_API_KEY
   const envConversation = process.env.SPEAKMCP_CONVERSATION
-  
-  // Resolve server URL (priority: CLI > env > file > auto-discover)
-  let serverUrl: string | undefined = cliArgs.url || envUrl || fileConfig.serverUrl
 
-  if (!serverUrl) {
-    const discovered = await autoDiscoverServer()
-    if (!discovered) {
-      throw new Error(
-        'Could not find SpeakMCP server. Please start the server or specify --url'
-      )
-    }
-    serverUrl = discovered
-  }
-  
+  // Resolve server URL (priority: CLI > env > file)
+  // Note: auto-discover is NOT done here — caller handles it with fallback logic
+  const serverUrl = cliArgs.url || envUrl || fileConfig.serverUrl || ''
+
   // Resolve API key (priority: CLI > env > file)
   const apiKey = cliArgs.apiKey || envApiKey || fileConfig.apiKey || ''
-  
+
   return {
     serverUrl,
     apiKey,

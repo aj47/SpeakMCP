@@ -53,6 +53,44 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 | **🛠️ Platform** | macOS/Windows/Linux, rate limit handling, multi-provider AI |
 | **🎨 UX** | Dark/light themes, resizable panels, kill switch, conversation history |
 
+## 💻 CLI (Terminal UI)
+
+A terminal-based client that connects to the SpeakMCP server. Requires **[Bun](https://bun.sh/)** runtime.
+
+### Prerequisites
+
+```bash
+# Install Bun (if not already installed)
+curl -fsSL https://bun.sh/install | bash
+
+# Install dependencies from repo root
+pnpm install
+```
+
+### Running the CLI
+
+**1. Start the server** (in one terminal):
+
+```bash
+cd packages/server && npx tsx src/index.ts --port 3211 --api-key test-key
+```
+
+**2. Start the CLI** (in another terminal):
+
+```bash
+cd apps/cli && bun run src/index.ts --url http://127.0.0.1:3211 --api-key test-key
+```
+
+Or using environment variables:
+
+```bash
+export SPEAKMCP_URL=http://127.0.0.1:3211
+export SPEAKMCP_API_KEY=test-key
+cd apps/cli && bun run src/index.ts
+```
+
+> ⚠️ **Note**: The CLI requires Bun — `node` and `tsx` will not work due to OpenTUI's tree-sitter dependencies.
+
 ## 🛠️ Development
 
 ```bash

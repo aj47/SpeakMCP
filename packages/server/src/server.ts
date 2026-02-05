@@ -267,7 +267,8 @@ export async function startServer(options: ServerOptions = {}): Promise<{
 
   // Generate API key if not provided
   const apiKey = options.apiKey || (cfg.remoteServerApiKey as string) || crypto.randomBytes(32).toString("hex")
-  if (!cfg.remoteServerApiKey) {
+  if (options.apiKey || !cfg.remoteServerApiKey) {
+    // Always save when explicitly provided (e.g. embedded mode), or when no key exists yet
     configStore.save({ ...cfg, remoteServerApiKey: apiKey })
   }
 

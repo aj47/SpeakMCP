@@ -13,9 +13,17 @@ import { mcpService, handleWhatsAppToggle } from './services/mcp-service'
 import { profileService } from './services/profile-service'
 import { conversationService } from './services/conversation-service'
 import { emergencyStopAll } from './services/emergency-stop'
-import { state, agentSessionStateManager } from './services/state'
+import { state, agentSessionStateManager, toolApprovalManager, messageQueueManager } from './services/state'
+import { fetchAvailableModels } from './services/models-service'
 import { executeBuiltinTool, isBuiltinTool, builtinTools } from './services/builtin-tools'
 import { processTranscriptWithAgentMode, type ConversationHistoryEntry } from './services/llm'
+import { memoryService } from './services/memory-service'
+import { skillsService } from './services/skills-service'
+import {
+  getPendingElicitations, resolveElicitation,
+  getPendingSamplingRequests, resolveSampling,
+} from './services/mcp-service'
+import { acpService, type ACPAgentConfig } from './services/acp-service'
 import type { AgentProgressUpdate, MCPToolResult } from './types'
 
 let server: FastifyInstance | null = null
@@ -429,6 +437,34 @@ export async function startServer(options: ServerOptions = {}): Promise<{
     })
   })
 
+  // Models per provider endpoint
+  fastify.get("/v1/models/:providerId", async (req, reply) => {
+    try {
+      const params = req.params as { providerId: string }
+      const providerId = params.providerId
+
+      const validProviders = ["openai", "groq", "gemini"]
+      if (!validProviders.includes(providerId)) {
+        return reply.code(400).send({ error: `Invalid provider: ${providerId}. Valid providers: ${validProviders.join(", ")}` })
+      }
+
+      const models = await fetchAvailableModels(providerId)
+      return reply.send({
+        providerId,
+        models: models.map(m => ({
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          context_length: m.context_length,
+        })),
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", `Failed to fetch models for provider`, err)
+      return reply.code(500).send({ error: err?.message || "Failed to fetch models" })
+    }
+  })
+
 
   // Profiles endpoints
   fastify.get("/v1/profiles", async (_req, reply) => {
@@ -548,6 +584,12 @@ export async function startServer(options: ServerOptions = {}): Promise<{
   fastify.get("/v1/settings", async (_req, reply) => {
     try {
       const cfg = configStore.get() as Record<string, unknown>
+      // Mask API keys: show only last 4 chars
+      const maskKey = (key: unknown): string => {
+        if (!key || typeof key !== "string" || key.length === 0) return ""
+        return key.length <= 4 ? "****" : `****${key.slice(-4)}`
+      }
+
       return reply.send({
         mcpToolsProviderId: cfg.mcpToolsProviderId || "openai",
         mcpToolsOpenaiModel: cfg.mcpToolsOpenaiModel,
@@ -557,6 +599,10 @@ export async function startServer(options: ServerOptions = {}): Promise<{
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
         ttsEnabled: cfg.ttsEnabled ?? true,
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
+        openaiApiKey: maskKey(cfg.openaiApiKey),
+        groqApiKey: maskKey(cfg.groqApiKey),
+        geminiApiKey: maskKey(cfg.geminiApiKey),
+        currentModelPresetId: cfg.currentModelPresetId || "builtin-openai",
       })
     } catch (error: unknown) {
       const err = error as Error
@@ -592,6 +638,23 @@ export async function startServer(options: ServerOptions = {}): Promise<{
       }
       if (typeof body.mcpToolsGeminiModel === "string") {
         updates.mcpToolsGeminiModel = body.mcpToolsGeminiModel
+      }
+      if (typeof body.transcriptPostProcessingEnabled === "boolean") {
+        updates.transcriptPostProcessingEnabled = body.transcriptPostProcessingEnabled
+      }
+      // API keys - only update if non-empty and not a masked value
+      if (typeof body.openaiApiKey === "string" && body.openaiApiKey.length > 0 && !body.openaiApiKey.startsWith("****")) {
+        updates.openaiApiKey = body.openaiApiKey
+      }
+      if (typeof body.groqApiKey === "string" && body.groqApiKey.length > 0 && !body.groqApiKey.startsWith("****")) {
+        updates.groqApiKey = body.groqApiKey
+      }
+      if (typeof body.geminiApiKey === "string" && body.geminiApiKey.length > 0 && !body.geminiApiKey.startsWith("****")) {
+        updates.geminiApiKey = body.geminiApiKey
+      }
+      // Model preset selection
+      if (typeof body.currentModelPresetId === "string" && body.currentModelPresetId.length > 0) {
+        updates.currentModelPresetId = body.currentModelPresetId
       }
 
       if (Object.keys(updates).length === 0) {
@@ -708,6 +771,92 @@ export async function startServer(options: ServerOptions = {}): Promise<{
   })
 
 
+  // Delete conversation
+  fastify.delete("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+
+      await conversationService.deleteConversation(conversationId)
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete conversation", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete conversation" })
+    }
+  })
+
+  // Update conversation (rename)
+  fastify.put("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+
+      const body = req.body as { title?: string }
+      const conversation = await conversationService.loadConversation(conversationId)
+      if (!conversation) {
+        return reply.code(404).send({ error: "Conversation not found" })
+      }
+
+      if (body.title && typeof body.title === "string") {
+        conversation.title = body.title
+      }
+      conversation.updatedAt = Date.now()
+
+      await conversationService.saveConversation(conversation)
+      return reply.send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to update conversation", err)
+      return reply.code(500).send({ error: err?.message || "Failed to update conversation" })
+    }
+  })
+
+  // Tool approval response
+  fastify.post("/v1/tool-approval", async (req, reply) => {
+    try {
+      const body = req.body as { approvalId?: string; approved?: boolean }
+
+      if (!body.approvalId || typeof body.approvalId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid approvalId" })
+      }
+      if (typeof body.approved !== "boolean") {
+        return reply.code(400).send({ error: "Missing or invalid 'approved' boolean" })
+      }
+
+      const found = toolApprovalManager.respondToApproval(body.approvalId, body.approved)
+      if (!found) {
+        return reply.code(404).send({ error: "Approval not found or already resolved" })
+      }
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Tool approval error", err)
+      return reply.code(500).send({ error: err?.message || "Tool approval failed" })
+    }
+  })
+
   // Emergency stop endpoint
   fastify.post("/v1/emergency-stop", async (_req, reply) => {
     try {
@@ -724,6 +873,752 @@ export async function startServer(options: ServerOptions = {}): Promise<{
       return reply.code(500).send({ success: false, error: err?.message || "Emergency stop failed" })
     }
   })
+
+  // Profile CRUD endpoints
+  fastify.post("/v1/profiles", async (req, reply) => {
+    try {
+      const body = req.body as { name?: string; guidelines?: string; systemPrompt?: string }
+      if (!body.name || typeof body.name !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'name'" })
+      }
+      const profile = profileService.createProfile(body.name, body.guidelines || "", body.systemPrompt)
+      return reply.code(201).send({ success: true, profile })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to create profile", err)
+      return reply.code(500).send({ error: err?.message || "Failed to create profile" })
+    }
+  })
+
+  fastify.patch("/v1/profiles/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const body = req.body as { name?: string; guidelines?: string; systemPrompt?: string }
+      const profile = profileService.updateProfile(params.id, body)
+      return reply.send({ success: true, profile })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to update profile", err)
+      return reply.code(500).send({ error: err?.message || "Failed to update profile" })
+    }
+  })
+
+  fastify.delete("/v1/profiles/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const success = profileService.deleteProfile(params.id)
+      if (!success) {
+        return reply.code(404).send({ error: "Profile not found or cannot be deleted" })
+      }
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete profile", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete profile" })
+    }
+  })
+
+  // Profile export/import
+  fastify.get("/v1/profiles/:id/export", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const exportJson = profileService.exportProfile(params.id)
+      return reply.send({ profile: JSON.parse(exportJson) })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to export profile", err)
+      return reply.code(500).send({ error: err?.message || "Failed to export profile" })
+    }
+  })
+
+  fastify.post("/v1/profiles/import", async (req, reply) => {
+    try {
+      const body = req.body as { profile?: unknown }
+      if (!body.profile) {
+        return reply.code(400).send({ error: "Missing 'profile' in request body" })
+      }
+      const profileJson = typeof body.profile === "string" ? body.profile : JSON.stringify(body.profile)
+      const profile = profileService.importProfile(profileJson)
+      return reply.code(201).send({ success: true, profile })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to import profile", err)
+      return reply.code(500).send({ error: err?.message || "Failed to import profile" })
+    }
+  })
+
+  // Diagnostics endpoints
+  fastify.get("/v1/diagnostics/report", async (_req, reply) => {
+    try {
+      const report = await diagnosticsService.generateDiagnosticReport()
+      return reply.send(report)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to generate diagnostic report", err)
+      return reply.code(500).send({ error: err?.message || "Failed to generate diagnostic report" })
+    }
+  })
+
+  fastify.get("/v1/diagnostics/health", async (_req, reply) => {
+    try {
+      const health = await diagnosticsService.performHealthCheck()
+      return reply.send(health)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to perform health check", err)
+      return reply.code(500).send({ error: err?.message || "Failed to perform health check" })
+    }
+  })
+
+  fastify.get("/v1/diagnostics/errors", async (req, reply) => {
+    try {
+      const query = req.query as { count?: string }
+      const count = query.count ? parseInt(query.count, 10) : 10
+      const errors = diagnosticsService.getRecentErrors(count)
+      return reply.send({ errors })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to get recent errors", err)
+      return reply.code(500).send({ error: err?.message || "Failed to get recent errors" })
+    }
+  })
+
+  fastify.post("/v1/diagnostics/errors/clear", async (_req, reply) => {
+    try {
+      diagnosticsService.clearErrorLog()
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to clear errors", err)
+      return reply.code(500).send({ error: err?.message || "Failed to clear errors" })
+    }
+  })
+
+  // ── MCP Server Management endpoints (G-17) ──
+  fastify.post("/v1/mcp/servers/:name/restart", async (req, reply) => {
+    try {
+      const { name } = req.params as { name: string }
+      const result = await mcpService.restartServer(name)
+      if (!result.success) {
+        return reply.code(result.error?.includes("not found") ? 404 : 500).send(result)
+      }
+      return reply.send(result)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to restart MCP server", err)
+      return reply.code(500).send({ success: false, error: err?.message || "Failed to restart server" })
+    }
+  })
+
+  fastify.post("/v1/mcp/servers/:name/stop", async (req, reply) => {
+    try {
+      const { name } = req.params as { name: string }
+      const result = await mcpService.stopMcpServer(name)
+      if (!result.success) {
+        return reply.code(500).send(result)
+      }
+      return reply.send(result)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to stop MCP server", err)
+      return reply.code(500).send({ success: false, error: err?.message || "Failed to stop server" })
+    }
+  })
+
+  fastify.get("/v1/mcp/servers/:name/logs", async (req, reply) => {
+    try {
+      const { name } = req.params as { name: string }
+      const logs = mcpService.getServerLogs(name)
+      return reply.send({ server: name, logs })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to get server logs", err)
+      return reply.code(500).send({ error: err?.message || "Failed to get server logs" })
+    }
+  })
+
+  fastify.post("/v1/mcp/servers/:name/logs/clear", async (req, reply) => {
+    try {
+      const { name } = req.params as { name: string }
+      mcpService.clearServerLogs(name)
+      return reply.send({ success: true, server: name })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to clear server logs", err)
+      return reply.code(500).send({ error: err?.message || "Failed to clear server logs" })
+    }
+  })
+
+  fastify.post("/v1/mcp/servers/:name/test", async (req, reply) => {
+    try {
+      const { name } = req.params as { name: string }
+      const cfg = configStore.get() as Record<string, unknown>
+      const mcpConfig = (cfg.mcpConfig || { mcpServers: {} }) as { mcpServers: Record<string, unknown> }
+      const serverConfig = mcpConfig.mcpServers?.[name]
+      if (!serverConfig) {
+        return reply.code(404).send({ success: false, error: `Server '${name}' not found in configuration` })
+      }
+      const result = await mcpService.testServerConnection(name, serverConfig as any)
+      return reply.send(result)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to test MCP server", err)
+      return reply.code(500).send({ success: false, toolCount: 0, error: err?.message || "Failed to test server" })
+    }
+  })
+
+  // ── Model Preset endpoints (G-08) ──
+  fastify.get("/v1/model-presets", async (_req, reply) => {
+    try {
+      const cfg = configStore.get() as Record<string, unknown>
+      const customPresets = (cfg.modelPresets || []) as Array<Record<string, unknown>>
+      const currentPresetId = (cfg.currentModelPresetId as string) || "builtin-openai"
+
+      // Built-in presets
+      const builtInPresets = [
+        { id: "builtin-openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", apiKey: "", isBuiltIn: true },
+        { id: "builtin-openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", apiKey: "", isBuiltIn: true },
+        { id: "builtin-together", name: "Together AI", baseUrl: "https://api.together.xyz/v1", apiKey: "", isBuiltIn: true },
+        { id: "builtin-cerebras", name: "Cerebras", baseUrl: "https://api.cerebras.ai/v1", apiKey: "", isBuiltIn: true },
+        { id: "builtin-zhipu", name: "Zhipu GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKey: "", isBuiltIn: true },
+      ]
+
+      return reply.send({
+        presets: [...builtInPresets, ...customPresets],
+        currentPresetId,
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to get model presets", err)
+      return reply.code(500).send({ error: err?.message || "Failed to get model presets" })
+    }
+  })
+
+  fastify.post("/v1/model-presets", async (req, reply) => {
+    try {
+      const body = req.body as Record<string, unknown>
+      if (!body.name || typeof body.name !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'name'" })
+      }
+      if (!body.baseUrl || typeof body.baseUrl !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'baseUrl'" })
+      }
+
+      const cfg = configStore.get() as Record<string, unknown>
+      const presets = ((cfg.modelPresets || []) as Array<Record<string, unknown>>).slice()
+      const now = Date.now()
+      const newPreset = {
+        id: `custom-${now}`,
+        name: body.name,
+        baseUrl: body.baseUrl,
+        apiKey: (body.apiKey as string) || "",
+        isBuiltIn: false,
+        createdAt: now,
+        updatedAt: now,
+        mcpToolsModel: body.mcpToolsModel || undefined,
+        transcriptProcessingModel: body.transcriptProcessingModel || undefined,
+        summarizationModel: body.summarizationModel || undefined,
+      }
+      presets.push(newPreset)
+      configStore.save({ ...cfg, modelPresets: presets })
+      return reply.send({ success: true, preset: newPreset })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to create model preset", err)
+      return reply.code(500).send({ error: err?.message || "Failed to create model preset" })
+    }
+  })
+
+  fastify.patch("/v1/model-presets/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const body = req.body as Record<string, unknown>
+      const cfg = configStore.get() as Record<string, unknown>
+      const presets = ((cfg.modelPresets || []) as Array<Record<string, unknown>>).slice()
+      const idx = presets.findIndex((p) => p.id === id)
+      if (idx === -1) {
+        return reply.code(404).send({ error: `Preset '${id}' not found` })
+      }
+      const existing = presets[idx]
+      if (existing.isBuiltIn) {
+        return reply.code(400).send({ error: "Cannot modify built-in presets" })
+      }
+      const updated = { ...existing, ...body, id: existing.id, isBuiltIn: false, updatedAt: Date.now() }
+      presets[idx] = updated
+      configStore.save({ ...cfg, modelPresets: presets })
+      return reply.send({ success: true, preset: updated })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to update model preset", err)
+      return reply.code(500).send({ error: err?.message || "Failed to update model preset" })
+    }
+  })
+
+  fastify.delete("/v1/model-presets/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      if (id.startsWith("builtin-")) {
+        return reply.code(400).send({ error: "Cannot delete built-in presets" })
+      }
+      const cfg = configStore.get() as Record<string, unknown>
+      const presets = ((cfg.modelPresets || []) as Array<Record<string, unknown>>).slice()
+      const idx = presets.findIndex((p) => p.id === id)
+      if (idx === -1) {
+        return reply.code(404).send({ error: `Preset '${id}' not found` })
+      }
+      presets.splice(idx, 1)
+      // If the deleted preset was active, reset to default
+      const updates: Record<string, unknown> = { modelPresets: presets }
+      if (cfg.currentModelPresetId === id) {
+        updates.currentModelPresetId = "builtin-openai"
+      }
+      configStore.save({ ...cfg, ...updates })
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete model preset", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete model preset" })
+    }
+  })
+
+  // ── Memory endpoints (G-12) ──
+
+  fastify.get("/v1/memories", async (_req, reply) => {
+    try {
+      const memories = memoryService.getAllMemories()
+      return reply.send({ memories })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to get memories", err)
+      return reply.code(500).send({ error: err?.message || "Failed to get memories" })
+    }
+  })
+
+  fastify.get("/v1/memories/search", async (req, reply) => {
+    try {
+      const { q } = req.query as { q?: string }
+      if (!q || typeof q !== "string") {
+        return reply.code(400).send({ error: "Missing 'q' query parameter" })
+      }
+      const memories = memoryService.searchMemories(q)
+      return reply.send({ memories })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to search memories", err)
+      return reply.code(500).send({ error: err?.message || "Failed to search memories" })
+    }
+  })
+
+  fastify.post("/v1/memories", async (req, reply) => {
+    try {
+      const body = req.body as Record<string, unknown>
+      const title = body.title as string
+      const content = body.content as string
+      if (!title || !content) {
+        return reply.code(400).send({ error: "Missing required fields: title, content" })
+      }
+      const now = Date.now()
+      const memory = {
+        id: memoryService.generateId(),
+        title,
+        content,
+        category: (body.category as string) || undefined,
+        tags: Array.isArray(body.tags) ? (body.tags as string[]) : [],
+        importance: (body.importance as string) || "medium",
+        createdAt: now,
+        updatedAt: now,
+        profileId: (body.profileId as string) || undefined,
+        sessionId: (body.sessionId as string) || undefined,
+        conversationId: (body.conversationId as string) || undefined,
+        conversationTitle: (body.conversationTitle as string) || undefined,
+        keyFindings: Array.isArray(body.keyFindings) ? (body.keyFindings as string[]) : [],
+        userNotes: (body.userNotes as string) || undefined,
+      }
+      const success = memoryService.saveMemory(memory as import('./types').AgentMemory)
+      if (!success) {
+        return reply.code(500).send({ error: "Failed to save memory" })
+      }
+      return reply.code(201).send({ success: true, memory })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to create memory", err)
+      return reply.code(500).send({ error: err?.message || "Failed to create memory" })
+    }
+  })
+
+  fastify.patch("/v1/memories/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const updates = req.body as Record<string, unknown>
+      const updated = memoryService.updateMemory(id, updates as Partial<import('./types').AgentMemory>)
+      if (!updated) {
+        return reply.code(404).send({ error: "Memory not found" })
+      }
+      return reply.send({ success: true, memory: updated })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to update memory", err)
+      return reply.code(500).send({ error: err?.message || "Failed to update memory" })
+    }
+  })
+
+  fastify.delete("/v1/memories/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const success = memoryService.deleteMemory(id)
+      if (!success) {
+        return reply.code(404).send({ error: "Memory not found" })
+      }
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete memory", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete memory" })
+    }
+  })
+
+  // ── Skills endpoints (G-13) ──
+
+  fastify.get("/v1/skills", async (_req, reply) => {
+    try {
+      const skills = skillsService.getSkills()
+      return reply.send({ skills })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to get skills", err)
+      return reply.code(500).send({ error: err?.message || "Failed to get skills" })
+    }
+  })
+
+  fastify.post("/v1/skills", async (req, reply) => {
+    try {
+      const body = req.body as Record<string, unknown>
+      const name = body.name as string
+      const description = body.description as string
+      const instructions = body.instructions as string
+      if (!name || !description || !instructions) {
+        return reply.code(400).send({ error: "Missing required fields: name, description, instructions" })
+      }
+      const skill = skillsService.createSkill(name, description, instructions, {
+        source: (body.source as 'local' | 'imported') || undefined,
+        filePath: (body.filePath as string) || undefined,
+      })
+      return reply.code(201).send({ success: true, skill })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to create skill", err)
+      return reply.code(500).send({ error: err?.message || "Failed to create skill" })
+    }
+  })
+
+  fastify.patch("/v1/skills/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const updates = req.body as Record<string, unknown>
+      const skill = skillsService.updateSkill(id, updates as Partial<import('./types').AgentSkill>)
+      return reply.send({ success: true, skill })
+    } catch (error: unknown) {
+      const err = error as Error
+      if (err?.message?.includes("not found")) {
+        return reply.code(404).send({ error: err.message })
+      }
+      diagnosticsService.logError("server", "Failed to update skill", err)
+      return reply.code(500).send({ error: err?.message || "Failed to update skill" })
+    }
+  })
+
+  fastify.delete("/v1/skills/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const success = skillsService.deleteSkill(id)
+      if (!success) {
+        return reply.code(404).send({ error: "Skill not found" })
+      }
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete skill", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete skill" })
+    }
+  })
+
+  fastify.post("/v1/skills/:id/toggle", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const skill = skillsService.toggleSkill(id)
+      return reply.send({ success: true, skill })
+    } catch (error: unknown) {
+      const err = error as Error
+      if (err?.message?.includes("not found")) {
+        return reply.code(404).send({ error: err.message })
+      }
+      diagnosticsService.logError("server", "Failed to toggle skill", err)
+      return reply.code(500).send({ error: err?.message || "Failed to toggle skill" })
+    }
+  })
+
+
+  // ====================================================================
+  // G-22: OAuth Flow endpoints
+  // ====================================================================
+
+  // Initiate OAuth flow for an MCP server
+  fastify.post("/v1/oauth/initiate", async (req, reply) => {
+    try {
+      const body = req.body as Record<string, unknown>
+      const serverName = body.serverName as string
+      if (!serverName) return reply.code(400).send({ error: "Missing serverName" })
+      const result = await mcpService.initiateOAuthFlow(serverName)
+      return reply.send(result)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "OAuth initiate failed", err)
+      return reply.code(500).send({ error: err?.message || "OAuth initiate failed" })
+    }
+  })
+
+  // Handle OAuth callback (code exchange)
+  fastify.post("/v1/oauth/callback", async (req, reply) => {
+    try {
+      const body = req.body as Record<string, unknown>
+      const serverName = body.serverName as string
+      const code = body.code as string
+      const oauthState = body.state as string
+      if (!serverName || !code || !oauthState) {
+        return reply.code(400).send({ error: "Missing serverName, code, or state" })
+      }
+      const result = await mcpService.handleOAuthCallback(serverName, code, oauthState)
+      return reply.send(result)
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "OAuth callback failed", err)
+      return reply.code(500).send({ error: err?.message || "OAuth callback failed" })
+    }
+  })
+
+  // ====================================================================
+  // G-23: MCP Protocol Extensions — Elicitation endpoints
+  // ====================================================================
+
+  fastify.get("/v1/elicitation/pending", async (_req, reply) => {
+    return reply.send({ pending: getPendingElicitations() })
+  })
+
+  fastify.post("/v1/elicitation/:requestId/resolve", async (req, reply) => {
+    try {
+      const { requestId } = req.params as { requestId: string }
+      const body = req.body as { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
+      if (!body.action) return reply.code(400).send({ error: "Missing action" })
+      const resolved = resolveElicitation(requestId, body)
+      return reply.send({ success: resolved })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to resolve elicitation" })
+    }
+  })
+
+  // ====================================================================
+  // G-23: MCP Protocol Extensions — Sampling endpoints
+  // ====================================================================
+
+  fastify.get("/v1/sampling/pending", async (_req, reply) => {
+    return reply.send({ pending: getPendingSamplingRequests() })
+  })
+
+  fastify.post("/v1/sampling/:requestId/resolve", async (req, reply) => {
+    try {
+      const { requestId } = req.params as { requestId: string }
+      const body = req.body as { approved: boolean }
+      if (typeof body.approved !== 'boolean') return reply.code(400).send({ error: "Missing approved boolean" })
+      const resolved = await resolveSampling(requestId, body.approved)
+      return reply.send({ success: resolved })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to resolve sampling" })
+    }
+  })
+
+  // ====================================================================
+  // G-18: Message Queue endpoints
+  // ====================================================================
+
+  fastify.get("/v1/queue", async (_req, reply) => {
+    return reply.send({ messages: messageQueueManager.getQueue() })
+  })
+
+  fastify.post("/v1/queue", async (req, reply) => {
+    try {
+      const body = req.body as { content: string; conversationId?: string }
+      if (!body.content) return reply.code(400).send({ error: "Missing content" })
+      const msg = messageQueueManager.enqueue(body.content, body.conversationId)
+      return reply.send({ success: true, message: msg })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to enqueue message" })
+    }
+  })
+
+  fastify.delete("/v1/queue/:id", async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const removed = messageQueueManager.remove(id)
+    return reply.send({ success: removed })
+  })
+
+  fastify.post("/v1/queue/dequeue", async (_req, reply) => {
+    const msg = messageQueueManager.dequeue()
+    return reply.send({ message: msg || null })
+  })
+
+  fastify.post("/v1/queue/clear", async (_req, reply) => {
+    messageQueueManager.clear()
+    return reply.send({ success: true })
+  })
+
+  // ====================================================================
+  // G-24: Agent Session endpoints
+  // ====================================================================
+
+  fastify.get("/v1/agent-sessions", async (_req, reply) => {
+    const sessions: Array<{
+      sessionId: string
+      shouldStop: boolean
+      iterationCount: number
+    }> = []
+    for (const [, session] of state.agentSessions) {
+      sessions.push({
+        sessionId: session.sessionId,
+        shouldStop: session.shouldStop,
+        iterationCount: session.iterationCount,
+      })
+    }
+    return reply.send({ sessions, activeCount: agentSessionStateManager.getActiveSessionCount() })
+  })
+
+  fastify.get("/v1/agent-sessions/:sessionId", async (req, reply) => {
+    const { sessionId } = req.params as { sessionId: string }
+    const session = agentSessionStateManager.getSession(sessionId)
+    if (!session) return reply.code(404).send({ error: "Session not found" })
+    return reply.send({
+      sessionId: session.sessionId,
+      shouldStop: session.shouldStop,
+      iterationCount: session.iterationCount,
+    })
+  })
+
+  fastify.post("/v1/agent-sessions/:sessionId/stop", async (req, reply) => {
+    const { sessionId } = req.params as { sessionId: string }
+    agentSessionStateManager.stopSession(sessionId)
+    return reply.send({ success: true })
+  })
+
+  fastify.post("/v1/agent-sessions/stop-all", async (_req, reply) => {
+    agentSessionStateManager.stopAllSessions()
+    return reply.send({ success: true })
+  })
+
+
+  // ====================================================================
+  // G-19: ACP Agent Delegation endpoints
+  // ====================================================================
+
+  // List all ACP agents with status
+  fastify.get("/v1/acp/agents", async (_req, reply) => {
+    return reply.send({ agents: acpService.getAgents() })
+  })
+
+  // Get single agent status
+  fastify.get("/v1/acp/agents/:agentName", async (req, reply) => {
+    const { agentName } = req.params as { agentName: string }
+    const status = acpService.getAgentStatus(agentName)
+    if (!status) return reply.code(404).send({ error: "Agent not found" })
+    return reply.send(status)
+  })
+
+  // Add a new ACP agent config
+  fastify.post("/v1/acp/agents", async (req, reply) => {
+    try {
+      const body = req.body as ACPAgentConfig
+      if (!body.name || !body.displayName || !body.connection) {
+        return reply.code(400).send({ error: "Missing required fields: name, displayName, connection" })
+      }
+      acpService.addAgent(body)
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to add agent" })
+    }
+  })
+
+  // Update an ACP agent config
+  fastify.patch("/v1/acp/agents/:agentName", async (req, reply) => {
+    try {
+      const { agentName } = req.params as { agentName: string }
+      const body = req.body as Partial<ACPAgentConfig>
+      acpService.updateAgent(agentName, body)
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to update agent" })
+    }
+  })
+
+  // Remove an ACP agent
+  fastify.post("/v1/acp/agents/:agentName/remove", async (req, reply) => {
+    try {
+      const { agentName } = req.params as { agentName: string }
+      await acpService.removeAgent(agentName)
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to remove agent" })
+    }
+  })
+
+  // Spawn an ACP agent
+  fastify.post("/v1/acp/agents/:agentName/spawn", async (req, reply) => {
+    try {
+      const { agentName } = req.params as { agentName: string }
+      await acpService.spawnAgent(agentName)
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to spawn agent" })
+    }
+  })
+
+  // Stop an ACP agent
+  fastify.post("/v1/acp/agents/:agentName/stop", async (req, reply) => {
+    try {
+      const { agentName } = req.params as { agentName: string }
+      await acpService.stopAgent(agentName)
+      return reply.send({ success: true })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to stop agent" })
+    }
+  })
+
+  // Stop all ACP agents
+  fastify.post("/v1/acp/agents/stop-all", async (_req, reply) => {
+    await acpService.stopAllAgents()
+    return reply.send({ success: true })
+  })
+
+  // Run a task on an ACP agent
+  fastify.post("/v1/acp/agents/:agentName/run", async (req, reply) => {
+    try {
+      const { agentName } = req.params as { agentName: string }
+      const body = req.body as { input: string }
+      if (!body.input) return reply.code(400).send({ error: "Missing input" })
+      const result = await acpService.runTask(agentName, body.input)
+      return reply.send(result)
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to run task" })
+    }
+  })
+
+
 
   // MCP builtin tools endpoints
   fastify.post("/mcp/tools/list", async (_req, reply) => {

@@ -37,6 +37,15 @@ interface PendingToolApproval {
   resolve: (approved: boolean) => void
 }
 
+export interface QueuedMessage {
+  id: string
+  content: string
+  conversationId?: string
+  createdAt: number
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  error?: string
+}
+
 export const state = {
   isRecording: false,
   isTextInputActive: false,
@@ -52,6 +61,7 @@ export const state = {
   agentSessions: new Map<string, AgentSessionState>(),
   panelAutoShowSuppressedUntil: 0,
   pendingToolApprovals: new Map<string, PendingToolApproval>(),
+  messageQueue: [] as QueuedMessage[],
 }
 
 export const agentProcessManager = {
@@ -380,3 +390,57 @@ export const toolApprovalManager = {
   },
 }
 
+
+
+// Message queue manager for queuing user messages when agent is busy
+export const messageQueueManager = {
+  enqueue(content: string, conversationId?: string): QueuedMessage {
+    const msg: QueuedMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      content,
+      conversationId,
+      createdAt: Date.now(),
+      status: 'queued',
+    }
+    state.messageQueue.push(msg)
+    return msg
+  },
+
+  dequeue(): QueuedMessage | undefined {
+    const idx = state.messageQueue.findIndex(m => m.status === 'queued')
+    if (idx === -1) return undefined
+    state.messageQueue[idx].status = 'processing'
+    return state.messageQueue[idx]
+  },
+
+  getQueue(): QueuedMessage[] {
+    return [...state.messageQueue]
+  },
+
+  getMessage(id: string): QueuedMessage | undefined {
+    return state.messageQueue.find(m => m.id === id)
+  },
+
+  updateStatus(id: string, status: QueuedMessage['status'], error?: string): boolean {
+    const msg = state.messageQueue.find(m => m.id === id)
+    if (!msg) return false
+    msg.status = status
+    if (error) msg.error = error
+    return true
+  },
+
+  remove(id: string): boolean {
+    const idx = state.messageQueue.findIndex(m => m.id === id)
+    if (idx === -1) return false
+    state.messageQueue.splice(idx, 1)
+    return true
+  },
+
+  clear(): void {
+    state.messageQueue.length = 0
+  },
+
+  getQueuedCount(): number {
+    return state.messageQueue.filter(m => m.status === 'queued').length
+  },
+}

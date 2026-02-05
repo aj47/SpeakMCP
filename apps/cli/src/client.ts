@@ -16,7 +16,18 @@ import type {
   ChatCompletionResponse,
   ApiError,
   SSEEvent,
-  AgentProgressUpdate
+  AgentProgressUpdate,
+  ModelPreset,
+  AgentMemory,
+  AgentSkill,
+  OAuthInitiateResponse,
+  PendingElicitation,
+  PendingSampling,
+  QueuedMessage,
+  AgentSession,
+  ACPAgent,
+  ACPAgentConfig,
+  ACPRunResponse,
 } from './types'
 
 export class SpeakMcpClient {
@@ -168,6 +179,66 @@ export class SpeakMcpClient {
     return this.request('DELETE', `/v1/conversations/${id}`)
   }
 
+  async updateConversation(id: string, data: {
+    title?: string
+    messages?: Array<{ role: string; content: string; timestamp?: number }>
+  }): Promise<Conversation> {
+    return this.request('PUT', `/v1/conversations/${id}`, data)
+  }
+
+  // Profiles CRUD
+  async createProfile(name: string, guidelines: string, systemPrompt?: string): Promise<{ success: boolean; profile: Profile }> {
+    return this.request('POST', '/v1/profiles', { name, guidelines, systemPrompt })
+  }
+
+  async updateProfile(id: string, updates: { name?: string; guidelines?: string; systemPrompt?: string }): Promise<{ success: boolean; profile: Profile }> {
+    return this.request('PATCH', `/v1/profiles/${encodeURIComponent(id)}`, updates)
+  }
+
+  async deleteProfile(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/profiles/${encodeURIComponent(id)}`)
+  }
+
+  // Tool approval
+  async respondToToolApproval(approvalId: string, approved: boolean): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/tool-approval', { approvalId, approved })
+  }
+
+  // Diagnostics
+  async getDiagnosticReport(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/v1/diagnostics/report')
+  }
+
+  async getHealthCheck(): Promise<{ overall: string; checks: Record<string, unknown> }> {
+    return this.request('GET', '/v1/diagnostics/health')
+  }
+
+  async getRecentErrors(count?: number): Promise<{ errors: Array<Record<string, unknown>> }> {
+    const query = count ? `?count=${count}` : ''
+    return this.request('GET', `/v1/diagnostics/errors${query}`)
+  }
+
+  async clearErrors(): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/diagnostics/errors/clear', {})
+  }
+
+  // Model Presets (G-08)
+  async getModelPresets(): Promise<{ presets: ModelPreset[]; currentPresetId: string }> {
+    return this.request('GET', '/v1/model-presets')
+  }
+
+  async createModelPreset(preset: { name: string; baseUrl: string; apiKey?: string }): Promise<{ success: boolean; preset: ModelPreset }> {
+    return this.request('POST', '/v1/model-presets', preset)
+  }
+
+  async updateModelPreset(id: string, updates: Partial<ModelPreset>): Promise<{ success: boolean; preset: ModelPreset }> {
+    return this.request('PATCH', `/v1/model-presets/${encodeURIComponent(id)}`, updates)
+  }
+
+  async deleteModelPreset(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/model-presets/${encodeURIComponent(id)}`)
+  }
+
   // MCP
   async getMcpServers(): Promise<{ servers: McpServer[] }> {
     return this.request('GET', '/v1/mcp/servers')
@@ -190,7 +261,70 @@ export class SpeakMcpClient {
   ): Promise<{ result: unknown }> {
     return this.request('POST', '/mcp/tools/call', { name, arguments: args })
   }
-  
+
+  // MCP Server Management (G-17)
+  async restartMcpServer(name: string): Promise<{ success: boolean; error?: string }> {
+    return this.request('POST', `/v1/mcp/servers/${encodeURIComponent(name)}/restart`)
+  }
+
+  async stopMcpServer(name: string): Promise<{ success: boolean; error?: string }> {
+    return this.request('POST', `/v1/mcp/servers/${encodeURIComponent(name)}/stop`)
+  }
+
+  async getMcpServerLogs(name: string): Promise<{ server: string; logs: string[] }> {
+    return this.request('GET', `/v1/mcp/servers/${encodeURIComponent(name)}/logs`)
+  }
+
+  async clearMcpServerLogs(name: string): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/mcp/servers/${encodeURIComponent(name)}/logs/clear`)
+  }
+
+  async testMcpServer(name: string): Promise<{ success: boolean; toolCount?: number; error?: string }> {
+    return this.request('POST', `/v1/mcp/servers/${encodeURIComponent(name)}/test`)
+  }
+
+  // Memory (G-12)
+  async getMemories(): Promise<{ memories: AgentMemory[] }> {
+    return this.request('GET', '/v1/memories')
+  }
+
+  async createMemory(memory: { title: string; content: string; tags?: string[]; importance?: string }): Promise<{ success: boolean; memory: AgentMemory }> {
+    return this.request('POST', '/v1/memories', memory)
+  }
+
+  async updateMemory(id: string, updates: Partial<AgentMemory>): Promise<{ success: boolean; memory: AgentMemory }> {
+    return this.request('PATCH', `/v1/memories/${encodeURIComponent(id)}`, updates)
+  }
+
+  async deleteMemory(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/memories/${encodeURIComponent(id)}`)
+  }
+
+  async searchMemories(query: string): Promise<{ memories: AgentMemory[] }> {
+    return this.request('GET', `/v1/memories/search?q=${encodeURIComponent(query)}`)
+  }
+
+  // Skills (G-13)
+  async getSkills(): Promise<{ skills: AgentSkill[] }> {
+    return this.request('GET', '/v1/skills')
+  }
+
+  async createSkill(skill: { name: string; description: string; instructions: string }): Promise<{ success: boolean; skill: AgentSkill }> {
+    return this.request('POST', '/v1/skills', skill)
+  }
+
+  async updateSkill(id: string, updates: Partial<AgentSkill>): Promise<{ success: boolean; skill: AgentSkill }> {
+    return this.request('PATCH', `/v1/skills/${encodeURIComponent(id)}`, updates)
+  }
+
+  async deleteSkill(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/skills/${encodeURIComponent(id)}`)
+  }
+
+  async toggleSkill(id: string, enabled: boolean): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/skills/${encodeURIComponent(id)}/toggle`, { enabled })
+  }
+
   // Emergency stop
   async emergencyStop(): Promise<{ success: boolean }> {
     return this.request('POST', '/v1/emergency-stop', {})
@@ -346,6 +480,140 @@ export class SpeakMcpClient {
     }
 
     return lastError ? 'offline' : 'online'
+  }
+
+  // ====================================================================
+  // G-22: OAuth Flow
+  // ====================================================================
+
+  async initiateOAuth(serverName: string): Promise<OAuthInitiateResponse> {
+    return this.request('POST', '/v1/oauth/initiate', { serverName })
+  }
+
+  async handleOAuthCallback(
+    serverName: string,
+    code: string,
+    state: string
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.request('POST', '/v1/oauth/callback', { serverName, code, state })
+  }
+
+  // ====================================================================
+  // G-23: MCP Protocol Extensions — Elicitation
+  // ====================================================================
+
+  async getPendingElicitations(): Promise<{ pending: PendingElicitation[] }> {
+    return this.request('GET', '/v1/elicitation/pending')
+  }
+
+  async resolveElicitation(
+    requestId: string,
+    action: 'accept' | 'decline' | 'cancel',
+    content?: Record<string, unknown>
+  ): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/elicitation/${requestId}/resolve`, { action, content })
+  }
+
+  // ====================================================================
+  // G-23: MCP Protocol Extensions — Sampling
+  // ====================================================================
+
+  async getPendingSamplingRequests(): Promise<{ pending: PendingSampling[] }> {
+    return this.request('GET', '/v1/sampling/pending')
+  }
+
+  async resolveSampling(
+    requestId: string,
+    approved: boolean
+  ): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/sampling/${requestId}/resolve`, { approved })
+  }
+
+  // ====================================================================
+  // G-18: Message Queue
+  // ====================================================================
+
+  async getMessageQueue(): Promise<{ messages: QueuedMessage[] }> {
+    return this.request('GET', '/v1/queue')
+  }
+
+  async enqueueMessage(
+    content: string,
+    conversationId?: string
+  ): Promise<{ success: boolean; message: QueuedMessage }> {
+    return this.request('POST', '/v1/queue', { content, conversationId })
+  }
+
+  async removeQueuedMessage(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/queue/${id}`)
+  }
+
+  async dequeueMessage(): Promise<{ message: QueuedMessage | null }> {
+    return this.request('POST', '/v1/queue/dequeue')
+  }
+
+  async clearMessageQueue(): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/queue/clear')
+  }
+
+  // ====================================================================
+  // G-24: Agent Sessions
+  // ====================================================================
+
+  async getAgentSessions(): Promise<{ sessions: AgentSession[]; activeCount: number }> {
+    return this.request('GET', '/v1/agent-sessions')
+  }
+
+  async getAgentSession(sessionId: string): Promise<AgentSession> {
+    return this.request('GET', `/v1/agent-sessions/${sessionId}`)
+  }
+
+  async stopAgentSession(sessionId: string): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/agent-sessions/${sessionId}/stop`)
+  }
+
+  async stopAllAgentSessions(): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/agent-sessions/stop-all')
+  }
+
+  // ====================================================================
+  // G-19: ACP Agent Delegation
+  // ====================================================================
+
+  async getACPAgents(): Promise<{ agents: ACPAgent[] }> {
+    return this.request('GET', '/v1/acp/agents')
+  }
+
+  async getACPAgentStatus(agentName: string): Promise<{ status: string; error?: string }> {
+    return this.request('GET', `/v1/acp/agents/${agentName}`)
+  }
+
+  async addACPAgent(config: ACPAgentConfig): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/acp/agents', config)
+  }
+
+  async updateACPAgent(agentName: string, updates: Partial<ACPAgentConfig>): Promise<{ success: boolean }> {
+    return this.request('PATCH', `/v1/acp/agents/${agentName}`, updates)
+  }
+
+  async removeACPAgent(agentName: string): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/acp/agents/${agentName}/remove`)
+  }
+
+  async spawnACPAgent(agentName: string): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/acp/agents/${agentName}/spawn`)
+  }
+
+  async stopACPAgent(agentName: string): Promise<{ success: boolean }> {
+    return this.request('POST', `/v1/acp/agents/${agentName}/stop`)
+  }
+
+  async stopAllACPAgents(): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/acp/agents/stop-all')
+  }
+
+  async runACPTask(agentName: string, input: string): Promise<ACPRunResponse> {
+    return this.request('POST', `/v1/acp/agents/${agentName}/run`, { input })
   }
 }
 

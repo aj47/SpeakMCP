@@ -467,11 +467,8 @@ class OAuthStorage {
 export const oauthStorage = new OAuthStorage()
 
 // ============================================================================
-// ELICITATION STUBS (to be implemented later)
+// ELICITATION (pending request map pattern for CLI interaction)
 // ============================================================================
-
-// Elicitation is not fully supported in standalone server mode yet
-// These are placeholder implementations
 
 interface ElicitationRequest {
   mode: 'form' | 'url'
@@ -483,32 +480,76 @@ interface ElicitationRequest {
   requestId: string
 }
 
+interface PendingElicitation {
+  request: ElicitationRequest
+  resolve: (result: ElicitResult) => void
+  reject: (error: Error) => void
+  timeoutId?: ReturnType<typeof setTimeout>
+}
+
+const pendingElicitations = new Map<string, PendingElicitation>()
+const ELICITATION_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+
 async function requestElicitation(request: ElicitationRequest): Promise<ElicitResult> {
   console.log(`[MCP] Elicitation request from ${request.serverName}: ${request.message || 'no message'}`)
-  console.log(`[MCP] Elicitation mode: ${request.mode}`)
 
-  // In server mode, we can't show UI dialogs, so we reject elicitation requests
-  // A future implementation could use webhooks or WebSocket to forward to a UI client
-  return {
-    action: 'decline',
-    content: {},
-  } as ElicitResult
+  return new Promise((resolve, _reject) => {
+    const timeoutId = setTimeout(() => {
+      pendingElicitations.delete(request.requestId)
+      resolve({ action: 'cancel', content: {} } as ElicitResult)
+    }, ELICITATION_TIMEOUT_MS)
+
+    pendingElicitations.set(request.requestId, {
+      request,
+      resolve,
+      reject: _reject,
+      timeoutId,
+    })
+  })
 }
 
 function handleElicitationComplete(elicitationId: string): void {
-  console.log(`[MCP] Elicitation complete: ${elicitationId}`)
-}
-
-function cancelAllElicitations(serverName?: string): void {
-  if (serverName) {
-    console.log(`[MCP] Cancelling elicitations for server: ${serverName}`)
-  } else {
-    console.log(`[MCP] Cancelling all elicitations`)
+  for (const [requestId, pending] of pendingElicitations.entries()) {
+    if (pending.request.mode === 'url' && pending.request.elicitationId === elicitationId) {
+      if (pending.timeoutId) clearTimeout(pending.timeoutId)
+      pendingElicitations.delete(requestId)
+      pending.resolve({ action: 'accept' } as ElicitResult)
+      return
+    }
   }
 }
 
+function cancelAllElicitations(serverName?: string): void {
+  for (const [requestId, pending] of pendingElicitations.entries()) {
+    if (!serverName || pending.request.serverName === serverName) {
+      if (pending.timeoutId) clearTimeout(pending.timeoutId)
+      pendingElicitations.delete(requestId)
+      pending.resolve({ action: 'cancel', content: {} } as ElicitResult)
+    }
+  }
+}
+
+export function getPendingElicitations(): Array<{ requestId: string; request: ElicitationRequest }> {
+  return Array.from(pendingElicitations.entries()).map(([requestId, p]) => ({
+    requestId,
+    request: p.request,
+  }))
+}
+
+export function resolveElicitation(
+  requestId: string,
+  result: { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
+): boolean {
+  const pending = pendingElicitations.get(requestId)
+  if (!pending) return false
+  if (pending.timeoutId) clearTimeout(pending.timeoutId)
+  pendingElicitations.delete(requestId)
+  pending.resolve({ action: result.action, content: result.content || {} } as ElicitResult)
+  return true
+}
+
 // ============================================================================
-// SAMPLING STUBS (to be implemented later)
+// SAMPLING (pending request map + LLM execution)
 // ============================================================================
 
 interface SamplingRequest {
@@ -528,22 +569,111 @@ interface SamplingResult {
   stopReason?: string
 }
 
-async function requestSampling(request: SamplingRequest): Promise<SamplingResult> {
-  console.log(`[MCP] Sampling request from ${request.serverName}: ${request.messages?.length || 0} messages`)
+interface PendingSampling {
+  request: SamplingRequest
+  resolve: (result: SamplingResult) => void
+  reject: (error: Error) => void
+  timeoutId?: ReturnType<typeof setTimeout>
+}
 
-  // In server mode, sampling requires LLM integration
-  // This is a placeholder that rejects requests
-  return {
-    approved: false,
+const pendingSamplingRequests = new Map<string, PendingSampling>()
+const SAMPLING_TIMEOUT_MS = 2 * 60 * 1000 // 2 minutes
+
+async function executeSampling(request: SamplingRequest): Promise<SamplingResult> {
+  try {
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const messages = (request.messages as Array<{ role: string; content: unknown }>).map(msg => ({
+      role: (msg.role as 'user' | 'assistant') || 'user',
+      content: typeof msg.content === 'string' ? msg.content :
+        Array.isArray(msg.content) ? (msg.content as Array<{ type: string; text?: string }>)
+          .map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n') :
+        String(msg.content),
+    }))
+
+    if (request.systemPrompt) {
+      messages.unshift({ role: 'user', content: `[System]: ${request.systemPrompt}` })
+    }
+
+    let model = 'gpt-4o'
+    if (request.modelPreferences && typeof request.modelPreferences === 'object') {
+      const prefs = request.modelPreferences as { hints?: Array<{ name?: string }> }
+      if (prefs.hints?.[0]?.name) model = prefs.hints[0].name
+    }
+
+    const result = await makeLLMCallWithFetch(messages)
+    return {
+      approved: true,
+      model,
+      content: { type: 'text', text: result.content || '' },
+      stopReason: 'endTurn',
+    }
+  } catch (error) {
+    return {
+      approved: true,
+      model: 'unknown',
+      content: { type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` },
+      stopReason: 'endTurn',
+    }
   }
 }
 
-function cancelAllSamplingRequests(serverName?: string): void {
-  if (serverName) {
-    console.log(`[MCP] Cancelling sampling requests for server: ${serverName}`)
-  } else {
-    console.log(`[MCP] Cancelling all sampling requests`)
+async function requestSampling(request: SamplingRequest): Promise<SamplingResult> {
+  console.log(`[MCP] Sampling request from ${request.serverName}: ${request.messages?.length || 0} messages`)
+
+  const config = configStore.get() as Record<string, unknown>
+
+  // If approval not required, auto-execute
+  if (!config.mcpRequireApprovalBeforeToolCall) {
+    return executeSampling(request)
   }
+
+  // Approval required — put in pending map for CLI/UI to resolve
+  return new Promise((resolve, _reject) => {
+    const timeoutId = setTimeout(() => {
+      pendingSamplingRequests.delete(request.requestId)
+      resolve({ approved: false })
+    }, SAMPLING_TIMEOUT_MS)
+
+    pendingSamplingRequests.set(request.requestId, {
+      request,
+      resolve,
+      reject: _reject,
+      timeoutId,
+    })
+  })
+}
+
+function cancelAllSamplingRequests(serverName?: string): void {
+  for (const [requestId, pending] of pendingSamplingRequests.entries()) {
+    if (!serverName || pending.request.serverName === serverName) {
+      if (pending.timeoutId) clearTimeout(pending.timeoutId)
+      pendingSamplingRequests.delete(requestId)
+      pending.resolve({ approved: false })
+    }
+  }
+}
+
+export function getPendingSamplingRequests(): Array<{ requestId: string; request: SamplingRequest }> {
+  return Array.from(pendingSamplingRequests.entries()).map(([requestId, p]) => ({
+    requestId,
+    request: p.request,
+  }))
+}
+
+export async function resolveSampling(requestId: string, approved: boolean): Promise<boolean> {
+  const pending = pendingSamplingRequests.get(requestId)
+  if (!pending) return false
+  if (pending.timeoutId) clearTimeout(pending.timeoutId)
+  pendingSamplingRequests.delete(requestId)
+
+  if (approved) {
+    const result = await executeSampling(pending.request)
+    pending.resolve(result)
+  } else {
+    pending.resolve({ approved: false })
+  }
+  return true
 }
 
 // ============================================================================
@@ -1556,6 +1686,70 @@ export class MCPService {
   }
 
   /**
+   * Restart an MCP server (stop + reinitialize)
+   */
+  async restartServer(
+    serverName: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const config = configStore.get() as Record<string, unknown>
+      const mcpConfig = (config.mcpConfig || { mcpServers: {} }) as MCPConfig
+
+      if (!mcpConfig?.mcpServers?.[serverName]) {
+        return {
+          success: false,
+          error: `Server ${serverName} not found in configuration`,
+        }
+      }
+
+      const serverConfig = mcpConfig.mcpServers[serverName]
+
+      // Clean up existing server
+      await this.stopMcpServer(serverName)
+
+      // Reinitialize the server
+      await this.initializeServer(serverName, serverConfig)
+      this.initializedServers.add(serverName)
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
+   * Stop an MCP server (close client + cleanup)
+   */
+  async stopMcpServer(
+    serverName: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const client = this.clients.get(serverName)
+
+      if (client) {
+        try {
+          await client.close()
+        } catch (error) {
+          // Ignore cleanup errors
+        }
+      }
+
+      // Clean up references
+      this.cleanupServer(serverName)
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  /**
    * Apply profile MCP configuration
    */
   applyProfileMcpConfig(
@@ -1602,6 +1796,92 @@ export class MCPService {
         disabledServers: Array.from(this.runtimeDisabledServers),
         disabledTools: Array.from(this.disabledTools),
       })
+    }
+  }
+
+  /**
+   * Initiate OAuth flow for a server — returns authorization URL for the client to open
+   */
+  async initiateOAuthFlow(serverName: string): Promise<{
+    authorizationUrl: string
+    state: string
+    codeVerifier: string
+  }> {
+    const config = configStore.get() as Record<string, unknown>
+    const mcpConfig = (config.mcpConfig || { mcpServers: {} }) as MCPConfig
+    const serverConfig = mcpConfig.mcpServers?.[serverName]
+
+    if (!serverConfig) {
+      throw new Error(`Server '${serverName}' not found in MCP config`)
+    }
+
+    const url = serverConfig.url
+    if (!url) {
+      throw new Error(`Server '${serverName}' has no URL configured — OAuth requires a remote server URL`)
+    }
+    const storedOAuth = oauthStorage.getServerOAuth(serverName)
+    const oauthClient = new OAuthClient(url, storedOAuth || {})
+
+    this.oauthClients.set(serverName, oauthClient)
+    const authRequest = await oauthClient.getAuthorizationRequest()
+
+    // Store code verifier for callback
+    oauthStorage.saveServerOAuth(serverName, {
+      ...oauthClient.getConfig(),
+      codeVerifier: authRequest.codeVerifier,
+      state: authRequest.state,
+    } as OAuthConfig & { codeVerifier: string; state: string })
+
+    return authRequest
+  }
+
+  /**
+   * Handle OAuth callback — exchange code for tokens
+   */
+  async handleOAuthCallback(serverName: string, code: string, returnedState: string): Promise<{
+    success: boolean
+    error?: string
+  }> {
+    const stored = oauthStorage.getServerOAuth(serverName) as (OAuthConfig & { codeVerifier?: string; state?: string }) | undefined
+    if (!stored?.codeVerifier) {
+      return { success: false, error: 'No pending OAuth flow for this server' }
+    }
+
+    if (stored.state && stored.state !== returnedState) {
+      return { success: false, error: 'OAuth state mismatch — possible CSRF attack' }
+    }
+
+    try {
+      let oauthClient = this.oauthClients.get(serverName)
+      if (!oauthClient) {
+        const config2 = configStore.get() as Record<string, unknown>
+        const mcpConfig2 = (config2.mcpConfig || { mcpServers: {} }) as MCPConfig
+        const sc = mcpConfig2.mcpServers?.[serverName]
+        const url = sc?.url
+        if (!url) {
+          return { success: false, error: `Server '${serverName}' has no URL configured` }
+        }
+        oauthClient = new OAuthClient(url, stored)
+        this.oauthClients.set(serverName, oauthClient)
+      }
+
+      const tokens = await oauthClient.exchangeCodeForTokens({
+        code,
+        codeVerifier: stored.codeVerifier,
+        state: returnedState,
+      })
+
+      oauthStorage.saveServerOAuth(serverName, {
+        ...oauthClient.getConfig(),
+        tokens,
+      })
+
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   }
 }

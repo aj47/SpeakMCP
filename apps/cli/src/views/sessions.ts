@@ -64,6 +64,45 @@ export class SessionsView extends BaseView {
     header.add(headerText)
     view.add(header)
 
+    // Search bar (initially hidden, shown on / key)
+    const searchBar = new BoxRenderable(this.renderer, {
+      id: 'search-bar',
+      width: '100%',
+      height: this.searchMode ? 1 : 0,
+      flexDirection: 'row',
+      padding: 0,
+    })
+
+    if (this.searchMode) {
+      const searchLabel = new TextRenderable(this.renderer, {
+        id: 'search-label',
+        content: ' 🔍 ',
+        fg: '#FFAA66',
+      })
+      searchBar.add(searchLabel)
+
+      this.searchInput = new InputRenderable(this.renderer, {
+        id: 'search-input',
+        width: 40,
+        height: 1,
+        placeholder: 'Search conversations...',
+        focusedBackgroundColor: '#2a2a2a',
+      })
+      if (this.searchQuery) {
+        this.searchInput.value = this.searchQuery
+      }
+      this.searchInput.on(InputRenderableEvents.CHANGE, (value: string) => {
+        this.searchQuery = value
+        this.filterSessions()
+        this.refreshList()
+      })
+      searchBar.add(this.searchInput)
+      // Auto-focus when in search mode
+      setTimeout(() => this.searchInput?.focus(), 0)
+    }
+
+    view.add(searchBar)
+
     // Sessions list
     const listContainer = new BoxRenderable(this.renderer, {
       id: 'sessions-list-container',
@@ -72,15 +111,19 @@ export class SessionsView extends BaseView {
       padding: 1,
     })
 
-    if (this.sessions.length === 0) {
+    const displaySessions = this.searchMode ? this.filteredSessions : this.sessions
+
+    if (displaySessions.length === 0) {
       const emptyText = new TextRenderable(this.renderer, {
         id: 'no-sessions',
-        content: 'No conversations yet. Press [N] or switch to Chat to start one.',
+        content: this.searchMode
+          ? `No conversations matching "${this.searchQuery}"`
+          : 'No conversations yet. Press [N] or switch to Chat to start one.',
         fg: '#888888',
       })
       listContainer.add(emptyText)
     } else {
-      const options = this.sessions.map(s => ({
+      const options = displaySessions.map(s => ({
         name: this.getSessionTitle(s),
         description: this.getSessionAge(s),
       }))
@@ -88,12 +131,12 @@ export class SessionsView extends BaseView {
       this.selectList = new SelectRenderable(this.renderer, {
         id: 'sessions-list',
         width: '100%',
-        height: Math.min(this.sessions.length * 2 + 2, 20),
+        height: Math.min(displaySessions.length * 2 + 2, 20),
         options,
       })
 
       this.selectList.on(SelectRenderableEvents.ITEM_SELECTED, (index: number) => {
-        const session = this.sessions[index]
+        const session = displaySessions[index]
         if (session) {
           this.resumeSession(session.id)
         }
@@ -113,7 +156,7 @@ export class SessionsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'sessions-footer-text',
-      content: ' [Enter] Resume  [D] Delete  [N] New session',
+      content: ' [Enter] Resume  [D] Delete  [N] New  [/] Search  [R] Rename',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -174,7 +217,17 @@ export class SessionsView extends BaseView {
 
   // Handle keyboard shortcuts
   handleKeyPress(key: KeyEvent): void {
-    // If in search mode, let the input handle it
+    // If in rename mode, let the input handle it
+    if (this.renameMode) {
+      if (key.name === 'escape') {
+        this.renameMode = false
+        this.renameInput = null
+        this.refresh()
+      }
+      return
+    }
+
+    // If in search mode, let the input handle most keys
     if (this.searchMode && key.name !== 'escape') {
       return
     }
@@ -194,6 +247,9 @@ export class SessionsView extends BaseView {
         break
       case 'd':
         this.deleteSelectedSession()
+        break
+      case 'r':
+        this.renameSelectedSession()
         break
       case '/':
         this.enterSearchMode()
@@ -254,16 +310,22 @@ export class SessionsView extends BaseView {
     }
   }
 
+  private renameMode: boolean = false
+  private renameInput: InputRenderable | null = null
+  private statusText: TextRenderable | null = null
+
   private enterSearchMode(): void {
     this.searchMode = true
-    // Would need to add search input to the view and focus it
-    // For now, this is a placeholder
+    this.searchQuery = ''
+    this.refresh()
   }
 
   private exitSearchMode(): void {
     this.searchMode = false
     this.searchQuery = ''
+    this.searchInput = null
     this.filterSessions()
+    this.refresh()
   }
 
   private filterSessions(): void {
@@ -277,6 +339,69 @@ export class SessionsView extends BaseView {
       })
     }
     this.selectedIndex = 0
+  }
+
+  private refreshList(): void {
+    // Re-render by refreshing the view
+    this.refresh()
+  }
+
+  private async renameSelectedSession(): Promise<void> {
+    const displaySessions = this.searchMode ? this.filteredSessions : this.sessions
+    const session = displaySessions[this.selectedIndex]
+    if (!session) return
+
+    // Simple inline rename: prompt in the status area
+    this.renameMode = true
+    const currentTitle = this.getSessionTitle(session)
+
+    // For simplicity, we'll use a basic approach: show an input
+    // Create a temporary input for rename
+    if (!this.viewContainer) return
+
+    const renameBar = new BoxRenderable(this.renderer, {
+      id: 'rename-bar',
+      width: '100%',
+      height: 1,
+      flexDirection: 'row',
+      backgroundColor: '#2a2a1a',
+    })
+
+    const renameLabel = new TextRenderable(this.renderer, {
+      id: 'rename-label',
+      content: ' Rename: ',
+      fg: '#FFAA66',
+    })
+    renameBar.add(renameLabel)
+
+    this.renameInput = new InputRenderable(this.renderer, {
+      id: 'rename-input',
+      width: 40,
+      height: 1,
+      placeholder: currentTitle,
+      focusedBackgroundColor: '#2a2a2a',
+    })
+    this.renameInput.value = currentTitle
+    this.renameInput.on(InputRenderableEvents.SUBMIT, async () => {
+      if (this.renameInput) {
+        const newTitle = this.renameInput.value.trim()
+        if (newTitle && newTitle !== currentTitle) {
+          try {
+            await this.client.updateConversation(session.id, { title: newTitle })
+            await this.loadSessions()
+            this.filterSessions()
+          } catch {
+            // Ignore errors
+          }
+        }
+      }
+      this.renameMode = false
+      this.renameInput = null
+      await this.refresh()
+    })
+    renameBar.add(this.renameInput)
+    this.viewContainer.add(renameBar)
+    this.renameInput.focus()
   }
 }
 

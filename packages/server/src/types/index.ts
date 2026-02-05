@@ -274,14 +274,51 @@ export interface SessionProfileSnapshot {
   skillsConfig?: ProfileSkillsConfig
 }
 
+// Model Preset types
+export interface ModelPreset {
+  id: string
+  name: string
+  baseUrl: string
+  apiKey: string
+  isBuiltIn?: boolean
+  createdAt?: number
+  updatedAt?: number
+  mcpToolsModel?: string
+  transcriptProcessingModel?: string
+  summarizationModel?: string
+}
+
 // Memory types
 export interface AgentMemory {
   id: string
+  title: string
   content: string
-  category: string
+  category?: string
+  tags: string[]
   importance: 'low' | 'medium' | 'high' | 'critical'
   createdAt: number
   updatedAt: number
+  profileId?: string
   sessionId?: string
   conversationId?: string
+  conversationTitle?: string
+  keyFindings?: string[]
+  userNotes?: string
+}
+
+// Skills types
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  instructions: string
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  source?: 'local' | 'imported'
+  filePath?: string
+}
+
+export interface AgentSkillsData {
+  skills: AgentSkill[]
 }

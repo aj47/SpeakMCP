@@ -12,7 +12,7 @@ import {
 } from '@opentui/core'
 
 import { BaseView } from './base'
-import type { Settings, McpServer } from '../types'
+import type { Settings, McpServer, ModelPreset } from '../types'
 
 // Provider options
 const PROVIDERS = [
@@ -25,6 +25,13 @@ interface FormState {
   providerId: string
   model: string
   maxIterations: number
+  ttsEnabled: boolean
+  mcpRequireApprovalBeforeToolCall: boolean
+  transcriptPostProcessingEnabled: boolean
+  openaiApiKey: string
+  groqApiKey: string
+  geminiApiKey: string
+  currentModelPresetId: string
   serverEnabled: Map<string, boolean>
 }
 
@@ -33,28 +40,53 @@ export class SettingsView extends BaseView {
   private mcpServers: McpServer[] = []
   private modelsForProvider: Array<{ id: string; name: string }> = []
 
+  // Model presets
+  private modelPresets: ModelPreset[] = []
+
   // Form state (current values being edited)
   private formState: FormState = {
     providerId: 'openai',
     model: 'gpt-4o-mini',
     maxIterations: 10,
+    ttsEnabled: true,
+    mcpRequireApprovalBeforeToolCall: false,
+    transcriptPostProcessingEnabled: true,
+    openaiApiKey: '',
+    groqApiKey: '',
+    geminiApiKey: '',
+    currentModelPresetId: 'builtin-openai',
     serverEnabled: new Map(),
   }
+
+  // API key inputs
+  private apiKeyInputs: Map<string, InputRenderable> = new Map()
 
   // Original state for reset
   private originalState: FormState | null = null
 
   // UI components
+  private presetSelect: SelectRenderable | null = null
   private providerSelect: SelectRenderable | null = null
   private modelSelect: SelectRenderable | null = null
   private maxIterInput: InputRenderable | null = null
   private serverToggles: Map<string, TextRenderable> = new Map()
+  private toggleElements: Map<string, TextRenderable> = new Map()
   private statusText: TextRenderable | null = null
 
   // Focus management
-  private focusedField: 'provider' | 'model' | 'maxIter' | 'servers' | 'buttons' = 'provider'
+  private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'toggles' | 'servers' | 'buttons' = 'preset'
+  private selectedApiKeyIndex: number = 0
+  private apiKeyProviders: Array<{ key: 'openaiApiKey' | 'groqApiKey' | 'geminiApiKey'; label: string }> = [
+    { key: 'openaiApiKey', label: 'OpenAI' },
+    { key: 'groqApiKey', label: 'Groq' },
+    { key: 'geminiApiKey', label: 'Gemini' },
+  ]
   private selectedServerIndex: number = 0
+  private selectedToggleIndex: number = 0
   private selectedButton: 'save' | 'reset' = 'save'
+  private toggleKeys: Array<'ttsEnabled' | 'mcpRequireApprovalBeforeToolCall' | 'transcriptPostProcessingEnabled'> = [
+    'ttsEnabled', 'mcpRequireApprovalBeforeToolCall', 'transcriptPostProcessingEnabled'
+  ]
 
   async show(): Promise<void> {
     if (this.isVisible) return
@@ -66,18 +98,21 @@ export class SettingsView extends BaseView {
     this.viewContainer = await this.createContent()
     this.container.add(this.viewContainer)
 
-    // Focus the provider select
-    if (this.providerSelect) {
-      this.providerSelect.focus()
+    // Focus the preset select
+    if (this.presetSelect) {
+      this.presetSelect.focus()
     }
   }
 
   hide(): void {
     // Clear component references
+    this.presetSelect = null
     this.providerSelect = null
     this.modelSelect = null
     this.maxIterInput = null
     this.serverToggles.clear()
+    this.toggleElements.clear()
+    this.apiKeyInputs.clear()
     this.statusText = null
     super.hide()
   }
@@ -130,6 +165,36 @@ export class SettingsView extends BaseView {
       fg: '#AAAAAA',
     })
     llmSection.add(llmTitle)
+
+    // Model Preset dropdown
+    const presetRow = new BoxRenderable(this.renderer, {
+      id: 'preset-row',
+      width: '100%',
+      height: 3,
+      flexDirection: 'row',
+    })
+    const presetLabel = new TextRenderable(this.renderer, {
+      id: 'preset-label',
+      content: '  Model Preset     ',
+      fg: '#FFFFFF',
+    })
+    presetRow.add(presetLabel)
+
+    this.presetSelect = new SelectRenderable(this.renderer, {
+      id: 'preset-select',
+      width: 25,
+      height: 3,
+      options: this.modelPresets.map(p => ({ name: p.name, description: p.isBuiltIn ? '(built-in)' : '' })),
+    })
+    const presetIndex = this.modelPresets.findIndex(p => p.id === this.formState.currentModelPresetId)
+    if (presetIndex >= 0) {
+      this.presetSelect.setSelectedIndex(presetIndex)
+    }
+    this.presetSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index: number) => {
+      this.onPresetChange(index)
+    })
+    presetRow.add(this.presetSelect)
+    llmSection.add(presetRow)
 
     // Provider dropdown
     const providerRow = new BoxRenderable(this.renderer, {
@@ -227,6 +292,102 @@ export class SettingsView extends BaseView {
 
     contentContainer.add(llmSection)
 
+    // API Keys Section
+    const apiKeysSection = new BoxRenderable(this.renderer, {
+      id: 'apikeys-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginBottom: 1,
+    })
+
+    const apiKeysTitle = new TextRenderable(this.renderer, {
+      id: 'apikeys-title',
+      content: '─ API Keys ─  (enter key, leave blank to keep current)',
+      fg: '#AAAAAA',
+    })
+    apiKeysSection.add(apiKeysTitle)
+
+    this.apiKeyInputs.clear()
+    for (const { key, label } of this.apiKeyProviders) {
+      const row = new BoxRenderable(this.renderer, {
+        id: `apikey-row-${key}`,
+        width: '100%',
+        height: 1,
+        flexDirection: 'row',
+      })
+      const keyLabel = new TextRenderable(this.renderer, {
+        id: `apikey-label-${key}`,
+        content: `  ${label.padEnd(15)}`,
+        fg: '#FFFFFF',
+      })
+      row.add(keyLabel)
+
+      const keyInput = new InputRenderable(this.renderer, {
+        id: `apikey-input-${key}`,
+        width: 35,
+        height: 1,
+        placeholder: this.formState[key] || 'not set',
+        focusedBackgroundColor: '#2a2a2a',
+      })
+      keyInput.on(InputRenderableEvents.CHANGE, (value: string) => {
+        this.formState[key] = value
+      })
+      row.add(keyInput)
+      this.apiKeyInputs.set(key, keyInput)
+
+      apiKeysSection.add(row)
+    }
+
+    contentContainer.add(apiKeysSection)
+
+    // General Settings Section (toggles)
+    const generalSection = new BoxRenderable(this.renderer, {
+      id: 'general-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginBottom: 1,
+    })
+
+    const generalTitle = new TextRenderable(this.renderer, {
+      id: 'general-title',
+      content: '─ General Settings ─  [Space] Toggle',
+      fg: '#AAAAAA',
+    })
+    generalSection.add(generalTitle)
+
+    // TTS Toggle
+    const ttsToggle = new TextRenderable(this.renderer, {
+      id: 'toggle-tts',
+      content: this.formatToggle('Text-to-Speech', this.formState.ttsEnabled),
+      fg: this.formState.ttsEnabled ? '#88FF88' : '#888888',
+    })
+    generalSection.add(ttsToggle)
+    this.toggleElements.set('ttsEnabled', ttsToggle)
+
+    // Require Tool Approval Toggle
+    const approvalToggle = new TextRenderable(this.renderer, {
+      id: 'toggle-approval',
+      content: this.formatToggle('Require Tool Approval', this.formState.mcpRequireApprovalBeforeToolCall),
+      fg: this.formState.mcpRequireApprovalBeforeToolCall ? '#88FF88' : '#888888',
+    })
+    generalSection.add(approvalToggle)
+    this.toggleElements.set('mcpRequireApprovalBeforeToolCall', approvalToggle)
+
+    // Transcript Post-Processing Toggle
+    const transcriptToggle = new TextRenderable(this.renderer, {
+      id: 'toggle-transcript',
+      content: this.formatToggle('Transcript Post-Processing', this.formState.transcriptPostProcessingEnabled),
+      fg: this.formState.transcriptPostProcessingEnabled ? '#88FF88' : '#888888',
+    })
+    generalSection.add(transcriptToggle)
+    this.toggleElements.set('transcriptPostProcessingEnabled', transcriptToggle)
+
+    contentContainer.add(generalSection)
+
     // MCP Servers Section
     const mcpSection = new BoxRenderable(this.renderer, {
       id: 'mcp-section',
@@ -313,13 +474,68 @@ export class SettingsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'settings-footer-text',
-      content: ' [S] Save  [R] Reset  [Space] Toggle server  [Tab] Next field',
+      content: ' [S] Save  [R] Reset  [Space] Toggle  [Tab] Next field  [↑↓] Navigate',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
     view.add(footer)
 
     return view
+  }
+
+  private formatToggle(label: string, enabled: boolean): string {
+    const icon = enabled ? '✓' : '○'
+    return `  [${icon}] ${label}`
+  }
+
+  private toggleSelectedGeneralSetting(): void {
+    const key = this.toggleKeys[this.selectedToggleIndex]
+    if (!key) return
+
+    this.formState[key] = !this.formState[key]
+
+    // Update the toggle element
+    const toggle = this.toggleElements.get(key)
+    if (toggle) {
+      const labels: Record<string, string> = {
+        ttsEnabled: 'Text-to-Speech',
+        mcpRequireApprovalBeforeToolCall: 'Require Tool Approval',
+        transcriptPostProcessingEnabled: 'Transcript Post-Processing',
+      }
+      toggle.content = this.formatToggle(labels[key], this.formState[key] as boolean)
+      toggle.fg = this.formState[key] ? '#88FF88' : '#888888'
+    }
+
+    this.setStatus(`${key}: ${this.formState[key] ? 'enabled' : 'disabled'}`)
+  }
+
+  private selectNextToggle(): void {
+    this.selectedToggleIndex = (this.selectedToggleIndex + 1) % this.toggleKeys.length
+    this.highlightSelectedToggle()
+  }
+
+  private selectPrevToggle(): void {
+    this.selectedToggleIndex = (this.selectedToggleIndex - 1 + this.toggleKeys.length) % this.toggleKeys.length
+    this.highlightSelectedToggle()
+  }
+
+  private highlightSelectedToggle(): void {
+    const labels: Record<string, string> = {
+      ttsEnabled: 'Text-to-Speech',
+      mcpRequireApprovalBeforeToolCall: 'Require Tool Approval',
+      transcriptPostProcessingEnabled: 'Transcript Post-Processing',
+    }
+    for (let i = 0; i < this.toggleKeys.length; i++) {
+      const key = this.toggleKeys[i]
+      const toggle = this.toggleElements.get(key)
+      if (!toggle) continue
+
+      const enabled = this.formState[key] as boolean
+      const prefix = i === this.selectedToggleIndex ? '► ' : '  '
+      const icon = enabled ? '✓' : '○'
+      toggle.content = `${prefix}[${icon}] ${labels[key]}`
+      toggle.fg = i === this.selectedToggleIndex ? '#FFFFFF' : (enabled ? '#88FF88' : '#888888')
+    }
   }
 
   private createServerToggle(server: McpServer): TextRenderable {
@@ -351,12 +567,14 @@ export class SettingsView extends BaseView {
 
   private async loadData(): Promise<void> {
     try {
-      const [settings, serversResult] = await Promise.all([
+      const [settings, serversResult, presetsResult] = await Promise.all([
         this.client.getSettings(),
         this.client.getMcpServers(),
+        this.client.getModelPresets().catch(() => ({ presets: [], currentPresetId: 'builtin-openai' })),
       ])
       this.settings = settings
       this.mcpServers = serversResult.servers || []
+      this.modelPresets = presetsResult.presets || []
 
       // Initialize form state from settings
       const providerId = settings.mcpToolsProviderId || 'openai'
@@ -364,6 +582,13 @@ export class SettingsView extends BaseView {
         providerId,
         model: this.getActiveModel(settings, providerId),
         maxIterations: settings.mcpMaxIterations || 10,
+        ttsEnabled: settings.ttsEnabled ?? true,
+        mcpRequireApprovalBeforeToolCall: settings.mcpRequireApprovalBeforeToolCall ?? false,
+        transcriptPostProcessingEnabled: settings.transcriptPostProcessingEnabled ?? true,
+        openaiApiKey: settings.openaiApiKey || '',
+        groqApiKey: settings.groqApiKey || '',
+        geminiApiKey: settings.geminiApiKey || '',
+        currentModelPresetId: presetsResult.currentPresetId || settings.currentModelPresetId || 'builtin-openai',
         serverEnabled: new Map(
           this.mcpServers.map(s => [s.name, s.status === 'connected'])
         ),
@@ -445,6 +670,14 @@ export class SettingsView extends BaseView {
     this.setStatus(`Provider changed to ${provider.name}`)
   }
 
+  private onPresetChange(index: number): void {
+    const preset = this.modelPresets[index]
+    if (!preset) return
+
+    this.formState.currentModelPresetId = preset.id
+    this.setStatus(`Model preset changed to ${preset.name}`)
+  }
+
   private onModelChange(index: number): void {
     const model = this.modelsForProvider[index]
     if (!model) return
@@ -472,15 +705,33 @@ export class SettingsView extends BaseView {
         await this.resetSettings()
         break
       case ' ':
-        this.toggleSelectedServer()
+        if (this.focusedField === 'toggles') {
+          this.toggleSelectedGeneralSetting()
+        } else {
+          this.toggleSelectedServer()
+        }
         break
       case 'j':
       case 'down':
-        this.selectNextServer()
+        if (this.focusedField === 'toggles') {
+          this.selectNextToggle()
+        } else if (this.focusedField === 'apiKeys') {
+          this.selectedApiKeyIndex = (this.selectedApiKeyIndex + 1) % this.apiKeyProviders.length
+          this.focusApiKeyInput()
+        } else {
+          this.selectNextServer()
+        }
         break
       case 'k':
       case 'up':
-        this.selectPrevServer()
+        if (this.focusedField === 'toggles') {
+          this.selectPrevToggle()
+        } else if (this.focusedField === 'apiKeys') {
+          this.selectedApiKeyIndex = (this.selectedApiKeyIndex - 1 + this.apiKeyProviders.length) % this.apiKeyProviders.length
+          this.focusApiKeyInput()
+        } else {
+          this.selectPrevServer()
+        }
         break
       case 'tab':
         this.focusNextField()
@@ -489,13 +740,16 @@ export class SettingsView extends BaseView {
   }
 
   private focusNextField(): void {
-    const fields: Array<'provider' | 'model' | 'maxIter' | 'servers' | 'buttons'> =
-      ['provider', 'model', 'maxIter', 'servers', 'buttons']
+    const fields: Array<'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'toggles' | 'servers' | 'buttons'> =
+      ['preset', 'provider', 'model', 'maxIter', 'apiKeys', 'toggles', 'servers', 'buttons']
     const currentIndex = fields.indexOf(this.focusedField)
     this.focusedField = fields[(currentIndex + 1) % fields.length]
 
     // Focus the appropriate component
     switch (this.focusedField) {
+      case 'preset':
+        this.presetSelect?.focus()
+        break
       case 'provider':
         this.providerSelect?.focus()
         break
@@ -505,12 +759,26 @@ export class SettingsView extends BaseView {
       case 'maxIter':
         this.maxIterInput?.focus()
         break
+      case 'apiKeys':
+        this.focusApiKeyInput()
+        break
+      case 'toggles':
+        this.highlightSelectedToggle()
+        break
       case 'servers':
         this.highlightSelectedServer()
         break
       case 'buttons':
         // Visual indication only
         break
+    }
+  }
+
+  private focusApiKeyInput(): void {
+    const provider = this.apiKeyProviders[this.selectedApiKeyIndex]
+    if (provider) {
+      const input = this.apiKeyInputs.get(provider.key)
+      input?.focus()
     }
   }
 
@@ -564,6 +832,21 @@ export class SettingsView extends BaseView {
       const patch: Partial<Settings> = {
         mcpToolsProviderId: this.formState.providerId,
         mcpMaxIterations: this.formState.maxIterations,
+        ttsEnabled: this.formState.ttsEnabled,
+        mcpRequireApprovalBeforeToolCall: this.formState.mcpRequireApprovalBeforeToolCall,
+        transcriptPostProcessingEnabled: this.formState.transcriptPostProcessingEnabled,
+        currentModelPresetId: this.formState.currentModelPresetId,
+      }
+
+      // Add API keys only if user entered a new (non-masked) value
+      if (this.formState.openaiApiKey && !this.formState.openaiApiKey.startsWith('****')) {
+        patch.openaiApiKey = this.formState.openaiApiKey
+      }
+      if (this.formState.groqApiKey && !this.formState.groqApiKey.startsWith('****')) {
+        patch.groqApiKey = this.formState.groqApiKey
+      }
+      if (this.formState.geminiApiKey && !this.formState.geminiApiKey.startsWith('****')) {
+        patch.geminiApiKey = this.formState.geminiApiKey
       }
 
       // Set the correct model field based on provider

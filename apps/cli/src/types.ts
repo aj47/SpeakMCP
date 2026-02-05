@@ -78,7 +78,56 @@ export interface Settings {
   mcpToolsGeminiModel?: string
   mcpMaxIterations?: number
   mcpToolsDelay?: number
+  ttsEnabled?: boolean
+  mcpRequireApprovalBeforeToolCall?: boolean
+  transcriptPostProcessingEnabled?: boolean
+  openaiApiKey?: string
+  groqApiKey?: string
+  geminiApiKey?: string
+  currentModelPresetId?: string
   [key: string]: unknown
+}
+
+export interface ModelPreset {
+  id: string
+  name: string
+  baseUrl: string
+  apiKey: string
+  isBuiltIn?: boolean
+  createdAt?: number
+  updatedAt?: number
+  mcpToolsModel?: string
+  transcriptProcessingModel?: string
+  summarizationModel?: string
+}
+
+export interface AgentMemory {
+  id: string
+  title: string
+  content: string
+  category?: string
+  tags: string[]
+  importance: 'low' | 'medium' | 'high' | 'critical'
+  createdAt: number
+  updatedAt: number
+  profileId?: string
+  sessionId?: string
+  conversationId?: string
+  conversationTitle?: string
+  keyFindings?: string[]
+  userNotes?: string
+}
+
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  instructions: string
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  source?: 'local' | 'imported'
+  filePath?: string
 }
 
 // Chat types
@@ -206,6 +255,87 @@ export interface SSEChunkEvent {
 }
 
 export type SSEEvent = SSEProgressEvent | SSEDoneEvent | SSEErrorEvent | SSEChunkEvent
+
+// OAuth types (G-22)
+export interface OAuthInitiateResponse {
+  authorizationUrl: string
+  state: string
+  codeVerifier: string
+}
+
+// Elicitation types (G-23)
+export interface PendingElicitation {
+  requestId: string
+  request: {
+    mode: 'form' | 'url'
+    serverName: string
+    message?: string
+    requestedSchema?: unknown
+    url?: string
+    requestId: string
+  }
+}
+
+// Sampling types (G-23)
+export interface PendingSampling {
+  requestId: string
+  request: {
+    serverName: string
+    requestId: string
+    messages: unknown[]
+    systemPrompt?: string
+    maxTokens?: number
+  }
+}
+
+// Message queue types (G-18)
+export interface QueuedMessage {
+  id: string
+  content: string
+  conversationId?: string
+  createdAt: number
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  error?: string
+}
+
+// Agent session types (G-24)
+export interface AgentSession {
+  sessionId: string
+  shouldStop: boolean
+  iterationCount: number
+}
+
+// ACP Agent types (G-19)
+export interface ACPAgentConfig {
+  name: string
+  displayName: string
+  description?: string
+  autoSpawn?: boolean
+  enabled?: boolean
+  isInternal?: boolean
+  connection: {
+    type: 'stdio' | 'remote' | 'internal'
+    command?: string
+    args?: string[]
+    env?: Record<string, string>
+    cwd?: string
+    url?: string
+  }
+}
+
+export type ACPAgentStatus = 'stopped' | 'starting' | 'ready' | 'error'
+
+export interface ACPAgent {
+  config: ACPAgentConfig
+  status: ACPAgentStatus
+  error?: string
+}
+
+export interface ACPRunResponse {
+  success: boolean
+  result?: string
+  error?: string
+}
 
 // View state
 export type ViewName = 'chat' | 'sessions' | 'settings' | 'tools'

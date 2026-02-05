@@ -18,6 +18,11 @@ interface ProgressState {
   currentIteration: number
   maxIterations: number
   steps: AgentProgressStep[]
+  pendingToolApproval?: {
+    approvalId: string
+    toolName: string
+    arguments: unknown
+  }
 }
 
 export class ChatView extends BaseView {
@@ -231,6 +236,12 @@ export class ChatView extends BaseView {
               currentIteration: progressData.currentIteration,
               maxIterations: progressData.maxIterations,
               steps: progressData.steps,
+              pendingToolApproval: progressData.pendingToolApproval,
+            }
+
+            // Handle tool approval if pending
+            if (progressData.pendingToolApproval) {
+              await this.handleToolApproval(progressData.pendingToolApproval)
             }
 
             // Extract streaming content from the latest streaming step
@@ -409,11 +420,28 @@ export class ChatView extends BaseView {
         return `${icon} Result${result}`
       }
 
+      case 'tool_processing': {
+        const toolName = step.toolName || 'tool'
+        return `${icon} Processing ${toolName}...`
+      }
+
       case 'error':
         return `${icon} Error: ${step.description || step.title}`
 
       case 'retry':
         return `${icon} Retry #${step.retryCount || 1}: ${step.retryReason || step.title}`
+
+      case 'context_reduction':
+        return `${icon} Reducing context: ${step.description || step.title}`
+
+      case 'verification':
+        return `${icon} Verifying: ${step.description || step.title}`
+
+      case 'acp_delegation':
+        return `${icon} Delegating to agent: ${step.description || step.title}`
+
+      case 'streaming':
+        return `${icon} ${step.title}`
 
       case 'completion':
         return `${icon} ${step.title}`
@@ -437,11 +465,26 @@ export class ChatView extends BaseView {
       case 'tool_result':
         return step.isError ? '❌' : '✅'
 
+      case 'tool_processing':
+        return '⚙️'
+
       case 'error':
         return '❌'
 
       case 'retry':
         return '🔄'
+
+      case 'context_reduction':
+        return '📦'
+
+      case 'verification':
+        return '🔍'
+
+      case 'acp_delegation':
+        return '🤖'
+
+      case 'streaming':
+        return '📡'
 
       case 'completion':
         return '✅'
@@ -458,7 +501,69 @@ export class ChatView extends BaseView {
     if (step.type === 'thinking') return '#AAAAFF'
     if (step.type === 'tool_call') return '#FFCC66'
     if (step.type === 'tool_result') return '#88CCFF'
+    if (step.type === 'tool_processing') return '#FFAA66'
+    if (step.type === 'context_reduction') return '#CC88FF'
+    if (step.type === 'verification') return '#88FFCC'
+    if (step.type === 'acp_delegation') return '#FF88CC'
+    if (step.type === 'streaming') return '#88AAFF'
     return '#CCCCCC'
+  }
+
+  private async handleToolApproval(approval: { approvalId: string; toolName: string; arguments: unknown }): Promise<void> {
+    if (!this.progressContainer) return
+
+    // Show approval prompt in the progress display
+    const approvalBox = new BoxRenderable(this.renderer, {
+      id: 'tool-approval-prompt',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#FFAA00',
+      padding: 1,
+    })
+
+    const promptText = new TextRenderable(this.renderer, {
+      id: 'approval-prompt-text',
+      content: `⚠️  Tool approval required: ${approval.toolName}`,
+      fg: '#FFAA00',
+    })
+    approvalBox.add(promptText)
+
+    const argsText = new TextRenderable(this.renderer, {
+      id: 'approval-args-text',
+      content: `   Args: ${this.truncateArgs(approval.arguments)}`,
+      fg: '#CCCCCC',
+    })
+    approvalBox.add(argsText)
+
+    const hintText = new TextRenderable(this.renderer, {
+      id: 'approval-hint-text',
+      content: '   Press [Y] Approve  [N] Deny',
+      fg: '#FFFFFF',
+    })
+    approvalBox.add(hintText)
+
+    this.progressContainer.add(approvalBox)
+
+    // Store the pending approval for keyboard handling
+    this.pendingApprovalId = approval.approvalId
+  }
+
+  private pendingApprovalId: string | null = null
+
+  private async respondToToolApproval(approved: boolean): Promise<void> {
+    if (!this.pendingApprovalId) return
+
+    try {
+      await this.client.respondToToolApproval(this.pendingApprovalId, approved)
+    } catch {
+      // Ignore errors - the agent will time out if needed
+    }
+    this.pendingApprovalId = null
+
+    // Remove the approval prompt
+    if (this.progressContainer) {
+      this.progressContainer.remove('tool-approval-prompt')
+    }
   }
 
   private truncateArgs(args: unknown): string {
@@ -494,6 +599,17 @@ export class ChatView extends BaseView {
   // Handle keyboard shortcuts
   handleKeyPress(key: KeyEvent): void {
     if (!this.messageContainer) return
+
+    // Handle tool approval Y/N
+    if (this.pendingApprovalId) {
+      if (key.name === 'y') {
+        this.respondToToolApproval(true)
+        return
+      } else if (key.name === 'n') {
+        this.respondToToolApproval(false)
+        return
+      }
+    }
 
     switch (key.name) {
       case 'up':

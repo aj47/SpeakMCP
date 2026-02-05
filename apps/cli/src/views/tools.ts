@@ -1,10 +1,13 @@
 /**
- * Tools View - Browse available MCP tools
+ * Tools View - Browse and execute MCP tools
  */
 
 import {
   BoxRenderable,
   TextRenderable,
+  InputRenderable,
+  InputRenderableEvents,
+  type KeyEvent,
 } from '@opentui/core'
 
 import { BaseView } from './base'
@@ -15,8 +18,21 @@ interface ToolsByServer {
   tools: McpTool[]
 }
 
+interface FlatTool {
+  serverName: string
+  tool: McpTool
+}
+
 export class ToolsView extends BaseView {
   private toolsByServer: ToolsByServer[] = []
+  private flatTools: FlatTool[] = []
+  private selectedToolIndex: number = 0
+  private toolElements: Map<number, TextRenderable> = new Map()
+  private resultBox: BoxRenderable | null = null
+  private resultText: TextRenderable | null = null
+  private argInputMode: boolean = false
+  private argInput: InputRenderable | null = null
+  private statusText: TextRenderable | null = null
 
   async show(): Promise<void> {
     if (this.isVisible) return
@@ -27,6 +43,15 @@ export class ToolsView extends BaseView {
 
     this.viewContainer = await this.createContent()
     this.container.add(this.viewContainer)
+  }
+
+  hide(): void {
+    this.toolElements.clear()
+    this.resultBox = null
+    this.resultText = null
+    this.argInput = null
+    this.statusText = null
+    super.hide()
   }
 
   protected async createContent(): Promise<BoxRenderable> {
@@ -46,7 +71,7 @@ export class ToolsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'tools-header-text',
-      content: ' 🔧 MCP Tools',
+      content: ' 🔧 MCP Tools                    [Enter] Execute  [↑↓] Navigate',
       fg: '#FFFFFF',
     })
     header.add(headerText)
@@ -61,6 +86,9 @@ export class ToolsView extends BaseView {
       padding: 1,
       overflow: 'scroll',
     })
+
+    this.toolElements.clear()
+    let flatIndex = 0
 
     if (this.toolsByServer.length === 0) {
       const noTools = new TextRenderable(this.renderer, {
@@ -82,10 +110,10 @@ export class ToolsView extends BaseView {
         })
 
         const statusIcon = server.status === 'connected' ? '▼' : '▷'
-        const statusText = server.status === 'connected' ? 'connected' : server.status
+        const statusLabel = server.status === 'connected' ? 'connected' : server.status
         const serverTitle = new TextRenderable(this.renderer, {
           id: `server-title-${server.name}`,
-          content: `${statusIcon} ${server.name} (${server.transport}) ─ ${statusText}`,
+          content: `${statusIcon} ${server.name} (${server.transport}) ─ ${statusLabel}`,
           fg: server.status === 'connected' ? '#88AA88' : '#AA8888',
         })
         serverBox.add(serverTitle)
@@ -99,25 +127,20 @@ export class ToolsView extends BaseView {
           })
           serverBox.add(noServerTools)
         } else {
-          for (const tool of tools.slice(0, 10)) { // Limit to first 10 tools per server
-            const desc = tool.description 
+          for (const tool of tools) {
+            const desc = tool.description
               ? tool.description.substring(0, 40) + (tool.description.length > 40 ? '...' : '')
               : ''
+            const isSelected = flatIndex === this.selectedToolIndex
+            const prefix = isSelected ? '► ' : '  '
             const toolText = new TextRenderable(this.renderer, {
               id: `tool-${server.name}-${tool.name}`,
-              content: `  ├─ ${tool.name.padEnd(25)} ${desc}`,
-              fg: '#AAAAFF',
+              content: `${prefix}├─ ${tool.name.padEnd(25)} ${desc}`,
+              fg: isSelected ? '#FFFFFF' : '#AAAAFF',
             })
             serverBox.add(toolText)
-          }
-          
-          if (tools.length > 10) {
-            const moreText = new TextRenderable(this.renderer, {
-              id: `more-tools-${server.name}`,
-              content: `  └─ ... and ${tools.length - 10} more tools`,
-              fg: '#666666',
-            })
-            serverBox.add(moreText)
+            this.toolElements.set(flatIndex, toolText)
+            flatIndex++
           }
         }
 
@@ -127,7 +150,271 @@ export class ToolsView extends BaseView {
 
     view.add(contentContainer)
 
+    // Result display area
+    this.resultBox = new BoxRenderable(this.renderer, {
+      id: 'tool-result-box',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      height: 6,
+    })
+
+    this.resultText = new TextRenderable(this.renderer, {
+      id: 'tool-result-text',
+      content: 'Select a tool and press [Enter] to execute',
+      fg: '#888888',
+    })
+    this.resultBox.add(this.resultText)
+    view.add(this.resultBox)
+
+    // Footer
+    const footer = new BoxRenderable(this.renderer, {
+      id: 'tools-footer',
+      width: '100%',
+      height: 1,
+      backgroundColor: '#333333',
+    })
+    const footerText = new TextRenderable(this.renderer, {
+      id: 'tools-footer-text',
+      content: ' [Enter] Execute  [↑↓] Navigate  [R]estart  [S]top  [L]ogs  [T]est  [Esc] Cancel',
+      fg: '#AAAAAA',
+    })
+    footer.add(footerText)
+    view.add(footer)
+
     return view
+  }
+
+  // Keyboard handler
+  handleKeyPress(key: KeyEvent): void {
+    if (this.argInputMode) {
+      if (key.name === 'escape') {
+        this.argInputMode = false
+        this.argInput = null
+        this.setResult('Execution cancelled', '#888888')
+        this.refresh()
+      }
+      // Input handles other keys
+      return
+    }
+
+    switch (key.name) {
+      case 'up':
+        this.selectPrevTool()
+        break
+      case 'down':
+        this.selectNextTool()
+        break
+      case 'enter':
+        this.executeSelectedTool()
+        break
+    }
+
+    // Character-based shortcuts for server management
+    const ch = typeof key.sequence === 'string' ? key.sequence.toLowerCase() : ''
+    switch (ch) {
+      case 'r':
+        this.restartSelectedServer()
+        break
+      case 's':
+        this.stopSelectedServer()
+        break
+      case 'l':
+        this.showSelectedServerLogs()
+        break
+      case 't':
+        this.testSelectedServer()
+        break
+    }
+  }
+
+  private selectNextTool(): void {
+    if (this.flatTools.length === 0) return
+    this.unhighlightTool(this.selectedToolIndex)
+    this.selectedToolIndex = (this.selectedToolIndex + 1) % this.flatTools.length
+    this.highlightTool(this.selectedToolIndex)
+  }
+
+  private selectPrevTool(): void {
+    if (this.flatTools.length === 0) return
+    this.unhighlightTool(this.selectedToolIndex)
+    this.selectedToolIndex = (this.selectedToolIndex - 1 + this.flatTools.length) % this.flatTools.length
+    this.highlightTool(this.selectedToolIndex)
+  }
+
+  private highlightTool(index: number): void {
+    const el = this.toolElements.get(index)
+    const flat = this.flatTools[index]
+    if (!el || !flat) return
+    const desc = flat.tool.description
+      ? flat.tool.description.substring(0, 40) + (flat.tool.description.length > 40 ? '...' : '')
+      : ''
+    el.content = `► ├─ ${flat.tool.name.padEnd(25)} ${desc}`
+    el.fg = '#FFFFFF'
+  }
+
+  private unhighlightTool(index: number): void {
+    const el = this.toolElements.get(index)
+    const flat = this.flatTools[index]
+    if (!el || !flat) return
+    const desc = flat.tool.description
+      ? flat.tool.description.substring(0, 40) + (flat.tool.description.length > 40 ? '...' : '')
+      : ''
+    el.content = `  ├─ ${flat.tool.name.padEnd(25)} ${desc}`
+    el.fg = '#AAAAFF'
+  }
+
+  private async executeSelectedTool(): Promise<void> {
+    const flat = this.flatTools[this.selectedToolIndex]
+    if (!flat) return
+
+    const tool = flat.tool
+
+    // Check if tool has required arguments
+    const schema = tool.inputSchema as { properties?: Record<string, unknown>; required?: string[] } | undefined
+    const hasRequiredArgs = schema?.required && schema.required.length > 0
+    const hasProperties = schema?.properties && Object.keys(schema.properties).length > 0
+
+    if (hasRequiredArgs || hasProperties) {
+      // Show args input
+      this.promptForArgs(tool)
+    } else {
+      // Execute directly with empty args
+      await this.runTool(tool.name, {})
+    }
+  }
+
+  private promptForArgs(tool: McpTool): void {
+    this.argInputMode = true
+    const schema = tool.inputSchema as { properties?: Record<string, unknown>; required?: string[] } | undefined
+    const params = schema?.properties ? Object.keys(schema.properties) : []
+    const hint = params.length > 0 ? `Params: ${params.join(', ')}` : 'Enter JSON arguments'
+
+    this.setResult(`🔧 ${tool.name}\n${hint}\nEnter args as JSON (or {} for none):`, '#FFAA66')
+
+    if (!this.resultBox) return
+
+    this.argInput = new InputRenderable(this.renderer, {
+      id: 'tool-args-input',
+      width: 60,
+      height: 1,
+      placeholder: '{}',
+      focusedBackgroundColor: '#2a2a2a',
+    })
+    this.argInput.value = '{}'
+    this.argInput.on(InputRenderableEvents.SUBMIT, async () => {
+      if (!this.argInput) return
+      const argsStr = this.argInput.value.trim() || '{}'
+      this.argInputMode = false
+      this.argInput = null
+
+      try {
+        const args = JSON.parse(argsStr)
+        await this.runTool(tool.name, args)
+      } catch {
+        this.setResult(`❌ Invalid JSON: ${argsStr}`, '#FF6666')
+      }
+      this.refresh()
+    })
+    this.resultBox.add(this.argInput)
+    this.argInput.focus()
+  }
+
+  private async runTool(name: string, args: Record<string, unknown>): Promise<void> {
+    this.setResult(`⏳ Executing ${name}...`, '#FFAA66')
+
+    try {
+      const result = await this.client.callMcpTool(name, args)
+      const resultStr = typeof result === 'string'
+        ? result
+        : JSON.stringify(result, null, 2)
+      const truncated = resultStr.length > 500 ? resultStr.substring(0, 497) + '...' : resultStr
+      this.setResult(`✅ ${name} result:\n${truncated}`, '#88FF88')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      this.setResult(`❌ ${name} failed:\n${msg}`, '#FF6666')
+    }
+  }
+
+  private setResult(text: string, color: string): void {
+    if (this.resultText) {
+      this.resultText.content = text
+      this.resultText.fg = color
+    }
+  }
+
+  private getSelectedServerName(): string | null {
+    const flat = this.flatTools[this.selectedToolIndex]
+    return flat ? flat.serverName : (this.toolsByServer[0]?.server.name || null)
+  }
+
+  private async restartSelectedServer(): Promise<void> {
+    const serverName = this.getSelectedServerName()
+    if (!serverName) return
+    this.setResult(`⏳ Restarting ${serverName}...`, '#FFAA66')
+    try {
+      const result = await this.client.restartMcpServer(serverName)
+      if (result.success) {
+        this.setResult(`✅ ${serverName} restarted successfully`, '#88FF88')
+        setTimeout(() => this.refresh(), 500)
+      } else {
+        this.setResult(`❌ Restart failed: ${result.error}`, '#FF6666')
+      }
+    } catch (err) {
+      this.setResult(`❌ Restart error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+    }
+  }
+
+  private async stopSelectedServer(): Promise<void> {
+    const serverName = this.getSelectedServerName()
+    if (!serverName) return
+    this.setResult(`⏳ Stopping ${serverName}...`, '#FFAA66')
+    try {
+      const result = await this.client.stopMcpServer(serverName)
+      if (result.success) {
+        this.setResult(`✅ ${serverName} stopped`, '#88FF88')
+        setTimeout(() => this.refresh(), 500)
+      } else {
+        this.setResult(`❌ Stop failed: ${result.error}`, '#FF6666')
+      }
+    } catch (err) {
+      this.setResult(`❌ Stop error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+    }
+  }
+
+  private async showSelectedServerLogs(): Promise<void> {
+    const serverName = this.getSelectedServerName()
+    if (!serverName) return
+    this.setResult(`⏳ Fetching logs for ${serverName}...`, '#FFAA66')
+    try {
+      const result = await this.client.getMcpServerLogs(serverName)
+      const logs = result.logs || []
+      if (logs.length === 0) {
+        this.setResult(`📋 ${serverName}: No logs available`, '#888888')
+      } else {
+        const last10 = logs.slice(-10).join('\n')
+        this.setResult(`📋 ${serverName} logs (last ${Math.min(logs.length, 10)}):\n${last10}`, '#AAAAFF')
+      }
+    } catch (err) {
+      this.setResult(`❌ Logs error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+    }
+  }
+
+  private async testSelectedServer(): Promise<void> {
+    const serverName = this.getSelectedServerName()
+    if (!serverName) return
+    this.setResult(`⏳ Testing connection to ${serverName}...`, '#FFAA66')
+    try {
+      const result = await this.client.testMcpServer(serverName)
+      if (result.success) {
+        this.setResult(`✅ ${serverName}: Connection OK, ${result.toolCount || 0} tools`, '#88FF88')
+      } else {
+        this.setResult(`❌ ${serverName}: Test failed - ${result.error}`, '#FF6666')
+      }
+    } catch (err) {
+      this.setResult(`❌ Test error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+    }
   }
 
   private async loadTools(): Promise<void> {
@@ -145,8 +432,17 @@ export class ToolsView extends BaseView {
         server,
         tools: tools.filter(t => t.serverName === server.name),
       }))
+
+      // Build flat index for navigation
+      this.flatTools = []
+      for (const { server, tools: serverTools } of this.toolsByServer) {
+        for (const tool of serverTools) {
+          this.flatTools.push({ serverName: server.name, tool })
+        }
+      }
     } catch {
       this.toolsByServer = []
+      this.flatTools = []
     }
   }
 }

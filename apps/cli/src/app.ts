@@ -229,7 +229,7 @@ export class App {
     const profile = this.state.currentProfile?.name || 'default'
     const connectionIndicator = this.getConnectionIndicator()
     const processing = this.state.isProcessing ? ' [Processing...]' : ''
-    return ` Profile: ${profile} │ ${connectionIndicator}${processing}`
+    return ` Profile: ${profile} │ ${connectionIndicator}${processing}  │  [?] Help`
   }
 
   private getConnectionIndicator(): string {

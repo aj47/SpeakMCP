@@ -303,7 +303,7 @@ export class ToolsView extends BaseView {
       focusedBackgroundColor: '#2a2a2a',
     })
     this.argInput.value = '{}'
-    this.argInput.on(InputRenderableEvents.SUBMIT, async () => {
+    this.argInput.on(InputRenderableEvents.ENTER, async () => {
       if (!this.argInput) return
       const argsStr = this.argInput.value.trim() || '{}'
       this.argInputMode = false

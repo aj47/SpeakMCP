@@ -139,22 +139,32 @@ export class App {
         return
       }
 
-      // F-keys for view switching
-      if (key.name === 'f1') {
+      // F-keys for view switching (with fallback escape sequences for iTerm2)
+      // Standard xterm: F1=\eOP, F2=\eOQ, F3=\eOR, F4=\eOS
+      // VT220 mode: F1=\e[11~, F2=\e[12~, F3=\e[13~, F4=\e[14~
+      if (key.name === 'f1' || key.sequence === '\x1bOP' || key.sequence === '\x1b[11~') {
         this.switchView('chat')
         return
       }
-      if (key.name === 'f2') {
+      if (key.name === 'f2' || key.sequence === '\x1bOQ' || key.sequence === '\x1b[12~') {
         this.switchView('sessions')
         return
       }
-      if (key.name === 'f3') {
+      if (key.name === 'f3' || key.sequence === '\x1bOR' || key.sequence === '\x1b[13~') {
         this.switchView('settings')
         return
       }
-      if (key.name === 'f4') {
+      if (key.name === 'f4' || key.sequence === '\x1bOS' || key.sequence === '\x1b[14~') {
         this.switchView('tools')
         return
+      }
+
+      // Alt+number alternatives for terminals where F-keys don't work
+      if (key.meta && key.sequence) {
+        if (key.name === '1' || key.sequence === '\x1b1') { this.switchView('chat'); return }
+        if (key.name === '2' || key.sequence === '\x1b2') { this.switchView('sessions'); return }
+        if (key.name === '3' || key.sequence === '\x1b3') { this.switchView('settings'); return }
+        if (key.name === '4' || key.sequence === '\x1b4') { this.switchView('tools'); return }
       }
 
       // Pass key events to current view
@@ -374,7 +384,7 @@ export class App {
   private handleEscape(): void {
     // If in settings, reset changes
     if (this.state.currentView === 'settings') {
-      this.settingsView.handleKeyPress('escape')
+      this.settingsView.handleKeyPress({ name: 'escape', sequence: '\x1b' } as KeyEvent)
     }
     // Otherwise, could go back or cancel current action
   }
@@ -389,10 +399,10 @@ export class App {
         this.sessionsView.handleKeyPress(key)
         break
       case 'settings':
-        this.settingsView.handleKeyPress(key.name || '')
+        this.settingsView.handleKeyPress(key)
         break
       case 'tools':
-        // Tools view doesn't need custom key handling yet
+        this.toolsView.handleKeyPress(key)
         break
     }
   }
@@ -442,7 +452,7 @@ export class App {
     helpBox.add(globalHeader)
 
     const globalShortcuts = [
-      '   F1-F4      Switch views',
+      '   F1-F4      Switch views (or Alt+1-4)',
       '   Ctrl+N     New conversation',
       '   Ctrl+P     Switch profile',
       '   Ctrl+C     Stop agent / Quit',

@@ -382,7 +382,7 @@ export class SessionsView extends BaseView {
       focusedBackgroundColor: '#2a2a2a',
     })
     this.renameInput.value = currentTitle
-    this.renameInput.on(InputRenderableEvents.SUBMIT, async () => {
+    this.renameInput.on(InputRenderableEvents.ENTER, async () => {
       if (this.renameInput) {
         const newTitle = this.renameInput.value.trim()
         if (newTitle && newTitle !== currentTitle) {

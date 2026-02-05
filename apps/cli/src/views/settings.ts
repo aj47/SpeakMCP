@@ -9,6 +9,7 @@ import {
   SelectRenderableEvents,
   InputRenderable,
   InputRenderableEvents,
+  type KeyEvent,
 } from '@opentui/core'
 
 import { BaseView } from './base'
@@ -694,43 +695,52 @@ export class SettingsView extends BaseView {
   }
 
   // Public methods for keyboard handling from App
-  async handleKeyPress(key: string): Promise<void> {
-    switch (key.toLowerCase()) {
-      case 's':
+  async handleKeyPress(key: KeyEvent): Promise<void> {
+    const name = key.name || ''
+
+    switch (name) {
       case 'enter':
-        await this.saveSettings()
+        if (this.focusedField === 'buttons') {
+          if (this.selectedButton === 'save') {
+            await this.saveSettings()
+          } else {
+            await this.resetSettings()
+          }
+        }
         break
-      case 'r':
       case 'escape':
         await this.resetSettings()
         break
+      case 'space':
       case ' ':
         if (this.focusedField === 'toggles') {
           this.toggleSelectedGeneralSetting()
-        } else {
+        } else if (this.focusedField === 'servers') {
           this.toggleSelectedServer()
         }
         break
-      case 'j':
       case 'down':
         if (this.focusedField === 'toggles') {
           this.selectNextToggle()
         } else if (this.focusedField === 'apiKeys') {
           this.selectedApiKeyIndex = (this.selectedApiKeyIndex + 1) % this.apiKeyProviders.length
           this.focusApiKeyInput()
-        } else {
+        } else if (this.focusedField === 'servers') {
           this.selectNextServer()
+        } else if (this.focusedField === 'buttons') {
+          this.selectedButton = this.selectedButton === 'save' ? 'reset' : 'save'
         }
         break
-      case 'k':
       case 'up':
         if (this.focusedField === 'toggles') {
           this.selectPrevToggle()
         } else if (this.focusedField === 'apiKeys') {
           this.selectedApiKeyIndex = (this.selectedApiKeyIndex - 1 + this.apiKeyProviders.length) % this.apiKeyProviders.length
           this.focusApiKeyInput()
-        } else {
+        } else if (this.focusedField === 'servers') {
           this.selectPrevServer()
+        } else if (this.focusedField === 'buttons') {
+          this.selectedButton = this.selectedButton === 'save' ? 'reset' : 'save'
         }
         break
       case 'tab':

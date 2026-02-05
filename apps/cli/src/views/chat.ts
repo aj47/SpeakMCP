@@ -7,6 +7,7 @@ import {
   TextRenderable,
   InputRenderable,
   InputRenderableEvents,
+  ScrollBoxRenderable,
   type KeyEvent,
 } from '@opentui/core'
 
@@ -26,7 +27,7 @@ interface ProgressState {
 }
 
 export class ChatView extends BaseView {
-  private messageContainer: BoxRenderable | null = null
+  private messageContainer: ScrollBoxRenderable | null = null
   private inputField: InputRenderable | null = null
   private messages: ConversationMessage[] = []
   private streamingContent: string = ''
@@ -75,14 +76,16 @@ export class ChatView extends BaseView {
     header.add(headerText)
     view.add(header)
 
-    // Message area
-    this.messageContainer = new BoxRenderable(this.renderer, {
+    // Message area (scrollable)
+    this.messageContainer = new ScrollBoxRenderable(this.renderer, {
       id: 'message-container',
       flexDirection: 'column',
       flexGrow: 1,
       width: '100%',
       padding: 1,
-      overflow: 'scroll',
+      scrollY: true,
+      stickyScroll: true,
+      stickyStart: 'bottom',
     })
     view.add(this.messageContainer)
 
@@ -106,7 +109,7 @@ export class ChatView extends BaseView {
       focusedBackgroundColor: '#1a1a1a',
     })
 
-    this.inputField.on(InputRenderableEvents.CHANGE, async (value: string) => {
+    this.inputField.on(InputRenderableEvents.ENTER, async (value: string) => {
       if (value.trim()) {
         await this.sendMessage(value.trim())
         if (this.inputField) {
@@ -633,11 +636,7 @@ export class ChatView extends BaseView {
 
   private scrollMessages(lines: number): void {
     if (!this.messageContainer) return
-    // The message container has overflow: 'scroll', so we can scroll it
-    // OpenTUI handles scroll internally, but we can try to trigger scroll
-    // by adjusting scroll offset if the container supports it
-    // For now, the container should auto-scroll with overflow: 'scroll'
-    // This is a placeholder for future scroll implementation
+    this.messageContainer.scrollBy({ x: 0, y: lines }, 'step')
   }
 }
 

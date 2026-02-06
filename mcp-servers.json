@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "electron-native-mcp": {
+      "command": "node",
+      "args": ["/Users/ajjoobandi/Development/electron-native-mcp/dist/index.js"],
+      "env": {}
+    },
+    "iterm-mcp": {
+      "command": "node",
+      "args": ["/Users/ajjoobandi/Development/iterm-mcp/build/index.js"],
+      "env": {}
+    }
+  }
+}

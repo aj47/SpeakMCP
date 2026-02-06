@@ -57,11 +57,21 @@ export class SpeakMcpClient {
     body?: unknown
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`
-    
+
+    // Only include Content-Type when sending a body to avoid
+    // Fastify's JSON parser rejecting empty-body requests with 400
+    const headers: Record<string, string> = {}
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`
+    }
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json'
+    }
+
     const response = await fetch(url, {
       method,
-      headers: this.headers,
-      body: body ? JSON.stringify(body) : undefined
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined
     })
     
     if (!response.ok) {

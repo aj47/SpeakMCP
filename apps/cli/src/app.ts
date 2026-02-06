@@ -9,6 +9,8 @@ import {
   Renderable,
   BoxRenderable,
   TextRenderable,
+  InputRenderable,
+  InputRenderableEvents,
   TabSelectRenderable,
   TabSelectRenderableEvents,
   SelectRenderable,
@@ -56,6 +58,12 @@ export class App {
   private helpOverlay: BoxRenderable | null = null
   private profileSwitcher: BoxRenderable | null = null
   private profiles: Profile[] = []
+  private profileSelectedIndex: number = 0
+  private profileSelectRenderable: SelectRenderable | null = null
+  private currentProfileId: string | undefined
+  private profileInputMode: 'create' | 'edit' | 'import' | null = null
+  private profileInput: InputRenderable | null = null
+  private profileBox: BoxRenderable | null = null
 
   // Health check timer
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null
@@ -98,10 +106,46 @@ export class App {
         return
       }
       if (this.profileSwitcher) {
+        // If in input mode (create/edit/import), only handle Escape
+        if (this.profileInputMode) {
+          if (key.name === 'escape') {
+            this.profileInputMode = null
+            this.profileInput = null
+            this.hideProfileSwitcher()
+            this.showProfileSwitcher()
+          }
+          // Let the input handle all other keys
+          return
+        }
+
         if (key.name === 'escape') {
           this.hideProfileSwitcher()
+          return
         }
-        // Let the profile switcher handle its own input
+
+        // Navigation
+        if (key.name === 'up') {
+          this.profileNavigateUp()
+          return
+        }
+        if (key.name === 'down') {
+          this.profileNavigateDown()
+          return
+        }
+        if (key.name === 'enter') {
+          this.selectCurrentProfile()
+          return
+        }
+
+        // Profile CRUD and export/import keybindings
+        const ch = typeof key.sequence === 'string' ? key.sequence.toLowerCase() : ''
+        switch (ch) {
+          case 'c': this.createProfilePrompt(); break
+          case 'e': this.editProfilePrompt(); break
+          case 'd': this.deleteSelectedProfile(); break
+          case 'x': this.exportSelectedProfile(); break
+          case 'i': this.importProfilePrompt(); break
+        }
         return
       }
 
@@ -467,7 +511,7 @@ export class App {
     const globalShortcuts = [
       '   F1-F4      Switch views (or Alt+1-4)',
       '   Ctrl+N     New conversation',
-      '   Ctrl+P     Switch profile',
+      '   Ctrl+P     Profiles (C/E/D/X/I)',
       '   Ctrl+C     Stop agent / Quit',
       '   Esc        Cancel / Close',
       '   ? / F12    This help',
@@ -543,19 +587,18 @@ export class App {
 
   // Profile switcher popup
   private async showProfileSwitcher(): Promise<void> {
-    if (this.profileSwitcher) return
+    if (this.profileSwitcher) {
+      this.hideProfileSwitcher()
+    }
 
     // Load profiles
-    let currentProfileId: string | undefined
     try {
       const result = await this.client.getProfiles()
       this.profiles = result.profiles || []
-      currentProfileId = result.currentProfileId
+      this.currentProfileId = result.currentProfileId
     } catch {
       this.profiles = []
     }
-
-    if (this.profiles.length === 0) return
 
     const root = this.renderer.root
 
@@ -570,10 +613,11 @@ export class App {
     })
 
     // Create profile box
-    const profileBox = new BoxRenderable(this.renderer, {
+    const boxHeight = Math.min(this.profiles.length + 6, 18)
+    this.profileBox = new BoxRenderable(this.renderer, {
       id: 'profile-box',
-      width: 40,
-      height: Math.min(this.profiles.length + 4, 15),
+      width: 62,
+      height: boxHeight,
       borderStyle: 'single',
       borderColor: '#888888',
       backgroundColor: '#1a1a1a',
@@ -583,46 +627,48 @@ export class App {
 
     const title = new TextRenderable(this.renderer, {
       id: 'profile-title',
-      content: '─ Switch Profile ─',
+      content: '─ Profiles ─',
       fg: '#FFFFFF',
     })
-    profileBox.add(title)
+    this.profileBox.add(title)
 
-    const profileSelect = new SelectRenderable(this.renderer, {
-      id: 'profile-select',
-      width: '100%',
-      height: Math.min(this.profiles.length * 2, 10),
-      options: this.profiles.map(p => ({
-        name: p.name,
-        description: p.id === currentProfileId ? '(current)' : '',
-      })),
-    })
+    if (this.profiles.length === 0) {
+      const emptyText = new TextRenderable(this.renderer, {
+        id: 'profile-empty',
+        content: 'No profiles. Press [C] to create one.',
+        fg: '#888888',
+      })
+      this.profileBox.add(emptyText)
+    } else {
+      const profileSelect = new SelectRenderable(this.renderer, {
+        id: 'profile-select',
+        width: '100%',
+        height: Math.min(this.profiles.length * 2, 10),
+        options: this.profiles.map(p => ({
+          name: p.name,
+          description: p.id === this.currentProfileId ? '(current)' : '',
+        })),
+      })
 
-    // Set current profile as selected
-    const currentIndex = this.profiles.findIndex(p => p.id === currentProfileId)
-    if (currentIndex >= 0) {
-      profileSelect.setSelectedIndex(currentIndex)
-    }
-
-    profileSelect.on(SelectRenderableEvents.ITEM_SELECTED, async (index: number) => {
-      const profile = this.profiles[index]
-      if (profile) {
-        await this.switchProfile(profile.id)
+      // Clamp selected index
+      if (this.profileSelectedIndex >= this.profiles.length) {
+        this.profileSelectedIndex = Math.max(0, this.profiles.length - 1)
       }
-      this.hideProfileSwitcher()
-    })
+      profileSelect.setSelectedIndex(this.profileSelectedIndex)
 
-    profileSelect.focus()
-    profileBox.add(profileSelect)
+      // Don't focus — we handle navigation manually to avoid double-handling
+      this.profileSelectRenderable = profileSelect
+      this.profileBox.add(profileSelect)
+    }
 
     const footer = new TextRenderable(this.renderer, {
       id: 'profile-footer',
-      content: '[Enter] Select  [Esc] Cancel',
+      content: '[Enter] Select [C]reate [E]dit [D]elete [X]port [I]mport',
       fg: '#888888',
     })
-    profileBox.add(footer)
+    this.profileBox.add(footer)
 
-    this.profileSwitcher.add(profileBox)
+    this.profileSwitcher.add(this.profileBox)
     root.add(this.profileSwitcher)
   }
 
@@ -630,6 +676,10 @@ export class App {
     if (!this.profileSwitcher) return
     this.renderer.root.remove(this.profileSwitcher.id)
     this.profileSwitcher = null
+    this.profileBox = null
+    this.profileSelectRenderable = null
+    this.profileInputMode = null
+    this.profileInput = null
   }
 
   private async switchProfile(profileId: string): Promise<void> {
@@ -641,6 +691,225 @@ export class App {
     } catch {
       // Ignore errors
     }
+  }
+
+  // Profile navigation
+  private profileNavigateUp(): void {
+    if (this.profiles.length === 0) return
+    this.profileSelectedIndex = Math.max(0, this.profileSelectedIndex - 1)
+    this.profileSelectRenderable?.setSelectedIndex(this.profileSelectedIndex)
+  }
+
+  private profileNavigateDown(): void {
+    if (this.profiles.length === 0) return
+    this.profileSelectedIndex = Math.min(this.profiles.length - 1, this.profileSelectedIndex + 1)
+    this.profileSelectRenderable?.setSelectedIndex(this.profileSelectedIndex)
+  }
+
+  private async selectCurrentProfile(): Promise<void> {
+    const profile = this.profiles[this.profileSelectedIndex]
+    if (profile) {
+      await this.switchProfile(profile.id)
+    }
+    this.hideProfileSwitcher()
+  }
+
+  // G-10: Profile CRUD
+  private async createProfilePrompt(): Promise<void> {
+    if (!this.profileBox) return
+    this.profileInputMode = 'create'
+
+    // Remove existing footer and add input
+    this.profileBox.remove('profile-footer')
+
+    const label = new TextRenderable(this.renderer, {
+      id: 'profile-input-label',
+      content: '  New profile name:',
+      fg: '#FFAA66',
+    })
+    this.profileBox.add(label)
+
+    this.profileInput = new InputRenderable(this.renderer, {
+      id: 'profile-name-input',
+      width: 40,
+      height: 1,
+      placeholder: 'Enter profile name...',
+      focusedBackgroundColor: '#2a2a2a',
+    })
+    this.profileInput.on(InputRenderableEvents.ENTER, async (value: string) => {
+      const name = value.trim()
+      if (name) {
+        try {
+          await this.client.createProfile(name, '')
+        } catch {
+          // Ignore
+        }
+      }
+      this.profileInputMode = null
+      this.profileInput = null
+      this.hideProfileSwitcher()
+      await this.showProfileSwitcher()
+    })
+    this.profileBox.add(this.profileInput)
+
+    const hint = new TextRenderable(this.renderer, {
+      id: 'profile-input-hint',
+      content: '  [Enter] Create  [Esc] Cancel',
+      fg: '#888888',
+    })
+    this.profileBox.add(hint)
+
+    setTimeout(() => this.profileInput?.focus(), 0)
+  }
+
+  private async editProfilePrompt(): Promise<void> {
+    const profile = this.profiles[this.profileSelectedIndex]
+    if (!profile || !this.profileBox) return
+    this.profileInputMode = 'edit'
+
+    // Remove existing footer and add input
+    this.profileBox.remove('profile-footer')
+
+    const label = new TextRenderable(this.renderer, {
+      id: 'profile-input-label',
+      content: `  Rename "${profile.name}":`,
+      fg: '#FFAA66',
+    })
+    this.profileBox.add(label)
+
+    this.profileInput = new InputRenderable(this.renderer, {
+      id: 'profile-name-input',
+      width: 40,
+      height: 1,
+      placeholder: profile.name,
+      focusedBackgroundColor: '#2a2a2a',
+    })
+    this.profileInput.on(InputRenderableEvents.ENTER, async (value: string) => {
+      const newName = value.trim()
+      if (newName && newName !== profile.name) {
+        try {
+          await this.client.updateProfile(profile.id, { name: newName })
+        } catch {
+          // Ignore
+        }
+      }
+      this.profileInputMode = null
+      this.profileInput = null
+      this.hideProfileSwitcher()
+      await this.showProfileSwitcher()
+    })
+    this.profileBox.add(this.profileInput)
+
+    const hint = new TextRenderable(this.renderer, {
+      id: 'profile-input-hint',
+      content: '  [Enter] Save  [Esc] Cancel',
+      fg: '#888888',
+    })
+    this.profileBox.add(hint)
+
+    setTimeout(() => this.profileInput?.focus(), 0)
+  }
+
+  private async deleteSelectedProfile(): Promise<void> {
+    const profile = this.profiles[this.profileSelectedIndex]
+    if (!profile) return
+
+    // Don't allow deleting the current or default profile
+    if (profile.id === this.currentProfileId) return
+    if ((profile as unknown as { isDefault?: boolean }).isDefault) return
+
+    try {
+      await this.client.deleteProfile(profile.id)
+    } catch {
+      // Silently ignore delete errors
+    }
+
+    this.hideProfileSwitcher()
+    await this.showProfileSwitcher()
+  }
+
+  // G-09: Profile Export/Import
+  private async exportSelectedProfile(): Promise<void> {
+    const profile = this.profiles[this.profileSelectedIndex]
+    if (!profile || !this.profileBox) return
+
+    try {
+      const result = await this.client.exportProfile(profile.id)
+      const json = typeof result.profileJson === 'string'
+        ? result.profileJson
+        : JSON.stringify(result, null, 2)
+      const truncated = json.length > 200 ? json.substring(0, 197) + '...' : json
+
+      // Show export result in the profile box
+      this.profileBox.remove('profile-footer')
+
+      const exportText = new TextRenderable(this.renderer, {
+        id: 'profile-export-text',
+        content: `  Exported "${profile.name}":\n  ${truncated}`,
+        fg: '#88FF88',
+      })
+      this.profileBox.add(exportText)
+
+      const hint = new TextRenderable(this.renderer, {
+        id: 'profile-export-hint',
+        content: '  (JSON logged to console) [Esc] Close',
+        fg: '#888888',
+      })
+      this.profileBox.add(hint)
+
+      // Log full JSON to stdout for copy-paste
+      console.log('\n--- Profile Export ---')
+      console.log(json)
+      console.log('--- End Export ---\n')
+    } catch {
+      // Ignore
+    }
+  }
+
+  private async importProfilePrompt(): Promise<void> {
+    if (!this.profileBox) return
+    this.profileInputMode = 'import'
+
+    this.profileBox.remove('profile-footer')
+
+    const label = new TextRenderable(this.renderer, {
+      id: 'profile-input-label',
+      content: '  Paste profile JSON:',
+      fg: '#FFAA66',
+    })
+    this.profileBox.add(label)
+
+    this.profileInput = new InputRenderable(this.renderer, {
+      id: 'profile-json-input',
+      width: 45,
+      height: 1,
+      placeholder: '{"name":"...","guidelines":"..."}',
+      focusedBackgroundColor: '#2a2a2a',
+    })
+    this.profileInput.on(InputRenderableEvents.ENTER, async (value: string) => {
+      const json = value.trim()
+      if (json) {
+        try {
+          await this.client.importProfile(json)
+        } catch {
+          // Ignore
+        }
+      }
+      this.profileInputMode = null
+      this.profileInput = null
+      this.hideProfileSwitcher()
+      await this.showProfileSwitcher()
+    })
+    this.profileBox.add(this.profileInput)
+
+    const hint = new TextRenderable(this.renderer, {
+      id: 'profile-input-hint',
+      content: '  [Enter] Import  [Esc] Cancel',
+      fg: '#888888',
+    })
+    this.profileBox.add(hint)
+
+    setTimeout(() => this.profileInput?.focus(), 0)
   }
 }
 

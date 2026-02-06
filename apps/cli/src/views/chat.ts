@@ -148,7 +148,7 @@ export class ChatView extends BaseView {
 
       const roleText = new TextRenderable(this.renderer, {
         id: `role-${Date.now()}-${Math.random()}`,
-        content: `─ ${isUser ? 'User' : 'Assistant'} ─`,
+        content: `-- ${isUser ? 'User' : 'Assistant'} --`,
         fg: isUser ? '#888888' : '#6688AA',
       })
       messageBox.add(roleText)
@@ -165,7 +165,7 @@ export class ChatView extends BaseView {
         for (const tc of msg.toolCalls) {
           const toolText = new TextRenderable(this.renderer, {
             id: `tool-${Date.now()}-${Math.random()}`,
-            content: `🔧 Using: ${tc.name}`,
+            content: `Using: ${tc.name}`,
             fg: '#AAAAFF',
           })
           messageBox.add(toolText)
@@ -287,7 +287,7 @@ export class ChatView extends BaseView {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error'
       this.messages.push({
         role: 'assistant',
-        content: `❌ Error: ${errorMsg}`
+        content: `X Error: ${errorMsg}`
       })
       this.renderMessages()
     } finally {
@@ -309,14 +309,14 @@ export class ChatView extends BaseView {
 
     const roleText = new TextRenderable(this.renderer, {
       id: 'streaming-role',
-      content: '─ Assistant ─ (streaming...)',
+      content: '-- Assistant -- (streaming...)',
       fg: '#66AA88',
     })
     streamBox.add(roleText)
 
     this.streamingText = new TextRenderable(this.renderer, {
       id: 'streaming-content',
-      content: '▌',
+      content: '|',
       fg: '#FFFFFF',
     })
     streamBox.add(this.streamingText)
@@ -326,7 +326,7 @@ export class ChatView extends BaseView {
 
   private updateStreamingMessage(): void {
     if (this.streamingText) {
-      this.streamingText.content = this.streamingContent + '▌'
+      this.streamingText.content = this.streamingContent + '|'
     }
   }
 
@@ -352,7 +352,7 @@ export class ChatView extends BaseView {
 
     const headerText = new TextRenderable(this.renderer, {
       id: 'progress-header',
-      content: '─ Assistant ─ (processing...)',
+      content: '-- Assistant -- (processing...)',
       fg: '#8888CC',
     })
     this.progressContainer.add(headerText)
@@ -376,7 +376,7 @@ export class ChatView extends BaseView {
     // Iteration counter
     const iterText = new TextRenderable(this.renderer, {
       id: 'progress-iteration',
-      content: `⏳ Iteration ${currentIteration}/${maxIterations}`,
+      content: `~ Iteration ${currentIteration}/${maxIterations}`,
       fg: '#AAAAFF',
     })
     this.progressContainer.add(iterText)
@@ -396,7 +396,7 @@ export class ChatView extends BaseView {
     if (this.streamingContent) {
       const contentText = new TextRenderable(this.renderer, {
         id: 'progress-content',
-        content: this.streamingContent + '▌',
+        content: this.streamingContent + '|',
         fg: '#FFFFFF',
       })
       this.progressContainer.add(contentText)
@@ -420,7 +420,7 @@ export class ChatView extends BaseView {
 
       case 'tool_result': {
         const result = step.toolOutput
-          ? ` → ${this.truncate(step.toolOutput, 60)}`
+          ? ` -> ${this.truncate(step.toolOutput, 60)}`
           : ''
         return `${icon} Result${result}`
       }
@@ -459,43 +459,43 @@ export class ChatView extends BaseView {
   private getStepIcon(step: AgentProgressStep): string {
     switch (step.type) {
       case 'thinking':
-        return '💭'
+        return '...'
 
       case 'tool_call':
-        if (step.status === 'running') return '▶'
-        if (step.status === 'complete') return '✓'
-        if (step.status === 'error') return '❌'
-        return '⏳'
+        if (step.status === 'running') return '>'
+        if (step.status === 'complete') return '+'
+        if (step.status === 'error') return 'X'
+        return '~'
 
       case 'tool_result':
-        return step.isError ? '❌' : '✅'
+        return step.isError ? 'X' : '+'
 
       case 'tool_processing':
-        return '⚙️'
+        return '*'
 
       case 'error':
-        return '❌'
+        return 'X'
 
       case 'retry':
-        return '🔄'
+        return '~'
 
       case 'context_reduction':
-        return '📦'
+        return '#'
 
       case 'verification':
-        return '🔍'
+        return '?'
 
       case 'acp_delegation':
-        return '🤖'
+        return '@'
 
       case 'streaming':
-        return '📡'
+        return '~'
 
       case 'completion':
-        return '✅'
+        return '+'
 
       default:
-        return '•'
+        return '*'
     }
   }
 
@@ -528,7 +528,7 @@ export class ChatView extends BaseView {
 
     const promptText = new TextRenderable(this.renderer, {
       id: 'approval-prompt-text',
-      content: `⚠️  Tool approval required: ${approval.toolName}`,
+      content: `! Tool approval required: ${approval.toolName}`,
       fg: '#FFAA00',
     })
     approvalBox.add(promptText)

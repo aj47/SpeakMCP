@@ -287,17 +287,17 @@ export class App {
     const profile = this.state.currentProfile?.name || 'default'
     const connectionIndicator = this.getConnectionIndicator()
     const processing = this.state.isProcessing ? ' [Processing...]' : ''
-    return ` Profile: ${profile} │ ${connectionIndicator}${processing}  │  [?] Help`
+    return ` Profile: ${profile} | ${connectionIndicator}${processing}  |  [?] Help`
   }
 
   private getConnectionIndicator(): string {
     switch (this.state.connectionState) {
       case 'online':
-        return '● Online'
+        return '* Online'
       case 'reconnecting':
-        return '○ Reconnecting...'
+        return '* Reconnecting...'
       case 'offline':
-        return '✗ Offline'
+        return 'X Offline'
     }
   }
 
@@ -500,7 +500,7 @@ export class App {
     // Title
     const title = new TextRenderable(this.renderer, {
       id: 'help-title',
-      content: '─ Keyboard Shortcuts ─',
+      content: '-- Keyboard Shortcuts --',
       fg: '#FFFFFF',
     })
     helpBox.add(title)
@@ -637,7 +637,7 @@ export class App {
 
     const title = new TextRenderable(this.renderer, {
       id: 'profile-title',
-      content: '─ Profiles ─',
+      content: '-- Profiles --',
       fg: '#FFFFFF',
     })
     this.profileBox.add(title)

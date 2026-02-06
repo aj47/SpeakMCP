@@ -58,7 +58,7 @@ export class SessionsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'sessions-header-text',
-      content: ' 📋 Sessions                         [/] Search  [N] New',
+      content: ' Sessions                            [/] Search  [N] New',
       fg: '#FFFFFF',
     })
     header.add(headerText)
@@ -76,7 +76,7 @@ export class SessionsView extends BaseView {
     if (this.searchMode) {
       const searchLabel = new TextRenderable(this.renderer, {
         id: 'search-label',
-        content: ' 🔍 ',
+        content: ' > ',
         fg: '#FFAA66',
       })
       searchBar.add(searchLabel)

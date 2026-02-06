@@ -242,7 +242,7 @@ export class SettingsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'settings-header-text',
-      content: ' ⚙️  Settings                                  [Tab] Navigate',
+      content: ' Settings                                     [Tab] Navigate',
       fg: '#FFFFFF',
     })
     header.add(headerText)
@@ -269,7 +269,7 @@ export class SettingsView extends BaseView {
 
     const llmTitle = new TextRenderable(this.renderer, {
       id: 'llm-title',
-      content: '─ LLM Configuration ─',
+      content: '-- LLM Configuration --',
       fg: '#AAAAAA',
     })
     llmSection.add(llmTitle)
@@ -413,7 +413,7 @@ export class SettingsView extends BaseView {
 
     const apiKeysTitle = new TextRenderable(this.renderer, {
       id: 'apikeys-title',
-      content: '─ API Keys ─  (enter key, leave blank to keep current)',
+      content: '-- API Keys --  (enter key, leave blank to keep current)',
       fg: '#AAAAAA',
     })
     apiKeysSection.add(apiKeysTitle)
@@ -463,7 +463,7 @@ export class SettingsView extends BaseView {
 
     const generalTitle = new TextRenderable(this.renderer, {
       id: 'general-title',
-      content: '─ General Settings ─  [Space] Toggle',
+      content: '-- General Settings --  [Space] Toggle',
       fg: '#AAAAAA',
     })
     generalSection.add(generalTitle)
@@ -494,7 +494,7 @@ export class SettingsView extends BaseView {
 
     const agentTitle = new TextRenderable(this.renderer, {
       id: 'agent-title',
-      content: '─ Agent Settings ─  [Space] Toggle',
+      content: '-- Agent Settings --  [Space] Toggle',
       fg: '#AAAAAA',
     })
     agentSection.add(agentTitle)
@@ -524,7 +524,7 @@ export class SettingsView extends BaseView {
 
     const ttsTitle = new TextRenderable(this.renderer, {
       id: 'tts-title',
-      content: '─ TTS Settings ─  [Space] Toggle',
+      content: '-- TTS Settings --  [Space] Toggle',
       fg: '#AAAAAA',
     })
     ttsSection.add(ttsTitle)
@@ -554,7 +554,7 @@ export class SettingsView extends BaseView {
 
     const langfuseTitle = new TextRenderable(this.renderer, {
       id: 'langfuse-title',
-      content: '─ Langfuse Observability ─',
+      content: '-- Langfuse Observability --',
       fg: '#AAAAAA',
     })
     langfuseSection.add(langfuseTitle)
@@ -616,7 +616,7 @@ export class SettingsView extends BaseView {
 
     const mcpTitle = new TextRenderable(this.renderer, {
       id: 'mcp-title',
-      content: '─ MCP Servers ─  [Space] Toggle',
+      content: '-- MCP Servers --  [Space] Toggle',
       fg: '#AAAAAA',
     })
     mcpSection.add(mcpTitle)
@@ -691,7 +691,7 @@ export class SettingsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'settings-footer-text',
-      content: ' [S] Save  [R] Reset  [Space] Toggle  [Tab] Next field  [↑↓] Navigate',
+      content: ' [S] Save  [R] Reset  [Space] Toggle  [Tab] Next field  [Up/Dn] Navigate',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -701,7 +701,7 @@ export class SettingsView extends BaseView {
   }
 
   private formatToggle(label: string, enabled: boolean): string {
-    const icon = enabled ? '✓' : '○'
+    const icon = enabled ? 'x' : ' '
     return `  [${icon}] ${label}`
   }
 
@@ -728,8 +728,8 @@ export class SettingsView extends BaseView {
       if (!toggle) continue
 
       const enabled = this.formState[key] as boolean
-      const prefix = i === selectedIndex ? '► ' : '  '
-      const icon = enabled ? '✓' : '○'
+      const prefix = i === selectedIndex ? '> ' : '  '
+      const icon = enabled ? 'x' : ' '
       toggle.content = `${prefix}[${icon}] ${TOGGLE_LABELS[key]}`
       toggle.fg = i === selectedIndex ? '#FFFFFF' : (enabled ? '#88FF88' : '#888888')
     }
@@ -755,7 +755,7 @@ export class SettingsView extends BaseView {
 
   private createServerToggle(server: McpServer): TextRenderable {
     const enabled = this.formState.serverEnabled.get(server.name) ?? (server.status === 'connected')
-    const icon = enabled ? '✓' : '○'
+    const icon = enabled ? 'x' : ' '
     const color = enabled ? '#88FF88' : '#888888'
     const toolsInfo = `${String(server.toolCount).padStart(2)} tools`
 
@@ -772,7 +772,7 @@ export class SettingsView extends BaseView {
     if (!server || !toggle) return
 
     const enabled = this.formState.serverEnabled.get(serverName) ?? (server.status === 'connected')
-    const icon = enabled ? '✓' : '○'
+    const icon = enabled ? 'x' : ' '
     const color = enabled ? '#88FF88' : '#888888'
     const toolsInfo = `${String(server.toolCount).padStart(2)} tools`
 
@@ -1126,10 +1126,10 @@ export class SettingsView extends BaseView {
       if (!toggle) continue
 
       const enabled = this.formState.serverEnabled.get(server.name) ?? (server.status === 'connected')
-      const icon = enabled ? '✓' : '○'
+      const icon = enabled ? 'x' : ' '
       const color = enabled ? '#88FF88' : '#888888'
       const toolsInfo = `${String(server.toolCount).padStart(2)} tools`
-      const prefix = i === this.selectedServerIndex ? '► ' : '  '
+      const prefix = i === this.selectedServerIndex ? '> ' : '  '
 
       toggle.content = `${prefix}[${icon}] ${server.name.padEnd(20)} ${toolsInfo}`
       toggle.fg = i === this.selectedServerIndex ? '#FFFFFF' : color
@@ -1222,13 +1222,13 @@ export class SettingsView extends BaseView {
         serverEnabled: new Map(this.formState.serverEnabled),
       }
 
-      this.setStatus('✓ Settings saved successfully!')
+      this.setStatus('Settings saved successfully!')
 
       // Reload data to reflect server status changes
       setTimeout(() => this.refresh(), 1000)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      this.setStatus(`✗ Save failed: ${msg}`)
+      this.setStatus(`X Save failed: ${msg}`)
     }
   }
 

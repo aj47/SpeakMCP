@@ -71,7 +71,7 @@ export class ToolsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'tools-header-text',
-      content: ' 🔧 MCP Tools                    [Enter] Execute  [↑↓] Navigate',
+      content: ' MCP Tools                       [Enter] Execute  [Up/Dn] Navigate',
       fg: '#FFFFFF',
     })
     header.add(headerText)
@@ -109,11 +109,11 @@ export class ToolsView extends BaseView {
           marginBottom: 1,
         })
 
-        const statusIcon = server.status === 'connected' ? '▼' : '▷'
+        const statusIcon = server.status === 'connected' ? 'v' : '>'
         const statusLabel = server.status === 'connected' ? 'connected' : server.status
         const serverTitle = new TextRenderable(this.renderer, {
           id: `server-title-${server.name}`,
-          content: `${statusIcon} ${server.name} (${server.transport}) ─ ${statusLabel}`,
+          content: `${statusIcon} ${server.name} (${server.transport}) -- ${statusLabel}`,
           fg: server.status === 'connected' ? '#88AA88' : '#AA8888',
         })
         serverBox.add(serverTitle)
@@ -132,10 +132,10 @@ export class ToolsView extends BaseView {
               ? tool.description.substring(0, 40) + (tool.description.length > 40 ? '...' : '')
               : ''
             const isSelected = flatIndex === this.selectedToolIndex
-            const prefix = isSelected ? '► ' : '  '
+            const prefix = isSelected ? '> ' : '  '
             const toolText = new TextRenderable(this.renderer, {
               id: `tool-${server.name}-${tool.name}`,
-              content: `${prefix}├─ ${tool.name.padEnd(25)} ${desc}`,
+              content: `${prefix}|- ${tool.name.padEnd(25)} ${desc}`,
               fg: isSelected ? '#FFFFFF' : '#AAAAFF',
             })
             serverBox.add(toolText)
@@ -177,7 +177,7 @@ export class ToolsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'tools-footer-text',
-      content: ' [Enter] Execute  [↑↓] Navigate  [R]estart  [S]top  [L]ogs  [T]est  [Esc] Cancel',
+      content: ' [Enter] Execute  [Up/Dn] Navigate  [R]estart  [S]top  [L]ogs  [T]est  [Esc] Cancel',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -250,7 +250,7 @@ export class ToolsView extends BaseView {
     const desc = flat.tool.description
       ? flat.tool.description.substring(0, 40) + (flat.tool.description.length > 40 ? '...' : '')
       : ''
-    el.content = `► ├─ ${flat.tool.name.padEnd(25)} ${desc}`
+    el.content = `> |- ${flat.tool.name.padEnd(25)} ${desc}`
     el.fg = '#FFFFFF'
   }
 
@@ -261,7 +261,7 @@ export class ToolsView extends BaseView {
     const desc = flat.tool.description
       ? flat.tool.description.substring(0, 40) + (flat.tool.description.length > 40 ? '...' : '')
       : ''
-    el.content = `  ├─ ${flat.tool.name.padEnd(25)} ${desc}`
+    el.content = `  |- ${flat.tool.name.padEnd(25)} ${desc}`
     el.fg = '#AAAAFF'
   }
 
@@ -291,7 +291,7 @@ export class ToolsView extends BaseView {
     const params = schema?.properties ? Object.keys(schema.properties) : []
     const hint = params.length > 0 ? `Params: ${params.join(', ')}` : 'Enter JSON arguments'
 
-    this.setResult(`🔧 ${tool.name}\n${hint}\nEnter args as JSON (or {} for none):`, '#FFAA66')
+    this.setResult(`${tool.name}\n${hint}\nEnter args as JSON (or {} for none):`, '#FFAA66')
 
     if (!this.resultBox) return
 
@@ -313,7 +313,7 @@ export class ToolsView extends BaseView {
         const args = JSON.parse(argsStr)
         await this.runTool(tool.name, args)
       } catch {
-        this.setResult(`❌ Invalid JSON: ${argsStr}`, '#FF6666')
+        this.setResult(`X Invalid JSON: ${argsStr}`, '#FF6666')
       }
       this.refresh()
     })
@@ -322,7 +322,7 @@ export class ToolsView extends BaseView {
   }
 
   private async runTool(name: string, args: Record<string, unknown>): Promise<void> {
-    this.setResult(`⏳ Executing ${name}...`, '#FFAA66')
+    this.setResult(`~ Executing ${name}...`, '#FFAA66')
 
     try {
       const result = await this.client.callMcpTool(name, args)
@@ -330,10 +330,10 @@ export class ToolsView extends BaseView {
         ? result
         : JSON.stringify(result, null, 2)
       const truncated = resultStr.length > 500 ? resultStr.substring(0, 497) + '...' : resultStr
-      this.setResult(`✅ ${name} result:\n${truncated}`, '#88FF88')
+      this.setResult(`+ ${name} result:\n${truncated}`, '#88FF88')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      this.setResult(`❌ ${name} failed:\n${msg}`, '#FF6666')
+      this.setResult(`X ${name} failed:\n${msg}`, '#FF6666')
     }
   }
 
@@ -352,68 +352,68 @@ export class ToolsView extends BaseView {
   private async restartSelectedServer(): Promise<void> {
     const serverName = this.getSelectedServerName()
     if (!serverName) return
-    this.setResult(`⏳ Restarting ${serverName}...`, '#FFAA66')
+    this.setResult(`~ Restarting ${serverName}...`, '#FFAA66')
     try {
       const result = await this.client.restartMcpServer(serverName)
       if (result.success) {
-        this.setResult(`✅ ${serverName} restarted successfully`, '#88FF88')
+        this.setResult(`+ ${serverName} restarted successfully`, '#88FF88')
         setTimeout(() => this.refresh(), 500)
       } else {
-        this.setResult(`❌ Restart failed: ${result.error}`, '#FF6666')
+        this.setResult(`X Restart failed: ${result.error}`, '#FF6666')
       }
     } catch (err) {
-      this.setResult(`❌ Restart error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+      this.setResult(`X Restart error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
     }
   }
 
   private async stopSelectedServer(): Promise<void> {
     const serverName = this.getSelectedServerName()
     if (!serverName) return
-    this.setResult(`⏳ Stopping ${serverName}...`, '#FFAA66')
+    this.setResult(`~ Stopping ${serverName}...`, '#FFAA66')
     try {
       const result = await this.client.stopMcpServer(serverName)
       if (result.success) {
-        this.setResult(`✅ ${serverName} stopped`, '#88FF88')
+        this.setResult(`+ ${serverName} stopped`, '#88FF88')
         setTimeout(() => this.refresh(), 500)
       } else {
-        this.setResult(`❌ Stop failed: ${result.error}`, '#FF6666')
+        this.setResult(`X Stop failed: ${result.error}`, '#FF6666')
       }
     } catch (err) {
-      this.setResult(`❌ Stop error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+      this.setResult(`X Stop error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
     }
   }
 
   private async showSelectedServerLogs(): Promise<void> {
     const serverName = this.getSelectedServerName()
     if (!serverName) return
-    this.setResult(`⏳ Fetching logs for ${serverName}...`, '#FFAA66')
+    this.setResult(`~ Fetching logs for ${serverName}...`, '#FFAA66')
     try {
       const result = await this.client.getMcpServerLogs(serverName)
       const logs = result.logs || []
       if (logs.length === 0) {
-        this.setResult(`📋 ${serverName}: No logs available`, '#888888')
+        this.setResult(`${serverName}: No logs available`, '#888888')
       } else {
         const last10 = logs.slice(-10).join('\n')
-        this.setResult(`📋 ${serverName} logs (last ${Math.min(logs.length, 10)}):\n${last10}`, '#AAAAFF')
+        this.setResult(`${serverName} logs (last ${Math.min(logs.length, 10)}):\n${last10}`, '#AAAAFF')
       }
     } catch (err) {
-      this.setResult(`❌ Logs error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+      this.setResult(`X Logs error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
     }
   }
 
   private async testSelectedServer(): Promise<void> {
     const serverName = this.getSelectedServerName()
     if (!serverName) return
-    this.setResult(`⏳ Testing connection to ${serverName}...`, '#FFAA66')
+    this.setResult(`~ Testing connection to ${serverName}...`, '#FFAA66')
     try {
       const result = await this.client.testMcpServer(serverName)
       if (result.success) {
-        this.setResult(`✅ ${serverName}: Connection OK, ${result.toolCount || 0} tools`, '#88FF88')
+        this.setResult(`+ ${serverName}: Connection OK, ${result.toolCount || 0} tools`, '#88FF88')
       } else {
-        this.setResult(`❌ ${serverName}: Test failed - ${result.error}`, '#FF6666')
+        this.setResult(`X ${serverName}: Test failed - ${result.error}`, '#FF6666')
       }
     } catch (err) {
-      this.setResult(`❌ Test error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
+      this.setResult(`X Test error: ${err instanceof Error ? err.message : String(err)}`, '#FF6666')
     }
   }
 

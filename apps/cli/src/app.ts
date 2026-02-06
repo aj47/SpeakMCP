@@ -470,9 +470,12 @@ export class App {
 
     const root = this.renderer.root
 
-    // Create overlay background
+    // Create overlay background (absolute position to cover entire screen)
     this.helpOverlay = new BoxRenderable(this.renderer, {
       id: 'help-overlay',
+      position: 'absolute',
+      top: 0,
+      left: 0,
       width: '100%',
       height: '100%',
       backgroundColor: '#000000CC',
@@ -480,11 +483,13 @@ export class App {
       alignItems: 'center',
     })
 
-    // Create help box
+    // Create help box (cap height to terminal size)
+    const termRows = process.stdout.rows || 24
+    const helpBoxHeight = Math.min(24, termRows - 4)
     const helpBox = new BoxRenderable(this.renderer, {
       id: 'help-box',
       width: 52,
-      height: 24,
+      height: helpBoxHeight,
       borderStyle: 'single',
       borderColor: '#888888',
       backgroundColor: '#1a1a1a',
@@ -602,9 +607,12 @@ export class App {
 
     const root = this.renderer.root
 
-    // Create overlay
+    // Create overlay (absolute position to cover entire screen)
     this.profileSwitcher = new BoxRenderable(this.renderer, {
       id: 'profile-overlay',
+      position: 'absolute',
+      top: 0,
+      left: 0,
       width: '100%',
       height: '100%',
       backgroundColor: '#000000CC',
@@ -612,8 +620,10 @@ export class App {
       alignItems: 'center',
     })
 
-    // Create profile box
-    const boxHeight = Math.min(this.profiles.length + 6, 18)
+    // Create profile box (cap height to terminal size)
+    const termRows = process.stdout.rows || 24
+    const maxBoxHeight = termRows - 4
+    const boxHeight = Math.min(this.profiles.length + 6, 18, maxBoxHeight)
     this.profileBox = new BoxRenderable(this.renderer, {
       id: 'profile-box',
       width: 62,

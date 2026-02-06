@@ -89,6 +89,8 @@ export class ChatView extends BaseView {
       stickyScroll: true,
       stickyStart: 'bottom',
     })
+    // Hide scrollbar so it doesn't consume layout space; scrolling via keyboard
+    this.messageContainer.verticalScrollBar.visible = false
     view.add(this.messageContainer)
 
     // Render existing messages
@@ -150,6 +152,7 @@ export class ChatView extends BaseView {
         id: `role-${Date.now()}-${Math.random()}`,
         content: `-- ${isUser ? 'User' : 'Assistant'} --`,
         fg: isUser ? '#888888' : '#6688AA',
+        height: 1,
       })
       messageBox.add(roleText)
 
@@ -167,6 +170,7 @@ export class ChatView extends BaseView {
             id: `tool-${Date.now()}-${Math.random()}`,
             content: `Using: ${tc.name}`,
             fg: '#AAAAFF',
+            height: 1,
           })
           messageBox.add(toolText)
         }
@@ -311,6 +315,7 @@ export class ChatView extends BaseView {
       id: 'streaming-role',
       content: '-- Assistant -- (streaming...)',
       fg: '#66AA88',
+      height: 1,
     })
     streamBox.add(roleText)
 
@@ -354,6 +359,7 @@ export class ChatView extends BaseView {
       id: 'progress-header',
       content: '-- Assistant -- (processing...)',
       fg: '#8888CC',
+      height: 1,
     })
     this.progressContainer.add(headerText)
 
@@ -378,6 +384,7 @@ export class ChatView extends BaseView {
       id: 'progress-iteration',
       content: `~ Iteration ${currentIteration}/${maxIterations}`,
       fg: '#AAAAFF',
+      height: 1,
     })
     this.progressContainer.add(iterText)
 
@@ -388,6 +395,7 @@ export class ChatView extends BaseView {
         id: `step-${step.id}`,
         content: stepContent,
         fg: this.getStepColor(step),
+        height: 1,
       })
       this.progressContainer.add(stepText)
     }
@@ -530,6 +538,7 @@ export class ChatView extends BaseView {
       id: 'approval-prompt-text',
       content: `! Tool approval required: ${approval.toolName}`,
       fg: '#FFAA00',
+      height: 1,
     })
     approvalBox.add(promptText)
 
@@ -537,6 +546,7 @@ export class ChatView extends BaseView {
       id: 'approval-args-text',
       content: `   Args: ${this.truncateArgs(approval.arguments)}`,
       fg: '#CCCCCC',
+      height: 1,
     })
     approvalBox.add(argsText)
 
@@ -544,6 +554,7 @@ export class ChatView extends BaseView {
       id: 'approval-hint-text',
       content: '   Press [Y] Approve  [N] Deny',
       fg: '#FFFFFF',
+      height: 1,
     })
     approvalBox.add(hintText)
 

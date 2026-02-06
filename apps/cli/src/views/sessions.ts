@@ -78,6 +78,7 @@ export class SessionsView extends BaseView {
         id: 'search-label',
         content: ' > ',
         fg: '#FFAA66',
+        height: 1,
       })
       searchBar.add(searchLabel)
 
@@ -120,6 +121,7 @@ export class SessionsView extends BaseView {
           ? `No conversations matching "${this.searchQuery}"`
           : 'No conversations yet. Press [N] or switch to Chat to start one.',
         fg: '#888888',
+        height: 1,
       })
       listContainer.add(emptyText)
     } else {
@@ -384,6 +386,7 @@ export class SessionsView extends BaseView {
       id: 'rename-label',
       content: ' Rename: ',
       fg: '#FFAA66',
+      height: 1,
     })
     renameBar.add(renameLabel)
 

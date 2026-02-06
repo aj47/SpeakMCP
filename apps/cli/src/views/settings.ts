@@ -9,6 +9,7 @@ import {
   SelectRenderableEvents,
   InputRenderable,
   InputRenderableEvents,
+  ScrollBoxRenderable,
   type KeyEvent,
 } from '@opentui/core'
 
@@ -154,6 +155,7 @@ export class SettingsView extends BaseView {
   private serverToggles: Map<string, TextRenderable> = new Map()
   private toggleElements: Map<string, TextRenderable> = new Map()
   private statusText: TextRenderable | null = null
+  private contentScroll: ScrollBoxRenderable | null = null
 
   // Focus management
   private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'agentToggles' | 'ttsToggles' | 'langfuse' | 'toggles' | 'servers' | 'buttons' = 'preset'
@@ -222,6 +224,7 @@ export class SettingsView extends BaseView {
     this.apiKeyInputs.clear()
     this.langfuseInputs.clear()
     this.statusText = null
+    this.contentScroll = null
     super.hide()
   }
 
@@ -248,14 +251,19 @@ export class SettingsView extends BaseView {
     header.add(headerText)
     view.add(header)
 
-    // Content area
-    const contentContainer = new BoxRenderable(this.renderer, {
+    // Content area (scrollable to handle overflow)
+    const contentContainer = new ScrollBoxRenderable(this.renderer, {
       id: 'settings-content',
       flexDirection: 'column',
       flexGrow: 1,
       width: '100%',
       padding: 1,
+      scrollY: true,
     })
+    // Hide the scrollbar so it doesn't consume layout space;
+    // scrolling is driven programmatically via scrollToFocusedField()
+    contentContainer.verticalScrollBar.visible = false
+    this.contentScroll = contentContainer
 
     // LLM Settings Section
     const llmSection = new BoxRenderable(this.renderer, {
@@ -269,6 +277,7 @@ export class SettingsView extends BaseView {
 
     const llmTitle = new TextRenderable(this.renderer, {
       id: 'llm-title',
+      height: 1,
       content: '-- LLM Configuration --',
       fg: '#AAAAAA',
     })
@@ -413,6 +422,7 @@ export class SettingsView extends BaseView {
 
     const apiKeysTitle = new TextRenderable(this.renderer, {
       id: 'apikeys-title',
+      height: 1,
       content: '-- API Keys --  (enter key, leave blank to keep current)',
       fg: '#AAAAAA',
     })
@@ -463,6 +473,7 @@ export class SettingsView extends BaseView {
 
     const generalTitle = new TextRenderable(this.renderer, {
       id: 'general-title',
+      height: 1,
       content: '-- General Settings --  [Space] Toggle',
       fg: '#AAAAAA',
     })
@@ -473,6 +484,7 @@ export class SettingsView extends BaseView {
       const enabled = this.formState[key] as boolean
       const toggle = new TextRenderable(this.renderer, {
         id: `toggle-${key}`,
+        height: 1,
         content: this.formatToggle(TOGGLE_LABELS[key], enabled),
         fg: enabled ? '#88FF88' : '#888888',
       })
@@ -494,6 +506,7 @@ export class SettingsView extends BaseView {
 
     const agentTitle = new TextRenderable(this.renderer, {
       id: 'agent-title',
+      height: 1,
       content: '-- Agent Settings --  [Space] Toggle',
       fg: '#AAAAAA',
     })
@@ -503,6 +516,7 @@ export class SettingsView extends BaseView {
       const enabled = this.formState[key] as boolean
       const toggle = new TextRenderable(this.renderer, {
         id: `toggle-${key}`,
+        height: 1,
         content: this.formatToggle(TOGGLE_LABELS[key], enabled),
         fg: enabled ? '#88FF88' : '#888888',
       })
@@ -524,6 +538,7 @@ export class SettingsView extends BaseView {
 
     const ttsTitle = new TextRenderable(this.renderer, {
       id: 'tts-title',
+      height: 1,
       content: '-- TTS Settings --  [Space] Toggle',
       fg: '#AAAAAA',
     })
@@ -533,6 +548,7 @@ export class SettingsView extends BaseView {
       const enabled = this.formState[key] as boolean
       const toggle = new TextRenderable(this.renderer, {
         id: `toggle-${key}`,
+        height: 1,
         content: this.formatToggle(TOGGLE_LABELS[key], enabled),
         fg: enabled ? '#88FF88' : '#888888',
       })
@@ -554,6 +570,7 @@ export class SettingsView extends BaseView {
 
     const langfuseTitle = new TextRenderable(this.renderer, {
       id: 'langfuse-title',
+      height: 1,
       content: '-- Langfuse Observability --',
       fg: '#AAAAAA',
     })
@@ -564,6 +581,7 @@ export class SettingsView extends BaseView {
       const enabled = this.formState[key] as boolean
       const toggle = new TextRenderable(this.renderer, {
         id: `toggle-${key}`,
+        height: 1,
         content: this.formatToggle(TOGGLE_LABELS[key], enabled),
         fg: enabled ? '#88FF88' : '#888888',
       })
@@ -616,6 +634,7 @@ export class SettingsView extends BaseView {
 
     const mcpTitle = new TextRenderable(this.renderer, {
       id: 'mcp-title',
+      height: 1,
       content: '-- MCP Servers --  [Space] Toggle',
       fg: '#AAAAAA',
     })
@@ -624,6 +643,7 @@ export class SettingsView extends BaseView {
     if (this.mcpServers.length === 0) {
       const noServers = new TextRenderable(this.renderer, {
         id: 'no-servers',
+        height: 1,
         content: '  No MCP servers configured',
         fg: '#888888',
       })
@@ -761,6 +781,7 @@ export class SettingsView extends BaseView {
 
     return new TextRenderable(this.renderer, {
       id: `server-toggle-${server.name}`,
+      height: 1,
       content: `  [${icon}] ${server.name.padEnd(20)} ${toolsInfo}`,
       fg: color,
     })
@@ -1068,6 +1089,25 @@ export class SettingsView extends BaseView {
       case 'buttons':
         // Visual indication only
         break
+    }
+
+    // Scroll to bring the focused section into view
+    this.scrollToFocusedField()
+  }
+
+  private scrollToFocusedField(): void {
+    if (!this.contentScroll) return
+    // Map each field group to an approximate fraction of total content height
+    const fractions: Record<string, number> = {
+      preset: 0, provider: 0.05, model: 0.1, maxIter: 0.15,
+      apiKeys: 0.25, toggles: 0.38, agentToggles: 0.5,
+      ttsToggles: 0.62, langfuse: 0.75, servers: 0.88, buttons: 1.0,
+    }
+    const fraction = fractions[this.focusedField] ?? 0
+    const scroll = this.contentScroll as any
+    const totalHeight = scroll.scrollHeight ?? 0
+    if (totalHeight > 0) {
+      scroll.scrollTop = fraction * totalHeight
     }
   }
 

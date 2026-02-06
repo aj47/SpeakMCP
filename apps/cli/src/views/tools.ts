@@ -95,6 +95,7 @@ export class ToolsView extends BaseView {
         id: 'no-tools',
         content: 'No MCP tools available. Check your MCP server configuration.',
         fg: '#888888',
+        height: 1,
       })
       contentContainer.add(noTools)
     } else {
@@ -115,6 +116,7 @@ export class ToolsView extends BaseView {
           id: `server-title-${server.name}`,
           content: `${statusIcon} ${server.name} (${server.transport}) -- ${statusLabel}`,
           fg: server.status === 'connected' ? '#88AA88' : '#AA8888',
+          height: 1,
         })
         serverBox.add(serverTitle)
 
@@ -124,6 +126,7 @@ export class ToolsView extends BaseView {
             id: `no-tools-${server.name}`,
             content: '  No tools available',
             fg: '#666666',
+            height: 1,
           })
           serverBox.add(noServerTools)
         } else {
@@ -137,6 +140,7 @@ export class ToolsView extends BaseView {
               id: `tool-${server.name}-${tool.name}`,
               content: `${prefix}|- ${tool.name.padEnd(25)} ${desc}`,
               fg: isSelected ? '#FFFFFF' : '#AAAAFF',
+              height: 1,
             })
             serverBox.add(toolText)
             this.toolElements.set(flatIndex, toolText)

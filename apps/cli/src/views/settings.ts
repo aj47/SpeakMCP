@@ -22,16 +22,74 @@ const PROVIDERS = [
   { name: 'Gemini', id: 'gemini' },
 ]
 
+// Toggle key type for all boolean settings
+type ToggleKey =
+  | 'ttsEnabled' | 'mcpRequireApprovalBeforeToolCall' | 'transcriptPostProcessingEnabled'
+  | 'mcpMessageQueueEnabled' | 'mcpVerifyCompletionEnabled' | 'mcpFinalSummaryEnabled'
+  | 'memoriesEnabled' | 'dualModelInjectMemories' | 'dualModelEnabled' | 'dualModelAutoSaveImportant'
+  | 'mcpParallelToolExecution' | 'mcpContextReductionEnabled' | 'acpInjectBuiltinTools'
+  | 'ttsAutoPlay' | 'ttsPreprocessingEnabled' | 'ttsRemoveCodeBlocks' | 'ttsRemoveUrls'
+  | 'ttsConvertMarkdown' | 'ttsUseLLMPreprocessing'
+  | 'langfuseEnabled'
+
+// Labels for all toggle keys
+const TOGGLE_LABELS: Record<ToggleKey, string> = {
+  ttsEnabled: 'Text-to-Speech',
+  ttsAutoPlay: 'TTS Auto-Play',
+  ttsPreprocessingEnabled: 'TTS Preprocessing',
+  ttsRemoveCodeBlocks: 'TTS Remove Code Blocks',
+  ttsRemoveUrls: 'TTS Remove URLs',
+  ttsConvertMarkdown: 'TTS Convert Markdown',
+  ttsUseLLMPreprocessing: 'TTS Use LLM Preprocessing',
+  mcpRequireApprovalBeforeToolCall: 'Require Tool Approval',
+  transcriptPostProcessingEnabled: 'Transcript Post-Processing',
+  mcpMessageQueueEnabled: 'Message Queue',
+  mcpVerifyCompletionEnabled: 'Verify Completion',
+  mcpFinalSummaryEnabled: 'Final Summary',
+  memoriesEnabled: 'Memories',
+  dualModelInjectMemories: 'Inject Memories',
+  dualModelEnabled: 'Summarization (Dual-Model)',
+  dualModelAutoSaveImportant: 'Auto-save Important Summaries',
+  mcpParallelToolExecution: 'Parallel Tool Execution',
+  mcpContextReductionEnabled: 'Context Reduction',
+  acpInjectBuiltinTools: 'ACP Inject Builtin Tools',
+  langfuseEnabled: 'Enable Langfuse Tracing',
+}
+
 interface FormState {
   providerId: string
   model: string
   maxIterations: number
+  // All boolean toggles
   ttsEnabled: boolean
   mcpRequireApprovalBeforeToolCall: boolean
   transcriptPostProcessingEnabled: boolean
+  mcpMessageQueueEnabled: boolean
+  mcpVerifyCompletionEnabled: boolean
+  mcpFinalSummaryEnabled: boolean
+  memoriesEnabled: boolean
+  dualModelInjectMemories: boolean
+  dualModelEnabled: boolean
+  dualModelAutoSaveImportant: boolean
+  mcpParallelToolExecution: boolean
+  mcpContextReductionEnabled: boolean
+  acpInjectBuiltinTools: boolean
+  ttsAutoPlay: boolean
+  ttsPreprocessingEnabled: boolean
+  ttsRemoveCodeBlocks: boolean
+  ttsRemoveUrls: boolean
+  ttsConvertMarkdown: boolean
+  ttsUseLLMPreprocessing: boolean
+  langfuseEnabled: boolean
+  // API keys
   openaiApiKey: string
   groqApiKey: string
   geminiApiKey: string
+  // Langfuse keys
+  langfusePublicKey: string
+  langfuseSecretKey: string
+  langfuseBaseUrl: string
+  // Other
   currentModelPresetId: string
   serverEnabled: Map<string, boolean>
 }
@@ -52,15 +110,38 @@ export class SettingsView extends BaseView {
     ttsEnabled: true,
     mcpRequireApprovalBeforeToolCall: false,
     transcriptPostProcessingEnabled: true,
+    mcpMessageQueueEnabled: true,
+    mcpVerifyCompletionEnabled: true,
+    mcpFinalSummaryEnabled: true,
+    memoriesEnabled: true,
+    dualModelInjectMemories: false,
+    dualModelEnabled: false,
+    dualModelAutoSaveImportant: false,
+    mcpParallelToolExecution: true,
+    mcpContextReductionEnabled: true,
+    acpInjectBuiltinTools: true,
+    ttsAutoPlay: true,
+    ttsPreprocessingEnabled: true,
+    ttsRemoveCodeBlocks: true,
+    ttsRemoveUrls: true,
+    ttsConvertMarkdown: true,
+    ttsUseLLMPreprocessing: false,
+    langfuseEnabled: false,
     openaiApiKey: '',
     groqApiKey: '',
     geminiApiKey: '',
+    langfusePublicKey: '',
+    langfuseSecretKey: '',
+    langfuseBaseUrl: '',
     currentModelPresetId: 'builtin-openai',
     serverEnabled: new Map(),
   }
 
   // API key inputs
   private apiKeyInputs: Map<string, InputRenderable> = new Map()
+
+  // Langfuse key inputs
+  private langfuseInputs: Map<string, InputRenderable> = new Map()
 
   // Original state for reset
   private originalState: FormState | null = null
@@ -75,7 +156,7 @@ export class SettingsView extends BaseView {
   private statusText: TextRenderable | null = null
 
   // Focus management
-  private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'toggles' | 'servers' | 'buttons' = 'preset'
+  private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'agentToggles' | 'ttsToggles' | 'langfuse' | 'toggles' | 'servers' | 'buttons' = 'preset'
   private selectedApiKeyIndex: number = 0
   private apiKeyProviders: Array<{ key: 'openaiApiKey' | 'groqApiKey' | 'geminiApiKey'; label: string }> = [
     { key: 'openaiApiKey', label: 'OpenAI' },
@@ -85,8 +166,33 @@ export class SettingsView extends BaseView {
   private selectedServerIndex: number = 0
   private selectedToggleIndex: number = 0
   private selectedButton: 'save' | 'reset' = 'save'
-  private toggleKeys: Array<'ttsEnabled' | 'mcpRequireApprovalBeforeToolCall' | 'transcriptPostProcessingEnabled'> = [
+
+  // Toggle keys grouped by section
+  private toggleKeys: ToggleKey[] = [
     'ttsEnabled', 'mcpRequireApprovalBeforeToolCall', 'transcriptPostProcessingEnabled'
+  ]
+
+  private agentToggleKeys: ToggleKey[] = [
+    'mcpMessageQueueEnabled', 'mcpVerifyCompletionEnabled', 'mcpFinalSummaryEnabled',
+    'memoriesEnabled', 'dualModelInjectMemories', 'dualModelEnabled', 'dualModelAutoSaveImportant',
+    'mcpParallelToolExecution', 'mcpContextReductionEnabled', 'acpInjectBuiltinTools',
+  ]
+
+  private ttsToggleKeys: ToggleKey[] = [
+    'ttsAutoPlay', 'ttsPreprocessingEnabled', 'ttsRemoveCodeBlocks',
+    'ttsRemoveUrls', 'ttsConvertMarkdown', 'ttsUseLLMPreprocessing',
+  ]
+
+  private langfuseToggleKeys: ToggleKey[] = ['langfuseEnabled']
+
+  // Section-specific indices
+  private selectedAgentToggleIndex: number = 0
+  private selectedTtsToggleIndex: number = 0
+  private selectedLangfuseIndex: number = 0 // 0=toggle, 1..3=inputs
+  private langfuseKeyProviders: Array<{ key: 'langfusePublicKey' | 'langfuseSecretKey' | 'langfuseBaseUrl'; label: string }> = [
+    { key: 'langfusePublicKey', label: 'Public Key' },
+    { key: 'langfuseSecretKey', label: 'Secret Key' },
+    { key: 'langfuseBaseUrl', label: 'Base URL' },
   ]
 
   async show(): Promise<void> {
@@ -114,6 +220,7 @@ export class SettingsView extends BaseView {
     this.serverToggles.clear()
     this.toggleElements.clear()
     this.apiKeyInputs.clear()
+    this.langfuseInputs.clear()
     this.statusText = null
     super.hide()
   }
@@ -361,34 +468,142 @@ export class SettingsView extends BaseView {
     })
     generalSection.add(generalTitle)
 
-    // TTS Toggle
-    const ttsToggle = new TextRenderable(this.renderer, {
-      id: 'toggle-tts',
-      content: this.formatToggle('Text-to-Speech', this.formState.ttsEnabled),
-      fg: this.formState.ttsEnabled ? '#88FF88' : '#888888',
-    })
-    generalSection.add(ttsToggle)
-    this.toggleElements.set('ttsEnabled', ttsToggle)
-
-    // Require Tool Approval Toggle
-    const approvalToggle = new TextRenderable(this.renderer, {
-      id: 'toggle-approval',
-      content: this.formatToggle('Require Tool Approval', this.formState.mcpRequireApprovalBeforeToolCall),
-      fg: this.formState.mcpRequireApprovalBeforeToolCall ? '#88FF88' : '#888888',
-    })
-    generalSection.add(approvalToggle)
-    this.toggleElements.set('mcpRequireApprovalBeforeToolCall', approvalToggle)
-
-    // Transcript Post-Processing Toggle
-    const transcriptToggle = new TextRenderable(this.renderer, {
-      id: 'toggle-transcript',
-      content: this.formatToggle('Transcript Post-Processing', this.formState.transcriptPostProcessingEnabled),
-      fg: this.formState.transcriptPostProcessingEnabled ? '#88FF88' : '#888888',
-    })
-    generalSection.add(transcriptToggle)
-    this.toggleElements.set('transcriptPostProcessingEnabled', transcriptToggle)
+    // Create toggle elements dynamically for general toggles
+    for (const key of this.toggleKeys) {
+      const enabled = this.formState[key] as boolean
+      const toggle = new TextRenderable(this.renderer, {
+        id: `toggle-${key}`,
+        content: this.formatToggle(TOGGLE_LABELS[key], enabled),
+        fg: enabled ? '#88FF88' : '#888888',
+      })
+      generalSection.add(toggle)
+      this.toggleElements.set(key, toggle)
+    }
 
     contentContainer.add(generalSection)
+
+    // Agent Settings Section
+    const agentSection = new BoxRenderable(this.renderer, {
+      id: 'agent-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginBottom: 1,
+    })
+
+    const agentTitle = new TextRenderable(this.renderer, {
+      id: 'agent-title',
+      content: '─ Agent Settings ─  [Space] Toggle',
+      fg: '#AAAAAA',
+    })
+    agentSection.add(agentTitle)
+
+    for (const key of this.agentToggleKeys) {
+      const enabled = this.formState[key] as boolean
+      const toggle = new TextRenderable(this.renderer, {
+        id: `toggle-${key}`,
+        content: this.formatToggle(TOGGLE_LABELS[key], enabled),
+        fg: enabled ? '#88FF88' : '#888888',
+      })
+      agentSection.add(toggle)
+      this.toggleElements.set(key, toggle)
+    }
+
+    contentContainer.add(agentSection)
+
+    // TTS Settings Section
+    const ttsSection = new BoxRenderable(this.renderer, {
+      id: 'tts-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginBottom: 1,
+    })
+
+    const ttsTitle = new TextRenderable(this.renderer, {
+      id: 'tts-title',
+      content: '─ TTS Settings ─  [Space] Toggle',
+      fg: '#AAAAAA',
+    })
+    ttsSection.add(ttsTitle)
+
+    for (const key of this.ttsToggleKeys) {
+      const enabled = this.formState[key] as boolean
+      const toggle = new TextRenderable(this.renderer, {
+        id: `toggle-${key}`,
+        content: this.formatToggle(TOGGLE_LABELS[key], enabled),
+        fg: enabled ? '#88FF88' : '#888888',
+      })
+      ttsSection.add(toggle)
+      this.toggleElements.set(key, toggle)
+    }
+
+    contentContainer.add(ttsSection)
+
+    // Langfuse Observability Section
+    const langfuseSection = new BoxRenderable(this.renderer, {
+      id: 'langfuse-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginBottom: 1,
+    })
+
+    const langfuseTitle = new TextRenderable(this.renderer, {
+      id: 'langfuse-title',
+      content: '─ Langfuse Observability ─',
+      fg: '#AAAAAA',
+    })
+    langfuseSection.add(langfuseTitle)
+
+    // Langfuse enable toggle
+    for (const key of this.langfuseToggleKeys) {
+      const enabled = this.formState[key] as boolean
+      const toggle = new TextRenderable(this.renderer, {
+        id: `toggle-${key}`,
+        content: this.formatToggle(TOGGLE_LABELS[key], enabled),
+        fg: enabled ? '#88FF88' : '#888888',
+      })
+      langfuseSection.add(toggle)
+      this.toggleElements.set(key, toggle)
+    }
+
+    // Langfuse key inputs
+    this.langfuseInputs.clear()
+    for (const { key, label } of this.langfuseKeyProviders) {
+      const row = new BoxRenderable(this.renderer, {
+        id: `langfuse-row-${key}`,
+        width: '100%',
+        height: 1,
+        flexDirection: 'row',
+      })
+      const keyLabel = new TextRenderable(this.renderer, {
+        id: `langfuse-label-${key}`,
+        content: `  ${label.padEnd(15)}`,
+        fg: '#FFFFFF',
+      })
+      row.add(keyLabel)
+
+      const keyInput = new InputRenderable(this.renderer, {
+        id: `langfuse-input-${key}`,
+        width: 35,
+        height: 1,
+        placeholder: this.formState[key] || 'not set',
+        focusedBackgroundColor: '#2a2a2a',
+      })
+      keyInput.on(InputRenderableEvents.CHANGE, (value: string) => {
+        (this.formState as Record<string, unknown>)[key] = value
+      })
+      row.add(keyInput)
+      this.langfuseInputs.set(key, keyInput)
+
+      langfuseSection.add(row)
+    }
+
+    contentContainer.add(langfuseSection)
 
     // MCP Servers Section
     const mcpSection = new BoxRenderable(this.renderer, {
@@ -490,25 +705,38 @@ export class SettingsView extends BaseView {
     return `  [${icon}] ${label}`
   }
 
-  private toggleSelectedGeneralSetting(): void {
-    const key = this.toggleKeys[this.selectedToggleIndex]
+  // Generic toggle/highlight helpers for any section's toggle keys
+  private toggleInSection(keys: ToggleKey[], index: number): void {
+    const key = keys[index]
     if (!key) return
 
     this.formState[key] = !this.formState[key]
 
-    // Update the toggle element
     const toggle = this.toggleElements.get(key)
     if (toggle) {
-      const labels: Record<string, string> = {
-        ttsEnabled: 'Text-to-Speech',
-        mcpRequireApprovalBeforeToolCall: 'Require Tool Approval',
-        transcriptPostProcessingEnabled: 'Transcript Post-Processing',
-      }
-      toggle.content = this.formatToggle(labels[key], this.formState[key] as boolean)
+      toggle.content = this.formatToggle(TOGGLE_LABELS[key], this.formState[key] as boolean)
       toggle.fg = this.formState[key] ? '#88FF88' : '#888888'
     }
 
-    this.setStatus(`${key}: ${this.formState[key] ? 'enabled' : 'disabled'}`)
+    this.setStatus(`${TOGGLE_LABELS[key]}: ${this.formState[key] ? 'enabled' : 'disabled'}`)
+  }
+
+  private highlightSection(keys: ToggleKey[], selectedIndex: number): void {
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      const toggle = this.toggleElements.get(key)
+      if (!toggle) continue
+
+      const enabled = this.formState[key] as boolean
+      const prefix = i === selectedIndex ? '► ' : '  '
+      const icon = enabled ? '✓' : '○'
+      toggle.content = `${prefix}[${icon}] ${TOGGLE_LABELS[key]}`
+      toggle.fg = i === selectedIndex ? '#FFFFFF' : (enabled ? '#88FF88' : '#888888')
+    }
+  }
+
+  private toggleSelectedGeneralSetting(): void {
+    this.toggleInSection(this.toggleKeys, this.selectedToggleIndex)
   }
 
   private selectNextToggle(): void {
@@ -522,22 +750,7 @@ export class SettingsView extends BaseView {
   }
 
   private highlightSelectedToggle(): void {
-    const labels: Record<string, string> = {
-      ttsEnabled: 'Text-to-Speech',
-      mcpRequireApprovalBeforeToolCall: 'Require Tool Approval',
-      transcriptPostProcessingEnabled: 'Transcript Post-Processing',
-    }
-    for (let i = 0; i < this.toggleKeys.length; i++) {
-      const key = this.toggleKeys[i]
-      const toggle = this.toggleElements.get(key)
-      if (!toggle) continue
-
-      const enabled = this.formState[key] as boolean
-      const prefix = i === this.selectedToggleIndex ? '► ' : '  '
-      const icon = enabled ? '✓' : '○'
-      toggle.content = `${prefix}[${icon}] ${labels[key]}`
-      toggle.fg = i === this.selectedToggleIndex ? '#FFFFFF' : (enabled ? '#88FF88' : '#888888')
-    }
+    this.highlightSection(this.toggleKeys, this.selectedToggleIndex)
   }
 
   private createServerToggle(server: McpServer): TextRenderable {
@@ -584,9 +797,34 @@ export class SettingsView extends BaseView {
         providerId,
         model: this.getActiveModel(settings, providerId),
         maxIterations: settings.mcpMaxIterations || 10,
+        // General toggles
         ttsEnabled: settings.ttsEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: settings.mcpRequireApprovalBeforeToolCall ?? false,
         transcriptPostProcessingEnabled: settings.transcriptPostProcessingEnabled ?? true,
+        // Agent toggles
+        mcpMessageQueueEnabled: settings.mcpMessageQueueEnabled ?? true,
+        mcpVerifyCompletionEnabled: settings.mcpVerifyCompletionEnabled ?? true,
+        mcpFinalSummaryEnabled: settings.mcpFinalSummaryEnabled ?? true,
+        memoriesEnabled: settings.memoriesEnabled ?? true,
+        dualModelInjectMemories: settings.dualModelInjectMemories ?? false,
+        dualModelEnabled: settings.dualModelEnabled ?? false,
+        dualModelAutoSaveImportant: settings.dualModelAutoSaveImportant ?? false,
+        mcpParallelToolExecution: settings.mcpParallelToolExecution ?? true,
+        mcpContextReductionEnabled: settings.mcpContextReductionEnabled ?? true,
+        acpInjectBuiltinTools: settings.acpInjectBuiltinTools ?? true,
+        // TTS toggles
+        ttsAutoPlay: settings.ttsAutoPlay ?? true,
+        ttsPreprocessingEnabled: settings.ttsPreprocessingEnabled ?? true,
+        ttsRemoveCodeBlocks: settings.ttsRemoveCodeBlocks ?? true,
+        ttsRemoveUrls: settings.ttsRemoveUrls ?? true,
+        ttsConvertMarkdown: settings.ttsConvertMarkdown ?? true,
+        ttsUseLLMPreprocessing: settings.ttsUseLLMPreprocessing ?? false,
+        // Langfuse
+        langfuseEnabled: settings.langfuseEnabled ?? false,
+        langfusePublicKey: settings.langfusePublicKey || '',
+        langfuseSecretKey: settings.langfuseSecretKey || '',
+        langfuseBaseUrl: settings.langfuseBaseUrl || '',
+        // API keys
         openaiApiKey: settings.openaiApiKey || '',
         groqApiKey: settings.groqApiKey || '',
         geminiApiKey: settings.geminiApiKey || '',
@@ -716,6 +954,15 @@ export class SettingsView extends BaseView {
       case ' ':
         if (this.focusedField === 'toggles') {
           this.toggleSelectedGeneralSetting()
+        } else if (this.focusedField === 'agentToggles') {
+          this.toggleInSection(this.agentToggleKeys, this.selectedAgentToggleIndex)
+        } else if (this.focusedField === 'ttsToggles') {
+          this.toggleInSection(this.ttsToggleKeys, this.selectedTtsToggleIndex)
+        } else if (this.focusedField === 'langfuse') {
+          // Only toggle if on the toggle item (index 0)
+          if (this.selectedLangfuseIndex === 0) {
+            this.toggleInSection(this.langfuseToggleKeys, 0)
+          }
         } else if (this.focusedField === 'servers') {
           this.toggleSelectedServer()
         }
@@ -723,6 +970,17 @@ export class SettingsView extends BaseView {
       case 'down':
         if (this.focusedField === 'toggles') {
           this.selectNextToggle()
+        } else if (this.focusedField === 'agentToggles') {
+          this.selectedAgentToggleIndex = (this.selectedAgentToggleIndex + 1) % this.agentToggleKeys.length
+          this.highlightSection(this.agentToggleKeys, this.selectedAgentToggleIndex)
+        } else if (this.focusedField === 'ttsToggles') {
+          this.selectedTtsToggleIndex = (this.selectedTtsToggleIndex + 1) % this.ttsToggleKeys.length
+          this.highlightSection(this.ttsToggleKeys, this.selectedTtsToggleIndex)
+        } else if (this.focusedField === 'langfuse') {
+          // 0=toggle, 1..3=inputs
+          const langfuseCount = 1 + this.langfuseKeyProviders.length
+          this.selectedLangfuseIndex = (this.selectedLangfuseIndex + 1) % langfuseCount
+          this.focusLangfuseItem()
         } else if (this.focusedField === 'apiKeys') {
           this.selectedApiKeyIndex = (this.selectedApiKeyIndex + 1) % this.apiKeyProviders.length
           this.focusApiKeyInput()
@@ -735,6 +993,16 @@ export class SettingsView extends BaseView {
       case 'up':
         if (this.focusedField === 'toggles') {
           this.selectPrevToggle()
+        } else if (this.focusedField === 'agentToggles') {
+          this.selectedAgentToggleIndex = (this.selectedAgentToggleIndex - 1 + this.agentToggleKeys.length) % this.agentToggleKeys.length
+          this.highlightSection(this.agentToggleKeys, this.selectedAgentToggleIndex)
+        } else if (this.focusedField === 'ttsToggles') {
+          this.selectedTtsToggleIndex = (this.selectedTtsToggleIndex - 1 + this.ttsToggleKeys.length) % this.ttsToggleKeys.length
+          this.highlightSection(this.ttsToggleKeys, this.selectedTtsToggleIndex)
+        } else if (this.focusedField === 'langfuse') {
+          const langfuseCount = 1 + this.langfuseKeyProviders.length
+          this.selectedLangfuseIndex = (this.selectedLangfuseIndex - 1 + langfuseCount) % langfuseCount
+          this.focusLangfuseItem()
         } else if (this.focusedField === 'apiKeys') {
           this.selectedApiKeyIndex = (this.selectedApiKeyIndex - 1 + this.apiKeyProviders.length) % this.apiKeyProviders.length
           this.focusApiKeyInput()
@@ -751,16 +1019,17 @@ export class SettingsView extends BaseView {
 
     // Character-based shortcuts (check sequence for S/R)
     const ch = typeof key.sequence === 'string' ? key.sequence.toLowerCase() : ''
-    if (ch === 's' && this.focusedField !== 'apiKeys' && this.focusedField !== 'maxIter') {
+    const noShortcutFields: string[] = ['apiKeys', 'maxIter', 'langfuse']
+    if (ch === 's' && !noShortcutFields.includes(this.focusedField)) {
       await this.saveSettings()
-    } else if (ch === 'r' && this.focusedField !== 'apiKeys' && this.focusedField !== 'maxIter') {
+    } else if (ch === 'r' && !noShortcutFields.includes(this.focusedField)) {
       await this.resetSettings()
     }
   }
 
   private focusNextField(): void {
-    const fields: Array<'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'toggles' | 'servers' | 'buttons'> =
-      ['preset', 'provider', 'model', 'maxIter', 'apiKeys', 'toggles', 'servers', 'buttons']
+    const fields: Array<typeof this.focusedField> =
+      ['preset', 'provider', 'model', 'maxIter', 'apiKeys', 'toggles', 'agentToggles', 'ttsToggles', 'langfuse', 'servers', 'buttons']
     const currentIndex = fields.indexOf(this.focusedField)
     this.focusedField = fields[(currentIndex + 1) % fields.length]
 
@@ -784,6 +1053,15 @@ export class SettingsView extends BaseView {
       case 'toggles':
         this.highlightSelectedToggle()
         break
+      case 'agentToggles':
+        this.highlightSection(this.agentToggleKeys, this.selectedAgentToggleIndex)
+        break
+      case 'ttsToggles':
+        this.highlightSection(this.ttsToggleKeys, this.selectedTtsToggleIndex)
+        break
+      case 'langfuse':
+        this.focusLangfuseItem()
+        break
       case 'servers':
         this.highlightSelectedServer()
         break
@@ -798,6 +1076,21 @@ export class SettingsView extends BaseView {
     if (provider) {
       const input = this.apiKeyInputs.get(provider.key)
       input?.focus()
+    }
+  }
+
+  private focusLangfuseItem(): void {
+    if (this.selectedLangfuseIndex === 0) {
+      // Highlight the langfuse toggle
+      this.highlightSection(this.langfuseToggleKeys, 0)
+    } else {
+      // Focus the appropriate langfuse input
+      const inputIndex = this.selectedLangfuseIndex - 1
+      const provider = this.langfuseKeyProviders[inputIndex]
+      if (provider) {
+        const input = this.langfuseInputs.get(provider.key)
+        input?.focus()
+      }
     }
   }
 
@@ -847,14 +1140,35 @@ export class SettingsView extends BaseView {
     this.setStatus('Saving settings...')
 
     try {
-      // Build settings patch
+      // Build settings patch — include all toggle and config fields
       const patch: Partial<Settings> = {
         mcpToolsProviderId: this.formState.providerId,
         mcpMaxIterations: this.formState.maxIterations,
+        currentModelPresetId: this.formState.currentModelPresetId,
+        // General toggles
         ttsEnabled: this.formState.ttsEnabled,
         mcpRequireApprovalBeforeToolCall: this.formState.mcpRequireApprovalBeforeToolCall,
         transcriptPostProcessingEnabled: this.formState.transcriptPostProcessingEnabled,
-        currentModelPresetId: this.formState.currentModelPresetId,
+        // Agent toggles
+        mcpMessageQueueEnabled: this.formState.mcpMessageQueueEnabled,
+        mcpVerifyCompletionEnabled: this.formState.mcpVerifyCompletionEnabled,
+        mcpFinalSummaryEnabled: this.formState.mcpFinalSummaryEnabled,
+        memoriesEnabled: this.formState.memoriesEnabled,
+        dualModelInjectMemories: this.formState.dualModelInjectMemories,
+        dualModelEnabled: this.formState.dualModelEnabled,
+        dualModelAutoSaveImportant: this.formState.dualModelAutoSaveImportant,
+        mcpParallelToolExecution: this.formState.mcpParallelToolExecution,
+        mcpContextReductionEnabled: this.formState.mcpContextReductionEnabled,
+        acpInjectBuiltinTools: this.formState.acpInjectBuiltinTools,
+        // TTS toggles
+        ttsAutoPlay: this.formState.ttsAutoPlay,
+        ttsPreprocessingEnabled: this.formState.ttsPreprocessingEnabled,
+        ttsRemoveCodeBlocks: this.formState.ttsRemoveCodeBlocks,
+        ttsRemoveUrls: this.formState.ttsRemoveUrls,
+        ttsConvertMarkdown: this.formState.ttsConvertMarkdown,
+        ttsUseLLMPreprocessing: this.formState.ttsUseLLMPreprocessing,
+        // Langfuse
+        langfuseEnabled: this.formState.langfuseEnabled,
       }
 
       // Add API keys only if user entered a new (non-masked) value
@@ -866,6 +1180,17 @@ export class SettingsView extends BaseView {
       }
       if (this.formState.geminiApiKey && !this.formState.geminiApiKey.startsWith('****')) {
         patch.geminiApiKey = this.formState.geminiApiKey
+      }
+
+      // Langfuse keys — same masking logic
+      if (this.formState.langfusePublicKey && !this.formState.langfusePublicKey.startsWith('****')) {
+        patch.langfusePublicKey = this.formState.langfusePublicKey
+      }
+      if (this.formState.langfuseSecretKey && !this.formState.langfuseSecretKey.startsWith('****')) {
+        patch.langfuseSecretKey = this.formState.langfuseSecretKey
+      }
+      if (this.formState.langfuseBaseUrl) {
+        patch.langfuseBaseUrl = this.formState.langfuseBaseUrl
       }
 
       // Set the correct model field based on provider

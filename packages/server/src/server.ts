@@ -8,6 +8,7 @@ import cors from '@fastify/cors'
 import crypto from 'crypto'
 
 import { configStore } from './config'
+import { getDefaultConfig } from './config/defaults'
 import { diagnosticsService } from './services/diagnostics'
 import { mcpService, handleWhatsAppToggle } from './services/mcp-service'
 import { profileService } from './services/profile-service'
@@ -590,20 +591,47 @@ export async function startServer(options: ServerOptions = {}): Promise<{
         return key.length <= 4 ? "****" : `****${key.slice(-4)}`
       }
 
-      return reply.send({
-        mcpToolsProviderId: cfg.mcpToolsProviderId || "openai",
-        mcpToolsOpenaiModel: cfg.mcpToolsOpenaiModel,
-        mcpToolsGroqModel: cfg.mcpToolsGroqModel,
-        mcpToolsGeminiModel: cfg.mcpToolsGeminiModel,
-        transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
-        mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
-        ttsEnabled: cfg.ttsEnabled ?? true,
-        mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
-        openaiApiKey: maskKey(cfg.openaiApiKey),
-        groqApiKey: maskKey(cfg.groqApiKey),
-        geminiApiKey: maskKey(cfg.geminiApiKey),
-        currentModelPresetId: cfg.currentModelPresetId || "builtin-openai",
-      })
+      // Keys that contain sensitive data and should be masked
+      const sensitiveKeys = [
+        "openaiApiKey", "groqApiKey", "geminiApiKey",
+        "langfusePublicKey", "langfuseSecretKey",
+      ]
+
+      // Keys that are desktop-only and should not be exposed via API
+      const desktopOnlyKeys = [
+        "shortcut", "textInputShortcut", "mcpToolsShortcut",
+        "customShortcut", "customShortcutMode", "customTextInputShortcut",
+        "customAgentKillSwitchHotkey", "customMcpToolsShortcut",
+        "customMcpToolsShortcutMode", "customToggleVoiceDictationHotkey",
+        "toggleVoiceDictationEnabled", "toggleVoiceDictationHotkey",
+        "settingsHotkeyEnabled", "settingsHotkey", "customSettingsHotkey",
+        "agentKillSwitchEnabled", "agentKillSwitchHotkey",
+        "panelPosition", "panelDragEnabled", "panelCustomSize", "panelProgressSize",
+        "floatingPanelAutoShow", "hidePanelWhenMainFocused",
+        "launchAtLogin", "hideDockIcon",
+        "remoteServerEnabled", "remoteServerPort", "remoteServerBindAddress",
+        "remoteServerLogLevel", "remoteServerCorsOrigins", "remoteServerAutoShowPanel",
+        "whatsappEnabled", "whatsappAllowFrom", "whatsappAutoReply", "whatsappLogMessages",
+        "providerSectionCollapsedOpenai", "providerSectionCollapsedGroq", "providerSectionCollapsedGemini",
+        "onboardingCompleted",
+      ]
+
+      // Merge defaults with actual config so clients always get expected keys
+      const defaults = getDefaultConfig()
+      const merged = { ...defaults, ...cfg }
+
+      // Build response with all config values, masking sensitive ones
+      const response: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(merged)) {
+        if (desktopOnlyKeys.includes(key)) continue
+        if (sensitiveKeys.includes(key)) {
+          response[key] = maskKey(value)
+        } else {
+          response[key] = value
+        }
+      }
+
+      return reply.send(response)
     } catch (error: unknown) {
       const err = error as Error
       diagnosticsService.logError("server", "Failed to get settings", err)
@@ -617,44 +645,85 @@ export async function startServer(options: ServerOptions = {}): Promise<{
       const cfg = configStore.get() as Record<string, unknown>
       const updates: Record<string, unknown> = {}
 
-      if (typeof body.mcpRequireApprovalBeforeToolCall === "boolean") {
-        updates.mcpRequireApprovalBeforeToolCall = body.mcpRequireApprovalBeforeToolCall
+      // Boolean settings - accept any boolean value
+      const booleanKeys = [
+        "mcpRequireApprovalBeforeToolCall", "ttsEnabled", "transcriptPostProcessingEnabled",
+        "ttsAutoPlay", "ttsPreprocessingEnabled", "ttsRemoveCodeBlocks", "ttsRemoveUrls",
+        "ttsConvertMarkdown", "ttsUseLLMPreprocessing",
+        "mcpMessageQueueEnabled", "mcpVerifyCompletionEnabled", "mcpFinalSummaryEnabled",
+        "memoriesEnabled", "dualModelEnabled", "dualModelAutoSaveImportant", "dualModelInjectMemories",
+        "mcpParallelToolExecution", "mcpContextReductionEnabled",
+        "langfuseEnabled", "acpInjectBuiltinTools", "streamerModeEnabled",
+        "mcpToolResponseProcessingEnabled", "mcpToolResponseProgressUpdates",
+        "textInputEnabled", "conversationsEnabled", "autoSaveConversations",
+        "mcpAutoPasteEnabled",
+      ]
+      for (const key of booleanKeys) {
+        if (typeof body[key] === "boolean") {
+          updates[key] = body[key]
+        }
       }
-      if (typeof body.ttsEnabled === "boolean") {
-        updates.ttsEnabled = body.ttsEnabled
-      }
+
+      // Number settings with ranges
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
         updates.mcpMaxIterations = Math.floor(body.mcpMaxIterations)
       }
+      if (typeof body.mcpToolsDelay === "number" && body.mcpToolsDelay >= 0) {
+        updates.mcpToolsDelay = Math.floor(body.mcpToolsDelay)
+      }
+      if (typeof body.openaiTtsSpeed === "number" && body.openaiTtsSpeed >= 0.25 && body.openaiTtsSpeed <= 4.0) {
+        updates.openaiTtsSpeed = body.openaiTtsSpeed
+      }
+      if (typeof body.mcpAutoPasteDelay === "number" && body.mcpAutoPasteDelay >= 0) {
+        updates.mcpAutoPasteDelay = Math.floor(body.mcpAutoPasteDelay)
+      }
+      if (typeof body.maxConversationsToKeep === "number" && body.maxConversationsToKeep >= 1) {
+        updates.maxConversationsToKeep = Math.floor(body.maxConversationsToKeep)
+      }
+
+      // String settings with validation
       const validProviders = ["openai", "groq", "gemini"]
       if (typeof body.mcpToolsProviderId === "string" && validProviders.includes(body.mcpToolsProviderId)) {
         updates.mcpToolsProviderId = body.mcpToolsProviderId
       }
-      if (typeof body.mcpToolsOpenaiModel === "string") {
-        updates.mcpToolsOpenaiModel = body.mcpToolsOpenaiModel
+
+      // String settings - accept any non-empty string
+      const stringKeys = [
+        "mcpToolsOpenaiModel", "mcpToolsGroqModel", "mcpToolsGeminiModel",
+        "currentModelPresetId", "mainAgentMode", "mainAgentName",
+        "ttsProviderId", "openaiTtsModel", "openaiTtsVoice", "openaiTtsResponseFormat",
+        "groqTtsModel", "groqTtsVoice", "geminiTtsModel", "geminiTtsVoice",
+        "sttProviderId", "transcriptPostProcessingProviderId",
+        "sttLanguage", "openaiSttLanguage", "groqSttLanguage", "groqSttPrompt",
+        "transcriptPostProcessingPrompt",
+        "dualModelSummarizationFrequency", "dualModelSummaryDetailLevel",
+        "themePreference",
+      ]
+      for (const key of stringKeys) {
+        if (typeof body[key] === "string") {
+          updates[key] = body[key]
+        }
       }
-      if (typeof body.mcpToolsGroqModel === "string") {
-        updates.mcpToolsGroqModel = body.mcpToolsGroqModel
-      }
-      if (typeof body.mcpToolsGeminiModel === "string") {
-        updates.mcpToolsGeminiModel = body.mcpToolsGeminiModel
-      }
-      if (typeof body.transcriptPostProcessingEnabled === "boolean") {
-        updates.transcriptPostProcessingEnabled = body.transcriptPostProcessingEnabled
-      }
+
       // API keys - only update if non-empty and not a masked value
-      if (typeof body.openaiApiKey === "string" && body.openaiApiKey.length > 0 && !body.openaiApiKey.startsWith("****")) {
-        updates.openaiApiKey = body.openaiApiKey
+      const apiKeyFields = ["openaiApiKey", "groqApiKey", "geminiApiKey"]
+      for (const key of apiKeyFields) {
+        if (typeof body[key] === "string" && (body[key] as string).length > 0 && !(body[key] as string).startsWith("****")) {
+          updates[key] = body[key]
+        }
       }
-      if (typeof body.groqApiKey === "string" && body.groqApiKey.length > 0 && !body.groqApiKey.startsWith("****")) {
-        updates.groqApiKey = body.groqApiKey
+
+      // Langfuse keys - same masking logic
+      const langfuseKeyFields = ["langfusePublicKey", "langfuseSecretKey"]
+      for (const key of langfuseKeyFields) {
+        if (typeof body[key] === "string" && (body[key] as string).length > 0 && !(body[key] as string).startsWith("****")) {
+          updates[key] = body[key]
+        }
       }
-      if (typeof body.geminiApiKey === "string" && body.geminiApiKey.length > 0 && !body.geminiApiKey.startsWith("****")) {
-        updates.geminiApiKey = body.geminiApiKey
-      }
-      // Model preset selection
-      if (typeof body.currentModelPresetId === "string" && body.currentModelPresetId.length > 0) {
-        updates.currentModelPresetId = body.currentModelPresetId
+
+      // Langfuse base URL (allow empty string to reset to default)
+      if (typeof body.langfuseBaseUrl === "string") {
+        updates.langfuseBaseUrl = body.langfuseBaseUrl || undefined
       }
 
       if (Object.keys(updates).length === 0) {

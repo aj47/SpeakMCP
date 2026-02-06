@@ -72,19 +72,70 @@ export interface ToolCall {
 }
 
 export interface Settings {
+  // LLM Provider & Model
   mcpToolsProviderId?: string
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
   mcpMaxIterations?: number
   mcpToolsDelay?: number
-  ttsEnabled?: boolean
+  currentModelPresetId?: string
+
+  // Agent Settings
+  mainAgentMode?: string // 'api' | 'acp'
+  mainAgentName?: string
+  acpInjectBuiltinTools?: boolean
+  mcpMessageQueueEnabled?: boolean
+  mcpVerifyCompletionEnabled?: boolean
+  mcpFinalSummaryEnabled?: boolean
+  memoriesEnabled?: boolean
+  dualModelInjectMemories?: boolean
+  dualModelEnabled?: boolean
+  dualModelAutoSaveImportant?: boolean
+  dualModelSummarizationFrequency?: string
+  dualModelSummaryDetailLevel?: string
+  mcpParallelToolExecution?: boolean
+  mcpContextReductionEnabled?: boolean
   mcpRequireApprovalBeforeToolCall?: boolean
+
+  // TTS Settings
+  ttsEnabled?: boolean
+  ttsAutoPlay?: boolean
+  ttsProviderId?: string
+  ttsPreprocessingEnabled?: boolean
+  ttsRemoveCodeBlocks?: boolean
+  ttsRemoveUrls?: boolean
+  ttsConvertMarkdown?: boolean
+  ttsUseLLMPreprocessing?: boolean
+  openaiTtsModel?: string
+  openaiTtsVoice?: string
+  openaiTtsSpeed?: number
+  groqTtsModel?: string
+  groqTtsVoice?: string
+  geminiTtsModel?: string
+  geminiTtsVoice?: string
+
+  // STT Settings
+  sttProviderId?: string
+  sttLanguage?: string
   transcriptPostProcessingEnabled?: boolean
+  transcriptPostProcessingProviderId?: string
+
+  // API Keys
   openaiApiKey?: string
   groqApiKey?: string
   geminiApiKey?: string
-  currentModelPresetId?: string
+
+  // Langfuse Observability
+  langfuseEnabled?: boolean
+  langfusePublicKey?: string
+  langfuseSecretKey?: string
+  langfuseBaseUrl?: string
+
+  // Theme
+  themePreference?: string
+  streamerModeEnabled?: boolean
+
   [key: string]: unknown
 }
 

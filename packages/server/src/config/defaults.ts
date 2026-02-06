@@ -30,6 +30,14 @@ export function getDefaultConfig(): Record<string, unknown> {
     textInputShortcut: platformDefaults.textInputShortcut,
     mcpToolsShortcut: 'hold-ctrl-alt',
 
+    // LLM Provider & Model
+    mcpToolsProviderId: 'openai',
+    mcpToolsOpenaiModel: 'gpt-4o-mini',
+    mcpToolsGroqModel: 'llama-3.3-70b-versatile',
+    mcpToolsGeminiModel: 'gemini-2.0-flash-exp',
+    mcpToolsDelay: 0,
+    currentModelPresetId: 'builtin-openai',
+
     // MCP Settings
     mcpRequireApprovalBeforeToolCall: false,
     mcpAutoPasteEnabled: false,
@@ -37,6 +45,7 @@ export function getDefaultConfig(): Record<string, unknown> {
     mcpMaxIterations: 10,
     mcpRuntimeDisabledServers: [],
     mcpDisabledTools: [],
+    mcpFinalSummaryEnabled: true,
 
     // Text input
     textInputEnabled: true,
@@ -160,6 +169,16 @@ export function getDefaultConfig(): Record<string, unknown> {
 
     // Memory System
     memoriesEnabled: true,
+
+    // STT Settings
+    sttProviderId: 'openai',
+    sttLanguage: '',
+    transcriptPostProcessingEnabled: true,
+    transcriptPostProcessingProviderId: 'openai',
+
+    // Agent settings
+    mainAgentMode: 'api',
+    mainAgentName: '',
 
     // ACP
     acpInjectBuiltinTools: true,

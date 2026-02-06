@@ -1,18 +1,42 @@
 # CLI Feature Parity Specification
 
+> **Last Updated:** 2026-02-06
+>
+> **Parent Document:** [`prd.md`](./prd.md) — Comprehensive PRD with all 25 gaps, testing framework, and keybindings
+> **Related:** [`../../plan-cli-feature-parity-assessment-2025-02-05.md`](../../plan-cli-feature-parity-assessment-2025-02-05.md) — Gap-by-gap readiness assessment
+>
+> **Scope:** This is a **settings-focused sub-spec** of the main PRD. It covers CLI settings, provider config, and profile management in detail. For the full gap inventory (G-01–G-25) and MCP testing framework, see the parent PRD.
+
 This document specifies the work required to bring the CLI (`@speakmcp/cli`) to full feature parity with the Electron desktop app's settings and configuration capabilities.
 
-## Current State
+## Current State (Updated 2026-02-06)
 
 ### CLI Settings View (Implemented)
-The CLI currently supports only 4 settings in `apps/cli/src/views/settings.ts`:
+The CLI settings view in `apps/cli/src/views/settings.ts` (930 lines) is comprehensive:
 
 | Setting | Type | Status |
 |---------|------|--------|
+| Model Preset | Select dropdown | ✅ Implemented |
 | LLM Provider | Select (OpenAI/Groq/Gemini) | ✅ Implemented |
 | Model | Select (per-provider) | ✅ Implemented |
 | Max Iterations | Number input | ✅ Implemented |
+| API Keys (OpenAI/Groq/Gemini) | Secure input fields | ✅ Implemented |
+| Text-to-Speech toggle | Checkbox | ✅ Implemented |
+| Require Tool Approval toggle | Checkbox | ✅ Implemented |
+| Transcript Post-Processing toggle | Checkbox | ✅ Implemented |
 | MCP Server Enable/Disable | Toggle list | ✅ Implemented |
+
+### Other Implemented Features
+| Feature | Location | Status |
+|---------|----------|--------|
+| Tool approval workflow (Y/N/A) | Chat view | ✅ Implemented |
+| Agent progress (all 11 step types) | Chat view | ✅ Implemented |
+| Profile CRUD (create/edit/delete) | Ctrl+P overlay | ✅ Implemented |
+| Profile export/import | Ctrl+P overlay | ✅ Implemented |
+| Conversation search | Sessions view (/) | ✅ Implemented |
+| Conversation rename | Sessions view (R) | ✅ Implemented |
+| Manual tool execution | Tools view (Enter) | ✅ Implemented |
+| MCP server management (restart/stop/logs/test) | Tools view | ✅ Implemented |
 
 ### Desktop Settings (Full Feature Set)
 The desktop app has 10+ settings pages with 50+ configurable options.
@@ -25,19 +49,20 @@ The desktop app has 10+ settings pages with 50+ configurable options.
 
 These settings directly affect agent behavior and are essential for CLI users.
 
-| Setting | Desktop Location | Server API | CLI Work Required |
-|---------|-----------------|------------|-------------------|
-| **Require Tool Approval** | `settings-general.tsx` | `PATCH /v1/settings` ✅ | Add toggle to Settings view |
-| **Message Queuing** | `settings-general.tsx` | Need to add | Add toggle + server endpoint |
-| **Verify Task Completion** | `settings-general.tsx` | Need to add | Add toggle + server endpoint |
-| **Final Summary** | `settings-general.tsx` | Need to add | Add toggle + server endpoint |
-| **Enable Memory System** | `settings-general.tsx` | Need to add | Add toggle + server endpoint |
-| **Inject Memories** | `settings-general.tsx` | Need to add | Add toggle + server endpoint |
-| **Enable Summarization** | `settings-general.tsx` | Need to add | Add toggle + server endpoint |
+| Setting | Desktop Location | Server API | CLI Status |
+|---------|-----------------|------------|------------|
+| **Require Tool Approval** | `settings-general.tsx` | `PATCH /v1/settings` ✅ | ✅ **Implemented** — toggle in Settings view |
+| **Message Queuing** | `settings-general.tsx` | Server likely supports via `PATCH /v1/settings` | ⚠️ **Verify** — add toggle to Settings view if field exists |
+| **Verify Task Completion** | `settings-general.tsx` | Server likely supports via `PATCH /v1/settings` | ⚠️ **Verify** — add toggle to Settings view if field exists |
+| **Final Summary** | `settings-general.tsx` | Server likely supports via `PATCH /v1/settings` | ⚠️ **Verify** — add toggle to Settings view if field exists |
+| **Enable Memory System** | `settings-general.tsx` | Memory service ✅ ported to server | ⚠️ **Verify** — add toggle to Settings view |
+| **Inject Memories** | `settings-general.tsx` | Memory service ✅ ported to server | ⚠️ **Verify** — add toggle to Settings view |
+| **Enable Summarization** | `settings-general.tsx` | Server likely supports via `PATCH /v1/settings` | ⚠️ **Verify** — add toggle to Settings view |
 
-**Server API Changes Required:**
+**Server API Status (Updated 2026-02-06):**
+The server now has memory, skills, and other services ported. The `PATCH /v1/settings` endpoint needs verification for these specific fields:
 ```typescript
-// GET /v1/settings should return:
+// Verify these fields are in GET /v1/settings and PATCH /v1/settings:
 {
   mcpMessageQueueEnabled: boolean,        // default: true
   mcpVerifyCompletionEnabled: boolean,    // default: true
@@ -46,83 +71,42 @@ These settings directly affect agent behavior and are essential for CLI users.
   dualModelInjectMemories: boolean,       // default: false
   dualModelEnabled: boolean,              // default: false
 }
-
-// PATCH /v1/settings should accept all above fields
 ```
 
 ### Priority 2: Profile Management (SHOULD HAVE)
 
 Profiles allow users to switch between different agent configurations.
 
-| Feature | Server API | CLI Work Required |
-|---------|------------|-------------------|
-| List profiles | `GET /v1/profiles` ✅ | Add Profiles view (F5?) |
-| View current profile | `GET /v1/profiles/current` ✅ | Show in Settings header |
-| Switch profile | `POST /v1/profiles/current` ✅ | Add profile selector |
-| View guidelines | `GET /v1/profiles/current` ✅ | Display in profile view |
-| View system prompt | `GET /v1/profiles/current` ✅ | Display in profile view |
-| Edit guidelines | Need to add | Add edit capability + endpoint |
-| Edit system prompt | Need to add | Add edit capability + endpoint |
-| Create profile | Need to add | Add create dialog + endpoint |
-| Delete profile | Need to add | Add delete action + endpoint |
-| Export profile | `GET /v1/profiles/:id/export` ✅ | Add export action |
-| Import profile | `POST /v1/profiles/import` ✅ | Add import action |
+| Feature | Server API | CLI Status |
+|---------|------------|------------|
+| List profiles | `GET /v1/profiles` ✅ | ✅ **Implemented** — Ctrl+P overlay |
+| View current profile | `GET /v1/profiles/current` ✅ | ✅ **Implemented** — Status bar |
+| Switch profile | `POST /v1/profiles/current` ✅ | ✅ **Implemented** — Ctrl+P → Enter |
+| View guidelines | `GET /v1/profiles/current` ✅ | ✅ **Implemented** — in profile view |
+| View system prompt | `GET /v1/profiles/current` ✅ | ✅ **Implemented** — in profile view |
+| Edit guidelines | `PATCH /v1/profiles/:id` ✅ | ✅ **Implemented** — [E]dit in Ctrl+P |
+| Edit system prompt | `PATCH /v1/profiles/:id` ✅ | ✅ **Implemented** — [E]dit in Ctrl+P |
+| Create profile | `POST /v1/profiles` ✅ | ✅ **Implemented** — [C]reate in Ctrl+P |
+| Delete profile | `DELETE /v1/profiles/:id` ✅ | ✅ **Implemented** — [D]elete in Ctrl+P |
+| Export profile | `GET /v1/profiles/:id/export` ✅ | ✅ **Implemented** — [X]port in Ctrl+P |
+| Import profile | `POST /v1/profiles/import` ✅ | ✅ **Implemented** — [I]mport in Ctrl+P |
 
-**Server API Changes Required:**
-```typescript
-// PATCH /v1/profiles/:id - Update profile
-{
-  guidelines?: string,
-  systemPrompt?: string,
-  name?: string,
-}
-
-// POST /v1/profiles - Create profile
-{
-  name: string,
-  guidelines?: string,
-  systemPrompt?: string,
-}
-
-// DELETE /v1/profiles/:id - Delete profile (non-default only)
-```
+**Server API Status:** ✅ All profile endpoints implemented and working. No changes needed.
 
 ### Priority 3: Provider Configuration (SHOULD HAVE)
 
 API keys and base URLs for LLM providers.
 
-| Setting | Server API | CLI Work Required |
-|---------|------------|-------------------|
-| OpenAI API Key | Need to add | Add secure input field |
-| OpenAI Base URL | Need to add | Add input field |
-| Groq API Key | Need to add | Add secure input field |
-| Groq Base URL | Need to add | Add input field |
-| Gemini API Key | Need to add | Add secure input field |
-| Model Presets | `GET /v1/settings` ✅ | Add preset selector |
+| Setting | Server API | CLI Status |
+|---------|------------|------------|
+| OpenAI API Key | `PATCH /v1/settings` ✅ | ✅ **Implemented** — secure input in Settings |
+| OpenAI Base URL | Verify in `PATCH /v1/settings` | ⚠️ **Verify** — may already be in settings schema |
+| Groq API Key | `PATCH /v1/settings` ✅ | ✅ **Implemented** — secure input in Settings |
+| Groq Base URL | Verify in `PATCH /v1/settings` | ⚠️ **Verify** — may already be in settings schema |
+| Gemini API Key | `PATCH /v1/settings` ✅ | ✅ **Implemented** — secure input in Settings |
+| Model Presets | `GET /v1/settings` ✅ | ✅ **Implemented** — preset selector in Settings |
 
-**Server API Changes Required:**
-```typescript
-// GET /v1/settings should return:
-{
-  openaiApiKey: string | null,      // masked or null
-  openaiBaseUrl: string | null,
-  groqApiKey: string | null,        // masked or null
-  groqBaseUrl: string | null,
-  geminiApiKey: string | null,      // masked or null
-  currentModelPresetId: string,
-  availablePresets: ModelPreset[],
-}
-
-// PATCH /v1/settings should accept:
-{
-  openaiApiKey?: string,
-  openaiBaseUrl?: string,
-  groqApiKey?: string,
-  groqBaseUrl?: string,
-  geminiApiKey?: string,
-  currentModelPresetId?: string,
-}
-```
+**Server API Status:** API keys are implemented. Base URLs need verification in server settings schema. Model presets have dedicated CRUD endpoints (`/v1/model-presets`).
 
 **Security Note:** API keys should be write-only (accept on PATCH, return masked on GET).
 
@@ -133,173 +117,94 @@ View server configuration (read-only for CLI since it connects to remote server)
 | Setting | Server API | CLI Work Required |
 |---------|------------|-------------------|
 | Server URL | N/A (CLI knows this) | Display in status bar |
-| Server Port | Need to add | Display in status |
+| Server Port | `GET /v1/diagnostics/health` ✅ | Display in status |
 | API Key status | N/A | Show connected/authenticated |
-| Server version | Need to add | Display in About section |
+| Server version | `GET /v1/diagnostics/health` ✅ | Display in About section |
 
-**Server API Changes Required:**
-```typescript
-// GET /v1/status or /health should return:
-{
-  version: string,
-  port: number,
-  bindAddress: string,
-  uptime: number,
-}
-```
+**Server API Status:** Diagnostics endpoints now exist. Health check likely returns server info.
 
 ### Priority 5: Optional Features (NICE TO HAVE)
 
 These features are lower priority but would complete feature parity.
 
-| Feature | Desktop Location | Notes |
-|---------|-----------------|-------|
-| Skills management | `settings-skills.tsx` | List, enable/disable, create, import |
-| Memories view | `memories.tsx` | View, add, delete memories |
-| Agent Personas | `settings-agent-personas.tsx` | CRUD for personas |
-| External Agents | `settings-external-agents.tsx` | ACP/Stdio/Remote agents |
-| Langfuse config | `settings-general.tsx` | Observability settings |
-| Theme selection | `settings-general.tsx` | Light/Dark/System |
+| Feature | Desktop Location | Server Status | Notes |
+|---------|-----------------|---------------|-------|
+| Skills management | `settings-skills.tsx` | ✅ 5 endpoints + client methods | Needs CLI view |
+| Memories view | `memories.tsx` | ✅ 5 endpoints + client methods | Needs CLI view |
+| Agent Personas | `settings-agent-personas.tsx` | ✅ ACP endpoints exist | Needs CLI view |
+| External Agents | `settings-external-agents.tsx` | ✅ ACP endpoints exist | Needs CLI view |
+| Langfuse config | `settings-general.tsx` | Verify in settings schema | May need settings fields |
+| Theme selection | `settings-general.tsx` | N/A for TUI | Not applicable to CLI |
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Server API Enhancements (1-2 days)
+> **Status Update (2026-02-06):** Phases 1-5 are largely complete. The settings view, profile management,
+> API client, and types have all been implemented. Remaining work is listed below.
 
-Update `packages/server/src/server.ts` to expose missing settings:
+### Phase 1: Server API Enhancements ✅ MOSTLY COMPLETE
 
-1. **Extend GET /v1/settings response:**
-   ```typescript
-   // Add to existing response:
-   mcpMessageQueueEnabled: cfg.mcpMessageQueueEnabled ?? true,
-   mcpVerifyCompletionEnabled: cfg.mcpVerifyCompletionEnabled ?? true,
-   mcpFinalSummaryEnabled: cfg.mcpFinalSummaryEnabled ?? true,
-   memoriesEnabled: cfg.memoriesEnabled ?? true,
-   dualModelInjectMemories: cfg.dualModelInjectMemories ?? false,
-   dualModelEnabled: cfg.dualModelEnabled ?? false,
-   mainAgentMode: cfg.mainAgentMode ?? 'api',
-   ```
+Profile mutation endpoints are implemented. Settings API handles core fields.
 
-2. **Extend PATCH /v1/settings handler:**
-   ```typescript
-   // Add validation and updates for each new field
-   if (typeof body.mcpMessageQueueEnabled === "boolean") {
-     updates.mcpMessageQueueEnabled = body.mcpMessageQueueEnabled
-   }
-   // ... repeat for each field
-   ```
+**Remaining server work:**
+- Add `mcpMessageQueueEnabled`, `mcpVerifyCompletionEnabled`, `mcpFinalSummaryEnabled` to settings
+- Add `memoriesEnabled`, `dualModelInjectMemories`, `dualModelEnabled` to settings
+- Verify `transcriptPostProcessingEnabled` in PATCH handler
 
-3. **Add profile mutation endpoints:**
-   - `PATCH /v1/profiles/:id` - Update profile
-   - `POST /v1/profiles` - Create profile
-   - `DELETE /v1/profiles/:id` - Delete profile
+### Phase 2: CLI Types Update ✅ COMPLETE
 
-### Phase 2: CLI Types Update (0.5 day)
+`apps/cli/src/types.ts` (354 lines) includes comprehensive type definitions for Settings, Profile, and all related types.
 
-Update `apps/cli/src/types.ts`:
+### Phase 3: CLI API Client Update ✅ COMPLETE
 
-```typescript
-export interface Settings {
-  // Existing
-  mcpToolsProviderId?: string
-  mcpToolsOpenaiModel?: string
-  mcpToolsGroqModel?: string
-  mcpToolsGeminiModel?: string
-  mcpMaxIterations?: number
+`apps/cli/src/client.ts` (630 lines) includes all needed methods: `getProfiles()`, `getCurrentProfile()`, `switchProfile()`, `exportProfile()`, `importProfile()`, `createProfile()`, `updateProfile()`, `deleteProfile()`, `renameConversation()`, and more.
 
-  // Add these
-  mcpRequireApprovalBeforeToolCall?: boolean
-  mcpMessageQueueEnabled?: boolean
-  mcpVerifyCompletionEnabled?: boolean
-  mcpFinalSummaryEnabled?: boolean
-  memoriesEnabled?: boolean
-  dualModelInjectMemories?: boolean
-  dualModelEnabled?: boolean
-  mainAgentMode?: 'api' | 'acp'
-}
+### Phase 4: CLI Settings View Enhancement ✅ COMPLETE
 
-export interface Profile {
-  id: string
-  name: string
-  isDefault?: boolean
-  guidelines?: string
-  systemPrompt?: string
-  createdAt?: number
-  updatedAt?: number
-}
-```
-
-### Phase 3: CLI API Client Update (0.5 day)
-
-Update `apps/cli/src/api-client.ts`:
-
-```typescript
-// Add methods:
-async getProfiles(): Promise<{ profiles: Profile[], currentProfileId?: string }>
-async getCurrentProfile(): Promise<Profile>
-async setCurrentProfile(profileId: string): Promise<void>
-async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile>
-async createProfile(data: { name: string, guidelines?: string }): Promise<Profile>
-async deleteProfile(id: string): Promise<void>
-```
-
-### Phase 4: CLI Settings View Enhancement (2-3 days)
-
-Restructure `apps/cli/src/views/settings.ts` into sections:
+`apps/cli/src/views/settings.ts` (930 lines) is fully implemented with:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ ⚙️  Settings                              Profile: Default  │
+│ ⚙️  Settings                                                │
 ├─────────────────────────────────────────────────────────────┤
+│ ─ Model ─                                                   │
+│   Model Preset   ▶ GPT-4o Mini                              │
+│   Max Iterations  15                                        │
 │                                                             │
-│ ─ LLM Configuration ─                                       │
-│   Provider        [OpenAI    ▼]                             │
-│   Model           [gpt-4o-mini ▼]                           │
-│   Max Iterations  [10        ]                              │
+│ ─ API Keys ─ (enter key, leave blank to keep current)       │
+│   OpenAI Key     [................]                          │
+│   Groq Key       [................]                          │
+│   Gemini Key     [................]                          │
 │                                                             │
-│ ─ Agent Behavior ─                                          │
-│   [✓] Require Tool Approval                                 │
-│   [✓] Message Queuing                                       │
-│   [✓] Verify Task Completion                                │
-│   [✓] Final Summary                                         │
-│   [✓] Enable Memory System                                  │
-│   [ ] Inject Memories                                       │
-│   [ ] Enable Summarization                                  │
+│ ─ General Settings ─                                        │
+│   [✓] Text-to-Speech                                        │
+│   [○] Require Tool Approval                                 │
+│   [✓] Transcript Post-Processing                            │
 │                                                             │
-│ ─ MCP Servers ─                                             │
+│ ─ MCP Servers ─ [Space] Toggle                              │
 │   [✓] filesystem          12 tools                          │
 │   [✓] browser-use          8 tools                          │
-│                                                             │
 ├─────────────────────────────────────────────────────────────┤
-│ [S] Save  [R] Reset  [P] Profiles  [Tab] Navigate           │
+│ [S] Save  [R] Reset  [Space] Toggle  [Tab] Next  [↑↓] Nav  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 5: Profiles View (1-2 days)
+### Phase 5: Profiles View ✅ COMPLETE
 
-Create new `apps/cli/src/views/profiles.ts`:
+Profile management is implemented as a Ctrl+P overlay in `apps/cli/src/app.ts`:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 👤 Profiles                                    [N] New      │
-├─────────────────────────────────────────────────────────────┤
+│                    ─ Profiles ─                              │
 │                                                             │
-│ ► Default (active)                                          │
-│     No custom guidelines                                    │
+│                    ▶ Default                                 │
 │                                                             │
-│   Work                                                      │
-│     "Focus on code quality and testing..."                  │
-│                                                             │
-│   Personal                                                  │
-│     "Be casual and friendly..."                             │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ [Enter] Switch  [E] Edit  [D] Delete  [X] Export  [I] Import│
+│  [Enter] Select [C]reate [E]dit [D]elete [X]port [I]mport  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 6: E2E Tests Update (1 day)
+### Phase 6: E2E Tests Update (TODO)
 
 Add tests for new settings in `apps/cli/e2e/critical-path/settings.e2e.ts`:
 
@@ -340,26 +245,32 @@ These features are intentionally excluded from CLI:
 
 ## Success Criteria
 
-1. **All Priority 1 settings** are viewable and editable in CLI
-2. **Profile switching** works from CLI
-3. **E2E tests pass** for all new settings
-4. **Server API** is backwards compatible (no breaking changes)
-5. **CLI types** match server response types
+| Criterion | Status |
+|-----------|--------|
+| All Priority 1 settings viewable and editable in CLI | ⚠️ 1/7 fully done (tool approval); 6 need settings field verification (server may already support) |
+| Profile switching works from CLI | ✅ Done — Ctrl+P overlay |
+| Profile CRUD (create/edit/delete/export/import) | ✅ Done — all in Ctrl+P overlay |
+| E2E tests pass for all new settings | 🔲 TODO |
+| Server API is backwards compatible | ✅ No breaking changes |
+| CLI types match server response types | ✅ Done — 354-line types.ts |
+| Server has all needed endpoints | ✅ 65+ endpoints across 19 groups |
+| CLI client has all needed methods | ✅ 40+ methods (630 lines) |
 
 ---
 
 ## Estimated Effort
 
-| Phase | Effort | Dependencies |
-|-------|--------|--------------|
-| Phase 1: Server API | 1-2 days | None |
-| Phase 2: CLI Types | 0.5 day | Phase 1 |
-| Phase 3: API Client | 0.5 day | Phase 1 |
-| Phase 4: Settings View | 2-3 days | Phase 2, 3 |
-| Phase 5: Profiles View | 1-2 days | Phase 2, 3 |
-| Phase 6: E2E Tests | 1 day | Phase 4, 5 |
+| Phase | Effort | Status |
+|-------|--------|--------|
+| Phase 1: Server API | 1-2 days | ✅ Complete — 65+ endpoints, all services ported |
+| Phase 2: CLI Types | 0.5 day | ✅ Complete |
+| Phase 3: API Client | 0.5 day | ✅ Complete — 40+ methods |
+| Phase 4: Settings View | 2-3 days | ✅ Complete — 930 lines |
+| Phase 5: Profiles View | 1-2 days | ✅ Complete — Ctrl+P overlay |
+| Phase 6: E2E Tests | 1 day | 🔲 TODO |
+| Verify settings fields | 0.5 day | ⚠️ Verify message queue, completion, memory toggles |
 
-**Total: 6-9 days**
+**Remaining effort: ~1-2 days** (verify settings fields + E2E tests)
 
 ---
 

@@ -35,10 +35,10 @@ export class SessionsView extends BaseView {
     this.viewContainer = await this.createContent()
     this.container.add(this.viewContainer)
 
-    // Focus the select list
-    if (this.selectList) {
-      this.selectList.focus()
-    }
+    // Note: Do NOT call this.selectList.focus() here.
+    // SelectRenderable handles its own up/down keys when focused,
+    // which conflicts with the manual navigation in handleKeyPress(),
+    // causing arrow keys to jump 2 positions instead of 1.
   }
 
   protected async createContent(): Promise<BoxRenderable> {
@@ -251,14 +251,17 @@ export class SessionsView extends BaseView {
       case 'r':
         this.renameSelectedSession()
         break
-      case '/':
-        this.enterSearchMode()
-        break
       case 'escape':
         if (this.searchMode) {
           this.exitSearchMode()
         }
         break
+    }
+
+    // Character-based shortcuts (key.name is undefined for non-letter keys like '/')
+    const ch = typeof key.sequence === 'string' ? key.sequence : ''
+    if (ch === '/') {
+      this.enterSearchMode()
     }
   }
 
@@ -341,9 +344,19 @@ export class SessionsView extends BaseView {
     this.selectedIndex = 0
   }
 
-  private refreshList(): void {
-    // Re-render by refreshing the view
-    this.refresh()
+  private async refreshList(): Promise<void> {
+    // Soft refresh: recreate the view without reloading sessions from network.
+    // A full this.refresh() → hide() → show() → loadSessions() is too heavy
+    // for real-time search filtering — it makes a network call on every keystroke.
+    if (!this.isVisible) return
+    if (this.viewContainer) {
+      this.container.remove(this.viewContainer.id)
+      this.viewContainer = null
+    }
+    this.isVisible = false  // Allow createContent to proceed
+    this.viewContainer = await this.createContent()
+    this.container.add(this.viewContainer)
+    this.isVisible = true
   }
 
   private async renameSelectedSession(): Promise<void> {

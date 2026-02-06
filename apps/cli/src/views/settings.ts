@@ -173,6 +173,7 @@ export class SettingsView extends BaseView {
       width: '100%',
       height: 3,
       flexDirection: 'row',
+      marginTop: 1,
     })
     const presetLabel = new TextRenderable(this.renderer, {
       id: 'preset-label',
@@ -746,6 +747,14 @@ export class SettingsView extends BaseView {
       case 'tab':
         this.focusNextField()
         break
+    }
+
+    // Character-based shortcuts (check sequence for S/R)
+    const ch = typeof key.sequence === 'string' ? key.sequence.toLowerCase() : ''
+    if (ch === 's' && this.focusedField !== 'apiKeys' && this.focusedField !== 'maxIter') {
+      await this.saveSettings()
+    } else if (ch === 'r' && this.focusedField !== 'apiKeys' && this.focusedField !== 'maxIter') {
+      await this.resetSettings()
     }
   }
 

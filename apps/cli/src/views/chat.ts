@@ -42,10 +42,12 @@ export class ChatView extends BaseView {
     this.viewContainer = await this.createContent()
     this.container.add(this.viewContainer)
 
-    // Focus the input field
-    if (this.inputField) {
-      this.inputField.focus()
-    }
+    // Focus the input field (defer to next tick so OpenTUI finishes rendering)
+    setTimeout(() => {
+      if (this.inputField) {
+        this.inputField.focus()
+      }
+    }, 0)
 
     // Load existing conversation if we have an ID
     if (this.state.currentConversationId) {
@@ -590,13 +592,22 @@ export class ChatView extends BaseView {
     this.progressState = null
   }
 
+  // Blur the input field (used by app.ts to prevent double-handling of ? key)
+  blurInput(): void {
+    if (this.inputField) {
+      this.inputField.blur()
+    }
+  }
+
   async newConversation(): Promise<void> {
     this.messages = []
     this.state.currentConversationId = undefined
     this.renderMessages()
-    if (this.inputField) {
-      this.inputField.focus()
-    }
+    setTimeout(() => {
+      if (this.inputField) {
+        this.inputField.focus()
+      }
+    }, 0)
   }
 
   // Handle keyboard shortcuts

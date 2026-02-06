@@ -127,13 +127,17 @@ export class App {
         return
       }
 
-      // ? or F12 - Help overlay
+      // ? or F12 - Help overlay (blur input first to prevent double-handling)
       if (key.name === '?' || key.sequence === '?' || key.name === 'f12') {
+        // Blur any focused input to prevent the '?' character from being typed
+        if (this.state.currentView === 'chat') {
+          this.chatView.blurInput()
+        }
         this.showHelpOverlay()
         return
       }
 
-      // Escape - Cancel / Go back
+      // Escape - Cancel / Go back (forward to current view)
       if (key.name === 'escape') {
         this.handleEscape()
         return
@@ -380,13 +384,22 @@ export class App {
     await this.switchView('chat')
   }
 
-  // Handle Escape key
+  // Handle Escape key - forward to current view
   private handleEscape(): void {
-    // If in settings, reset changes
-    if (this.state.currentView === 'settings') {
-      this.settingsView.handleKeyPress({ name: 'escape', sequence: '\x1b' } as KeyEvent)
+    switch (this.state.currentView) {
+      case 'settings':
+        this.settingsView.handleKeyPress({ name: 'escape', sequence: '\x1b' } as KeyEvent)
+        break
+      case 'sessions':
+        this.sessionsView.handleKeyPress({ name: 'escape', sequence: '\x1b' } as KeyEvent)
+        break
+      case 'chat':
+        this.chatView.handleKeyPress({ name: 'escape', sequence: '\x1b' } as KeyEvent)
+        break
+      case 'tools':
+        this.toolsView.handleKeyPress({ name: 'escape', sequence: '\x1b' } as KeyEvent)
+        break
     }
-    // Otherwise, could go back or cancel current action
   }
 
   // Pass key events to current view

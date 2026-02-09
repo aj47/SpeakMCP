@@ -1012,19 +1012,22 @@ export class SettingsView extends BaseView {
   // Public methods for keyboard handling from App
   async handleKeyPress(key: KeyEvent): Promise<void> {
     const name = key.name || ''
+    const isEnter = name === 'enter' || name === 'return' || key.sequence === '\r'
+
+    if (isEnter) {
+      if (this.focusedField === 'parityMenus') {
+        await this.runSelectedParityMenu()
+      } else if (this.focusedField === 'buttons') {
+        if (this.selectedButton === 'save') {
+          await this.saveSettings()
+        } else {
+          await this.resetSettings()
+        }
+      }
+      return
+    }
 
     switch (name) {
-      case 'enter':
-        if (this.focusedField === 'parityMenus') {
-          await this.runSelectedParityMenu()
-        } else if (this.focusedField === 'buttons') {
-          if (this.selectedButton === 'save') {
-            await this.saveSettings()
-          } else {
-            await this.resetSettings()
-          }
-        }
-        break
       case 'escape':
         await this.resetSettings()
         break

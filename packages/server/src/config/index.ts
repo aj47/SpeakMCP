@@ -13,6 +13,124 @@ import { getDefaultConfig, migrateGroqTtsConfig } from './defaults'
  */
 export type Config = Record<string, unknown>
 
+interface ModelPresetLike {
+  id?: unknown
+  name?: unknown
+  baseUrl?: unknown
+  apiKey?: unknown
+  isBuiltIn?: unknown
+  mcpToolsModel?: unknown
+  transcriptProcessingModel?: unknown
+  [key: string]: unknown
+}
+
+const BUILTIN_MODEL_PRESETS: ModelPresetLike[] = [
+  {
+    id: 'builtin-openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    isBuiltIn: true,
+  },
+  {
+    id: 'builtin-openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKey: '',
+    isBuiltIn: true,
+  },
+  {
+    id: 'builtin-together',
+    name: 'Together AI',
+    baseUrl: 'https://api.together.xyz/v1',
+    apiKey: '',
+    isBuiltIn: true,
+  },
+  {
+    id: 'builtin-cerebras',
+    name: 'Cerebras',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    apiKey: '',
+    isBuiltIn: true,
+  },
+  {
+    id: 'builtin-zhipu',
+    name: 'Zhipu GLM',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    apiKey: '',
+    isBuiltIn: true,
+  },
+  {
+    id: 'builtin-perplexity',
+    name: 'Perplexity',
+    baseUrl: 'https://api.perplexity.ai',
+    apiKey: '',
+    isBuiltIn: true,
+  },
+]
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getActivePreset(config: Config): ModelPresetLike | undefined {
+  const savedPresetsRaw = config.modelPresets
+  const savedPresets = Array.isArray(savedPresetsRaw)
+    ? savedPresetsRaw.filter(isObject) as ModelPresetLike[]
+    : []
+
+  const currentPresetId =
+    typeof config.currentModelPresetId === 'string' && config.currentModelPresetId.length > 0
+      ? config.currentModelPresetId
+      : 'builtin-openai'
+
+  // Merge built-in presets with saved overrides, filtering undefined values
+  const mergedBuiltIns = BUILTIN_MODEL_PRESETS.map((preset) => {
+    const saved = savedPresets.find((candidate) => candidate.id === preset.id)
+    if (!saved) return preset
+
+    const filteredSaved = Object.fromEntries(
+      Object.entries(saved).filter(([, value]) => value !== undefined)
+    )
+    return { ...preset, ...filteredSaved }
+  })
+
+  // Include custom presets (non-built-in IDs)
+  const builtinIds = new Set(
+    BUILTIN_MODEL_PRESETS
+      .map((preset) => preset.id)
+      .filter((id): id is string => typeof id === 'string')
+  )
+  const customPresets = savedPresets.filter(
+    (preset) => typeof preset.id === 'string' && !builtinIds.has(preset.id)
+  )
+
+  const allPresets = [...mergedBuiltIns, ...customPresets]
+  return allPresets.find((preset) => preset.id === currentPresetId)
+}
+
+/**
+ * Sync the active preset's credentials and model preferences to legacy fields.
+ * This mirrors desktop behavior so standalone server and Electron resolve the
+ * same effective OpenAI-compatible provider settings.
+ */
+function syncPresetToLegacyFields(config: Config): Config {
+  const synced = { ...config }
+  const activePreset = getActivePreset(synced)
+  if (!activePreset) return synced
+
+  synced.openaiApiKey = typeof activePreset.apiKey === 'string' ? activePreset.apiKey : ''
+  synced.openaiBaseUrl = typeof activePreset.baseUrl === 'string' ? activePreset.baseUrl : ''
+  synced.mcpToolsOpenaiModel =
+    typeof activePreset.mcpToolsModel === 'string' ? activePreset.mcpToolsModel : ''
+  synced.transcriptPostProcessingOpenaiModel =
+    typeof activePreset.transcriptProcessingModel === 'string'
+      ? activePreset.transcriptProcessingModel
+      : ''
+
+  return synced
+}
+
 /**
  * Load config from file with defaults
  */
@@ -33,14 +151,14 @@ function loadConfig(): Config {
       delete (migrated as any).panelAgentModeSize
       delete (migrated as any).panelTextInputModeSize
 
-      return migrated
+      return syncPresetToLegacyFields(migrated as Config)
     }
   } catch (error) {
     // If config file is invalid, use defaults
     console.warn('Failed to load config file, using defaults:', error)
   }
 
-  return defaultConfig
+  return syncPresetToLegacyFields(defaultConfig as Config)
 }
 
 /**
@@ -67,7 +185,7 @@ class ConfigStore {
    * Save configuration to file and update in-memory state
    */
   save(config: Config): void {
-    this.config = config
+    this.config = syncPresetToLegacyFields(config)
 
     // Ensure data directory exists
     ensureDir(getDataDir())
@@ -133,4 +251,3 @@ export { getDataDir, getConfigPath, getConversationsFolder, getRecordingsFolder,
 
 // Re-export env utilities
 export { getEnvConfig, isStandaloneServer, isDevelopment } from './env'
-

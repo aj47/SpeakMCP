@@ -298,3 +298,106 @@ describe('env.ts', () => {
   })
 })
 
+describe('config store preset sync', () => {
+  let tempDir: string
+  let configPath: string
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'speakmcp-config-sync-test-'))
+    configPath = path.join(tempDir, 'config.json')
+    vi.stubEnv('SPEAKMCP_DATA_DIR', tempDir)
+    vi.stubEnv('SPEAKMCP_CONFIG_PATH', configPath)
+    vi.stubEnv('OPENAI_API_KEY', '')
+    vi.stubEnv('SPEAKMCP_OPENAI_API_KEY', '')
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('should sync legacy OpenAI fields from active model preset on load', async () => {
+    const presetApiKey = 'preset-openrouter-key'
+    const legacyApiKey = 'legacy-openai-key'
+    const presetBaseUrl = 'https://openrouter.ai/api/v1'
+    const presetModel = 'x-ai/grok-4.1-fast'
+
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          currentModelPresetId: 'builtin-openrouter',
+          modelPresets: [
+            {
+              id: 'builtin-openrouter',
+              name: 'OpenRouter',
+              baseUrl: presetBaseUrl,
+              apiKey: presetApiKey,
+              isBuiltIn: true,
+              mcpToolsModel: presetModel,
+              transcriptProcessingModel: presetModel,
+            },
+          ],
+          mcpToolsProviderId: 'openai',
+          openaiApiKey: legacyApiKey,
+          openaiBaseUrl: 'https://api.openai.com/v1',
+          mcpToolsOpenaiModel: 'gpt-4o-mini',
+          transcriptPostProcessingOpenaiModel: 'gpt-4o-mini',
+        },
+        null,
+        2,
+      ),
+    )
+
+    const { configStore } = await import('./index')
+    const config = configStore.get() as Record<string, unknown>
+
+    expect(config.currentModelPresetId).toBe('builtin-openrouter')
+    expect(config.openaiApiKey).toBe(presetApiKey)
+    expect(config.openaiBaseUrl).toBe(presetBaseUrl)
+    expect(config.mcpToolsOpenaiModel).toBe(presetModel)
+    expect(config.transcriptPostProcessingOpenaiModel).toBe(presetModel)
+  })
+
+  it('should sync legacy OpenAI fields from active model preset on save', async () => {
+    const presetApiKey = 'preset-openrouter-key'
+    const legacyApiKey = 'legacy-openai-key'
+    const presetBaseUrl = 'https://openrouter.ai/api/v1'
+    const presetModel = 'x-ai/grok-4.1-fast'
+
+    const { configStore } = await import('./index')
+    const current = configStore.get() as Record<string, unknown>
+
+    configStore.save({
+      ...current,
+      currentModelPresetId: 'builtin-openrouter',
+      modelPresets: [
+        {
+          id: 'builtin-openrouter',
+          name: 'OpenRouter',
+          baseUrl: presetBaseUrl,
+          apiKey: presetApiKey,
+          isBuiltIn: true,
+          mcpToolsModel: presetModel,
+          transcriptProcessingModel: presetModel,
+        },
+      ],
+      mcpToolsProviderId: 'openai',
+      openaiApiKey: legacyApiKey,
+      openaiBaseUrl: 'https://api.openai.com/v1',
+      mcpToolsOpenaiModel: 'gpt-4o-mini',
+      transcriptPostProcessingOpenaiModel: 'gpt-4o-mini',
+    })
+
+    const persisted = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
+    expect(persisted.currentModelPresetId).toBe('builtin-openrouter')
+    expect(persisted.openaiApiKey).toBe(presetApiKey)
+    expect(persisted.openaiBaseUrl).toBe(presetBaseUrl)
+    expect(persisted.mcpToolsOpenaiModel).toBe(presetModel)
+    expect(persisted.transcriptPostProcessingOpenaiModel).toBe(presetModel)
+  })
+})

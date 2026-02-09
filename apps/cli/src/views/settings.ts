@@ -95,6 +95,14 @@ interface FormState {
   serverEnabled: Map<string, boolean>
 }
 
+type ParityMenuActionId =
+  | 'Settings: Remote Server'
+  | 'Settings: Profiles'
+  | 'Settings: Personas'
+  | 'Settings: Memories'
+  | 'Settings: Skills'
+  | 'Settings: Diagnostics'
+
 export class SettingsView extends BaseView {
   private settings: Settings | null = null
   private mcpServers: McpServer[] = []
@@ -178,6 +186,11 @@ export class SettingsView extends BaseView {
     'Settings: Skills',
     'Settings: Diagnostics',
   ] as const
+  private parityMenuActions: Partial<Record<ParityMenuActionId, () => Promise<void>>> = {}
+
+  setParityMenuActions(actions: Partial<Record<ParityMenuActionId, () => Promise<void>>>): void {
+    this.parityMenuActions = actions
+  }
 
   // Toggle keys grouped by section
   private toggleKeys: ToggleKey[] = [
@@ -1174,10 +1187,17 @@ export class SettingsView extends BaseView {
   }
 
   private async runSelectedParityMenu(): Promise<void> {
-    const selected = this.parityMenus[this.selectedParityMenuIndex]
+    const selected = this.parityMenus[this.selectedParityMenuIndex] as ParityMenuActionId | undefined
     if (!selected) return
 
     try {
+      const action = this.parityMenuActions[selected]
+      if (action) {
+        await action()
+        this.setStatus(`${selected} executed`)
+        return
+      }
+
       switch (selected) {
         case 'Settings: Remote Server': {
           const status = await this.client.getTunnelStatus()

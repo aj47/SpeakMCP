@@ -313,6 +313,41 @@ export class App {
 
     // Wire up sessions view callback
     this.sessionsView.setSwitchToChatCallback((conversationId?: string) => this.switchToChat(conversationId))
+    this.settingsView.setParityMenuActions({
+      'Settings: Remote Server': async () => {
+        const result = await this.client.getTunnelStatus()
+        this.logCommandOutput('Settings Remote Server', result)
+        if (await this.maybeShowTunnelQrCode(result, 'settings remote server')) {
+          this.setStatusNotice('Remote server URL QR ready. Scan and press Esc when done.', 9000)
+          return
+        }
+        this.setStatusNotice(`Remote server/tunnel ${result.running ? 'running' : 'stopped'} (details in console)`)
+      },
+      'Settings: Profiles': async () => {
+        await this.showProfileSwitcher()
+        this.setStatusNotice('Profile manager opened')
+      },
+      'Settings: Personas': async () => {
+        const result = await this.client.getAgentPersonas()
+        this.logCommandOutput('Settings Personas', result)
+        this.setStatusNotice(`Personas loaded: ${result.personas.length} (details in console)`)
+      },
+      'Settings: Memories': async () => {
+        const result = await this.client.getMemories()
+        this.logCommandOutput('Settings Memories', result)
+        this.setStatusNotice(`Memories loaded: ${result.memories.length} (details in console)`)
+      },
+      'Settings: Skills': async () => {
+        const result = await this.client.getSkills()
+        this.logCommandOutput('Settings Skills', result)
+        this.setStatusNotice(`Skills loaded: ${result.skills.length} (details in console)`)
+      },
+      'Settings: Diagnostics': async () => {
+        const result = await this.client.getDiagnosticReport()
+        this.logCommandOutput('Settings Diagnostics', result)
+        this.setStatusNotice('Diagnostics report fetched (details in console)')
+      },
+    })
 
     // Show initial view
     await this.chatView.show()

@@ -69,6 +69,20 @@ pnpm install
 
 ### Running the CLI
 
+**Quick Start (Recommended)** - One command with embedded server:
+
+```bash
+cd apps/cli && bun run src/index.ts
+```
+
+The CLI automatically starts an embedded server if none is found. Use `--port` and `--api-key` to customize:
+
+```bash
+cd apps/cli && bun run src/index.ts --port 3211 --api-key your-key
+```
+
+**Advanced: External Server** - Run server separately for development or debugging:
+
 **1. Start the server** (in one terminal):
 
 ```bash

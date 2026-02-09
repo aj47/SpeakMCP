@@ -59,6 +59,83 @@
     "apps/cli/src/views/sessions.ts": "0120589e84ec0cbc6def07ed5159152aa29d775acc96ee0bf597b932d9cf6d1d",
     "apps/cli/src/views/tools.ts": "76a367aea9dd6a2c5ac8454423c7ea328c89897d8f9ad16d950ef3fca8632e24"
   },
+  "menuCoverage": {
+    "description": "Required CLI settings/menu surfaces expected from desktop parity scope.",
+    "requiredMenus": [
+      {
+        "id": "settings-remote-server",
+        "label": "Settings menu: Remote Server / Tunnel",
+        "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-remote-server.tsx",
+        "match": "any",
+        "checks": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "pattern": "Settings: Remote Server"
+          }
+        ]
+      },
+      {
+        "id": "settings-profiles",
+        "label": "Settings menu: Profiles",
+        "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-tools.tsx",
+        "match": "any",
+        "checks": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "pattern": "Settings: Profiles"
+          }
+        ]
+      },
+      {
+        "id": "settings-personas",
+        "label": "Settings menu: Agent Personas",
+        "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-agent-personas.tsx",
+        "match": "any",
+        "checks": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "pattern": "Settings: Personas"
+          }
+        ]
+      },
+      {
+        "id": "settings-memories",
+        "label": "Settings menu: Memories",
+        "desktopSurface": "apps/desktop/src/renderer/src/pages/memories.tsx",
+        "match": "any",
+        "checks": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "pattern": "Settings: Memories"
+          }
+        ]
+      },
+      {
+        "id": "settings-skills",
+        "label": "Settings menu: Skills",
+        "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-skills.tsx",
+        "match": "any",
+        "checks": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "pattern": "Settings: Skills"
+          }
+        ]
+      },
+      {
+        "id": "settings-diagnostics",
+        "label": "Settings menu: Diagnostics",
+        "desktopSurface": "apps/desktop/src/main/tipc.ts diagnostics handlers",
+        "match": "any",
+        "checks": [
+          {
+            "file": "apps/cli/src/app.ts",
+            "pattern": "Settings: Diagnostics"
+          }
+        ]
+      }
+    ]
+  },
   "rows": [
     {
       "id": "G-01",

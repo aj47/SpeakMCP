@@ -29,6 +29,17 @@ function summarizeByStatus(rows) {
   return summary;
 }
 
+const fileCache = new Map();
+
+function readTextFile(absPath) {
+  if (fileCache.has(absPath)) {
+    return fileCache.get(absPath);
+  }
+  const content = fs.readFileSync(absPath, "utf8");
+  fileCache.set(absPath, content);
+  return content;
+}
+
 if (!fs.existsSync(matrixPath)) {
   fail(`Matrix file missing: ${matrixPath}`);
   process.exit(process.exitCode || 1);
@@ -118,6 +129,68 @@ for (const relPath of watchFiles || []) {
         `  actual:   ${actualHash}\n` +
         `  hint: update parity-matrix.json sourceHashes after reviewing row statuses`
     );
+  }
+}
+
+const menuCoverage = matrix.menuCoverage;
+if (menuCoverage !== undefined) {
+  if (!Array.isArray(menuCoverage.requiredMenus)) {
+    fail("menuCoverage.requiredMenus must be an array when menuCoverage is provided");
+  } else {
+    for (const menu of menuCoverage.requiredMenus) {
+      if (!menu || typeof menu !== "object") {
+        fail("menuCoverage.requiredMenus entries must be objects");
+        continue;
+      }
+
+      const { id, label, checks, match } = menu;
+      if (!id || !label || !Array.isArray(checks) || checks.length === 0) {
+        fail(`menuCoverage entry is missing id/label/checks: ${JSON.stringify(menu)}`);
+        continue;
+      }
+
+      const mode = match === "all" ? "all" : "any";
+      const checkResults = [];
+
+      for (const check of checks) {
+        if (!check || typeof check !== "object" || !check.file || !check.pattern) {
+          fail(`[menuCoverage:${id}] each check must include file and pattern`);
+          continue;
+        }
+
+        const absPath = path.resolve(repoRoot, check.file);
+        if (!fs.existsSync(absPath)) {
+          fail(`[menuCoverage:${id}] check file does not exist: ${check.file}`);
+          checkResults.push(false);
+          continue;
+        }
+
+        let regex;
+        try {
+          regex = new RegExp(check.pattern, "m");
+        } catch (error) {
+          fail(`[menuCoverage:${id}] invalid regex pattern "${check.pattern}": ${error instanceof Error ? error.message : String(error)}`);
+          checkResults.push(false);
+          continue;
+        }
+
+        const content = readTextFile(absPath);
+        checkResults.push(regex.test(content));
+      }
+
+      const matched = mode === "all"
+        ? checkResults.length > 0 && checkResults.every(Boolean)
+        : checkResults.some(Boolean);
+
+      if (!matched) {
+        const checkSummary = checks.map((check) => `${check.file} =~ /${check.pattern}/`).join(" OR ");
+        fail(
+          `[menuCoverage:${id}] Missing required menu surface: ${label}\n` +
+          `  expected evidence: ${checkSummary}\n` +
+          `  hint: add a dedicated CLI settings/menu surface or update menuCoverage if intentionally deferred`
+        );
+      }
+    }
   }
 }
 

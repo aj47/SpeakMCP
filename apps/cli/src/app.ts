@@ -87,6 +87,10 @@ export class App {
   private profileInput: InputRenderable | null = null
   private profileBox: BoxRenderable | null = null
 
+  // Cloudflared install overlay state
+  private cloudflaredInstallOverlay: BoxRenderable | null = null
+  private cloudflaredInstallResolver: ((installed: boolean) => void) | null = null
+
   // Health check timer
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null
 
@@ -123,6 +127,10 @@ export class App {
   private setupKeyboardHandlers(): void {
     this.renderer.keyInput.on('keypress', (key: KeyEvent) => {
       // Handle overlays first - they capture all input
+      if (this.cloudflaredInstallOverlay) {
+        this.handleCloudflaredInstallKeyPress(key)
+        return
+      }
       if (this.qrCodeOverlay) {
         this.handleQrCodeOverlayKeyPress(key)
         return
@@ -317,10 +325,30 @@ export class App {
     this.settingsView.setParityMenuActions({
       'Settings: Remote Server': async (): Promise<ParityMenuActionResult> => {
         const lines: string[] = []
-        const installation = await this.client.checkTunnelInstalled().catch(() => ({ installed: false, error: 'check failed' }))
+        let installation = await this.client.checkTunnelInstalled().catch(() => ({ installed: false, error: 'check failed' }))
         lines.push(`cloudflared installed: ${installation.installed ? 'yes' : 'no'}`)
         if ('version' in installation && installation.version) lines.push(`cloudflared version: ${installation.version}`)
         if ('error' in installation && installation.error) lines.push(`install check: ${installation.error}`)
+
+        // Offer to install cloudflared if not installed
+        if (!installation.installed) {
+          const installed = await this.offerCloudflaredInstall()
+          if (installed) {
+            // Re-check installation after successful install
+            installation = await this.client.checkTunnelInstalled().catch(() => ({ installed: false, error: 'check failed' }))
+            lines.length = 0 // Clear lines to refresh with new status
+            lines.push(`cloudflared installed: ${installation.installed ? 'yes' : 'no'}`)
+            if ('version' in installation && installation.version) lines.push(`cloudflared version: ${installation.version}`)
+          } else {
+            // User declined or install failed - show manual instructions in status
+            this.setStatusNotice('cloudflared not installed. Download: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/', 12000)
+            return {
+              status: 'cloudflared not installed',
+              sectionTitle: 'Settings: Remote Server',
+              sectionLines: lines,
+            }
+          }
+        }
 
         let status = await this.client.getTunnelStatus()
         this.logCommandOutput('Settings Remote Server', status)
@@ -460,6 +488,15 @@ export class App {
       this.updateStatusBar()
       this.statusNoticeTimer = null
     }, ttlMs)
+  }
+
+  private clearStatusNotice(): void {
+    if (this.statusNoticeTimer) {
+      clearTimeout(this.statusNoticeTimer)
+      this.statusNoticeTimer = null
+    }
+    this.statusNotice = null
+    this.updateStatusBar()
   }
 
   private async loadInitialData(): Promise<void> {
@@ -998,19 +1035,28 @@ export class App {
     }
   }
 
-  private async waitForTunnelConnectUrl(timeoutMs: number = 12000, intervalMs: number = 1200): Promise<string | null> {
+  private async waitForTunnelConnectUrl(timeoutMs: number = 30000, intervalMs: number = 1000): Promise<string | null> {
     const startTime = Date.now()
+    this.setStatusNotice('Waiting for tunnel URL...', timeoutMs + 5000)
     while (Date.now() - startTime < timeoutMs) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
       try {
         const status = await this.client.getTunnelStatus()
         const connectUrl = this.extractTunnelConnectUrl(status)
-        if (connectUrl) return connectUrl
-        if (!status.running && !status.starting) return null
+        if (connectUrl) {
+          this.clearStatusNotice()
+          return connectUrl
+        }
+        if (!status.running && !status.starting) {
+          this.setStatusNotice('Tunnel failed to start', 8000)
+          return null
+        }
       } catch {
+        this.setStatusNotice('Tunnel failed to start', 8000)
         return null
       }
     }
+    this.clearStatusNotice()
     return null
   }
 
@@ -1533,6 +1579,16 @@ export class App {
         description: 'Start cloudflared quick tunnel',
         keywords: ['tunnel', 'start', 'quick', 'qr', 'connect'],
         run: async () => {
+          // Check if cloudflared is installed first
+          const installation = await this.client.checkTunnelInstalled().catch(() => ({ installed: false, error: 'check failed' }))
+          if (!installation.installed) {
+            const installed = await this.offerCloudflaredInstall()
+            if (!installed) {
+              this.setStatusNotice('cloudflared not installed. Download: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/', 12000)
+              return
+            }
+          }
+
           const result = await this.client.startTunnel({ mode: 'quick' })
           this.logCommandOutput('Tunnel Start', result)
           if (await this.maybeShowTunnelQrCode(result, 'tunnel start')) {

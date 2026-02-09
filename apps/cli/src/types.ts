@@ -347,13 +347,81 @@ export interface QueuedMessage {
   createdAt: number
   status: 'queued' | 'processing' | 'completed' | 'failed'
   error?: string
+  retryCount?: number
 }
 
 // Agent session types (G-24)
 export interface AgentSession {
   sessionId: string
   shouldStop: boolean
+  isSnoozed?: boolean
   iterationCount: number
+  processCount?: number
+  abortControllerCount?: number
+  profileSnapshot?: {
+    profileId: string
+    profileName: string
+  }
+}
+
+export type AgentProfileRole = 'delegation-target' | 'external-agent'
+
+export interface AgentProfile {
+  id: string
+  name: string
+  description?: string
+  role: AgentProfileRole
+  enabled: boolean
+  autoSpawn?: boolean
+  connection?: Record<string, unknown>
+  systemPrompt?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface QueueGroup {
+  conversationId: string
+  messages: QueuedMessage[]
+  isPaused: boolean
+}
+
+export interface TunnelStatus {
+  running: boolean
+  starting: boolean
+  mode?: 'quick' | 'named' | null
+  url?: string | null
+  tunnelId?: string | null
+  hostname?: string | null
+  uptimeMs?: number
+  pid?: number
+  lastError?: string | null
+  logs: string[]
+}
+
+export interface TunnelListItem {
+  id?: string
+  name?: string
+  createdAt?: string
+  connections?: number
+  status?: string
+  [key: string]: unknown
+}
+
+export interface GeneratedTTSFile {
+  path: string
+  name: string
+  sizeBytes: number
+  mimeType: string
+}
+
+export interface GeneratedTTSResponse {
+  success: boolean
+  provider: 'openai' | 'groq' | 'gemini'
+  processedText: string
+  file: GeneratedTTSFile
+  handoff: {
+    playbackCommand: string
+  }
 }
 
 // ACP Agent types (G-19)
@@ -401,4 +469,3 @@ export interface AppState {
   connectionState: ConnectionState
   isProcessing: boolean
 }
-

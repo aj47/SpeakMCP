@@ -19,6 +19,7 @@ export interface SessionProfileSnapshot {
 export interface AgentSessionState {
   sessionId: string
   shouldStop: boolean
+  isSnoozed: boolean
   iterationCount: number
   abortControllers: Set<AbortController>
   processes: Set<ChildProcess>
@@ -44,6 +45,7 @@ export interface QueuedMessage {
   createdAt: number
   status: 'queued' | 'processing' | 'completed' | 'failed'
   error?: string
+  retryCount?: number
 }
 
 export const state = {
@@ -62,6 +64,7 @@ export const state = {
   panelAutoShowSuppressedUntil: 0,
   pendingToolApprovals: new Map<string, PendingToolApproval>(),
   messageQueue: [] as QueuedMessage[],
+  pausedMessageQueues: new Set<string>(),
 }
 
 export const agentProcessManager = {
@@ -162,6 +165,7 @@ export const agentSessionStateManager = {
       state.agentSessions.set(sessionId, {
         sessionId,
         shouldStop: false,
+        isSnoozed: false,
         iterationCount: 0,
         abortControllers: new Set(),
         processes: new Set(),
@@ -197,6 +201,7 @@ export const agentSessionStateManager = {
     const session = state.agentSessions.get(sessionId)
     if (session) {
       session.shouldStop = true
+      session.isSnoozed = false
 
       // Abort all controllers for this session
       for (const controller of session.abortControllers) {
@@ -229,6 +234,28 @@ export const agentSessionStateManager = {
     }
     // Also set legacy global flag
     state.shouldStopAgent = true
+  },
+
+  // Mark session as snoozed (keeps it active but hidden from focused workflows)
+  snoozeSession(sessionId: string): boolean {
+    const session = state.agentSessions.get(sessionId)
+    if (!session) return false
+    session.isSnoozed = true
+    return true
+  },
+
+  // Unsnooze session
+  unsnoozeSession(sessionId: string): boolean {
+    const session = state.agentSessions.get(sessionId)
+    if (!session) return false
+    session.isSnoozed = false
+    return true
+  },
+
+  // Query snoozed state
+  isSessionSnoozed(sessionId: string): boolean {
+    const session = state.agentSessions.get(sessionId)
+    return session?.isSnoozed ?? false
   },
 
   // Register abort controller for session
@@ -394,53 +421,201 @@ export const toolApprovalManager = {
 
 // Message queue manager for queuing user messages when agent is busy
 export const messageQueueManager = {
+  normalizeConversationId(conversationId?: string): string {
+    const id = conversationId?.trim()
+    return id && id.length > 0 ? id : 'default'
+  },
+
   enqueue(content: string, conversationId?: string): QueuedMessage {
+    const normalizedConversationId = this.normalizeConversationId(conversationId)
     const msg: QueuedMessage = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       content,
-      conversationId,
+      conversationId: normalizedConversationId,
       createdAt: Date.now(),
       status: 'queued',
+      retryCount: 0,
     }
     state.messageQueue.push(msg)
     return msg
   },
 
-  dequeue(): QueuedMessage | undefined {
-    const idx = state.messageQueue.findIndex(m => m.status === 'queued')
+  dequeue(conversationId?: string): QueuedMessage | undefined {
+    const normalizedConversationId = conversationId
+      ? this.normalizeConversationId(conversationId)
+      : undefined
+
+    const idx = state.messageQueue.findIndex((m) => {
+      if (m.status !== 'queued') return false
+      const messageConversationId = this.normalizeConversationId(m.conversationId)
+      if (state.pausedMessageQueues.has(messageConversationId)) return false
+      if (!normalizedConversationId) return true
+      return messageConversationId === normalizedConversationId
+    })
+
     if (idx === -1) return undefined
     state.messageQueue[idx].status = 'processing'
     return state.messageQueue[idx]
   },
 
-  getQueue(): QueuedMessage[] {
-    return [...state.messageQueue]
+  getQueue(conversationId?: string): QueuedMessage[] {
+    if (!conversationId) {
+      return [...state.messageQueue]
+    }
+    const normalizedConversationId = this.normalizeConversationId(conversationId)
+    return state.messageQueue.filter(
+      (m) => this.normalizeConversationId(m.conversationId) === normalizedConversationId,
+    )
   },
 
-  getMessage(id: string): QueuedMessage | undefined {
-    return state.messageQueue.find(m => m.id === id)
+  getAllQueues(): Array<{ conversationId: string; messages: QueuedMessage[]; isPaused: boolean }> {
+    const grouped = new Map<string, QueuedMessage[]>()
+
+    for (const message of state.messageQueue) {
+      const conversationId = this.normalizeConversationId(message.conversationId)
+      if (!grouped.has(conversationId)) {
+        grouped.set(conversationId, [])
+      }
+      grouped.get(conversationId)!.push(message)
+    }
+
+    const queueIds = new Set([...grouped.keys(), ...state.pausedMessageQueues.values()])
+    return [...queueIds]
+      .sort((a, b) => a.localeCompare(b))
+      .map((conversationId) => ({
+        conversationId,
+        messages: grouped.get(conversationId) || [],
+        isPaused: state.pausedMessageQueues.has(conversationId),
+      }))
   },
 
-  updateStatus(id: string, status: QueuedMessage['status'], error?: string): boolean {
-    const msg = state.messageQueue.find(m => m.id === id)
+  getMessage(id: string, conversationId?: string): QueuedMessage | undefined {
+    if (!conversationId) {
+      return state.messageQueue.find((m) => m.id === id)
+    }
+    const normalizedConversationId = this.normalizeConversationId(conversationId)
+    return state.messageQueue.find(
+      (m) =>
+        m.id === id &&
+        this.normalizeConversationId(m.conversationId) === normalizedConversationId,
+    )
+  },
+
+  updateStatus(
+    id: string,
+    status: QueuedMessage['status'],
+    error?: string,
+    conversationId?: string,
+  ): boolean {
+    const msg = this.getMessage(id, conversationId)
     if (!msg) return false
     msg.status = status
     if (error) msg.error = error
+    if (!error) delete msg.error
     return true
   },
 
-  remove(id: string): boolean {
-    const idx = state.messageQueue.findIndex(m => m.id === id)
+  updateText(id: string, content: string, conversationId?: string): boolean {
+    const msg = this.getMessage(id, conversationId)
+    if (!msg) return false
+    if (msg.status === 'processing') return false
+    msg.content = content
+    return true
+  },
+
+  retry(id: string, conversationId?: string): boolean {
+    const msg = this.getMessage(id, conversationId)
+    if (!msg) return false
+    msg.status = 'queued'
+    delete msg.error
+    msg.retryCount = (msg.retryCount || 0) + 1
+    return true
+  },
+
+  reorder(conversationId: string, messageIds: string[]): boolean {
+    const normalizedConversationId = this.normalizeConversationId(conversationId)
+    const queueForConversation = state.messageQueue.filter(
+      (m) => this.normalizeConversationId(m.conversationId) === normalizedConversationId,
+    )
+    const queueIds = new Set(queueForConversation.map((m) => m.id))
+
+    // All ids provided must belong to the same conversation queue.
+    for (const id of messageIds) {
+      if (!queueIds.has(id)) return false
+    }
+
+    // Keep message order deterministic:
+    // 1) ids provided by caller first
+    // 2) remaining items in original order.
+    const prioritized = new Map(queueForConversation.map((m) => [m.id, m]))
+    const reorderedConversation: QueuedMessage[] = []
+    for (const id of messageIds) {
+      const message = prioritized.get(id)
+      if (message) {
+        reorderedConversation.push(message)
+        prioritized.delete(id)
+      }
+    }
+    for (const message of queueForConversation) {
+      if (prioritized.has(message.id)) {
+        reorderedConversation.push(message)
+      }
+    }
+
+    // Replace only this conversation slice while preserving other conversations.
+    const otherMessages = state.messageQueue.filter(
+      (m) => this.normalizeConversationId(m.conversationId) !== normalizedConversationId,
+    )
+    state.messageQueue = [...otherMessages, ...reorderedConversation]
+    return true
+  },
+
+  remove(id: string, conversationId?: string): boolean {
+    const idx = state.messageQueue.findIndex((m) => {
+      if (m.id !== id) return false
+      if (!conversationId) return true
+      return this.normalizeConversationId(m.conversationId) === this.normalizeConversationId(conversationId)
+    })
     if (idx === -1) return false
     state.messageQueue.splice(idx, 1)
     return true
   },
 
-  clear(): void {
-    state.messageQueue.length = 0
+  clear(conversationId?: string): void {
+    if (!conversationId) {
+      state.messageQueue.length = 0
+      state.pausedMessageQueues.clear()
+      return
+    }
+
+    const normalizedConversationId = this.normalizeConversationId(conversationId)
+    state.messageQueue = state.messageQueue.filter(
+      (m) => this.normalizeConversationId(m.conversationId) !== normalizedConversationId,
+    )
+    state.pausedMessageQueues.delete(normalizedConversationId)
   },
 
-  getQueuedCount(): number {
-    return state.messageQueue.filter(m => m.status === 'queued').length
+  pause(conversationId: string): void {
+    state.pausedMessageQueues.add(this.normalizeConversationId(conversationId))
+  },
+
+  resume(conversationId: string): void {
+    state.pausedMessageQueues.delete(this.normalizeConversationId(conversationId))
+  },
+
+  isPaused(conversationId: string): boolean {
+    return state.pausedMessageQueues.has(this.normalizeConversationId(conversationId))
+  },
+
+  getQueuedCount(conversationId?: string): number {
+    if (!conversationId) {
+      return state.messageQueue.filter((m) => m.status === 'queued').length
+    }
+    const normalizedConversationId = this.normalizeConversationId(conversationId)
+    return state.messageQueue.filter(
+      (m) =>
+        m.status === 'queued' &&
+        this.normalizeConversationId(m.conversationId) === normalizedConversationId,
+    ).length
   },
 }

@@ -4,6 +4,7 @@ import {
   agentSessionStateManager,
   llmRequestAbortManager,
   toolApprovalManager,
+  messageQueueManager,
   type SessionProfileSnapshot,
 } from "./state"
 
@@ -15,6 +16,8 @@ function resetState() {
   state.shouldStopAgent = false
   state.isAgentModeActive = false
   state.agentIterationCount = 0
+  state.messageQueue.length = 0
+  state.pausedMessageQueues.clear()
 }
 
 describe("agentSessionStateManager", () => {
@@ -211,6 +214,22 @@ describe("agentSessionStateManager", () => {
       expect(state.shouldStopAgent).toBe(true)
     })
   })
+
+  describe("snooze and unsnooze", () => {
+    it("should snooze and unsnooze an active session", () => {
+      agentSessionStateManager.createSession("session-1")
+      expect(agentSessionStateManager.snoozeSession("session-1")).toBe(true)
+      expect(agentSessionStateManager.isSessionSnoozed("session-1")).toBe(true)
+
+      expect(agentSessionStateManager.unsnoozeSession("session-1")).toBe(true)
+      expect(agentSessionStateManager.isSessionSnoozed("session-1")).toBe(false)
+    })
+
+    it("should return false when snoozing an unknown session", () => {
+      expect(agentSessionStateManager.snoozeSession("missing")).toBe(false)
+      expect(agentSessionStateManager.unsnoozeSession("missing")).toBe(false)
+    })
+  })
 })
 
 
@@ -385,3 +404,50 @@ describe("toolApprovalManager", () => {
   })
 })
 
+describe("messageQueueManager", () => {
+  beforeEach(() => {
+    resetState()
+  })
+
+  it("should manage queue per conversation", () => {
+    const msg1 = messageQueueManager.enqueue("hello", "conv-a")
+    const msg2 = messageQueueManager.enqueue("world", "conv-b")
+
+    expect(messageQueueManager.getQueue("conv-a")).toHaveLength(1)
+    expect(messageQueueManager.getQueue("conv-b")).toHaveLength(1)
+    expect(messageQueueManager.getQueue()).toHaveLength(2)
+
+    messageQueueManager.remove(msg2.id, "conv-b")
+    expect(messageQueueManager.getQueue("conv-b")).toHaveLength(0)
+    expect(messageQueueManager.getMessage(msg1.id, "conv-a")?.content).toBe("hello")
+  })
+
+  it("should pause/resume queue and skip paused dequeue", () => {
+    const msg1 = messageQueueManager.enqueue("a", "conv-a")
+    messageQueueManager.pause("conv-a")
+
+    expect(messageQueueManager.isPaused("conv-a")).toBe(true)
+    expect(messageQueueManager.dequeue("conv-a")).toBeUndefined()
+
+    messageQueueManager.resume("conv-a")
+    expect(messageQueueManager.isPaused("conv-a")).toBe(false)
+    expect(messageQueueManager.dequeue("conv-a")?.id).toBe(msg1.id)
+  })
+
+  it("should update, retry, and reorder queue entries", () => {
+    const first = messageQueueManager.enqueue("first", "conv-a")
+    const second = messageQueueManager.enqueue("second", "conv-a")
+
+    expect(messageQueueManager.updateText(second.id, "second-edited", "conv-a")).toBe(true)
+    expect(messageQueueManager.getMessage(second.id, "conv-a")?.content).toBe("second-edited")
+
+    expect(messageQueueManager.updateStatus(second.id, "failed", "error", "conv-a")).toBe(true)
+    expect(messageQueueManager.retry(second.id, "conv-a")).toBe(true)
+    expect(messageQueueManager.getMessage(second.id, "conv-a")?.retryCount).toBe(1)
+
+    expect(messageQueueManager.reorder("conv-a", [second.id])).toBe(true)
+    const queue = messageQueueManager.getQueue("conv-a")
+    expect(queue[0]?.id).toBe(second.id)
+    expect(queue[1]?.id).toBe(first.id)
+  })
+})

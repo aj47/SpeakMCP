@@ -14,12 +14,14 @@ import { mcpService, handleWhatsAppToggle } from './services/mcp-service'
 import { profileService } from './services/profile-service'
 import { conversationService } from './services/conversation-service'
 import { emergencyStopAll } from './services/emergency-stop'
-import { state, agentSessionStateManager, toolApprovalManager, messageQueueManager } from './services/state'
+import { state, agentSessionStateManager, toolApprovalManager, messageQueueManager, type AgentSessionState } from './services/state'
 import { fetchAvailableModels } from './services/models-service'
 import { executeBuiltinTool, isBuiltinTool, builtinTools } from './services/builtin-tools'
 import { processTranscriptWithAgentMode, type ConversationHistoryEntry } from './services/llm'
 import { memoryService } from './services/memory-service'
 import { skillsService } from './services/skills-service'
+import { checkCloudflaredInstalled, getTunnelStatus, listTunnels, startTunnel, stopTunnel } from './services/tunnel-service'
+import { generateSpeechToFile } from './services/tts-service'
 import {
   getPendingElicitations, resolveElicitation,
   getPendingSamplingRequests, resolveSampling,
@@ -115,6 +117,95 @@ function extractUserPrompt(body: Record<string, unknown>): string | null {
     return null
   } catch {
     return null
+  }
+}
+
+type AgentProfileRole = 'delegation-target' | 'external-agent'
+interface AgentProfileRecord {
+  id: string
+  name: string
+  description?: string
+  role: AgentProfileRole
+  enabled: boolean
+  autoSpawn?: boolean
+  connection?: Record<string, unknown>
+  systemPrompt?: string
+  createdAt: number
+  updatedAt: number
+}
+
+function getAgentProfilesFromConfig(): AgentProfileRecord[] {
+  const cfg = configStore.get() as Record<string, unknown>
+  if (!Array.isArray(cfg.agentProfiles)) return []
+  return (cfg.agentProfiles as Array<Record<string, unknown>>).map((p) => ({
+    id: String(p.id || crypto.randomUUID()),
+    name: String(p.name || 'Unnamed Agent'),
+    description: typeof p.description === 'string' ? p.description : undefined,
+    role: p.role === 'external-agent' ? 'external-agent' : 'delegation-target',
+    enabled: p.enabled !== false,
+    autoSpawn: typeof p.autoSpawn === 'boolean' ? p.autoSpawn : undefined,
+    connection: p.connection && typeof p.connection === 'object' ? (p.connection as Record<string, unknown>) : undefined,
+    systemPrompt: typeof p.systemPrompt === 'string' ? p.systemPrompt : undefined,
+    createdAt: typeof p.createdAt === 'number' ? p.createdAt : Date.now(),
+    updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : Date.now(),
+  }))
+}
+
+function saveAgentProfilesToConfig(agentProfiles: AgentProfileRecord[]): void {
+  const cfg = configStore.get() as Record<string, unknown>
+  configStore.save({
+    ...cfg,
+    agentProfiles,
+  })
+}
+
+function parseMaybeJson(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function flattenToolResultText(result: MCPToolResult): string {
+  return (result.content || [])
+    .map((item) => item?.text || '')
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+}
+
+function toSessionPayload(session: AgentSessionState): {
+  sessionId: string
+  shouldStop: boolean
+  isSnoozed: boolean
+  iterationCount: number
+  processCount: number
+  abortControllerCount: number
+  profileSnapshot?: {
+    profileId: string
+    profileName: string
+  }
+} {
+  return {
+    sessionId: session.sessionId,
+    shouldStop: session.shouldStop,
+    isSnoozed: session.isSnoozed,
+    iterationCount: session.iterationCount,
+    processCount: session.processes.size,
+    abortControllerCount: session.abortControllers.size,
+    profileSnapshot: session.profileSnapshot
+      ? {
+          profileId: session.profileSnapshot.profileId,
+          profileName: session.profileSnapshot.profileName,
+        }
+      : undefined,
   }
 }
 
@@ -1263,6 +1354,21 @@ export async function startServer(options: ServerOptions = {}): Promise<{
     }
   })
 
+  fastify.get("/v1/memories/profile/:profileId", async (req, reply) => {
+    try {
+      const { profileId } = req.params as { profileId: string }
+      if (!profileId) {
+        return reply.code(400).send({ error: "Missing profileId" })
+      }
+      const memories = memoryService.getMemoriesByProfile(profileId)
+      return reply.send({ memories })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to get profile memories", err)
+      return reply.code(500).send({ error: err?.message || "Failed to get profile memories" })
+    }
+  })
+
   fastify.get("/v1/memories/search", async (req, reply) => {
     try {
       const { q } = req.query as { q?: string }
@@ -1346,6 +1452,33 @@ export async function startServer(options: ServerOptions = {}): Promise<{
     }
   })
 
+  fastify.post("/v1/memories/delete-many", async (req, reply) => {
+    try {
+      const body = req.body as { ids?: string[] }
+      if (!Array.isArray(body.ids) || body.ids.length === 0) {
+        return reply.code(400).send({ error: "Missing ids array" })
+      }
+      const deletedCount = memoryService.deleteMultipleMemories(body.ids)
+      return reply.send({ success: true, deletedCount })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete multiple memories", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete memories" })
+    }
+  })
+
+  fastify.delete("/v1/memories", async (req, reply) => {
+    try {
+      const { profileId } = (req.query || {}) as { profileId?: string }
+      const deletedCount = memoryService.deleteAllMemories(profileId)
+      return reply.send({ success: true, deletedCount })
+    } catch (error: unknown) {
+      const err = error as Error
+      diagnosticsService.logError("server", "Failed to delete all memories", err)
+      return reply.code(500).send({ error: err?.message || "Failed to delete all memories" })
+    }
+  })
+
   // ── Skills endpoints (G-13) ──
 
   fastify.get("/v1/skills", async (_req, reply) => {
@@ -1423,6 +1556,149 @@ export async function startServer(options: ServerOptions = {}): Promise<{
       }
       diagnosticsService.logError("server", "Failed to toggle skill", err)
       return reply.code(500).send({ error: err?.message || "Failed to toggle skill" })
+    }
+  })
+
+  fastify.post("/v1/skills/import/markdown", async (req, reply) => {
+    try {
+      const body = req.body as { content?: string }
+      if (!body.content || typeof body.content !== "string") {
+        return reply.code(400).send({ error: "Missing markdown content" })
+      }
+      const skill = skillsService.importSkillFromMarkdown(body.content)
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return reply.code(201).send({ success: true, skill })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to import markdown skill" })
+    }
+  })
+
+  fastify.post("/v1/skills/import/file", async (req, reply) => {
+    try {
+      const body = req.body as { filePath?: string }
+      if (!body.filePath || typeof body.filePath !== "string") {
+        return reply.code(400).send({ error: "Missing filePath" })
+      }
+      const skill = skillsService.importSkillFromFile(body.filePath)
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return reply.code(201).send({ success: true, skill })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to import skill file" })
+    }
+  })
+
+  fastify.post("/v1/skills/import/folder", async (req, reply) => {
+    try {
+      const body = req.body as { folderPath?: string }
+      if (!body.folderPath || typeof body.folderPath !== "string") {
+        return reply.code(400).send({ error: "Missing folderPath" })
+      }
+      const skill = skillsService.importSkillFromFolder(body.folderPath)
+      profileService.enableSkillForCurrentProfile(skill.id)
+      return reply.code(201).send({ success: true, skill })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to import skill folder" })
+    }
+  })
+
+  fastify.post("/v1/skills/import/parent-folder", async (req, reply) => {
+    try {
+      const body = req.body as { folderPath?: string }
+      if (!body.folderPath || typeof body.folderPath !== "string") {
+        return reply.code(400).send({ error: "Missing folderPath" })
+      }
+      const result = skillsService.importSkillsFromParentFolder(body.folderPath)
+      for (const skill of result.imported) {
+        profileService.enableSkillForCurrentProfile(skill.id)
+      }
+      return reply.send({ success: true, ...result })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to import parent folder skills" })
+    }
+  })
+
+  fastify.post("/v1/skills/import/github", async (req, reply) => {
+    try {
+      const body = req.body as { repoIdentifier?: string }
+      if (!body.repoIdentifier || typeof body.repoIdentifier !== "string") {
+        return reply.code(400).send({ error: "Missing repoIdentifier" })
+      }
+      const result = await skillsService.importSkillFromGitHub(body.repoIdentifier)
+      for (const skill of result.imported) {
+        profileService.enableSkillForCurrentProfile(skill.id)
+      }
+      return reply.send({ success: result.imported.length > 0, ...result })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to import skill from GitHub" })
+    }
+  })
+
+  fastify.get("/v1/skills/:id/export", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const markdown = skillsService.exportSkillToMarkdown(id)
+      return reply.send({ markdown })
+    } catch (error: unknown) {
+      const err = error as Error
+      if (err?.message?.includes("not found")) {
+        return reply.code(404).send({ error: err.message })
+      }
+      return reply.code(500).send({ error: err?.message || "Failed to export skill" })
+    }
+  })
+
+  fastify.post("/v1/skills/:id/save-file", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const body = req.body as { outputPath?: string }
+      const filePath = skillsService.saveSkillToFile(id, body?.outputPath)
+      return reply.send({ success: true, filePath })
+    } catch (error: unknown) {
+      const err = error as Error
+      if (err?.message?.includes("not found")) {
+        return reply.code(404).send({ error: err.message })
+      }
+      return reply.code(500).send({ error: err?.message || "Failed to save skill file" })
+    }
+  })
+
+  fastify.get("/v1/skills/folder", async (_req, reply) => {
+    return reply.send({ folderPath: skillsService.getSkillsFolderPath() })
+  })
+
+  fastify.post("/v1/skills/scan", async (req, reply) => {
+    try {
+      const body = req.body as { folderPath?: string } | undefined
+      const imported = skillsService.scanSkillsFolder(body?.folderPath)
+      for (const skill of imported) {
+        profileService.enableSkillForCurrentProfile(skill.id)
+      }
+      return reply.send({ imported })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || "Failed to scan skills folder" })
+    }
+  })
+
+  fastify.get("/v1/profiles/:id/skills/enabled", async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(id)
+    return reply.send({ profileId: id, enabledSkillIds })
+  })
+
+  fastify.post("/v1/profiles/:id/skills/:skillId/toggle", async (req, reply) => {
+    try {
+      const { id, skillId } = req.params as { id: string; skillId: string }
+      const profile = profileService.toggleProfileSkill(id, skillId)
+      return reply.send({ success: true, profile })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ error: err?.message || "Failed to toggle profile skill" })
     }
   })
 
@@ -1511,8 +1787,23 @@ export async function startServer(options: ServerOptions = {}): Promise<{
   // G-18: Message Queue endpoints
   // ====================================================================
 
-  fastify.get("/v1/queue", async (_req, reply) => {
-    return reply.send({ messages: messageQueueManager.getQueue() })
+  fastify.get("/v1/queue", async (req, reply) => {
+    const { conversationId } = (req.query || {}) as { conversationId?: string }
+    const messages = messageQueueManager.getQueue(conversationId)
+    const normalizedConversationId = conversationId
+      ? messageQueueManager.normalizeConversationId(conversationId)
+      : undefined
+
+    return reply.send({
+      messages,
+      conversationId: normalizedConversationId,
+      isPaused: normalizedConversationId ? messageQueueManager.isPaused(normalizedConversationId) : undefined,
+      queuedCount: messageQueueManager.getQueuedCount(conversationId),
+    })
+  })
+
+  fastify.get("/v1/queue/all", async (_req, reply) => {
+    return reply.send({ queues: messageQueueManager.getAllQueues() })
   })
 
   fastify.post("/v1/queue", async (req, reply) => {
@@ -1527,19 +1818,105 @@ export async function startServer(options: ServerOptions = {}): Promise<{
     }
   })
 
+  fastify.patch("/v1/queue/:id", async (req, reply) => {
+    try {
+      const { id } = req.params as { id: string }
+      const body = req.body as {
+        content?: string
+        status?: 'queued' | 'processing' | 'completed' | 'failed'
+        error?: string
+        conversationId?: string
+      }
+
+      const targetConversationId = body?.conversationId
+      let success = false
+
+      if (typeof body.content === 'string') {
+        success = messageQueueManager.updateText(id, body.content, targetConversationId)
+      } else if (body.status) {
+        success = messageQueueManager.updateStatus(id, body.status, body.error, targetConversationId)
+      } else {
+        return reply.code(400).send({ error: 'Missing content or status patch data' })
+      }
+
+      if (!success) {
+        return reply.code(404).send({ error: 'Queued message not found or not editable' })
+      }
+
+      return reply.send({
+        success: true,
+        message: messageQueueManager.getMessage(id, targetConversationId) || null,
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || 'Failed to patch queued message' })
+    }
+  })
+
+  fastify.post("/v1/queue/:id/retry", async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const body = (req.body || {}) as { conversationId?: string }
+    const success = messageQueueManager.retry(id, body.conversationId)
+    if (!success) {
+      return reply.code(404).send({ error: 'Queued message not found' })
+    }
+    return reply.send({
+      success: true,
+      message: messageQueueManager.getMessage(id, body.conversationId) || null,
+    })
+  })
+
+  fastify.post("/v1/queue/reorder", async (req, reply) => {
+    const body = req.body as { conversationId?: string; messageIds?: string[] }
+    if (!body?.conversationId || !Array.isArray(body.messageIds)) {
+      return reply.code(400).send({ error: 'Missing conversationId or messageIds' })
+    }
+    const success = messageQueueManager.reorder(body.conversationId, body.messageIds)
+    if (!success) {
+      return reply.code(400).send({ error: 'Reorder failed - ensure messageIds belong to conversation queue' })
+    }
+    return reply.send({
+      success: true,
+      queue: messageQueueManager.getQueue(body.conversationId),
+    })
+  })
+
+  fastify.post("/v1/queue/:conversationId/pause", async (req, reply) => {
+    const { conversationId } = req.params as { conversationId: string }
+    messageQueueManager.pause(conversationId)
+    return reply.send({
+      success: true,
+      conversationId: messageQueueManager.normalizeConversationId(conversationId),
+      isPaused: true,
+    })
+  })
+
+  fastify.post("/v1/queue/:conversationId/resume", async (req, reply) => {
+    const { conversationId } = req.params as { conversationId: string }
+    messageQueueManager.resume(conversationId)
+    return reply.send({
+      success: true,
+      conversationId: messageQueueManager.normalizeConversationId(conversationId),
+      isPaused: false,
+    })
+  })
+
   fastify.delete("/v1/queue/:id", async (req, reply) => {
     const { id } = req.params as { id: string }
-    const removed = messageQueueManager.remove(id)
+    const { conversationId } = (req.query || {}) as { conversationId?: string }
+    const removed = messageQueueManager.remove(id, conversationId)
     return reply.send({ success: removed })
   })
 
-  fastify.post("/v1/queue/dequeue", async (_req, reply) => {
-    const msg = messageQueueManager.dequeue()
+  fastify.post("/v1/queue/dequeue", async (req, reply) => {
+    const body = (req.body || {}) as { conversationId?: string }
+    const msg = messageQueueManager.dequeue(body.conversationId)
     return reply.send({ message: msg || null })
   })
 
-  fastify.post("/v1/queue/clear", async (_req, reply) => {
-    messageQueueManager.clear()
+  fastify.post("/v1/queue/clear", async (req, reply) => {
+    const body = (req.body || {}) as { conversationId?: string }
+    messageQueueManager.clear(body.conversationId)
     return reply.send({ success: true })
   })
 
@@ -1547,31 +1924,45 @@ export async function startServer(options: ServerOptions = {}): Promise<{
   // G-24: Agent Session endpoints
   // ====================================================================
 
-  fastify.get("/v1/agent-sessions", async (_req, reply) => {
-    const sessions: Array<{
-      sessionId: string
-      shouldStop: boolean
-      iterationCount: number
-    }> = []
+  fastify.get("/v1/agent-sessions", async (req, reply) => {
+    const { includeSnoozed } = (req.query || {}) as { includeSnoozed?: string }
+    const sessions: Array<ReturnType<typeof toSessionPayload>> = []
     for (const [, session] of state.agentSessions) {
-      sessions.push({
-        sessionId: session.sessionId,
-        shouldStop: session.shouldStop,
-        iterationCount: session.iterationCount,
-      })
+      if (includeSnoozed !== 'true' && session.isSnoozed) continue
+      sessions.push(toSessionPayload(session))
     }
-    return reply.send({ sessions, activeCount: agentSessionStateManager.getActiveSessionCount() })
+    return reply.send({
+      sessions,
+      activeCount: agentSessionStateManager.getActiveSessionCount(),
+      snoozedCount: sessions.filter((session) => session.isSnoozed).length,
+    })
   })
 
   fastify.get("/v1/agent-sessions/:sessionId", async (req, reply) => {
     const { sessionId } = req.params as { sessionId: string }
     const session = agentSessionStateManager.getSession(sessionId)
     if (!session) return reply.code(404).send({ error: "Session not found" })
-    return reply.send({
-      sessionId: session.sessionId,
-      shouldStop: session.shouldStop,
-      iterationCount: session.iterationCount,
-    })
+    return reply.send(toSessionPayload(session))
+  })
+
+  fastify.post("/v1/agent-sessions/:sessionId/snooze", async (req, reply) => {
+    const { sessionId } = req.params as { sessionId: string }
+    const success = agentSessionStateManager.snoozeSession(sessionId)
+    if (!success) {
+      return reply.code(404).send({ error: 'Session not found' })
+    }
+    const updated = agentSessionStateManager.getSession(sessionId)
+    return reply.send({ success: true, session: updated ? toSessionPayload(updated) : null })
+  })
+
+  fastify.post("/v1/agent-sessions/:sessionId/unsnooze", async (req, reply) => {
+    const { sessionId } = req.params as { sessionId: string }
+    const success = agentSessionStateManager.unsnoozeSession(sessionId)
+    if (!success) {
+      return reply.code(404).send({ error: 'Session not found' })
+    }
+    const updated = agentSessionStateManager.getSession(sessionId)
+    return reply.send({ success: true, session: updated ? toSessionPayload(updated) : null })
   })
 
   fastify.post("/v1/agent-sessions/:sessionId/stop", async (req, reply) => {
@@ -1583,6 +1974,321 @@ export async function startServer(options: ServerOptions = {}): Promise<{
   fastify.post("/v1/agent-sessions/stop-all", async (_req, reply) => {
     agentSessionStateManager.stopAllSessions()
     return reply.send({ success: true })
+  })
+
+  // ====================================================================
+  // Agent Profiles / Personas / External Agents parity endpoints
+  // ====================================================================
+
+  fastify.get("/v1/agent-profiles", async (req, reply) => {
+    const { role, enabled } = (req.query || {}) as { role?: string; enabled?: string }
+    let profiles = getAgentProfilesFromConfig()
+
+    if (role === 'delegation-target' || role === 'external-agent') {
+      profiles = profiles.filter((profile) => profile.role === role)
+    }
+    if (enabled === 'true' || enabled === 'false') {
+      const enabledValue = enabled === 'true'
+      profiles = profiles.filter((profile) => profile.enabled === enabledValue)
+    }
+
+    return reply.send({ agentProfiles: profiles })
+  })
+
+  fastify.get("/v1/agent-profiles/:id", async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const profile = getAgentProfilesFromConfig().find((item) => item.id === id)
+    if (!profile) {
+      return reply.code(404).send({ error: 'Agent profile not found' })
+    }
+    return reply.send({ agentProfile: profile })
+  })
+
+  fastify.post("/v1/agent-profiles", async (req, reply) => {
+    const body = req.body as Partial<AgentProfileRecord>
+    if (!body.name || typeof body.name !== 'string') {
+      return reply.code(400).send({ error: 'Missing agent profile name' })
+    }
+
+    const role = body.role === 'external-agent' ? 'external-agent' : 'delegation-target'
+    const now = Date.now()
+    const profile: AgentProfileRecord = {
+      id: crypto.randomUUID(),
+      name: body.name.trim(),
+      description: typeof body.description === 'string' ? body.description : undefined,
+      role,
+      enabled: body.enabled !== false,
+      autoSpawn: typeof body.autoSpawn === 'boolean' ? body.autoSpawn : undefined,
+      connection: body.connection && typeof body.connection === 'object'
+        ? (body.connection as Record<string, unknown>)
+        : undefined,
+      systemPrompt: typeof body.systemPrompt === 'string' ? body.systemPrompt : undefined,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    const profiles = getAgentProfilesFromConfig()
+    profiles.push(profile)
+    saveAgentProfilesToConfig(profiles)
+    return reply.code(201).send({ success: true, agentProfile: profile })
+  })
+
+  fastify.patch("/v1/agent-profiles/:id", async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const updates = req.body as Partial<AgentProfileRecord>
+    const profiles = getAgentProfilesFromConfig()
+    const index = profiles.findIndex((profile) => profile.id === id)
+
+    if (index === -1) {
+      return reply.code(404).send({ error: 'Agent profile not found' })
+    }
+
+    const existing = profiles[index]
+    const updated: AgentProfileRecord = {
+      ...existing,
+      name: typeof updates.name === 'string' ? updates.name : existing.name,
+      description: typeof updates.description === 'string' ? updates.description : existing.description,
+      role: updates.role === 'external-agent' || updates.role === 'delegation-target'
+        ? updates.role
+        : existing.role,
+      enabled: typeof updates.enabled === 'boolean' ? updates.enabled : existing.enabled,
+      autoSpawn: typeof updates.autoSpawn === 'boolean' ? updates.autoSpawn : existing.autoSpawn,
+      connection: updates.connection && typeof updates.connection === 'object'
+        ? (updates.connection as Record<string, unknown>)
+        : existing.connection,
+      systemPrompt: typeof updates.systemPrompt === 'string' ? updates.systemPrompt : existing.systemPrompt,
+      updatedAt: Date.now(),
+    }
+
+    profiles[index] = updated
+    saveAgentProfilesToConfig(profiles)
+    return reply.send({ success: true, agentProfile: updated })
+  })
+
+  fastify.delete("/v1/agent-profiles/:id", async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const profiles = getAgentProfilesFromConfig()
+    const before = profiles.length
+    const nextProfiles = profiles.filter((profile) => profile.id !== id)
+    if (nextProfiles.length === before) {
+      return reply.code(404).send({ error: 'Agent profile not found' })
+    }
+    saveAgentProfilesToConfig(nextProfiles)
+    return reply.send({ success: true })
+  })
+
+  fastify.get("/v1/agent-personas", async (_req, reply) => {
+    const personas = getAgentProfilesFromConfig().filter((profile) => profile.role === 'delegation-target')
+    return reply.send({ personas })
+  })
+
+  fastify.get("/v1/external-agents", async (_req, reply) => {
+    const externalAgents = getAgentProfilesFromConfig().filter((profile) => profile.role === 'external-agent')
+    return reply.send({ externalAgents })
+  })
+
+  // ====================================================================
+  // Terminal-equivalent endpoints (WhatsApp / Tunnel / TTS)
+  // ====================================================================
+
+  fastify.get("/v1/whatsapp/status", async (_req, reply) => {
+    try {
+      const statusMap = mcpService.getServerStatus()
+      const whatsappServer = statusMap.whatsapp
+      if (!whatsappServer?.connected) {
+        return reply.send({
+          available: false,
+          connected: false,
+          serverConnected: false,
+          error: 'WhatsApp MCP server is not connected',
+          handoff: {
+            type: 'command',
+            commands: [
+              'Enable the whatsapp MCP server in settings',
+              'Then reconnect MCP servers (or restart server)',
+            ],
+          },
+        })
+      }
+
+      const result = await mcpService.executeToolCall('whatsapp:whatsapp_get_status', {})
+      const text = flattenToolResultText(result)
+      const parsed = parseMaybeJson(text)
+
+      if (result.isError) {
+        return reply.send({
+          available: true,
+          connected: false,
+          serverConnected: true,
+          error: text || 'Failed to fetch WhatsApp status',
+        })
+      }
+
+      return reply.send({
+        available: true,
+        connected: Boolean((parsed?.connected as boolean | undefined) ?? false),
+        serverConnected: true,
+        ...(parsed || {}),
+        raw: text,
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ error: err?.message || 'Failed to get WhatsApp status' })
+    }
+  })
+
+  fastify.post("/v1/whatsapp/connect", async (_req, reply) => {
+    try {
+      const statusMap = mcpService.getServerStatus()
+      if (!statusMap.whatsapp?.connected) {
+        return reply.code(400).send({
+          success: false,
+          error: 'WhatsApp MCP server is not connected',
+        })
+      }
+
+      const result = await mcpService.executeToolCall('whatsapp:whatsapp_connect', {})
+      const text = flattenToolResultText(result)
+      const parsed = parseMaybeJson(text)
+      const qrCode = typeof parsed?.qrCode === 'string' ? parsed.qrCode : undefined
+
+      if (result.isError) {
+        return reply.code(400).send({ success: false, error: text || 'Connect failed' })
+      }
+
+      return reply.send({
+        success: true,
+        qrCode,
+        status: parsed || undefined,
+        raw: text,
+        handoff: qrCode
+          ? {
+              type: 'qr',
+              instructions: 'Scan this QR code with WhatsApp on your phone.',
+            }
+          : undefined,
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ success: false, error: err?.message || 'Failed to connect WhatsApp' })
+    }
+  })
+
+  fastify.post("/v1/whatsapp/disconnect", async (_req, reply) => {
+    try {
+      const result = await mcpService.executeToolCall('whatsapp:whatsapp_disconnect', {})
+      const text = flattenToolResultText(result)
+      if (result.isError) {
+        return reply.code(400).send({ success: false, error: text || 'Disconnect failed' })
+      }
+      return reply.send({ success: true, raw: text })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ success: false, error: err?.message || 'Failed to disconnect WhatsApp' })
+    }
+  })
+
+  fastify.post("/v1/whatsapp/logout", async (_req, reply) => {
+    try {
+      const result = await mcpService.executeToolCall('whatsapp:whatsapp_logout', {})
+      const text = flattenToolResultText(result)
+      if (result.isError) {
+        return reply.code(400).send({ success: false, error: text || 'Logout failed' })
+      }
+      return reply.send({ success: true, raw: text })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(500).send({ success: false, error: err?.message || 'Failed to logout WhatsApp' })
+    }
+  })
+
+  fastify.get("/v1/tunnels/status", async (_req, reply) => {
+    return reply.send({
+      ...getTunnelStatus(),
+      handoff: {
+        commands: {
+          startQuick: 'cloudflared tunnel --url http://127.0.0.1:3210',
+          stop: 'pkill -f cloudflared',
+          list: 'cloudflared tunnel list --output json',
+        },
+      },
+    })
+  })
+
+  fastify.post("/v1/tunnels/start", async (req, reply) => {
+    const body = (req.body || {}) as {
+      mode?: 'quick' | 'named'
+      tunnelId?: string
+      hostname?: string
+      credentialsPath?: string
+      localUrl?: string
+    }
+    const started = startTunnel(body)
+    if (!started.success) {
+      return reply.code(400).send(started)
+    }
+    return reply.send(started)
+  })
+
+  fastify.post("/v1/tunnels/stop", async (_req, reply) => {
+    const stopped = await stopTunnel()
+    if (!stopped.success) {
+      return reply.code(500).send(stopped)
+    }
+    return reply.send(stopped)
+  })
+
+  fastify.get("/v1/tunnels/list", async (_req, reply) => {
+    const listed = listTunnels()
+    if (!listed.success) {
+      return reply.code(400).send(listed)
+    }
+    return reply.send(listed)
+  })
+
+  fastify.get("/v1/tunnels/check-installed", async (_req, reply) => {
+    return reply.send(checkCloudflaredInstalled())
+  })
+
+  fastify.post("/v1/tts/generate", async (req, reply) => {
+    try {
+      const body = req.body as {
+        text?: string
+        providerId?: 'openai' | 'groq' | 'gemini'
+        voice?: string
+        model?: string
+        speed?: number
+      }
+      if (!body?.text || typeof body.text !== 'string') {
+        return reply.code(400).send({ error: 'Missing text' })
+      }
+
+      const generated = await generateSpeechToFile({
+        text: body.text,
+        providerId: body.providerId,
+        voice: body.voice,
+        model: body.model,
+        speed: body.speed,
+      })
+
+      return reply.send({
+        success: true,
+        provider: generated.provider,
+        processedText: generated.processedText,
+        file: {
+          path: generated.outputPath,
+          name: generated.fileName,
+          sizeBytes: generated.sizeBytes,
+          mimeType: generated.mimeType,
+        },
+        handoff: {
+          playbackCommand: generated.playbackCommand,
+        },
+      })
+    } catch (error: unknown) {
+      const err = error as Error
+      return reply.code(400).send({ success: false, error: err?.message || 'Failed to generate TTS' })
+    }
   })
 
 

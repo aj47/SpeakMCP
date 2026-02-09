@@ -149,12 +149,12 @@ Each gap below is tagged with a priority:
 |----|---------|-------------------|-------------------|--------|
 | G-18 | **Message queue management** | `getMessageQueue()`, `clearMessageQueue()`, `reorderMessageQueue()`, pause/resume | Server endpoints ✅, client methods ✅, no CLI view | ⚠️ **PARTIAL** — needs CLI view |
 | G-19 | **ACP agent delegation** | `spawnAcpAgent()`, `runAcpTask()`, `getAcpAgentStatuses()` | Server endpoints ✅, client methods ✅, no CLI view | ⚠️ **PARTIAL** — needs CLI view |
-| G-20 | **Cloudflare tunnel** | `startCloudflareTunnel()`, `getCloudflareTunnelStatus()` | Not in scope for TUI | ⚫ **OUT OF SCOPE** — desktop-only |
-| G-21 | **WhatsApp integration** | `whatsappConnect()`, `whatsappGetStatus()` | Not in scope for TUI | ⚫ **OUT OF SCOPE** — requires QR UI |
+| G-20 | **Cloudflare tunnel** | `startCloudflareTunnel()`, `getCloudflareTunnelStatus()` | Terminal-equivalent command palette actions (status/start/stop/list) | ✅ **DONE** — terminal-equivalent |
+| G-21 | **WhatsApp integration** | `whatsappConnect()`, `whatsappGetStatus()` | Terminal-equivalent command palette actions with in-CLI QR rendering | ✅ **DONE** — terminal-equivalent |
 | G-22 | **OAuth flow** | `initiateOAuthFlow()`, `completeOAuthFlow()` for MCP servers | Server endpoints ✅, client methods ✅, no CLI flow | ⚠️ **PARTIAL** — needs browser interaction |
 | G-23 | **MCP protocol extensions** | `resolveElicitation()`, `resolveSampling()` | Server endpoints ✅, client methods ✅, no CLI prompts | ⚠️ **PARTIAL** — needs chat prompts |
 | G-24 | **Agent sessions (multi-session)** | Multiple concurrent agent sessions, snooze/unsnooze, focus | Server endpoints ✅, client methods ✅, no CLI view | ⚠️ **PARTIAL** — needs UX design |
-| G-25 | **Text-to-speech** | `generateSpeech()` with multiple providers | Not feasible in TUI (no audio output) | ⚫ **OUT OF SCOPE** — desktop-only |
+| G-25 | **Text-to-speech** | `generateSpeech()` with multiple providers | Terminal-equivalent TTS generation with file + playback handoff command | ✅ **DONE** — terminal-equivalent |
 
 ---
 
@@ -204,9 +204,6 @@ Each gap below is tagged with a priority:
 - [ ] **G-24**: Multi-session agent **CLI view** (server endpoints + client methods already done)
 
 ### Out of Scope (Desktop-Only)
-- G-20: Cloudflare tunnel management (desktop-only networking feature)
-- G-21: WhatsApp integration (requires QR code scanning UI)
-- G-25: Text-to-speech (requires audio output)
 - Window/panel management (Electron-specific)
 - System tray / dock integration
 - Auto-updates

@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-09",
+  "description": "CLI parity matrix against desktop capabilities and server API support.",
+  "statusEnum": [
+    "implemented",
+    "partial",
+    "missing",
+    "terminal_equivalent_required"
+  ],
+  "sourceOfTruth": {
+    "desktop": [
+      "apps/desktop/src/main/tipc.ts",
+      "apps/desktop/src/renderer/src/router.tsx",
+      "apps/desktop/src/renderer/src/components/app-layout.tsx",
+      "apps/desktop/src/renderer/src/pages/settings-general.tsx",
+      "apps/desktop/src/renderer/src/pages/settings-skills.tsx",
+      "apps/desktop/src/renderer/src/pages/memories.tsx"
+    ],
+    "server": [
+      "packages/server/src/server.ts"
+    ],
+    "cli": [
+      "apps/cli/src/app.ts",
+      "apps/cli/src/client.ts",
+      "apps/cli/src/views/chat.ts",
+      "apps/cli/src/views/settings.ts",
+      "apps/cli/src/views/sessions.ts",
+      "apps/cli/src/views/tools.ts"
+    ],
+    "watchFiles": [
+      "apps/desktop/src/main/tipc.ts",
+      "apps/desktop/src/renderer/src/router.tsx",
+      "apps/desktop/src/renderer/src/components/app-layout.tsx",
+      "apps/desktop/src/renderer/src/pages/settings-general.tsx",
+      "apps/desktop/src/renderer/src/pages/settings-skills.tsx",
+      "apps/desktop/src/renderer/src/pages/memories.tsx",
+      "packages/server/src/server.ts",
+      "apps/cli/src/app.ts",
+      "apps/cli/src/client.ts",
+      "apps/cli/src/views/chat.ts",
+      "apps/cli/src/views/settings.ts",
+      "apps/cli/src/views/sessions.ts",
+      "apps/cli/src/views/tools.ts"
+    ]
+  },
+  "sourceHashes": {
+    "apps/desktop/src/main/tipc.ts": "398792447fac1d54d1404907a4cbad19c009b6b688b93d6bdc9f649aa72c90b1",
+    "apps/desktop/src/renderer/src/router.tsx": "58305bd7ef3b557d5868b3cfc159b9d92bf25266b33019e3db68b373f104d977",
+    "apps/desktop/src/renderer/src/components/app-layout.tsx": "e0e0786118105a9422a18ad7855188a87e73f0b70cc380cccceef186e7abd939",
+    "apps/desktop/src/renderer/src/pages/settings-general.tsx": "394b7aad1a8590971ec153bd247edf634197af972dc5eac979d0e2125bfd8949",
+    "apps/desktop/src/renderer/src/pages/settings-skills.tsx": "ceb3e972abcaac615820e6a88454b4ca104353fdcf8585f64e529782e6f853a9",
+    "apps/desktop/src/renderer/src/pages/memories.tsx": "688235246f99f5de8c3f68f5e15ca539c5ddf2d177e9097bef2a05890b348af0",
+    "packages/server/src/server.ts": "794a3efa6f6c18a266f7f4860b032553332bf9fb18e746a85cafd6c21b35d691",
+    "apps/cli/src/app.ts": "97ff6077f839caa05d40869d90f32d0b3303fd68f7f335e0979fa4dc00e154de",
+    "apps/cli/src/client.ts": "9f1d5e63a1faee1c9ba311866fe69e8ab57c933e67340c9e6c379646b2aa3d37",
+    "apps/cli/src/views/chat.ts": "f8316e5094d5b773337a694ebad52eeab8f1e05ef9195ebd43a5579e30522eb1",
+    "apps/cli/src/views/settings.ts": "19c724ad80b8245a173c357a51c5b04491de38c7ee35aea95ecb5b4c83112cb0",
+    "apps/cli/src/views/sessions.ts": "0120589e84ec0cbc6def07ed5159152aa29d775acc96ee0bf597b932d9cf6d1d",
+    "apps/cli/src/views/tools.ts": "76a367aea9dd6a2c5ac8454423c7ea328c89897d8f9ad16d950ef3fca8632e24"
+  },
+  "rows": [
+    {
+      "id": "G-01",
+      "feature": "Tool approval workflow",
+      "priority": "P0",
+      "desktopSurface": "apps/desktop/src/main/tipc.ts respondToToolApproval",
+      "serverSurface": "/v1/tool-approval",
+      "cliSurface": "apps/cli/src/views/chat.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Chat shows Y/N approval prompt and sends response."
+    },
+    {
+      "id": "G-02",
+      "feature": "Agent progress display",
+      "priority": "P0",
+      "desktopSurface": "apps/desktop/src/renderer/src/components/agent-progress.tsx",
+      "serverSurface": "SSE progress events",
+      "cliSurface": "apps/cli/src/views/chat.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "CLI renders all progress step types."
+    },
+    {
+      "id": "G-03",
+      "feature": "Conversation update",
+      "priority": "P1",
+      "desktopSurface": "Conversation updates via tipc and session views",
+      "serverSurface": "PUT /v1/conversations/:id",
+      "cliSurface": "apps/cli/src/views/sessions.ts",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Rename is implemented; full message/metadata update flows are not exposed."
+    },
+    {
+      "id": "G-04",
+      "feature": "Provider API key configuration",
+      "priority": "P1",
+      "desktopSurface": "settings-general.tsx and settings-providers.tsx",
+      "serverSurface": "GET/PATCH /v1/settings",
+      "cliSurface": "apps/cli/src/views/settings.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "OpenAI, Groq, Gemini keys are editable."
+    },
+    {
+      "id": "G-05",
+      "feature": "TTS toggle in settings",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-general.tsx",
+      "serverSurface": "GET/PATCH /v1/settings",
+      "cliSurface": "apps/cli/src/views/settings.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "TTS toggles are available."
+    },
+    {
+      "id": "G-06",
+      "feature": "Require tool approval toggle",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-general.tsx",
+      "serverSurface": "GET/PATCH /v1/settings",
+      "cliSurface": "apps/cli/src/views/settings.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Boolean toggle is surfaced."
+    },
+    {
+      "id": "G-07",
+      "feature": "Transcript post-processing toggle",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-general.tsx",
+      "serverSurface": "GET/PATCH /v1/settings",
+      "cliSurface": "apps/cli/src/views/settings.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Setting is available in CLI."
+    },
+    {
+      "id": "G-08",
+      "feature": "Model preset selection",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-providers.tsx",
+      "serverSurface": "/v1/model-presets and /v1/settings currentModelPresetId",
+      "cliSurface": "apps/cli/src/views/settings.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Preset select exists; advanced preset CRUD parity remains separate."
+    },
+    {
+      "id": "G-09",
+      "feature": "Profile export/import UI",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-tools.tsx",
+      "serverSurface": "/v1/profiles/:id/export and /v1/profiles/import",
+      "cliSurface": "apps/cli/src/app.ts Ctrl+P overlay",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "X/I keybindings available."
+    },
+    {
+      "id": "G-10",
+      "feature": "Profile CRUD",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-tools.tsx",
+      "serverSurface": "/v1/profiles CRUD",
+      "cliSurface": "apps/cli/src/app.ts Ctrl+P overlay",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Create/edit/delete implemented."
+    },
+    {
+      "id": "G-11",
+      "feature": "Manual MCP tool execution",
+      "priority": "P1",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-mcp-tools.tsx",
+      "serverSurface": "/mcp/tools/list and /mcp/tools/call",
+      "cliSurface": "apps/cli/src/views/tools.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "JSON arg prompt plus result display."
+    },
+    {
+      "id": "G-12",
+      "feature": "Memory management view",
+      "priority": "P2",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/memories.tsx",
+      "serverSurface": "/v1/memories/*",
+      "cliSurface": "apps/cli/src/app.ts command palette actions",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Memory APIs are surfaced through command palette actions; dedicated list/CRUD view is still pending."
+    },
+    {
+      "id": "G-13",
+      "feature": "Skills management view",
+      "priority": "P2",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-skills.tsx",
+      "serverSurface": "/v1/skills/*",
+      "cliSurface": "apps/cli/src/app.ts command palette actions",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Skill lifecycle/import/export APIs are available in client and command palette; dedicated management view is pending."
+    },
+    {
+      "id": "G-14",
+      "feature": "Conversation search",
+      "priority": "P2",
+      "desktopSurface": "Desktop sidebar/session search",
+      "serverSurface": "Conversation list APIs",
+      "cliSurface": "apps/cli/src/views/sessions.ts",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Client-side title filtering only; full parity search semantics differ."
+    },
+    {
+      "id": "G-15",
+      "feature": "Dual-model / advanced preset config",
+      "priority": "P2",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-providers.tsx",
+      "serverSurface": "GET/PATCH /v1/settings + /v1/model-presets",
+      "cliSurface": "apps/cli/src/views/settings.ts",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Some toggles exist; full advanced model workflow missing."
+    },
+    {
+      "id": "G-16",
+      "feature": "Diagnostics view",
+      "priority": "P2",
+      "desktopSurface": "Diagnostics handlers in apps/desktop/src/main/tipc.ts",
+      "serverSurface": "/v1/diagnostics/*",
+      "cliSurface": "apps/cli/src/app.ts command palette actions",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Diagnostics health/report actions are available via command palette; full diagnostics screen is pending."
+    },
+    {
+      "id": "G-17",
+      "feature": "MCP server detailed management",
+      "priority": "P2",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-mcp-tools.tsx",
+      "serverSurface": "/v1/mcp/servers/*",
+      "cliSurface": "apps/cli/src/views/tools.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Restart/stop/log/test available."
+    },
+    {
+      "id": "G-18",
+      "feature": "Message queue management",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/renderer/src/components/message-queue-panel.tsx",
+      "serverSurface": "/v1/queue*",
+      "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Advanced queue APIs (pause/resume/retry/reorder/edit/list-all) are implemented and callable; dedicated queue panel UX remains pending."
+    },
+    {
+      "id": "G-19",
+      "feature": "ACP agent delegation management",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-external-agents.tsx and settings-agent-personas.tsx",
+      "serverSurface": "/v1/acp/agents*",
+      "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Server/client support ACP and agent profile/persona APIs; CLI currently exposes list/control through command palette actions."
+    },
+    {
+      "id": "G-20",
+      "feature": "Cloudflare tunnel flows",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-remote-server.tsx",
+      "serverSurface": "/v1/tunnels/*",
+      "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
+      "status": "implemented",
+      "parityType": "terminal_equivalent",
+      "notes": "Terminal-equivalent tunnel status/start/stop/list endpoints and command-palette controls are implemented."
+    },
+    {
+      "id": "G-21",
+      "feature": "WhatsApp integration flows",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/renderer/src/pages/settings-whatsapp.tsx",
+      "serverSurface": "/v1/whatsapp/*",
+      "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
+      "status": "implemented",
+      "parityType": "terminal_equivalent",
+      "notes": "Terminal-equivalent WhatsApp status/connect/disconnect/logout flows are exposed from the CLI command palette, including in-CLI QR rendering for scan-to-connect flows."
+    },
+    {
+      "id": "G-22",
+      "feature": "OAuth flow UX",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/main/tipc.ts initiateOAuthFlow/completeOAuthFlow",
+      "serverSurface": "/v1/oauth/*",
+      "cliSurface": "No interactive flow",
+      "status": "missing",
+      "parityType": "direct",
+      "notes": "Endpoints exist; user prompt/open-browser flow not wired in CLI."
+    },
+    {
+      "id": "G-23",
+      "feature": "Elicitation and sampling prompts",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/main/tipc.ts resolveElicitation/resolveSampling",
+      "serverSurface": "/v1/elicitation/* and /v1/sampling/*",
+      "cliSurface": "No chat prompt integration",
+      "status": "missing",
+      "parityType": "direct",
+      "notes": "Client methods exist; no interactive UI prompts in chat."
+    },
+    {
+      "id": "G-24",
+      "feature": "Multi-session agent management",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/renderer/src/components/active-agents-sidebar.tsx",
+      "serverSurface": "/v1/agent-sessions*",
+      "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
+      "status": "partial",
+      "parityType": "direct",
+      "notes": "Session payloads now include snooze/status metadata and APIs support snooze/unsnooze; dedicated sidebar/session panel UX is pending."
+    },
+    {
+      "id": "G-25",
+      "feature": "Text-to-speech output experience",
+      "priority": "P3",
+      "desktopSurface": "apps/desktop/src/main/tipc.ts generateSpeech",
+      "serverSurface": "/v1/tts/generate",
+      "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
+      "status": "implemented",
+      "parityType": "terminal_equivalent",
+      "notes": "Terminal-equivalent TTS generation writes audio files and returns playback handoff commands, surfaced in CLI command palette."
+    },
+    {
+      "id": "UX-01",
+      "feature": "Global command palette",
+      "priority": "P2",
+      "desktopSurface": "Desktop sidebar/settings navigation breadth",
+      "serverSurface": "N/A",
+      "cliSurface": "apps/cli/src/app.ts",
+      "status": "implemented",
+      "parityType": "direct",
+      "notes": "Ctrl+K command palette is implemented and provides discoverable navigation and parity control actions."
+    }
+  ]
+}

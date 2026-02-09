@@ -67,3 +67,4 @@ release/
 # Test artifacts
 trace-session*.json
 apps/desktop/tmp/
+apps/cli/parity/reports/

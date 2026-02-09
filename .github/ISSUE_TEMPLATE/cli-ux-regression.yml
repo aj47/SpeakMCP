@@ -1,0 +1,83 @@
+name: CLI UX regression
+about: Report a CLI workflow regression (speed, keystrokes, recoverable errors).
+title: "[CLI UX Regression] "
+labels:
+  - cli
+  - ux
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for UX regressions against baseline workflows.
+        Include artifacts from `parity:smoke` or `parity:full` and local UX logs.
+
+  - type: input
+    id: workflow
+    attributes:
+      label: Workflow name
+      description: Which workflow regressed?
+      placeholder: Queue pause/retry flow
+    validations:
+      required: true
+
+  - type: textarea
+    id: regression_summary
+    attributes:
+      label: Regression summary
+      description: Explain what got worse and when.
+      placeholder: Completion time increased from X to Y, extra keypresses required, etc.
+    validations:
+      required: true
+
+  - type: input
+    id: completion_time_ms
+    attributes:
+      label: Completion time (ms)
+      description: Measured completion time for this run.
+      placeholder: "42000"
+    validations:
+      required: true
+
+  - type: input
+    id: keystroke_count
+    attributes:
+      label: Keystroke count
+      description: Number of keypresses needed for the workflow.
+      placeholder: "37"
+    validations:
+      required: true
+
+  - type: input
+    id: recoverable_error_count
+    attributes:
+      label: Recoverable error count
+      description: Number of recoverable errors observed.
+      placeholder: "1"
+    validations:
+      required: true
+
+  - type: input
+    id: parity_report_path
+    attributes:
+      label: Parity report path (required)
+      description: Path to report artifact generated locally.
+      placeholder: /Users/<you>/Development/SpeakMCP-Workspaces/slot-1/apps/cli/parity/reports/parity-smoke-report.json
+    validations:
+      required: true
+
+  - type: input
+    id: diagnostics_export_path
+    attributes:
+      label: Diagnostics export path (required)
+      description: Path to diagnostics output used for debugging.
+      placeholder: /Users/<you>/.speakmcp/logs/diagnostics-export.json
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any additional context, screenshots, or logs.
+    validations:
+      required: false

@@ -16,6 +16,7 @@ import {
   SelectRenderable,
   SelectRenderableEvents,
 } from '@opentui/core'
+import QRCode from 'qrcode'
 
 import { SpeakMcpClient } from './client'
 import type { CliConfig, ViewName, AppState, ConnectionState, Profile } from './types'
@@ -32,6 +33,14 @@ const TAB_OPTIONS = [
   { name: 'Settings', description: 'View and modify configuration' },
   { name: 'Tools', description: 'Browse available MCP tools' },
 ]
+
+interface CommandPaletteItem {
+  id: string
+  title: string
+  description: string
+  keywords: string[]
+  run: () => Promise<void>
+}
 
 export class App {
   private client: SpeakMcpClient
@@ -57,6 +66,18 @@ export class App {
   // Overlay state
   private helpOverlay: BoxRenderable | null = null
   private profileSwitcher: BoxRenderable | null = null
+  private qrCodeOverlay: BoxRenderable | null = null
+  private commandPaletteOverlay: BoxRenderable | null = null
+  private commandPaletteBox: BoxRenderable | null = null
+  private commandPaletteInput: InputRenderable | null = null
+  private commandPaletteListContainer: BoxRenderable | null = null
+  private commandPaletteSelect: SelectRenderable | null = null
+  private commandPaletteItems: CommandPaletteItem[] = []
+  private commandPaletteFilteredItems: CommandPaletteItem[] = []
+  private commandPaletteSelectedIndex: number = 0
+  private commandPaletteQuery: string = ''
+  private statusNotice: string | null = null
+  private statusNoticeTimer: ReturnType<typeof setTimeout> | null = null
   private profiles: Profile[] = []
   private profileSelectedIndex: number = 0
   private profileSelectRenderable: SelectRenderable | null = null
@@ -101,6 +122,14 @@ export class App {
   private setupKeyboardHandlers(): void {
     this.renderer.keyInput.on('keypress', (key: KeyEvent) => {
       // Handle overlays first - they capture all input
+      if (this.qrCodeOverlay) {
+        this.handleQrCodeOverlayKeyPress(key)
+        return
+      }
+      if (this.commandPaletteOverlay) {
+        this.handleCommandPaletteKeyPress(key)
+        return
+      }
       if (this.helpOverlay) {
         this.hideHelpOverlay()
         return
@@ -168,6 +197,12 @@ export class App {
       // Ctrl+P - Profile switcher
       if (key.ctrl && key.name === 'p') {
         this.showProfileSwitcher()
+        return
+      }
+
+      // Ctrl+K - Command palette
+      if (key.ctrl && key.name === 'k') {
+        this.showCommandPalette()
         return
       }
 
@@ -287,7 +322,8 @@ export class App {
     const profile = this.state.currentProfile?.name || 'default'
     const connectionIndicator = this.getConnectionIndicator()
     const processing = this.state.isProcessing ? ' [Processing...]' : ''
-    return ` Profile: ${profile} | ${connectionIndicator}${processing}  |  [?] Help`
+    const notice = this.statusNotice ? `  |  ${this.statusNotice}` : ''
+    return ` Profile: ${profile} | ${connectionIndicator}${processing}  |  [Ctrl+K] Commands  [?] Help${notice}`
   }
 
   private getConnectionIndicator(): string {
@@ -303,6 +339,19 @@ export class App {
 
   private updateStatusBar(): void {
     this.statusBar.content = this.getStatusText()
+  }
+
+  private setStatusNotice(message: string, ttlMs: number = 4500): void {
+    this.statusNotice = message
+    this.updateStatusBar()
+    if (this.statusNoticeTimer) {
+      clearTimeout(this.statusNoticeTimer)
+    }
+    this.statusNoticeTimer = setTimeout(() => {
+      this.statusNotice = null
+      this.updateStatusBar()
+      this.statusNoticeTimer = null
+    }, ttlMs)
   }
 
   private async loadInitialData(): Promise<void> {
@@ -369,6 +418,10 @@ export class App {
 
   private shutdown(): void {
     this.stopHealthCheck()
+    if (this.statusNoticeTimer) {
+      clearTimeout(this.statusNoticeTimer)
+      this.statusNoticeTimer = null
+    }
     this.renderer.stop()
     process.exit(0)
   }
@@ -515,6 +568,7 @@ export class App {
 
     const globalShortcuts = [
       '   F1-F4      Switch views (or Alt+1-4)',
+      '   Ctrl+K     Command palette',
       '   Ctrl+N     New conversation',
       '   Ctrl+P     Profiles (C/E/D/X/I)',
       '   Ctrl+C     Stop agent / Quit',
@@ -588,6 +642,645 @@ export class App {
     if (!this.helpOverlay) return
     this.renderer.root.remove(this.helpOverlay.id)
     this.helpOverlay = null
+  }
+
+  private handleQrCodeOverlayKeyPress(key: KeyEvent): void {
+    if (key.name === 'escape' || key.name === 'enter') {
+      this.hideQrCodeOverlay()
+      return
+    }
+
+    const sequence = typeof key.sequence === 'string' ? key.sequence.toLowerCase() : ''
+    if (sequence === 'q') {
+      this.hideQrCodeOverlay()
+    }
+  }
+
+  private async showQrCodeOverlay(qrCodeData: string, sourceLabel: string): Promise<void> {
+    const qrText: string = await QRCode.toString(qrCodeData, {
+      type: 'utf8',
+      margin: 0,
+    })
+
+    if (this.qrCodeOverlay) {
+      this.hideQrCodeOverlay()
+    }
+
+    const qrLines = qrText.replace(/\n$/, '').split('\n')
+    const maxQrLineLength = qrLines.reduce((max: number, line: string) => Math.max(max, line.length), 0)
+    const termCols = process.stdout.columns || 80
+    const termRows = process.stdout.rows || 24
+    const maxWidth = Math.max(40, termCols - 2)
+    const maxHeight = Math.max(14, termRows - 2)
+    const boxWidth = Math.min(maxWidth, Math.max(52, maxQrLineLength + 8))
+    const boxHeight = Math.min(maxHeight, Math.max(18, qrLines.length + 8))
+
+    const root = this.renderer.root
+    this.qrCodeOverlay = new BoxRenderable(this.renderer, {
+      id: 'qr-code-overlay',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: '#000000CC',
+      justifyContent: 'center',
+      alignItems: 'center',
+    })
+
+    const qrBox = new BoxRenderable(this.renderer, {
+      id: 'qr-code-box',
+      width: boxWidth,
+      height: boxHeight,
+      borderStyle: 'single',
+      borderColor: '#888888',
+      backgroundColor: '#1a1a1a',
+      padding: 1,
+      flexDirection: 'column',
+    })
+
+    qrBox.add(new TextRenderable(this.renderer, {
+      id: 'qr-code-title',
+      content: '-- WhatsApp QR Code --',
+      fg: '#FFFFFF',
+    }))
+
+    qrBox.add(new TextRenderable(this.renderer, {
+      id: 'qr-code-source',
+      content: `Source: ${sourceLabel}`,
+      fg: '#88AAFF',
+    }))
+
+    qrBox.add(new TextRenderable(this.renderer, {
+      id: 'qr-code-body',
+      content: qrText,
+      fg: '#000000',
+      bg: '#FFFFFF',
+    }))
+
+    qrBox.add(new TextRenderable(this.renderer, {
+      id: 'qr-code-instructions',
+      content: 'Scan with WhatsApp > Settings > Linked Devices > Link a Device',
+      fg: '#CCCCCC',
+    }))
+
+    qrBox.add(new TextRenderable(this.renderer, {
+      id: 'qr-code-footer',
+      content: '[Esc/Enter/Q] Close',
+      fg: '#888888',
+    }))
+
+    this.qrCodeOverlay.add(qrBox)
+    root.add(this.qrCodeOverlay)
+  }
+
+  private hideQrCodeOverlay(): void {
+    if (!this.qrCodeOverlay) return
+    this.renderer.root.remove(this.qrCodeOverlay.id)
+    this.qrCodeOverlay = null
+  }
+
+  private parseJsonObject(raw: string): Record<string, unknown> | null {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      // ignore invalid JSON
+    }
+    return null
+  }
+
+  private extractWhatsAppQrCode(payload: unknown): string | null {
+    if (!payload || typeof payload !== 'object') return null
+    const record = payload as Record<string, unknown>
+
+    const direct = record.qrCode
+    if (typeof direct === 'string' && direct.trim().length > 0) {
+      return direct
+    }
+
+    const status = record.status
+    if (status && typeof status === 'object') {
+      const nested = (status as Record<string, unknown>).qrCode
+      if (typeof nested === 'string' && nested.trim().length > 0) {
+        return nested
+      }
+    }
+
+    const raw = record.raw
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      const parsed = this.parseJsonObject(raw)
+      const nested = parsed?.qrCode
+      if (typeof nested === 'string' && nested.trim().length > 0) {
+        return nested
+      }
+    }
+
+    return null
+  }
+
+  private async maybeShowWhatsAppQrCode(payload: unknown, sourceLabel: string): Promise<boolean> {
+    const qrCodeData = this.extractWhatsAppQrCode(payload)
+    if (!qrCodeData) {
+      return false
+    }
+
+    try {
+      await this.showQrCodeOverlay(qrCodeData, sourceLabel)
+      return true
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.setStatusNotice(`Failed to render QR code: ${message}`, 8000)
+      return false
+    }
+  }
+
+  // Command palette
+  private showCommandPalette(): void {
+    if (this.commandPaletteOverlay) return
+
+    this.commandPaletteItems = this.buildCommandPaletteItems()
+    this.commandPaletteQuery = ''
+    this.commandPaletteSelectedIndex = 0
+    this.commandPaletteFilteredItems = [...this.commandPaletteItems]
+
+    const root = this.renderer.root
+    this.commandPaletteOverlay = new BoxRenderable(this.renderer, {
+      id: 'command-palette-overlay',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: '#000000CC',
+      justifyContent: 'center',
+      alignItems: 'center',
+    })
+
+    this.commandPaletteBox = new BoxRenderable(this.renderer, {
+      id: 'command-palette-box',
+      width: 74,
+      height: 22,
+      borderStyle: 'single',
+      borderColor: '#888888',
+      backgroundColor: '#1a1a1a',
+      padding: 1,
+      flexDirection: 'column',
+    })
+
+    const title = new TextRenderable(this.renderer, {
+      id: 'command-palette-title',
+      content: '-- Command Palette --',
+      fg: '#FFFFFF',
+    })
+    this.commandPaletteBox.add(title)
+
+    const inputRow = new BoxRenderable(this.renderer, {
+      id: 'command-palette-input-row',
+      width: '100%',
+      height: 1,
+      flexDirection: 'row',
+      marginTop: 1,
+      marginBottom: 1,
+    })
+    inputRow.add(new TextRenderable(this.renderer, {
+      id: 'command-palette-input-label',
+      content: ' > ',
+      fg: '#66AAFF',
+    }))
+
+    this.commandPaletteInput = new InputRenderable(this.renderer, {
+      id: 'command-palette-input',
+      width: 66,
+      height: 1,
+      placeholder: 'Search commands...',
+      focusedBackgroundColor: '#2a2a2a',
+    })
+    this.commandPaletteInput.on(InputRenderableEvents.CHANGE, (value: string) => {
+      this.commandPaletteQuery = value
+      this.commandPaletteSelectedIndex = 0
+      this.refreshCommandPaletteList()
+    })
+    this.commandPaletteInput.on(InputRenderableEvents.ENTER, () => {
+      void this.executeSelectedCommandPaletteItem()
+    })
+    inputRow.add(this.commandPaletteInput)
+    this.commandPaletteBox.add(inputRow)
+
+    this.commandPaletteListContainer = new BoxRenderable(this.renderer, {
+      id: 'command-palette-list-container',
+      width: '100%',
+      flexGrow: 1,
+    })
+    this.commandPaletteBox.add(this.commandPaletteListContainer)
+
+    const footer = new TextRenderable(this.renderer, {
+      id: 'command-palette-footer',
+      content: '[Enter] Run  [Up/Down] Navigate  [Esc] Close',
+      fg: '#888888',
+    })
+    this.commandPaletteBox.add(footer)
+
+    this.commandPaletteOverlay.add(this.commandPaletteBox)
+    root.add(this.commandPaletteOverlay)
+
+    this.refreshCommandPaletteList()
+    setTimeout(() => this.commandPaletteInput?.focus(), 0)
+  }
+
+  private hideCommandPalette(): void {
+    if (!this.commandPaletteOverlay) return
+    this.renderer.root.remove(this.commandPaletteOverlay.id)
+    this.commandPaletteOverlay = null
+    this.commandPaletteBox = null
+    this.commandPaletteInput = null
+    this.commandPaletteListContainer = null
+    this.commandPaletteSelect = null
+    this.commandPaletteItems = []
+    this.commandPaletteFilteredItems = []
+    this.commandPaletteSelectedIndex = 0
+    this.commandPaletteQuery = ''
+  }
+
+  private handleCommandPaletteKeyPress(key: KeyEvent): void {
+    if (key.ctrl && key.name === 'k') {
+      this.hideCommandPalette()
+      return
+    }
+    if (key.name === 'escape') {
+      this.hideCommandPalette()
+      return
+    }
+    if (key.name === 'up') {
+      this.moveCommandPaletteSelection(-1)
+      return
+    }
+    if (key.name === 'down') {
+      this.moveCommandPaletteSelection(1)
+      return
+    }
+    if (key.name === 'enter') {
+      void this.executeSelectedCommandPaletteItem()
+      return
+    }
+  }
+
+  private moveCommandPaletteSelection(delta: number): void {
+    if (this.commandPaletteFilteredItems.length === 0) return
+    const count = this.commandPaletteFilteredItems.length
+    this.commandPaletteSelectedIndex = (this.commandPaletteSelectedIndex + delta + count) % count
+    this.commandPaletteSelect?.setSelectedIndex(this.commandPaletteSelectedIndex)
+  }
+
+  private refreshCommandPaletteList(): void {
+    if (!this.commandPaletteListContainer) return
+
+    const children = this.commandPaletteListContainer.getChildren()
+    for (const child of children) {
+      this.commandPaletteListContainer.remove(child.id)
+    }
+
+    const query = this.commandPaletteQuery.trim().toLowerCase()
+    this.commandPaletteFilteredItems = this.commandPaletteItems.filter((item) => {
+      if (!query) return true
+      return (
+        item.title.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query) ||
+        item.keywords.some((keyword) => keyword.includes(query))
+      )
+    })
+
+    if (this.commandPaletteFilteredItems.length === 0) {
+      this.commandPaletteListContainer.add(new TextRenderable(this.renderer, {
+        id: 'command-palette-empty',
+        content: 'No commands match your search.',
+        fg: '#888888',
+      }))
+      this.commandPaletteSelect = null
+      return
+    }
+
+    if (this.commandPaletteSelectedIndex >= this.commandPaletteFilteredItems.length) {
+      this.commandPaletteSelectedIndex = this.commandPaletteFilteredItems.length - 1
+    }
+
+    this.commandPaletteSelect = new SelectRenderable(this.renderer, {
+      id: 'command-palette-select',
+      width: '100%',
+      height: Math.min(16, Math.max(4, this.commandPaletteFilteredItems.length * 2)),
+      options: this.commandPaletteFilteredItems.map((item) => ({
+        name: item.title,
+        description: item.description,
+      })),
+    })
+    this.commandPaletteSelect.setSelectedIndex(this.commandPaletteSelectedIndex)
+    this.commandPaletteSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index: number) => {
+      this.commandPaletteSelectedIndex = index
+      void this.executeSelectedCommandPaletteItem()
+    })
+    this.commandPaletteListContainer.add(this.commandPaletteSelect)
+  }
+
+  private async executeSelectedCommandPaletteItem(): Promise<void> {
+    const command = this.commandPaletteFilteredItems[this.commandPaletteSelectedIndex]
+    if (!command) return
+
+    this.hideCommandPalette()
+    try {
+      await command.run()
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.setStatusNotice(`Command failed: ${message}`, 7000)
+    }
+  }
+
+  private logCommandOutput(label: string, payload: unknown): void {
+    console.log(`\\n--- ${label} ---`)
+    if (typeof payload === 'string') {
+      console.log(payload)
+    } else {
+      console.log(JSON.stringify(payload, null, 2))
+    }
+    console.log(`--- End ${label} ---\\n`)
+  }
+
+  private async getLastAssistantMessageForCurrentConversation(): Promise<string | null> {
+    if (!this.state.currentConversationId) return null
+    const conversation = await this.client.getConversation(this.state.currentConversationId)
+    const latestAssistant = [...conversation.messages].reverse().find(
+      (message) => message.role === 'assistant' && message.content.trim().length > 0,
+    )
+    return latestAssistant?.content || null
+  }
+
+  private buildCommandPaletteItems(): CommandPaletteItem[] {
+    return [
+      {
+        id: 'view-chat',
+        title: 'View: Chat',
+        description: 'Switch to chat view',
+        keywords: ['view', 'chat', 'f1'],
+        run: async () => {
+          await this.switchView('chat')
+        },
+      },
+      {
+        id: 'view-sessions',
+        title: 'View: Sessions',
+        description: 'Switch to sessions view',
+        keywords: ['view', 'sessions', 'f2'],
+        run: async () => {
+          await this.switchView('sessions')
+        },
+      },
+      {
+        id: 'view-settings',
+        title: 'View: Settings',
+        description: 'Switch to settings view',
+        keywords: ['view', 'settings', 'f3'],
+        run: async () => {
+          await this.switchView('settings')
+        },
+      },
+      {
+        id: 'view-tools',
+        title: 'View: Tools',
+        description: 'Switch to tools view',
+        keywords: ['view', 'tools', 'f4'],
+        run: async () => {
+          await this.switchView('tools')
+        },
+      },
+      {
+        id: 'memories-list',
+        title: 'Memories: List',
+        description: 'Fetch and print saved memories',
+        keywords: ['memories', 'memory', 'list'],
+        run: async () => {
+          const result = await this.client.getMemories()
+          this.logCommandOutput('Memories', result)
+          this.setStatusNotice(`Memories loaded: ${result.memories.length} (details in console)`)
+        },
+      },
+      {
+        id: 'skills-list',
+        title: 'Skills: List',
+        description: 'Fetch and print skills catalog',
+        keywords: ['skills', 'list', 'import'],
+        run: async () => {
+          const result = await this.client.getSkills()
+          this.logCommandOutput('Skills', result)
+          this.setStatusNotice(`Skills loaded: ${result.skills.length} (details in console)`)
+        },
+      },
+      {
+        id: 'diagnostics-health',
+        title: 'Diagnostics: Health',
+        description: 'Run health check and print result',
+        keywords: ['diagnostics', 'health', 'report'],
+        run: async () => {
+          const result = await this.client.getHealthCheck()
+          this.logCommandOutput('Diagnostics Health', result)
+          this.setStatusNotice(`Diagnostics: ${result.overall} (details in console)`)
+        },
+      },
+      {
+        id: 'queue-all',
+        title: 'Queue: List all queues',
+        description: 'Fetch grouped queue state',
+        keywords: ['queue', 'list', 'pause', 'retry'],
+        run: async () => {
+          const result = await this.client.getAllQueues()
+          this.logCommandOutput('Message Queues', result)
+          this.setStatusNotice(`Queue groups: ${result.queues.length} (details in console)`)
+        },
+      },
+      {
+        id: 'queue-pause-current',
+        title: 'Queue: Pause current conversation',
+        description: 'Pause queue processing for active conversation',
+        keywords: ['queue', 'pause', 'conversation'],
+        run: async () => {
+          if (!this.state.currentConversationId) {
+            this.setStatusNotice('No active conversation to pause')
+            return
+          }
+          await this.client.pauseQueue(this.state.currentConversationId)
+          this.setStatusNotice(`Queue paused for ${this.state.currentConversationId}`)
+        },
+      },
+      {
+        id: 'queue-resume-current',
+        title: 'Queue: Resume current conversation',
+        description: 'Resume queue processing for active conversation',
+        keywords: ['queue', 'resume', 'conversation'],
+        run: async () => {
+          if (!this.state.currentConversationId) {
+            this.setStatusNotice('No active conversation to resume')
+            return
+          }
+          await this.client.resumeQueue(this.state.currentConversationId)
+          this.setStatusNotice(`Queue resumed for ${this.state.currentConversationId}`)
+        },
+      },
+      {
+        id: 'agent-sessions-list',
+        title: 'Agent Sessions: List',
+        description: 'Fetch current agent sessions',
+        keywords: ['agent', 'sessions', 'snooze', 'stop'],
+        run: async () => {
+          const result = await this.client.getAgentSessions()
+          this.logCommandOutput('Agent Sessions', result)
+          this.setStatusNotice(`Agent sessions: ${result.activeCount} active (details in console)`)
+        },
+      },
+      {
+        id: 'agent-sessions-stop-all',
+        title: 'Agent Sessions: Stop all',
+        description: 'Emergency stop all running sessions',
+        keywords: ['agent', 'sessions', 'stop', 'kill'],
+        run: async () => {
+          await this.client.stopAllAgentSessions()
+          this.setStatusNotice('All agent sessions stopped')
+        },
+      },
+      {
+        id: 'personas-list',
+        title: 'Personas: List delegation targets',
+        description: 'Fetch agent personas',
+        keywords: ['personas', 'delegation', 'agents'],
+        run: async () => {
+          const result = await this.client.getAgentPersonas()
+          this.logCommandOutput('Agent Personas', result)
+          this.setStatusNotice(`Personas loaded: ${result.personas.length}`)
+        },
+      },
+      {
+        id: 'external-agents-list',
+        title: 'External Agents: List',
+        description: 'Fetch external-agent profiles',
+        keywords: ['external', 'agents', 'profiles'],
+        run: async () => {
+          const result = await this.client.getExternalAgents()
+          this.logCommandOutput('External Agents', result)
+          this.setStatusNotice(`External agents loaded: ${result.externalAgents.length}`)
+        },
+      },
+      {
+        id: 'whatsapp-status',
+        title: 'WhatsApp: Status',
+        description: 'Fetch WhatsApp connection status',
+        keywords: ['whatsapp', 'status', 'qr'],
+        run: async () => {
+          const result = await this.client.getWhatsAppStatus()
+          this.logCommandOutput('WhatsApp Status', result)
+          if (await this.maybeShowWhatsAppQrCode(result, 'whatsapp status')) {
+            this.setStatusNotice('WhatsApp QR ready. Scan and press Esc when done.', 9000)
+            return
+          }
+          this.setStatusNotice('WhatsApp status fetched (details in console)')
+        },
+      },
+      {
+        id: 'whatsapp-connect',
+        title: 'WhatsApp: Connect',
+        description: 'Start WhatsApp connect flow (QR if required)',
+        keywords: ['whatsapp', 'connect', 'qr'],
+        run: async () => {
+          const result = await this.client.connectWhatsApp()
+          this.logCommandOutput('WhatsApp Connect', result)
+          if (await this.maybeShowWhatsAppQrCode(result, 'whatsapp connect')) {
+            this.setStatusNotice('WhatsApp QR ready. Scan and press Esc when done.', 9000)
+            return
+          }
+          this.setStatusNotice('WhatsApp connect requested (details in console)')
+        },
+      },
+      {
+        id: 'whatsapp-disconnect',
+        title: 'WhatsApp: Disconnect',
+        description: 'Disconnect without logout',
+        keywords: ['whatsapp', 'disconnect'],
+        run: async () => {
+          const result = await this.client.disconnectWhatsApp()
+          this.logCommandOutput('WhatsApp Disconnect', result)
+          this.setStatusNotice('WhatsApp disconnect requested')
+        },
+      },
+      {
+        id: 'whatsapp-logout',
+        title: 'WhatsApp: Logout',
+        description: 'Logout and clear WhatsApp auth',
+        keywords: ['whatsapp', 'logout'],
+        run: async () => {
+          const result = await this.client.logoutWhatsApp()
+          this.logCommandOutput('WhatsApp Logout', result)
+          this.setStatusNotice('WhatsApp logout requested')
+        },
+      },
+      {
+        id: 'tunnel-status',
+        title: 'Tunnel: Status',
+        description: 'Fetch tunnel runtime status',
+        keywords: ['tunnel', 'status', 'cloudflared'],
+        run: async () => {
+          const result = await this.client.getTunnelStatus()
+          this.logCommandOutput('Tunnel Status', result)
+          this.setStatusNotice(`Tunnel ${result.running ? 'running' : 'stopped'} (details in console)`)
+        },
+      },
+      {
+        id: 'tunnel-start-quick',
+        title: 'Tunnel: Start quick tunnel',
+        description: 'Start cloudflared quick tunnel',
+        keywords: ['tunnel', 'start', 'quick'],
+        run: async () => {
+          const result = await this.client.startTunnel({ mode: 'quick' })
+          this.logCommandOutput('Tunnel Start', result)
+          this.setStatusNotice('Tunnel start requested (details in console)')
+        },
+      },
+      {
+        id: 'tunnel-stop',
+        title: 'Tunnel: Stop',
+        description: 'Stop running cloudflared tunnel',
+        keywords: ['tunnel', 'stop'],
+        run: async () => {
+          const result = await this.client.stopTunnel()
+          this.logCommandOutput('Tunnel Stop', result)
+          this.setStatusNotice('Tunnel stop requested')
+        },
+      },
+      {
+        id: 'tunnel-list',
+        title: 'Tunnel: List configured tunnels',
+        description: 'Run cloudflared tunnel list',
+        keywords: ['tunnel', 'list'],
+        run: async () => {
+          const result = await this.client.listTunnels()
+          this.logCommandOutput('Tunnel List', result)
+          this.setStatusNotice(`Tunnels listed: ${result.tunnels.length}`)
+        },
+      },
+      {
+        id: 'tts-generate-last-assistant',
+        title: 'TTS: Generate from latest assistant reply',
+        description: 'Generate audio file from current conversation',
+        keywords: ['tts', 'audio', 'speech'],
+        run: async () => {
+          const lastAssistantMessage = await this.getLastAssistantMessageForCurrentConversation()
+          if (!lastAssistantMessage) {
+            this.setStatusNotice('No assistant message available for TTS')
+            return
+          }
+          const result = await this.client.generateTTS({ text: lastAssistantMessage })
+          this.logCommandOutput('TTS Generation', result)
+          this.setStatusNotice(`TTS file created: ${result.file.name}`)
+        },
+      },
+    ]
   }
 
   // Profile switcher popup
@@ -922,4 +1615,3 @@ export class App {
     setTimeout(() => this.profileInput?.focus(), 0)
   }
 }
-

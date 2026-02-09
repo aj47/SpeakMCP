@@ -1,0 +1,70 @@
+name: CLI parity gap
+about: Report a feature parity mismatch between Electron and CLI.
+title: "[CLI Parity Gap] "
+labels:
+  - cli
+  - parity
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for capability mismatches between desktop and CLI.
+        Attach artifacts from `pnpm --filter @speakmcp/cli parity:full` whenever possible.
+
+  - type: input
+    id: feature_area
+    attributes:
+      label: Feature area
+      description: Short feature name (e.g. Queue retry, Skills import, WhatsApp status).
+      placeholder: Queue retry
+    validations:
+      required: true
+
+  - type: textarea
+    id: parity_gap
+    attributes:
+      label: Parity gap description
+      description: Describe expected desktop behavior vs actual CLI behavior.
+      placeholder: |
+        Desktop:
+        CLI:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Exact steps to reproduce.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: parity_report_path
+    attributes:
+      label: Parity report path (required)
+      description: Path to report artifact generated locally.
+      placeholder: /Users/<you>/Development/SpeakMCP-Workspaces/slot-1/apps/cli/parity/reports/parity-report.json
+    validations:
+      required: true
+
+  - type: input
+    id: diagnostics_export_path
+    attributes:
+      label: Diagnostics export path (required)
+      description: Path to diagnostics output used for debugging.
+      placeholder: /Users/<you>/.speakmcp/logs/diagnostics-export.json
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Additional artifacts
+      description: Include log excerpts, screenshots, or terminal transcript snippets.
+    validations:
+      required: false

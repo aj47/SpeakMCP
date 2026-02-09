@@ -261,8 +261,8 @@ The following is a comprehensive list of Electron desktop app settings that CLI 
 #### Text-to-Speech (TTS)
 | Feature | Desktop | CLI Status | Test |
 |---------|---------|------------|------|
-| TTS Enabled | Yes | N/A (no audio) | Skip |
-| TTS Voice selection | Yes | N/A | Skip |
+| TTS Enabled | Yes | Required (terminal-equivalent) | `should generate tts and return playback handoff` |
+| TTS Voice selection | Yes | Optional | |
 | TTS Auto-play | Yes | N/A | Skip |
 
 #### Panel Position
@@ -332,7 +332,7 @@ The following is a comprehensive list of Electron desktop app settings that CLI 
 | Bind Address | Yes | Required | |
 | API Key | Yes | Required | |
 | CORS Origins | Yes | Optional | |
-| Cloudflare Tunnel | Yes | N/A (desktop only) | Skip |
+| Cloudflare Tunnel | Yes | Required (terminal-equivalent) | `should run tunnel status/start/stop/list` |
 
 *Note: CLI connects to a remote server, so these settings verify the server config.
 
@@ -374,10 +374,10 @@ The following is a comprehensive list of Electron desktop app settings that CLI 
 
 | Feature | Desktop | CLI Status | Test |
 |---------|---------|------------|------|
-| Enable WhatsApp | Yes | N/A (desktop only) | Skip |
-| WhatsApp QR Code | Yes | N/A | Skip |
-| Allowed Senders | Yes | N/A | Skip |
-| Auto-Reply | Yes | N/A | Skip |
+| Enable WhatsApp | Yes | Required (terminal-equivalent) | `should fetch whatsapp status` |
+| WhatsApp QR Code | Yes | Required (terminal-equivalent) | `should render whatsapp qr in cli` |
+| Allowed Senders | Yes | Optional | |
+| Auto-Reply | Yes | Optional | |
 
 ### Agent Profiles (Desktop: `settings-tools.tsx`)
 
@@ -608,4 +608,3 @@ Clean up after tests to prevent disk space accumulation.
 2. **Performance benchmarks**: Track response time trends
 3. **Chaos testing**: Random network interruptions
 4. **Cross-platform CI**: Test on macOS, Linux, Windows
-

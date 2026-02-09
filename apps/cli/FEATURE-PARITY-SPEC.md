@@ -232,14 +232,14 @@ These features are intentionally excluded from CLI:
 
 | Feature | Reason |
 |---------|--------|
-| Voice/STT/TTS | CLI has no audio I/O |
-| WhatsApp integration | Requires QR code scanning |
+| Voice/STT live capture | CLI has no microphone capture pipeline |
 | Keyboard shortcuts config | CLI uses its own key bindings |
 | Panel position/dragging | No floating panel in CLI |
 | Dock icon/launch at login | Desktop OS integration |
-| Cloudflare Tunnel | Desktop-specific networking |
 | Streamer mode | No sensitive display in CLI |
 | Emergency kill switch hotkey | CLI uses Ctrl+C |
+
+Note: WhatsApp, Cloudflare tunnel, and TTS generation flows are supported in CLI via terminal-equivalent command palette actions.
 
 ---
 
@@ -338,4 +338,3 @@ These features are intentionally excluded from CLI:
 - View all memories
 - Add/Delete memories
 - Memory categories/tags
-

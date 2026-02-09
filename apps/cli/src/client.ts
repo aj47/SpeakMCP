@@ -25,6 +25,12 @@ import type {
   PendingSampling,
   QueuedMessage,
   AgentSession,
+  AgentProfile,
+  AgentProfileRole,
+  QueueGroup,
+  TunnelStatus,
+  TunnelListItem,
+  GeneratedTTSResponse,
   ACPAgent,
   ACPAgentConfig,
   ACPRunResponse,
@@ -298,6 +304,10 @@ export class SpeakMcpClient {
     return this.request('GET', '/v1/memories')
   }
 
+  async getMemoriesByProfile(profileId: string): Promise<{ memories: AgentMemory[] }> {
+    return this.request('GET', `/v1/memories/profile/${encodeURIComponent(profileId)}`)
+  }
+
   async createMemory(memory: { title: string; content: string; tags?: string[]; importance?: string }): Promise<{ success: boolean; memory: AgentMemory }> {
     return this.request('POST', '/v1/memories', memory)
   }
@@ -312,6 +322,15 @@ export class SpeakMcpClient {
 
   async searchMemories(query: string): Promise<{ memories: AgentMemory[] }> {
     return this.request('GET', `/v1/memories/search?q=${encodeURIComponent(query)}`)
+  }
+
+  async deleteManyMemories(ids: string[]): Promise<{ success: boolean; deletedCount: number }> {
+    return this.request('POST', '/v1/memories/delete-many', { ids })
+  }
+
+  async deleteAllMemories(profileId?: string): Promise<{ success: boolean; deletedCount: number }> {
+    const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : ''
+    return this.request('DELETE', `/v1/memories${query}`)
   }
 
   // Skills (G-13)
@@ -333,6 +352,58 @@ export class SpeakMcpClient {
 
   async toggleSkill(id: string, enabled: boolean): Promise<{ success: boolean }> {
     return this.request('POST', `/v1/skills/${encodeURIComponent(id)}/toggle`, { enabled })
+  }
+
+  async importSkillMarkdown(content: string): Promise<{ success: boolean; skill: AgentSkill }> {
+    return this.request('POST', '/v1/skills/import/markdown', { content })
+  }
+
+  async importSkillFile(filePath: string): Promise<{ success: boolean; skill: AgentSkill }> {
+    return this.request('POST', '/v1/skills/import/file', { filePath })
+  }
+
+  async importSkillFolder(folderPath: string): Promise<{ success: boolean; skill: AgentSkill }> {
+    return this.request('POST', '/v1/skills/import/folder', { folderPath })
+  }
+
+  async importSkillsParentFolder(folderPath: string): Promise<{
+    success: boolean
+    imported: AgentSkill[]
+    skipped?: Array<Record<string, unknown>>
+  }> {
+    return this.request('POST', '/v1/skills/import/parent-folder', { folderPath })
+  }
+
+  async importSkillGitHub(repoIdentifier: string): Promise<{
+    success: boolean
+    imported: AgentSkill[]
+    skipped?: Array<Record<string, unknown>>
+  }> {
+    return this.request('POST', '/v1/skills/import/github', { repoIdentifier })
+  }
+
+  async exportSkillMarkdown(id: string): Promise<{ markdown: string }> {
+    return this.request('GET', `/v1/skills/${encodeURIComponent(id)}/export`)
+  }
+
+  async saveSkillFile(id: string, outputPath?: string): Promise<{ success: boolean; filePath: string }> {
+    return this.request('POST', `/v1/skills/${encodeURIComponent(id)}/save-file`, { outputPath })
+  }
+
+  async getSkillsFolderPath(): Promise<{ folderPath: string }> {
+    return this.request('GET', '/v1/skills/folder')
+  }
+
+  async scanSkillsFolder(folderPath?: string): Promise<{ imported: AgentSkill[] }> {
+    return this.request('POST', '/v1/skills/scan', folderPath ? { folderPath } : {})
+  }
+
+  async getEnabledProfileSkillIds(profileId: string): Promise<{ profileId: string; enabledSkillIds: string[] }> {
+    return this.request('GET', `/v1/profiles/${encodeURIComponent(profileId)}/skills/enabled`)
+  }
+
+  async toggleProfileSkill(profileId: string, skillId: string): Promise<{ success: boolean; profile: Profile }> {
+    return this.request('POST', `/v1/profiles/${encodeURIComponent(profileId)}/skills/${encodeURIComponent(skillId)}/toggle`, {})
   }
 
   // Emergency stop
@@ -543,8 +614,18 @@ export class SpeakMcpClient {
   // G-18: Message Queue
   // ====================================================================
 
-  async getMessageQueue(): Promise<{ messages: QueuedMessage[] }> {
-    return this.request('GET', '/v1/queue')
+  async getMessageQueue(conversationId?: string): Promise<{
+    messages: QueuedMessage[]
+    conversationId?: string
+    isPaused?: boolean
+    queuedCount?: number
+  }> {
+    const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : ''
+    return this.request('GET', `/v1/queue${query}`)
+  }
+
+  async getAllQueues(): Promise<{ queues: QueueGroup[] }> {
+    return this.request('GET', '/v1/queue/all')
   }
 
   async enqueueMessage(
@@ -554,16 +635,51 @@ export class SpeakMcpClient {
     return this.request('POST', '/v1/queue', { content, conversationId })
   }
 
-  async removeQueuedMessage(id: string): Promise<{ success: boolean }> {
-    return this.request('DELETE', `/v1/queue/${id}`)
+  async removeQueuedMessage(id: string, conversationId?: string): Promise<{ success: boolean }> {
+    const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : ''
+    return this.request('DELETE', `/v1/queue/${id}${query}`)
   }
 
-  async dequeueMessage(): Promise<{ message: QueuedMessage | null }> {
-    return this.request('POST', '/v1/queue/dequeue')
+  async patchQueuedMessage(
+    id: string,
+    patch: {
+      content?: string
+      status?: 'queued' | 'processing' | 'completed' | 'failed'
+      error?: string
+      conversationId?: string
+    }
+  ): Promise<{ success: boolean; message: QueuedMessage | null }> {
+    return this.request('PATCH', `/v1/queue/${encodeURIComponent(id)}`, patch)
   }
 
-  async clearMessageQueue(): Promise<{ success: boolean }> {
-    return this.request('POST', '/v1/queue/clear')
+  async retryQueuedMessage(
+    id: string,
+    conversationId?: string
+  ): Promise<{ success: boolean; message: QueuedMessage | null }> {
+    return this.request('POST', `/v1/queue/${encodeURIComponent(id)}/retry`, { conversationId })
+  }
+
+  async reorderQueue(
+    conversationId: string,
+    messageIds: string[]
+  ): Promise<{ success: boolean; queue: QueuedMessage[] }> {
+    return this.request('POST', '/v1/queue/reorder', { conversationId, messageIds })
+  }
+
+  async pauseQueue(conversationId: string): Promise<{ success: boolean; conversationId: string; isPaused: boolean }> {
+    return this.request('POST', `/v1/queue/${encodeURIComponent(conversationId)}/pause`)
+  }
+
+  async resumeQueue(conversationId: string): Promise<{ success: boolean; conversationId: string; isPaused: boolean }> {
+    return this.request('POST', `/v1/queue/${encodeURIComponent(conversationId)}/resume`)
+  }
+
+  async dequeueMessage(conversationId?: string): Promise<{ message: QueuedMessage | null }> {
+    return this.request('POST', '/v1/queue/dequeue', conversationId ? { conversationId } : {})
+  }
+
+  async clearMessageQueue(conversationId?: string): Promise<{ success: boolean }> {
+    return this.request('POST', '/v1/queue/clear', conversationId ? { conversationId } : {})
   }
 
   // ====================================================================
@@ -584,6 +700,102 @@ export class SpeakMcpClient {
 
   async stopAllAgentSessions(): Promise<{ success: boolean }> {
     return this.request('POST', '/v1/agent-sessions/stop-all')
+  }
+
+  async snoozeAgentSession(sessionId: string): Promise<{ success: boolean; session: AgentSession | null }> {
+    return this.request('POST', `/v1/agent-sessions/${encodeURIComponent(sessionId)}/snooze`)
+  }
+
+  async unsnoozeAgentSession(sessionId: string): Promise<{ success: boolean; session: AgentSession | null }> {
+    return this.request('POST', `/v1/agent-sessions/${encodeURIComponent(sessionId)}/unsnooze`)
+  }
+
+  // Agent profiles / personas / external agents
+  async getAgentProfiles(filters?: { role?: AgentProfileRole; enabled?: boolean }): Promise<{ agentProfiles: AgentProfile[] }> {
+    const params = new URLSearchParams()
+    if (filters?.role) params.set('role', filters.role)
+    if (typeof filters?.enabled === 'boolean') params.set('enabled', String(filters.enabled))
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.request('GET', `/v1/agent-profiles${query}`)
+  }
+
+  async getAgentProfile(id: string): Promise<{ agentProfile: AgentProfile }> {
+    return this.request('GET', `/v1/agent-profiles/${encodeURIComponent(id)}`)
+  }
+
+  async createAgentProfile(profile: Partial<AgentProfile>): Promise<{ success: boolean; agentProfile: AgentProfile }> {
+    return this.request('POST', '/v1/agent-profiles', profile)
+  }
+
+  async updateAgentProfile(id: string, updates: Partial<AgentProfile>): Promise<{ success: boolean; agentProfile: AgentProfile }> {
+    return this.request('PATCH', `/v1/agent-profiles/${encodeURIComponent(id)}`, updates)
+  }
+
+  async deleteAgentProfile(id: string): Promise<{ success: boolean }> {
+    return this.request('DELETE', `/v1/agent-profiles/${encodeURIComponent(id)}`)
+  }
+
+  async getAgentPersonas(): Promise<{ personas: AgentProfile[] }> {
+    return this.request('GET', '/v1/agent-personas')
+  }
+
+  async getExternalAgents(): Promise<{ externalAgents: AgentProfile[] }> {
+    return this.request('GET', '/v1/external-agents')
+  }
+
+  // WhatsApp terminal-equivalent APIs
+  async getWhatsAppStatus(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/v1/whatsapp/status')
+  }
+
+  async connectWhatsApp(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/v1/whatsapp/connect', {})
+  }
+
+  async disconnectWhatsApp(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/v1/whatsapp/disconnect', {})
+  }
+
+  async logoutWhatsApp(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/v1/whatsapp/logout', {})
+  }
+
+  // Tunnel terminal-equivalent APIs
+  async getTunnelStatus(): Promise<TunnelStatus & { handoff?: Record<string, unknown> }> {
+    return this.request('GET', '/v1/tunnels/status')
+  }
+
+  async startTunnel(options?: {
+    mode?: 'quick' | 'named'
+    tunnelId?: string
+    hostname?: string
+    credentialsPath?: string
+    localUrl?: string
+  }): Promise<Record<string, unknown>> {
+    return this.request('POST', '/v1/tunnels/start', options || {})
+  }
+
+  async stopTunnel(): Promise<{ success: boolean; running: boolean; error?: string }> {
+    return this.request('POST', '/v1/tunnels/stop', {})
+  }
+
+  async listTunnels(): Promise<{ success: boolean; tunnels: TunnelListItem[]; error?: string }> {
+    return this.request('GET', '/v1/tunnels/list')
+  }
+
+  async checkTunnelInstalled(): Promise<{ installed: boolean; version?: string; error?: string }> {
+    return this.request('GET', '/v1/tunnels/check-installed')
+  }
+
+  // TTS terminal-equivalent API
+  async generateTTS(input: {
+    text: string
+    providerId?: 'openai' | 'groq' | 'gemini'
+    voice?: string
+    model?: string
+    speed?: number
+  }): Promise<GeneratedTTSResponse> {
+    return this.request('POST', '/v1/tts/generate', input)
   }
 
   // ====================================================================
@@ -626,4 +838,3 @@ export class SpeakMcpClient {
     return this.request('POST', `/v1/acp/agents/${agentName}/run`, { input })
   }
 }
-

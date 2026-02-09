@@ -613,7 +613,7 @@ export class SettingsView extends BaseView {
         focusedBackgroundColor: '#2a2a2a',
       })
       keyInput.on(InputRenderableEvents.CHANGE, (value: string) => {
-        (this.formState as Record<string, unknown>)[key] = value
+        this.formState[key] = value
       })
       row.add(keyInput)
       this.langfuseInputs.set(key, keyInput)
@@ -1291,4 +1291,3 @@ export class SettingsView extends BaseView {
     }
   }
 }
-

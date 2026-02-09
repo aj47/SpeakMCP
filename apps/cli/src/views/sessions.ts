@@ -58,7 +58,7 @@ export class SessionsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'sessions-header-text',
-      content: ' Sessions                            [/] Search  [N] New',
+      content: ' Sessions                    [/] Search  [N] New  [E] Edit  [D] Delete',
       fg: '#FFFFFF',
     })
     header.add(headerText)
@@ -158,7 +158,7 @@ export class SessionsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'sessions-footer-text',
-      content: ' [Enter] Resume  [D] Delete  [N] New  [/] Search  [R] Rename',
+      content: ' [Enter] Open  [N] Create  [E] Edit  [D] Delete  [/] Search',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -251,6 +251,9 @@ export class SessionsView extends BaseView {
         this.deleteSelectedSession()
         break
       case 'r':
+        this.renameSelectedSession()
+        break
+      case 'e':
         this.renameSelectedSession()
         break
       case 'escape':
@@ -420,4 +423,3 @@ export class SessionsView extends BaseView {
     this.renameInput.focus()
   }
 }
-

@@ -78,6 +78,10 @@ class MemoryService {
     return [...this.memories].sort((a, b) => b.createdAt - a.createdAt)
   }
 
+  getMemoriesByProfile(profileId: string): AgentMemory[] {
+    return this.getAllMemories().filter((memory) => memory.profileId === profileId)
+  }
+
   getMemory(id: string): AgentMemory | null {
     this.initialize()
     return this.memories.find(m => m.id === id) || null
@@ -138,6 +142,57 @@ class MemoryService {
     return true
   }
 
+  deleteMultipleMemories(ids: string[]): number {
+    this.initialize()
+    if (!Array.isArray(ids) || ids.length === 0) return 0
+
+    const idSet = new Set(ids)
+    const before = this.memories.length
+    const previous = [...this.memories]
+    this.memories = this.memories.filter((memory) => !idSet.has(memory.id))
+    const deletedCount = before - this.memories.length
+
+    if (deletedCount === 0) return 0
+
+    const success = this.saveToDisk()
+    if (!success) {
+      this.memories = previous
+      return 0
+    }
+    return deletedCount
+  }
+
+  deleteAllMemories(profileId?: string): number {
+    this.initialize()
+
+    if (!profileId) {
+      const deletedCount = this.memories.length
+      if (deletedCount === 0) return 0
+      const previous = [...this.memories]
+      this.memories = []
+      const success = this.saveToDisk()
+      if (!success) {
+        this.memories = previous
+        return 0
+      }
+      return deletedCount
+    }
+
+    const before = this.memories.length
+    const previous = [...this.memories]
+    this.memories = this.memories.filter((memory) => memory.profileId !== profileId)
+    const deletedCount = before - this.memories.length
+
+    if (deletedCount === 0) return 0
+
+    const success = this.saveToDisk()
+    if (!success) {
+      this.memories = previous
+      return 0
+    }
+    return deletedCount
+  }
+
   searchMemories(query: string): AgentMemory[] {
     const all = this.getAllMemories()
     const lowerQuery = query.toLowerCase()
@@ -155,4 +210,3 @@ class MemoryService {
 }
 
 export const memoryService = new MemoryService()
-

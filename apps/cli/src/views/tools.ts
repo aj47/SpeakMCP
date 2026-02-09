@@ -181,7 +181,7 @@ export class ToolsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'tools-footer-text',
-      content: ' [Enter] Execute  [Up/Dn] Navigate  [R]estart  [S]top  [L]ogs  [T]est  [Esc] Cancel',
+      content: ' [Enter/Space/E] Run  [Up/Dn] Navigate  [R]estart  [S]top  [L]ogs  [T]est',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -213,6 +213,9 @@ export class ToolsView extends BaseView {
       case 'enter':
         this.executeSelectedTool()
         break
+      case 'space':
+        this.executeSelectedTool()
+        break
     }
 
     // Character-based shortcuts for server management
@@ -229,6 +232,9 @@ export class ToolsView extends BaseView {
         break
       case 't':
         this.testSelectedServer()
+        break
+      case 'e':
+        this.executeSelectedTool()
         break
     }
   }
@@ -450,4 +456,3 @@ export class ToolsView extends BaseView {
     }
   }
 }
-

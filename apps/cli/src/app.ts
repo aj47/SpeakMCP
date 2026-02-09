@@ -1154,6 +1154,81 @@ export class App {
         },
       },
       {
+        id: 'settings-remote-server',
+        title: 'Settings: Remote Server',
+        description: 'Open tunnel/remote-server controls and current status',
+        keywords: ['settings', 'remote', 'server', 'tunnel', 'cloudflared'],
+        run: async () => {
+          await this.switchView('settings')
+          const result = await this.client.getTunnelStatus()
+          this.logCommandOutput('Settings Remote Server', result)
+          if (await this.maybeShowTunnelQrCode(result, 'settings remote server')) {
+            this.setStatusNotice('Remote server URL QR ready. Scan and press Esc when done.', 9000)
+            return
+          }
+          this.setStatusNotice(`Remote server/tunnel ${result.running ? 'running' : 'stopped'} (details in console)`)
+        },
+      },
+      {
+        id: 'settings-profiles',
+        title: 'Settings: Profiles',
+        description: 'Open profile manager (select/create/edit/delete/import/export)',
+        keywords: ['settings', 'profiles', 'profile'],
+        run: async () => {
+          await this.switchView('settings')
+          await this.showProfileSwitcher()
+          this.setStatusNotice('Profile manager opened')
+        },
+      },
+      {
+        id: 'settings-personas',
+        title: 'Settings: Personas',
+        description: 'List agent personas for delegation settings',
+        keywords: ['settings', 'personas', 'agent', 'delegation'],
+        run: async () => {
+          await this.switchView('settings')
+          const result = await this.client.getAgentPersonas()
+          this.logCommandOutput('Settings Personas', result)
+          this.setStatusNotice(`Personas loaded: ${result.personas.length} (details in console)`)
+        },
+      },
+      {
+        id: 'settings-memories',
+        title: 'Settings: Memories',
+        description: 'Inspect memory inventory and controls',
+        keywords: ['settings', 'memories', 'memory'],
+        run: async () => {
+          await this.switchView('settings')
+          const result = await this.client.getMemories()
+          this.logCommandOutput('Settings Memories', result)
+          this.setStatusNotice(`Memories loaded: ${result.memories.length} (details in console)`)
+        },
+      },
+      {
+        id: 'settings-skills',
+        title: 'Settings: Skills',
+        description: 'Inspect skills inventory and import/export surfaces',
+        keywords: ['settings', 'skills', 'skill'],
+        run: async () => {
+          await this.switchView('settings')
+          const result = await this.client.getSkills()
+          this.logCommandOutput('Settings Skills', result)
+          this.setStatusNotice(`Skills loaded: ${result.skills.length} (details in console)`)
+        },
+      },
+      {
+        id: 'settings-diagnostics',
+        title: 'Settings: Diagnostics',
+        description: 'Run diagnostics report from settings surface',
+        keywords: ['settings', 'diagnostics', 'health', 'report'],
+        run: async () => {
+          await this.switchView('settings')
+          const result = await this.client.getDiagnosticReport()
+          this.logCommandOutput('Settings Diagnostics', result)
+          this.setStatusNotice('Diagnostics report fetched (details in console)')
+        },
+      },
+      {
         id: 'view-tools',
         title: 'View: Tools',
         description: 'Switch to tools view',

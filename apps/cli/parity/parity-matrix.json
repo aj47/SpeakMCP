@@ -52,7 +52,7 @@
     "apps/desktop/src/renderer/src/pages/settings-skills.tsx": "ceb3e972abcaac615820e6a88454b4ca104353fdcf8585f64e529782e6f853a9",
     "apps/desktop/src/renderer/src/pages/memories.tsx": "688235246f99f5de8c3f68f5e15ca539c5ddf2d177e9097bef2a05890b348af0",
     "packages/server/src/server.ts": "794a3efa6f6c18a266f7f4860b032553332bf9fb18e746a85cafd6c21b35d691",
-    "apps/cli/src/app.ts": "97ff6077f839caa05d40869d90f32d0b3303fd68f7f335e0979fa4dc00e154de",
+    "apps/cli/src/app.ts": "0198595839ef2ceb89aaf8b5ef1b6f635056af4f609dbfb61d9d319aa1ff2971",
     "apps/cli/src/client.ts": "9f1d5e63a1faee1c9ba311866fe69e8ab57c933e67340c9e6c379646b2aa3d37",
     "apps/cli/src/views/chat.ts": "f8316e5094d5b773337a694ebad52eeab8f1e05ef9195ebd43a5579e30522eb1",
     "apps/cli/src/views/settings.ts": "19c724ad80b8245a173c357a51c5b04491de38c7ee35aea95ecb5b4c83112cb0",
@@ -278,7 +278,7 @@
       "cliSurface": "apps/cli/src/client.ts + apps/cli/src/app.ts command palette",
       "status": "implemented",
       "parityType": "terminal_equivalent",
-      "notes": "Terminal-equivalent tunnel status/start/stop/list endpoints and command-palette controls are implemented."
+      "notes": "Terminal-equivalent tunnel status/start/stop/list endpoints and command-palette controls are implemented, including in-CLI QR rendering of tunnel URLs."
     },
     {
       "id": "G-21",

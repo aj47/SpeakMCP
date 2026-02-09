@@ -332,7 +332,7 @@ The following is a comprehensive list of Electron desktop app settings that CLI 
 | Bind Address | Yes | Required | |
 | API Key | Yes | Required | |
 | CORS Origins | Yes | Optional | |
-| Cloudflare Tunnel | Yes | Required (terminal-equivalent) | `should run tunnel status/start/stop/list` |
+| Cloudflare Tunnel | Yes | Required (terminal-equivalent) | `should run tunnel status/start/stop/list and render tunnel qr` |
 
 *Note: CLI connects to a remote server, so these settings verify the server config.
 

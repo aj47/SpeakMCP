@@ -656,7 +656,16 @@ export class App {
     }
   }
 
-  private async showQrCodeOverlay(qrCodeData: string, sourceLabel: string): Promise<void> {
+  private async showQrCodeOverlay(
+    qrCodeData: string,
+    sourceLabel: string,
+    options?: {
+      title?: string
+      instructions?: string
+      valueLabel?: string
+      value?: string
+    },
+  ): Promise<void> {
     const qrText: string = await QRCode.toString(qrCodeData, {
       type: 'utf8',
       margin: 0,
@@ -699,9 +708,10 @@ export class App {
       flexDirection: 'column',
     })
 
+    const title = options?.title || '-- QR Code --'
     qrBox.add(new TextRenderable(this.renderer, {
       id: 'qr-code-title',
-      content: '-- WhatsApp QR Code --',
+      content: title,
       fg: '#FFFFFF',
     }))
 
@@ -718,9 +728,22 @@ export class App {
       bg: '#FFFFFF',
     }))
 
+    if (options?.value) {
+      const maxVisible = 76
+      const displayValue = options.value.length > maxVisible
+        ? `${options.value.slice(0, maxVisible - 3)}...`
+        : options.value
+      qrBox.add(new TextRenderable(this.renderer, {
+        id: 'qr-code-value',
+        content: `${options.valueLabel || 'Value'}: ${displayValue}`,
+        fg: '#AAAAAA',
+      }))
+    }
+
+    const instructions = options?.instructions || 'Scan this QR code with your device.'
     qrBox.add(new TextRenderable(this.renderer, {
       id: 'qr-code-instructions',
-      content: 'Scan with WhatsApp > Settings > Linked Devices > Link a Device',
+      content: instructions,
       fg: '#CCCCCC',
     }))
 
@@ -788,13 +811,99 @@ export class App {
     }
 
     try {
-      await this.showQrCodeOverlay(qrCodeData, sourceLabel)
+      await this.showQrCodeOverlay(qrCodeData, sourceLabel, {
+        title: '-- WhatsApp QR Code --',
+        instructions: 'Scan with WhatsApp > Settings > Linked Devices > Link a Device',
+      })
       return true
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       this.setStatusNotice(`Failed to render QR code: ${message}`, 8000)
       return false
     }
+  }
+
+  private normalizeTunnelConnectUrl(candidate: unknown): string | null {
+    if (typeof candidate !== 'string') return null
+    const trimmed = candidate.trim()
+    if (!trimmed) return null
+
+    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+    try {
+      const parsed = new URL(withProtocol)
+      if (!parsed.hostname) return null
+      return parsed.toString()
+    } catch {
+      return null
+    }
+  }
+
+  private extractTunnelConnectUrl(payload: unknown): string | null {
+    if (!payload || typeof payload !== 'object') return null
+    const record = payload as Record<string, unknown>
+
+    const directUrl = this.normalizeTunnelConnectUrl(record.url)
+    if (directUrl) return directUrl
+
+    const hostnameUrl = this.normalizeTunnelConnectUrl(record.hostname)
+    if (hostnameUrl) return hostnameUrl
+
+    const status = record.status
+    if (status && typeof status === 'object') {
+      const statusRecord = status as Record<string, unknown>
+      const nestedUrl = this.normalizeTunnelConnectUrl(statusRecord.url)
+      if (nestedUrl) return nestedUrl
+      const nestedHostname = this.normalizeTunnelConnectUrl(statusRecord.hostname)
+      if (nestedHostname) return nestedHostname
+    }
+
+    const raw = record.raw
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      const parsed = this.parseJsonObject(raw)
+      if (parsed) {
+        const nestedUrl = this.normalizeTunnelConnectUrl(parsed.url)
+        if (nestedUrl) return nestedUrl
+        const nestedHostname = this.normalizeTunnelConnectUrl(parsed.hostname)
+        if (nestedHostname) return nestedHostname
+      }
+    }
+
+    return null
+  }
+
+  private async maybeShowTunnelQrCode(payload: unknown, sourceLabel: string): Promise<boolean> {
+    const tunnelUrl = this.extractTunnelConnectUrl(payload)
+    if (!tunnelUrl) return false
+
+    try {
+      await this.showQrCodeOverlay(tunnelUrl, sourceLabel, {
+        title: '-- Cloudflare Tunnel QR --',
+        instructions: 'Scan to open tunnel URL in your app or browser.',
+        valueLabel: 'URL',
+        value: tunnelUrl,
+      })
+      return true
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.setStatusNotice(`Failed to render tunnel QR: ${message}`, 8000)
+      return false
+    }
+  }
+
+  private async waitForTunnelConnectUrl(timeoutMs: number = 12000, intervalMs: number = 1200): Promise<string | null> {
+    const startTime = Date.now()
+    while (Date.now() - startTime < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      try {
+        const status = await this.client.getTunnelStatus()
+        const connectUrl = this.extractTunnelConnectUrl(status)
+        if (connectUrl) return connectUrl
+        if (!status.running && !status.starting) return null
+      } catch {
+        return null
+      }
+    }
+    return null
   }
 
   // Command palette
@@ -1224,10 +1333,14 @@ export class App {
         id: 'tunnel-status',
         title: 'Tunnel: Status',
         description: 'Fetch tunnel runtime status',
-        keywords: ['tunnel', 'status', 'cloudflared'],
+        keywords: ['tunnel', 'status', 'cloudflared', 'qr', 'connect'],
         run: async () => {
           const result = await this.client.getTunnelStatus()
           this.logCommandOutput('Tunnel Status', result)
+          if (await this.maybeShowTunnelQrCode(result, 'tunnel status')) {
+            this.setStatusNotice('Tunnel URL QR ready. Scan and press Esc when done.', 9000)
+            return
+          }
           this.setStatusNotice(`Tunnel ${result.running ? 'running' : 'stopped'} (details in console)`)
         },
       },
@@ -1235,11 +1348,22 @@ export class App {
         id: 'tunnel-start-quick',
         title: 'Tunnel: Start quick tunnel',
         description: 'Start cloudflared quick tunnel',
-        keywords: ['tunnel', 'start', 'quick'],
+        keywords: ['tunnel', 'start', 'quick', 'qr', 'connect'],
         run: async () => {
           const result = await this.client.startTunnel({ mode: 'quick' })
           this.logCommandOutput('Tunnel Start', result)
-          this.setStatusNotice('Tunnel start requested (details in console)')
+          if (await this.maybeShowTunnelQrCode(result, 'tunnel start')) {
+            this.setStatusNotice('Tunnel URL QR ready. Scan and press Esc when done.', 9000)
+            return
+          }
+
+          const postStartUrl = await this.waitForTunnelConnectUrl()
+          if (postStartUrl && await this.maybeShowTunnelQrCode({ url: postStartUrl }, 'tunnel start (ready)')) {
+            this.setStatusNotice('Tunnel URL QR ready. Scan and press Esc when done.', 9000)
+            return
+          }
+
+          this.setStatusNotice('Tunnel started. Run Tunnel: Status for URL/QR once ready.', 9000)
         },
       },
       {

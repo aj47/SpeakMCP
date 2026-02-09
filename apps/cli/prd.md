@@ -149,7 +149,7 @@ Each gap below is tagged with a priority:
 |----|---------|-------------------|-------------------|--------|
 | G-18 | **Message queue management** | `getMessageQueue()`, `clearMessageQueue()`, `reorderMessageQueue()`, pause/resume | Server endpoints ✅, client methods ✅, no CLI view | ⚠️ **PARTIAL** — needs CLI view |
 | G-19 | **ACP agent delegation** | `spawnAcpAgent()`, `runAcpTask()`, `getAcpAgentStatuses()` | Server endpoints ✅, client methods ✅, no CLI view | ⚠️ **PARTIAL** — needs CLI view |
-| G-20 | **Cloudflare tunnel** | `startCloudflareTunnel()`, `getCloudflareTunnelStatus()` | Terminal-equivalent command palette actions (status/start/stop/list) | ✅ **DONE** — terminal-equivalent |
+| G-20 | **Cloudflare tunnel** | `startCloudflareTunnel()`, `getCloudflareTunnelStatus()` | Terminal-equivalent command palette actions (status/start/stop/list) with tunnel URL QR rendering | ✅ **DONE** — terminal-equivalent |
 | G-21 | **WhatsApp integration** | `whatsappConnect()`, `whatsappGetStatus()` | Terminal-equivalent command palette actions with in-CLI QR rendering | ✅ **DONE** — terminal-equivalent |
 | G-22 | **OAuth flow** | `initiateOAuthFlow()`, `completeOAuthFlow()` for MCP servers | Server endpoints ✅, client methods ✅, no CLI flow | ⚠️ **PARTIAL** — needs browser interaction |
 | G-23 | **MCP protocol extensions** | `resolveElicitation()`, `resolveSampling()` | Server endpoints ✅, client methods ✅, no CLI prompts | ⚠️ **PARTIAL** — needs chat prompts |

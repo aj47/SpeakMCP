@@ -29,6 +29,13 @@ import {
 import { acpService, type ACPAgentConfig } from './services/acp-service'
 import type { AgentProgressUpdate, MCPToolResult } from './types'
 
+import {
+  setServerListeningInfo,
+  clearServerListeningInfo,
+  getActualListeningPort,
+  getActualListeningBind,
+} from './services/server-runtime'
+
 let server: FastifyInstance | null = null
 let lastError: string | undefined
 
@@ -2203,11 +2210,14 @@ export async function startServer(options: ServerOptions = {}): Promise<{
   })
 
   fastify.get("/v1/tunnels/status", async (_req, reply) => {
+    // Use the actual listening port for handoff commands
+    const tunnelBind = bind === '0.0.0.0' || bind === '::' ? '127.0.0.1' : bind
+    const tunnelUrl = `http://${tunnelBind}:${port}`
     return reply.send({
       ...getTunnelStatus(),
       handoff: {
         commands: {
-          startQuick: 'cloudflared tunnel --url http://127.0.0.1:3210',
+          startQuick: `cloudflared tunnel --url ${tunnelUrl}`,
           stop: 'pkill -f cloudflared',
           list: 'cloudflared tunnel list --output json',
         },
@@ -2442,6 +2452,8 @@ export async function startServer(options: ServerOptions = {}): Promise<{
 
   try {
     await fastify.listen({ port, host: bind })
+    // Store the actual listening port and bind for tunnel-service to use
+    setServerListeningInfo(port, bind)
     console.log(`[server] SpeakMCP server listening at http://${bind}:${port}/v1`)
     console.log(`[server] API Key: ${redact(apiKey)}`)
     server = fastify
@@ -2451,6 +2463,7 @@ export async function startServer(options: ServerOptions = {}): Promise<{
     lastError = error?.message || String(err)
     diagnosticsService.logError("server", "Failed to start server", error)
     server = null
+    clearServerListeningInfo()
     return { running: false, error: lastError }
   }
 }
@@ -2468,6 +2481,7 @@ export async function stopServer(): Promise<void> {
       diagnosticsService.logError("server", "Error stopping server", err)
     } finally {
       server = null
+      clearServerListeningInfo()
     }
   }
 }
@@ -2496,8 +2510,9 @@ export function getServerStatus(): {
   lastError?: string
 } {
   const cfg = configStore.get() as Record<string, unknown>
-  const bind = (cfg.remoteServerBindAddress as string) || "127.0.0.1"
-  const port = (cfg.remoteServerPort as number) || 3210
+  // Prefer actual listening port/bind over config values
+  const bind = getActualListeningBind() || (cfg.remoteServerBindAddress as string) || "127.0.0.1"
+  const port = getActualListeningPort() || (cfg.remoteServerPort as number) || 3210
   const running = !!server
   const url = running ? `http://${bind}:${port}/v1` : undefined
   return { running, url, bind, port, lastError }

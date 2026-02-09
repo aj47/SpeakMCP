@@ -1,5 +1,6 @@
 import { ChildProcessWithoutNullStreams, spawn, spawnSync } from 'child_process'
 import { configStore } from '../config'
+import { getActualListeningPort, getActualListeningBind } from './server-runtime'
 
 interface StartTunnelOptions {
   mode?: 'quick' | 'named'
@@ -59,6 +60,20 @@ function extractQuickTunnelUrl(text: string): string | null {
 }
 
 function getDefaultLocalUrl(): string {
+  // Prefer the server's actual listening port/bind (set after fastify.listen() succeeds)
+  // over the config values (which may differ when using --port flag)
+  const actualPort = getActualListeningPort()
+  const actualBind = getActualListeningBind()
+
+  if (actualPort !== null) {
+    // Server is running, use its actual port
+    const bind = actualBind === '0.0.0.0' || actualBind === '::' || actualBind === null
+      ? '127.0.0.1'
+      : actualBind
+    return `http://${bind}:${actualPort}`
+  }
+
+  // Fallback to config values (server not yet started)
   const cfg = configStore.get() as Record<string, unknown>
   const port = typeof cfg.remoteServerPort === 'number' ? cfg.remoteServerPort : 3210
   const bindAddress = typeof cfg.remoteServerBindAddress === 'string' ? cfg.remoteServerBindAddress : '127.0.0.1'

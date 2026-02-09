@@ -719,6 +719,8 @@ export class SettingsView extends BaseView {
       this.parityMenuItems.push(text)
       paritySection.add(text)
     }
+    // Always render a visible default selection so Enter behavior is predictable in terminals.
+    this.highlightParityMenus()
     contentContainer.add(paritySection)
 
     const parityDetailSection = new BoxRenderable(this.renderer, {
@@ -1043,7 +1045,9 @@ export class SettingsView extends BaseView {
   // Public methods for keyboard handling from App
   async handleKeyPress(key: KeyEvent): Promise<void> {
     const name = key.name || ''
-    const isEnter = name === 'enter' || name === 'return' || key.sequence === '\r'
+    const sequence = typeof key.sequence === 'string' ? key.sequence : ''
+    const isEnter = name === 'enter' || name === 'return' || sequence === '\r' || sequence === '\n'
+    const isTab = name === 'tab' || sequence === '\t'
 
     if (isEnter) {
       if (this.focusedField === 'parityMenus') {
@@ -1133,6 +1137,11 @@ export class SettingsView extends BaseView {
       case 'tab':
         this.focusNextField()
         break
+    }
+
+    if (isTab) {
+      this.focusNextField()
+      return
     }
 
     // Character-based shortcuts (check sequence for S/R)
@@ -1233,9 +1242,7 @@ export class SettingsView extends BaseView {
           ? result.sectionLines
           : ['No details returned by action.']
         this.updateParityDetails(title, lines)
-        if (result?.status) {
-          this.setStatus(result.status)
-        }
+        this.setStatus(result?.status || `${selected} loaded`)
         return
       }
 

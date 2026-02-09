@@ -1977,4 +1977,236 @@ export class App {
 
     setTimeout(() => this.profileInput?.focus(), 0)
   }
+
+  // Cloudflared install overlay
+  private handleCloudflaredInstallKeyPress(key: KeyEvent): void {
+    const ch = typeof key.sequence === 'string' ? key.sequence.toLowerCase() : ''
+
+    if (key.name === 'escape' || ch === 'n') {
+      this.hideCloudflaredInstallOverlay(false)
+      return
+    }
+
+    if (key.name === 'enter' || ch === 'y') {
+      this.runCloudflaredInstall()
+      return
+    }
+  }
+
+  private async offerCloudflaredInstall(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      this.cloudflaredInstallResolver = resolve
+      this.showCloudflaredInstallOverlay()
+    })
+  }
+
+  private showCloudflaredInstallOverlay(): void {
+    if (this.cloudflaredInstallOverlay) {
+      this.hideCloudflaredInstallOverlay(false)
+    }
+
+    const root = this.renderer.root
+    const platform = process.platform
+
+    // Create overlay background
+    this.cloudflaredInstallOverlay = new BoxRenderable(this.renderer, {
+      id: 'cloudflared-install-overlay',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      backgroundColor: '#000000CC',
+      justifyContent: 'center',
+      alignItems: 'center',
+    })
+
+    // Create dialog box
+    const dialogBox = new BoxRenderable(this.renderer, {
+      id: 'cloudflared-install-box',
+      width: 64,
+      height: 12,
+      borderStyle: 'single',
+      borderColor: '#888888',
+      backgroundColor: '#1a1a1a',
+      padding: 1,
+      flexDirection: 'column',
+    })
+
+    const title = new TextRenderable(this.renderer, {
+      id: 'cloudflared-install-title',
+      content: '-- Install cloudflared --',
+      fg: '#FFFFFF',
+    })
+    dialogBox.add(title)
+
+    const message = new TextRenderable(this.renderer, {
+      id: 'cloudflared-install-message',
+      content: '\ncloudflared is not installed on this system.',
+      fg: '#FFAA66',
+    })
+    dialogBox.add(message)
+
+    // Platform-specific install command
+    let installCmd: string
+    if (platform === 'darwin') {
+      installCmd = 'brew install cloudflared'
+    } else if (platform === 'linux') {
+      installCmd = 'curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared'
+    } else {
+      installCmd = '(manual install required)'
+    }
+
+    const cmdText = new TextRenderable(this.renderer, {
+      id: 'cloudflared-install-cmd',
+      content: `\nInstall command:\n  ${installCmd.length > 56 ? installCmd.slice(0, 53) + '...' : installCmd}`,
+      fg: '#88AAFF',
+    })
+    dialogBox.add(cmdText)
+
+    const prompt = new TextRenderable(this.renderer, {
+      id: 'cloudflared-install-prompt',
+      content: '\nWould you like to install cloudflared now?',
+      fg: '#FFFFFF',
+    })
+    dialogBox.add(prompt)
+
+    const footer = new TextRenderable(this.renderer, {
+      id: 'cloudflared-install-footer',
+      content: '\n[Y]es to install   [N]o / [Esc] to cancel',
+      fg: '#888888',
+    })
+    dialogBox.add(footer)
+
+    this.cloudflaredInstallOverlay.add(dialogBox)
+    root.add(this.cloudflaredInstallOverlay)
+  }
+
+  private hideCloudflaredInstallOverlay(installed: boolean): void {
+    if (!this.cloudflaredInstallOverlay) return
+    this.renderer.root.remove(this.cloudflaredInstallOverlay.id)
+    this.cloudflaredInstallOverlay = null
+    if (this.cloudflaredInstallResolver) {
+      this.cloudflaredInstallResolver(installed)
+      this.cloudflaredInstallResolver = null
+    }
+  }
+
+  private async runCloudflaredInstall(): Promise<void> {
+    const platform = process.platform
+
+    // Update overlay to show installing status
+    if (this.cloudflaredInstallOverlay) {
+      this.renderer.root.remove(this.cloudflaredInstallOverlay.id)
+
+      this.cloudflaredInstallOverlay = new BoxRenderable(this.renderer, {
+        id: 'cloudflared-install-overlay',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#000000CC',
+        justifyContent: 'center',
+        alignItems: 'center',
+      })
+
+      const statusBox = new BoxRenderable(this.renderer, {
+        id: 'cloudflared-install-status-box',
+        width: 50,
+        height: 6,
+        borderStyle: 'single',
+        borderColor: '#888888',
+        backgroundColor: '#1a1a1a',
+        padding: 1,
+        flexDirection: 'column',
+      })
+
+      const statusTitle = new TextRenderable(this.renderer, {
+        id: 'cloudflared-install-status-title',
+        content: '-- Installing cloudflared --',
+        fg: '#FFFFFF',
+      })
+      statusBox.add(statusTitle)
+
+      const statusMsg = new TextRenderable(this.renderer, {
+        id: 'cloudflared-install-status-msg',
+        content: platform === 'darwin'
+          ? '\nRunning: brew install cloudflared\nPlease wait...'
+          : '\nDownloading cloudflared binary...\nPlease wait...',
+        fg: '#88AAFF',
+      })
+      statusBox.add(statusMsg)
+
+      this.cloudflaredInstallOverlay.add(statusBox)
+      this.renderer.root.add(this.cloudflaredInstallOverlay)
+    }
+
+    try {
+      let success = false
+
+      if (platform === 'darwin') {
+        // macOS: use Homebrew
+        const proc = Bun.spawn(['brew', 'install', 'cloudflared'], {
+          stdout: 'pipe',
+          stderr: 'pipe',
+        })
+        const exitCode = await proc.exited
+        success = exitCode === 0
+      } else if (platform === 'linux') {
+        // Linux: download binary directly
+        const downloadUrl = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64'
+        const targetPath = '/usr/local/bin/cloudflared'
+
+        // Try downloading with curl
+        const curlProc = Bun.spawn(['curl', '-L', '-o', '/tmp/cloudflared', downloadUrl], {
+          stdout: 'pipe',
+          stderr: 'pipe',
+        })
+        const curlExit = await curlProc.exited
+
+        if (curlExit === 0) {
+          // Move to target path (may need sudo, so try with sudo first)
+          const mvProc = Bun.spawn(['sudo', 'mv', '/tmp/cloudflared', targetPath], {
+            stdout: 'pipe',
+            stderr: 'pipe',
+          })
+          const mvExit = await mvProc.exited
+
+          if (mvExit === 0) {
+            const chmodProc = Bun.spawn(['sudo', 'chmod', '+x', targetPath], {
+              stdout: 'pipe',
+              stderr: 'pipe',
+            })
+            const chmodExit = await chmodProc.exited
+            success = chmodExit === 0
+          }
+        }
+      } else {
+        // Windows or other: show download URL
+        this.setStatusNotice('Please install cloudflared manually: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/', 15000)
+        this.hideCloudflaredInstallOverlay(false)
+        return
+      }
+
+      if (success) {
+        // Verify installation
+        const checkResult = await this.client.checkTunnelInstalled().catch(() => ({ installed: false }))
+        if (checkResult.installed) {
+          this.setStatusNotice('cloudflared installed successfully!', 5000)
+          this.hideCloudflaredInstallOverlay(true)
+        } else {
+          this.setStatusNotice('cloudflared install command completed but binary not found. Try manual install.', 10000)
+          this.hideCloudflaredInstallOverlay(false)
+        }
+      } else {
+        this.setStatusNotice('cloudflared installation failed. Try manual install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/', 12000)
+        this.hideCloudflaredInstallOverlay(false)
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.setStatusNotice(`Install error: ${message}. Try manual install.`, 10000)
+      this.hideCloudflaredInstallOverlay(false)
+    }
+  }
 }

@@ -18,6 +18,12 @@ const runsPerScenario = Number(process.env.PARITY_RUNS_PER_SCENARIO || '3')
 
 const cliTarget = process.env.SPEAKMCP_PARITY_CLI_URL || 'http://127.0.0.1:3210'
 const desktopTarget = process.env.SPEAKMCP_PARITY_DESKTOP_URL || cliTarget
+const parityApiKey = (
+  process.env.SPEAKMCP_PARITY_API_KEY ||
+  process.env.SPEAKMCP_API_KEY ||
+  process.env.PARITY_API_KEY ||
+  ''
+).trim()
 
 if (!Number.isFinite(runsPerScenario) || runsPerScenario <= 0) {
   console.error('[parity] Invalid PARITY_RUNS_PER_SCENARIO value')
@@ -69,11 +75,17 @@ async function requestJson(target, method, endpoint, body, timeoutMs = 20000) {
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    const headers = {}
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json'
+    }
+    if (parityApiKey) {
+      headers.Authorization = `Bearer ${parityApiKey}`
+    }
+
     const response = await fetch(`${target}${endpoint}`, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     })
@@ -119,15 +131,21 @@ const scenarios = [
         throw new Error(`Unable to fetch settings (${before.status}): ${before.text}`)
       }
 
-      const currentIterations = typeof before.json.mcpMaxIterations === 'number'
-        ? before.json.mcpMaxIterations
-        : 10
-
+      const currentTtsEnabled = typeof before.json.ttsEnabled === 'boolean'
+        ? before.json.ttsEnabled
+        : false
       const patch = await client.patch('/v1/settings', {
-        mcpMaxIterations: currentIterations,
+        ttsEnabled: !currentTtsEnabled,
       })
       if (!patch.ok) {
         throw new Error(`Unable to patch settings (${patch.status}): ${patch.text}`)
+      }
+
+      const restore = await client.patch('/v1/settings', {
+        ttsEnabled: currentTtsEnabled,
+      })
+      if (!restore.ok) {
+        throw new Error(`Unable to restore settings (${restore.status}): ${restore.text}`)
       }
 
       const after = await client.get('/v1/settings')
@@ -137,7 +155,7 @@ const scenarios = [
 
       return {
         signature: {
-          mcpMaxIterations: after.json.mcpMaxIterations,
+          ttsEnabled: after.json.ttsEnabled,
           hasMemoriesToggle: typeof after.json.memoriesEnabled === 'boolean',
           hasQueueToggle: typeof after.json.mcpMessageQueueEnabled === 'boolean',
         },
@@ -401,6 +419,28 @@ async function runScenarioPair(scenario) {
 async function main() {
   ensureDir(reportDir)
   ensureDir(uxLogDir)
+
+  const preflightDesktop = await requestJson(desktopTarget, 'GET', '/v1/settings')
+  const preflightCli = await requestJson(cliTarget, 'GET', '/v1/settings')
+  const preflightFailures = []
+
+  if (!preflightDesktop.ok) {
+    preflightFailures.push(`desktop target preflight failed (${preflightDesktop.status}): ${preflightDesktop.text}`)
+  }
+  if (!preflightCli.ok) {
+    preflightFailures.push(`cli target preflight failed (${preflightCli.status}): ${preflightCli.text}`)
+  }
+
+  if (preflightFailures.length > 0) {
+    console.error('[parity] Preflight failed:')
+    for (const failure of preflightFailures) {
+      console.error(`  - ${failure}`)
+    }
+    if (!parityApiKey) {
+      console.error('[parity] Hint: set SPEAKMCP_PARITY_API_KEY (or SPEAKMCP_API_KEY) for authenticated server runs.')
+    }
+    process.exit(1)
+  }
 
   const scenarioReports = []
   let totalRuns = 0

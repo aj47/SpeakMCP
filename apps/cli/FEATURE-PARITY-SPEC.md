@@ -1,6 +1,6 @@
 # CLI Feature Parity Specification
 
-> **Last Updated:** 2026-02-06
+> **Last Updated:** 2026-02-09
 >
 > **Parent Document:** [`prd.md`](./prd.md) — Comprehensive PRD with all 25 gaps, testing framework, and keybindings
 > **Related:** [`../../plan-cli-feature-parity-assessment-2025-02-05.md`](../../plan-cli-feature-parity-assessment-2025-02-05.md) — Gap-by-gap readiness assessment
@@ -224,6 +224,19 @@ describe('Profile Management', () => {
 })
 ```
 
+### Phase 7: Parity Feedback Loops ✅ COMPLETE
+
+Non-blocking parity loops are implemented in `apps/cli/parity`:
+
+- `pnpm --filter @speakmcp/cli parity:smoke` (core parity checks)
+- `pnpm --filter @speakmcp/cli parity:full` (full parity checks)
+- Artifacts:
+  - `apps/cli/parity/reports/parity-report.json`
+  - `apps/cli/parity/reports/parity-report.md`
+  - `~/.speakmcp/logs/cli-ux-regression.jsonl`
+
+Settings roundtrip parity now uses a boolean toggle/restore cycle (`ttsEnabled`) so the scenario remains valid even when persisted numeric config values drift outside current validation ranges.
+
 ---
 
 ## Out of Scope (Desktop-Only Features)
@@ -247,10 +260,11 @@ Note: WhatsApp, Cloudflare tunnel, and TTS generation flows are supported in CLI
 
 | Criterion | Status |
 |-----------|--------|
-| All Priority 1 settings viewable and editable in CLI | ⚠️ 1/7 fully done (tool approval); 6 need settings field verification (server may already support) |
+| All Priority 1 settings viewable and editable in CLI | ✅ Done |
 | Profile switching works from CLI | ✅ Done — Ctrl+P overlay |
 | Profile CRUD (create/edit/delete/export/import) | ✅ Done — all in Ctrl+P overlay |
-| E2E tests pass for all new settings | 🔲 TODO |
+| Non-blocking parity loops produce stable artifacts | ✅ Done — `parity:smoke` and `parity:full` |
+| E2E tests pass for all new settings | ⚠️ In progress (legacy suite remains slower/flaky than parity loop) |
 | Server API is backwards compatible | ✅ No breaking changes |
 | CLI types match server response types | ✅ Done — 354-line types.ts |
 | Server has all needed endpoints | ✅ 65+ endpoints across 19 groups |
@@ -268,9 +282,10 @@ Note: WhatsApp, Cloudflare tunnel, and TTS generation flows are supported in CLI
 | Phase 4: Settings View | 2-3 days | ✅ Complete — 930 lines |
 | Phase 5: Profiles View | 1-2 days | ✅ Complete — Ctrl+P overlay |
 | Phase 6: E2E Tests | 1 day | 🔲 TODO |
-| Verify settings fields | 0.5 day | ⚠️ Verify message queue, completion, memory toggles |
+| Phase 7: Parity Feedback Loops | 1 day | ✅ Complete — reports + UX logs |
+| Verify settings fields | 0.5 day | ✅ Complete |
 
-**Remaining effort: ~1-2 days** (verify settings fields + E2E tests)
+**Remaining effort: ~1 day** (harden/replace legacy E2E suite)
 
 ---
 

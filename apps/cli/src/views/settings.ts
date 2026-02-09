@@ -103,6 +103,12 @@ type ParityMenuActionId =
   | 'Settings: Skills'
   | 'Settings: Diagnostics'
 
+interface ParityMenuItem {
+  id: ParityMenuActionId
+  label: string
+  description: string
+}
+
 export interface ParityMenuActionResult {
   status?: string
   sectionTitle?: string
@@ -184,14 +190,38 @@ export class SettingsView extends BaseView {
   private selectedToggleIndex: number = 0
   private selectedButton: 'save' | 'reset' = 'save'
   private selectedParityMenuIndex: number = 0
-  private parityMenus = [
-    'Settings: Remote Server',
-    'Settings: Profiles',
-    'Settings: Personas',
-    'Settings: Memories',
-    'Settings: Skills',
-    'Settings: Diagnostics',
-  ] as const
+  private parityMenus: ParityMenuItem[] = [
+    {
+      id: 'Settings: Remote Server',
+      label: 'Remote Server & Tunnel',
+      description: 'Connection status, Cloudflare URL/QR, and handoff details',
+    },
+    {
+      id: 'Settings: Profiles',
+      label: 'Profiles',
+      description: 'Active profile and configured profile list',
+    },
+    {
+      id: 'Settings: Personas',
+      label: 'Personas',
+      description: 'Agent persona catalog for role and behavior presets',
+    },
+    {
+      id: 'Settings: Memories',
+      label: 'Memories',
+      description: 'Stored memory entries used for context',
+    },
+    {
+      id: 'Settings: Skills',
+      label: 'Skills',
+      description: 'Installed skills and enabled/disabled state',
+    },
+    {
+      id: 'Settings: Diagnostics',
+      label: 'Diagnostics',
+      description: 'Local health/report keys for troubleshooting',
+    },
+  ]
   private parityMenuActions: Partial<Record<ParityMenuActionId, () => Promise<ParityMenuActionResult | void>>> = {}
   private parityDetailTitle: TextRenderable | null = null
   private parityDetailBody: TextRenderable | null = null
@@ -703,17 +733,18 @@ export class SettingsView extends BaseView {
     const parityTitle = new TextRenderable(this.renderer, {
       id: 'parity-menus-title',
       height: 1,
-      content: '-- Parity Menus --  [Enter] Open/Run',
+      content: '-- Advanced Settings --  [Enter] Open',
       fg: '#AAAAAA',
     })
     paritySection.add(parityTitle)
 
     this.parityMenuItems = []
     for (let i = 0; i < this.parityMenus.length; i++) {
+      const item = this.parityMenus[i]
       const text = new TextRenderable(this.renderer, {
         id: `parity-menu-${i}`,
         height: 1,
-        content: `  ${this.parityMenus[i]}`,
+        content: `  ${item.label}`,
         fg: '#AAAAAA',
       })
       this.parityMenuItems.push(text)
@@ -739,7 +770,7 @@ export class SettingsView extends BaseView {
     })
     this.parityDetailBody = new TextRenderable(this.renderer, {
       id: 'parity-details-body',
-      content: '  Choose a parity menu and press Enter to load details.',
+      content: '  Choose an item in Advanced Settings and press Enter to load details.',
       fg: '#CCCCCC',
     })
     parityDetailSection.add(this.parityDetailTitle)
@@ -799,7 +830,7 @@ export class SettingsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'settings-footer-text',
-      content: ' [S] Save  [R] Reset  [Space] Toggle  [Enter] Parity menu action  [Tab] Next field  [Up/Dn] Navigate',
+      content: ' [S] Save  [R] Reset  [Space] Toggle  [Enter] Open selected section  [Tab] Next field  [Up/Dn] Navigate',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -1224,29 +1255,30 @@ export class SettingsView extends BaseView {
     for (let i = 0; i < this.parityMenuItems.length; i++) {
       const item = this.parityMenuItems[i]
       const selected = i === this.selectedParityMenuIndex
-      item.content = `${selected ? '> ' : '  '}${this.parityMenus[i]}`
+      const parityItem = this.parityMenus[i]
+      item.content = `${selected ? '> ' : '  '}${parityItem.label} - ${parityItem.description}`
       item.fg = selected ? '#FFFFFF' : '#AAAAAA'
     }
   }
 
   private async runSelectedParityMenu(): Promise<void> {
-    const selected = this.parityMenus[this.selectedParityMenuIndex] as ParityMenuActionId | undefined
+    const selected = this.parityMenus[this.selectedParityMenuIndex]
     if (!selected) return
 
     try {
-      const action = this.parityMenuActions[selected]
+      const action = this.parityMenuActions[selected.id]
       if (action) {
         const result = await action()
-        const title = result?.sectionTitle || selected
+        const title = result?.sectionTitle || selected.label
         const lines = result?.sectionLines && result.sectionLines.length > 0
           ? result.sectionLines
           : ['No details returned by action.']
         this.updateParityDetails(title, lines)
-        this.setStatus(result?.status || `${selected} loaded`)
+        this.setStatus(result?.status || `${selected.label} loaded`)
         return
       }
 
-      switch (selected) {
+      switch (selected.id) {
         case 'Settings: Remote Server': {
           const status = await this.client.getTunnelStatus()
           this.updateParityDetails('Settings: Remote Server', [

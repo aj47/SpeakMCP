@@ -156,9 +156,10 @@ export class SettingsView extends BaseView {
   private toggleElements: Map<string, TextRenderable> = new Map()
   private statusText: TextRenderable | null = null
   private contentScroll: ScrollBoxRenderable | null = null
+  private parityMenuItems: TextRenderable[] = []
 
   // Focus management
-  private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'agentToggles' | 'ttsToggles' | 'langfuse' | 'toggles' | 'servers' | 'buttons' = 'preset'
+  private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'agentToggles' | 'ttsToggles' | 'langfuse' | 'toggles' | 'servers' | 'parityMenus' | 'buttons' = 'preset'
   private selectedApiKeyIndex: number = 0
   private apiKeyProviders: Array<{ key: 'openaiApiKey' | 'groqApiKey' | 'geminiApiKey'; label: string }> = [
     { key: 'openaiApiKey', label: 'OpenAI' },
@@ -168,6 +169,15 @@ export class SettingsView extends BaseView {
   private selectedServerIndex: number = 0
   private selectedToggleIndex: number = 0
   private selectedButton: 'save' | 'reset' = 'save'
+  private selectedParityMenuIndex: number = 0
+  private parityMenus = [
+    'Settings: Remote Server',
+    'Settings: Profiles',
+    'Settings: Personas',
+    'Settings: Memories',
+    'Settings: Skills',
+    'Settings: Diagnostics',
+  ] as const
 
   // Toggle keys grouped by section
   private toggleKeys: ToggleKey[] = [
@@ -223,6 +233,7 @@ export class SettingsView extends BaseView {
     this.toggleElements.clear()
     this.apiKeyInputs.clear()
     this.langfuseInputs.clear()
+    this.parityMenuItems = []
     this.statusText = null
     this.contentScroll = null
     super.hide()
@@ -658,6 +669,37 @@ export class SettingsView extends BaseView {
 
     contentContainer.add(mcpSection)
 
+    // Parity Menus Section
+    const paritySection = new BoxRenderable(this.renderer, {
+      id: 'parity-menus-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginTop: 1,
+    })
+
+    const parityTitle = new TextRenderable(this.renderer, {
+      id: 'parity-menus-title',
+      height: 1,
+      content: '-- Parity Menus --  [Enter] Open/Run',
+      fg: '#AAAAAA',
+    })
+    paritySection.add(parityTitle)
+
+    this.parityMenuItems = []
+    for (let i = 0; i < this.parityMenus.length; i++) {
+      const text = new TextRenderable(this.renderer, {
+        id: `parity-menu-${i}`,
+        height: 1,
+        content: `  ${this.parityMenus[i]}`,
+        fg: '#AAAAAA',
+      })
+      this.parityMenuItems.push(text)
+      paritySection.add(text)
+    }
+    contentContainer.add(paritySection)
+
     // Buttons row
     const buttonRow = new BoxRenderable(this.renderer, {
       id: 'button-row',
@@ -711,7 +753,7 @@ export class SettingsView extends BaseView {
     })
     const footerText = new TextRenderable(this.renderer, {
       id: 'settings-footer-text',
-      content: ' [S] Save  [R] Reset  [Space] Toggle  [Tab] Next field  [Up/Dn] Navigate',
+      content: ' [S] Save  [R] Reset  [Space] Toggle  [Enter] Parity menu action  [Tab] Next field  [Up/Dn] Navigate',
       fg: '#AAAAAA',
     })
     footer.add(footerText)
@@ -960,7 +1002,9 @@ export class SettingsView extends BaseView {
 
     switch (name) {
       case 'enter':
-        if (this.focusedField === 'buttons') {
+        if (this.focusedField === 'parityMenus') {
+          await this.runSelectedParityMenu()
+        } else if (this.focusedField === 'buttons') {
           if (this.selectedButton === 'save') {
             await this.saveSettings()
           } else {
@@ -1007,6 +1051,9 @@ export class SettingsView extends BaseView {
           this.focusApiKeyInput()
         } else if (this.focusedField === 'servers') {
           this.selectNextServer()
+        } else if (this.focusedField === 'parityMenus') {
+          this.selectedParityMenuIndex = (this.selectedParityMenuIndex + 1) % this.parityMenus.length
+          this.highlightParityMenus()
         } else if (this.focusedField === 'buttons') {
           this.selectedButton = this.selectedButton === 'save' ? 'reset' : 'save'
         }
@@ -1029,6 +1076,9 @@ export class SettingsView extends BaseView {
           this.focusApiKeyInput()
         } else if (this.focusedField === 'servers') {
           this.selectPrevServer()
+        } else if (this.focusedField === 'parityMenus') {
+          this.selectedParityMenuIndex = (this.selectedParityMenuIndex - 1 + this.parityMenus.length) % this.parityMenus.length
+          this.highlightParityMenus()
         } else if (this.focusedField === 'buttons') {
           this.selectedButton = this.selectedButton === 'save' ? 'reset' : 'save'
         }
@@ -1050,7 +1100,7 @@ export class SettingsView extends BaseView {
 
   private focusNextField(): void {
     const fields: Array<typeof this.focusedField> =
-      ['preset', 'provider', 'model', 'maxIter', 'apiKeys', 'toggles', 'agentToggles', 'ttsToggles', 'langfuse', 'servers', 'buttons']
+      ['preset', 'provider', 'model', 'maxIter', 'apiKeys', 'toggles', 'agentToggles', 'ttsToggles', 'langfuse', 'servers', 'parityMenus', 'buttons']
     const currentIndex = fields.indexOf(this.focusedField)
     this.focusedField = fields[(currentIndex + 1) % fields.length]
 
@@ -1086,6 +1136,9 @@ export class SettingsView extends BaseView {
       case 'servers':
         this.highlightSelectedServer()
         break
+      case 'parityMenus':
+        this.highlightParityMenus()
+        break
       case 'buttons':
         // Visual indication only
         break
@@ -1101,13 +1154,65 @@ export class SettingsView extends BaseView {
     const fractions: Record<string, number> = {
       preset: 0, provider: 0.05, model: 0.1, maxIter: 0.15,
       apiKeys: 0.25, toggles: 0.38, agentToggles: 0.5,
-      ttsToggles: 0.62, langfuse: 0.75, servers: 0.88, buttons: 1.0,
+      ttsToggles: 0.62, langfuse: 0.74, servers: 0.84, parityMenus: 0.92, buttons: 1.0,
     }
     const fraction = fractions[this.focusedField] ?? 0
     const scroll = this.contentScroll as any
     const totalHeight = scroll.scrollHeight ?? 0
     if (totalHeight > 0) {
       scroll.scrollTop = fraction * totalHeight
+    }
+  }
+
+  private highlightParityMenus(): void {
+    for (let i = 0; i < this.parityMenuItems.length; i++) {
+      const item = this.parityMenuItems[i]
+      const selected = i === this.selectedParityMenuIndex
+      item.content = `${selected ? '> ' : '  '}${this.parityMenus[i]}`
+      item.fg = selected ? '#FFFFFF' : '#AAAAAA'
+    }
+  }
+
+  private async runSelectedParityMenu(): Promise<void> {
+    const selected = this.parityMenus[this.selectedParityMenuIndex]
+    if (!selected) return
+
+    try {
+      switch (selected) {
+        case 'Settings: Remote Server': {
+          const status = await this.client.getTunnelStatus()
+          this.setStatus(`Remote server/tunnel ${status.running ? 'running' : 'stopped'} (check command palette for QR)`)
+          break
+        }
+        case 'Settings: Profiles': {
+          const profiles = await this.client.getProfiles()
+          this.setStatus(`Profiles loaded: ${profiles.profiles.length} (Ctrl+P for manager)`)
+          break
+        }
+        case 'Settings: Personas': {
+          const result = await this.client.getAgentPersonas()
+          this.setStatus(`Personas loaded: ${result.personas.length}`)
+          break
+        }
+        case 'Settings: Memories': {
+          const result = await this.client.getMemories()
+          this.setStatus(`Memories loaded: ${result.memories.length}`)
+          break
+        }
+        case 'Settings: Skills': {
+          const result = await this.client.getSkills()
+          this.setStatus(`Skills loaded: ${result.skills.length}`)
+          break
+        }
+        case 'Settings: Diagnostics': {
+          await this.client.getDiagnosticReport()
+          this.setStatus('Diagnostics report fetched')
+          break
+        }
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.setStatus(`Parity menu action failed: ${message}`)
     }
   }
 

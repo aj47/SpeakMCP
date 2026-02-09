@@ -55,7 +55,7 @@
     "apps/cli/src/app.ts": "1a69667f58175ee65284a3baf87358b080dac1d2c7585e58cf989b5ef28bcc52",
     "apps/cli/src/client.ts": "9f1d5e63a1faee1c9ba311866fe69e8ab57c933e67340c9e6c379646b2aa3d37",
     "apps/cli/src/views/chat.ts": "f8316e5094d5b773337a694ebad52eeab8f1e05ef9195ebd43a5579e30522eb1",
-    "apps/cli/src/views/settings.ts": "19c724ad80b8245a173c357a51c5b04491de38c7ee35aea95ecb5b4c83112cb0",
+    "apps/cli/src/views/settings.ts": "b7ea51fa191c91404734d2eefd704343780dc15295990d302b35ab6f39917b6f",
     "apps/cli/src/views/sessions.ts": "0120589e84ec0cbc6def07ed5159152aa29d775acc96ee0bf597b932d9cf6d1d",
     "apps/cli/src/views/tools.ts": "76a367aea9dd6a2c5ac8454423c7ea328c89897d8f9ad16d950ef3fca8632e24"
   },

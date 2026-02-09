@@ -24,6 +24,7 @@ import { ChatView } from './views/chat'
 import { SessionsView } from './views/sessions'
 import { SettingsView } from './views/settings'
 import { ToolsView } from './views/tools'
+import type { ParityMenuActionResult } from './views/settings'
 
 const HEALTH_CHECK_INTERVAL = 30000 // 30 seconds when idle
 
@@ -314,38 +315,110 @@ export class App {
     // Wire up sessions view callback
     this.sessionsView.setSwitchToChatCallback((conversationId?: string) => this.switchToChat(conversationId))
     this.settingsView.setParityMenuActions({
-      'Settings: Remote Server': async () => {
-        const result = await this.client.getTunnelStatus()
-        this.logCommandOutput('Settings Remote Server', result)
-        if (await this.maybeShowTunnelQrCode(result, 'settings remote server')) {
-          this.setStatusNotice('Remote server URL QR ready. Scan and press Esc when done.', 9000)
-          return
+      'Settings: Remote Server': async (): Promise<ParityMenuActionResult> => {
+        const lines: string[] = []
+        const installation = await this.client.checkTunnelInstalled().catch(() => ({ installed: false, error: 'check failed' }))
+        lines.push(`cloudflared installed: ${installation.installed ? 'yes' : 'no'}`)
+        if ('version' in installation && installation.version) lines.push(`cloudflared version: ${installation.version}`)
+        if ('error' in installation && installation.error) lines.push(`install check: ${installation.error}`)
+
+        let status = await this.client.getTunnelStatus()
+        this.logCommandOutput('Settings Remote Server', status)
+
+        let qrShown = await this.maybeShowTunnelQrCode(status, 'settings remote server')
+        if (!qrShown && !status.running && !status.starting && installation.installed) {
+          const startResult = await this.client.startTunnel({ mode: 'quick' }).catch((error: unknown) => ({ error: String(error) }))
+          this.logCommandOutput('Settings Remote Server Start', startResult)
+          const postStartUrl = await this.waitForTunnelConnectUrl()
+          if (postStartUrl) {
+            qrShown = await this.maybeShowTunnelQrCode({ url: postStartUrl }, 'settings remote server auto-start')
+            status = await this.client.getTunnelStatus().catch(() => status)
+          }
         }
-        this.setStatusNotice(`Remote server/tunnel ${result.running ? 'running' : 'stopped'} (details in console)`)
+
+        const tunnelList = await this.client.listTunnels().catch(() => ({ success: false, tunnels: [] as Array<{ name?: string; id?: string; createdAt?: string; }>, error: 'list failed' }))
+        lines.push(`tunnel running: ${status.running ? 'yes' : 'no'}`)
+        lines.push(`tunnel starting: ${status.starting ? 'yes' : 'no'}`)
+        lines.push(`mode: ${status.mode || 'unknown'}`)
+        lines.push(`public url: ${status.url || '(none)'}`)
+        lines.push(`hostname: ${status.hostname || '(none)'}`)
+        lines.push(`configured tunnels: ${tunnelList.tunnels.length}`)
+        if (tunnelList.tunnels[0]) {
+          lines.push(`first configured tunnel: ${tunnelList.tunnels[0].name || tunnelList.tunnels[0].id || 'unknown'}`)
+        }
+        lines.push(qrShown ? 'QR rendered: yes (scan overlay)' : 'QR rendered: no (no public URL available)')
+
+        if (qrShown) {
+          this.setStatusNotice('Cloudflare connect QR ready. Scan and press Esc when done.', 9000)
+        } else {
+          this.setStatusNotice(`Remote server/tunnel ${status.running ? 'running' : 'stopped'} (no connect URL yet)`, 9000)
+        }
+        return {
+          status: qrShown ? 'Cloudflare QR rendered' : 'Remote server details loaded',
+          sectionTitle: 'Settings: Remote Server',
+          sectionLines: lines,
+        }
       },
-      'Settings: Profiles': async () => {
-        await this.showProfileSwitcher()
-        this.setStatusNotice('Profile manager opened')
+      'Settings: Profiles': async (): Promise<ParityMenuActionResult> => {
+        const profiles = await this.client.getProfiles()
+        const current = await this.client.getCurrentProfile().catch(() => null)
+        return {
+          status: `Profiles loaded: ${profiles.profiles.length}`,
+          sectionTitle: 'Settings: Profiles',
+          sectionLines: [
+            `profiles: ${profiles.profiles.length}`,
+            `active profile: ${current?.name || '(none)'}`,
+            ...profiles.profiles.slice(0, 8).map((profile) => `- ${profile.name}${profile.id === current?.id ? ' (active)' : ''}`),
+          ],
+        }
       },
-      'Settings: Personas': async () => {
+      'Settings: Personas': async (): Promise<ParityMenuActionResult> => {
         const result = await this.client.getAgentPersonas()
         this.logCommandOutput('Settings Personas', result)
-        this.setStatusNotice(`Personas loaded: ${result.personas.length} (details in console)`)
+        return {
+          status: `Personas loaded: ${result.personas.length}`,
+          sectionTitle: 'Settings: Personas',
+          sectionLines: [
+            `personas: ${result.personas.length}`,
+            ...result.personas.slice(0, 8).map((persona) => `- ${persona.name}`),
+          ],
+        }
       },
-      'Settings: Memories': async () => {
+      'Settings: Memories': async (): Promise<ParityMenuActionResult> => {
         const result = await this.client.getMemories()
         this.logCommandOutput('Settings Memories', result)
-        this.setStatusNotice(`Memories loaded: ${result.memories.length} (details in console)`)
+        return {
+          status: `Memories loaded: ${result.memories.length}`,
+          sectionTitle: 'Settings: Memories',
+          sectionLines: [
+            `memories: ${result.memories.length}`,
+            ...result.memories.slice(0, 8).map((memory) => `- ${memory.title || memory.id}`),
+          ],
+        }
       },
-      'Settings: Skills': async () => {
+      'Settings: Skills': async (): Promise<ParityMenuActionResult> => {
         const result = await this.client.getSkills()
         this.logCommandOutput('Settings Skills', result)
-        this.setStatusNotice(`Skills loaded: ${result.skills.length} (details in console)`)
+        return {
+          status: `Skills loaded: ${result.skills.length}`,
+          sectionTitle: 'Settings: Skills',
+          sectionLines: [
+            `skills: ${result.skills.length}`,
+            ...result.skills.slice(0, 8).map((skill) => `- ${skill.name}${skill.enabled ? ' [on]' : ' [off]'}`),
+          ],
+        }
       },
-      'Settings: Diagnostics': async () => {
+      'Settings: Diagnostics': async (): Promise<ParityMenuActionResult> => {
         const result = await this.client.getDiagnosticReport()
         this.logCommandOutput('Settings Diagnostics', result)
-        this.setStatusNotice('Diagnostics report fetched (details in console)')
+        return {
+          status: 'Diagnostics report loaded',
+          sectionTitle: 'Settings: Diagnostics',
+          sectionLines: [
+            `report keys: ${Object.keys(result).length}`,
+            ...Object.keys(result).slice(0, 12).map((key) => `- ${key}`),
+          ],
+        }
       },
     })
 

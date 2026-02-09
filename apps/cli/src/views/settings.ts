@@ -103,6 +103,12 @@ type ParityMenuActionId =
   | 'Settings: Skills'
   | 'Settings: Diagnostics'
 
+export interface ParityMenuActionResult {
+  status?: string
+  sectionTitle?: string
+  sectionLines?: string[]
+}
+
 export class SettingsView extends BaseView {
   private settings: Settings | null = null
   private mcpServers: McpServer[] = []
@@ -186,9 +192,11 @@ export class SettingsView extends BaseView {
     'Settings: Skills',
     'Settings: Diagnostics',
   ] as const
-  private parityMenuActions: Partial<Record<ParityMenuActionId, () => Promise<void>>> = {}
+  private parityMenuActions: Partial<Record<ParityMenuActionId, () => Promise<ParityMenuActionResult | void>>> = {}
+  private parityDetailTitle: TextRenderable | null = null
+  private parityDetailBody: TextRenderable | null = null
 
-  setParityMenuActions(actions: Partial<Record<ParityMenuActionId, () => Promise<void>>>): void {
+  setParityMenuActions(actions: Partial<Record<ParityMenuActionId, () => Promise<ParityMenuActionResult | void>>>): void {
     this.parityMenuActions = actions
   }
 
@@ -713,6 +721,29 @@ export class SettingsView extends BaseView {
     }
     contentContainer.add(paritySection)
 
+    const parityDetailSection = new BoxRenderable(this.renderer, {
+      id: 'parity-details-section',
+      width: '100%',
+      borderStyle: 'single',
+      borderColor: '#444444',
+      padding: 1,
+      marginTop: 1,
+    })
+    this.parityDetailTitle = new TextRenderable(this.renderer, {
+      id: 'parity-details-title',
+      height: 1,
+      content: '-- Selected Parity Section --',
+      fg: '#AAAAAA',
+    })
+    this.parityDetailBody = new TextRenderable(this.renderer, {
+      id: 'parity-details-body',
+      content: '  Choose a parity menu and press Enter to load details.',
+      fg: '#CCCCCC',
+    })
+    parityDetailSection.add(this.parityDetailTitle)
+    parityDetailSection.add(this.parityDetailBody)
+    contentContainer.add(parityDetailSection)
+
     // Buttons row
     const buttonRow = new BoxRenderable(this.renderer, {
       id: 'button-row',
@@ -1196,39 +1227,74 @@ export class SettingsView extends BaseView {
     try {
       const action = this.parityMenuActions[selected]
       if (action) {
-        await action()
-        this.setStatus(`${selected} executed`)
+        const result = await action()
+        const title = result?.sectionTitle || selected
+        const lines = result?.sectionLines && result.sectionLines.length > 0
+          ? result.sectionLines
+          : ['No details returned by action.']
+        this.updateParityDetails(title, lines)
+        if (result?.status) {
+          this.setStatus(result.status)
+        }
         return
       }
 
       switch (selected) {
         case 'Settings: Remote Server': {
           const status = await this.client.getTunnelStatus()
-          this.setStatus(`Remote server/tunnel ${status.running ? 'running' : 'stopped'} (check command palette for QR)`)
+          this.updateParityDetails('Settings: Remote Server', [
+            `running=${status.running ? 'yes' : 'no'}`,
+            `starting=${status.starting ? 'yes' : 'no'}`,
+            `mode=${status.mode || 'unknown'}`,
+            `url=${status.url || '(none)'}`,
+            `hostname=${status.hostname || '(none)'}`,
+          ])
+          this.setStatus(`Remote server/tunnel ${status.running ? 'running' : 'stopped'}`)
           break
         }
         case 'Settings: Profiles': {
           const profiles = await this.client.getProfiles()
+          this.updateParityDetails('Settings: Profiles', [
+            `profiles=${profiles.profiles.length}`,
+            ...profiles.profiles.slice(0, 5).map((p) => `- ${p.name}${p.isActive ? ' (active)' : ''}`),
+          ])
           this.setStatus(`Profiles loaded: ${profiles.profiles.length} (Ctrl+P for manager)`)
           break
         }
         case 'Settings: Personas': {
           const result = await this.client.getAgentPersonas()
+          this.updateParityDetails('Settings: Personas', [
+            `personas=${result.personas.length}`,
+            ...result.personas.slice(0, 5).map((p) => `- ${p.name}`),
+          ])
           this.setStatus(`Personas loaded: ${result.personas.length}`)
           break
         }
         case 'Settings: Memories': {
           const result = await this.client.getMemories()
+          this.updateParityDetails('Settings: Memories', [
+            `memories=${result.memories.length}`,
+            ...result.memories.slice(0, 5).map((m) => `- ${m.title || m.id}`),
+          ])
           this.setStatus(`Memories loaded: ${result.memories.length}`)
           break
         }
         case 'Settings: Skills': {
           const result = await this.client.getSkills()
+          this.updateParityDetails('Settings: Skills', [
+            `skills=${result.skills.length}`,
+            ...result.skills.slice(0, 5).map((s) => `- ${s.name}${s.enabled ? ' [on]' : ' [off]'}`),
+          ])
           this.setStatus(`Skills loaded: ${result.skills.length}`)
           break
         }
         case 'Settings: Diagnostics': {
-          await this.client.getDiagnosticReport()
+          const report = await this.client.getDiagnosticReport()
+          const keys = Object.keys(report)
+          this.updateParityDetails('Settings: Diagnostics', [
+            `reportKeys=${keys.length}`,
+            ...keys.slice(0, 8).map((k) => `- ${k}`),
+          ])
           this.setStatus('Diagnostics report fetched')
           break
         }
@@ -1236,6 +1302,15 @@ export class SettingsView extends BaseView {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
       this.setStatus(`Parity menu action failed: ${message}`)
+    }
+  }
+
+  private updateParityDetails(title: string, lines: string[]): void {
+    if (this.parityDetailTitle) {
+      this.parityDetailTitle.content = `-- ${title} --`
+    }
+    if (this.parityDetailBody) {
+      this.parityDetailBody.content = lines.map((line) => `  ${line}`).join('\n')
     }
   }
 

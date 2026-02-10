@@ -93,13 +93,8 @@ module.exports = {
     // Disable hardened runtime and timestamp for development builds to avoid timestamp service errors
     // For production builds, set ENABLE_HARDENED_RUNTIME=true environment variable
     hardenedRuntime: process.env.ENABLE_HARDENED_RUNTIME === 'true',
-    // Skip signing native extensions that cause timestamp issues
-    signIgnore: [
-      "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node",
-      // sherpa-onnx native libraries (already signed by package maintainers)
-      "node_modules/sherpa-onnx-darwin-*/sherpa-onnx.node",
-      "node_modules/sherpa-onnx-darwin-*/*.dylib"
-    ],
+    // All native extensions must be signed for notarization
+    // Do NOT add signIgnore entries - Apple requires all binaries to be signed
     target: [
       {
         target: "dmg",

@@ -1,9 +1,10 @@
 import Fastify, { FastifyInstance } from "fastify"
 import cors from "@fastify/cors"
+import multipart from "@fastify/multipart"
 import crypto from "crypto"
 import fs from "fs"
 import path from "path"
-import { configStore, recordingsFolder } from "./config"
+import { configStore, recordingsFolder, Config } from "./config"
 import { diagnosticsService } from "./diagnostics"
 import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
@@ -13,6 +14,7 @@ import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
+import { preprocessTextForTTS, validateTTSText } from "@speakmcp/shared"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -94,6 +96,241 @@ function extractUserPrompt(body: any): string | null {
   } catch {
     return null
   }
+}
+
+// ============================================
+// Audio Processing Helper Functions
+// ============================================
+
+/**
+ * Transcribe audio using configured STT provider (OpenAI or Groq Whisper)
+ */
+async function transcribeAudio(
+  audioBuffer: Buffer,
+  filename: string,
+  options?: {
+    model?: string
+    language?: string
+    prompt?: string
+    response_format?: string
+  }
+): Promise<{ text: string }> {
+  const config = configStore.get()
+
+  // Determine mime type from filename
+  const ext = path.extname(filename).toLowerCase()
+  const mimeTypes: Record<string, string> = {
+    ".mp3": "audio/mpeg",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".wav": "audio/wav",
+    ".webm": "audio/webm",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+  }
+  const mimeType = mimeTypes[ext] || "audio/webm"
+
+  const form = new FormData()
+  form.append("file", new File([audioBuffer], filename, { type: mimeType }))
+
+  // Use specified model or default based on provider
+  const model = options?.model ||
+    (config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1")
+  form.append("model", model)
+  form.append("response_format", options?.response_format || "json")
+
+  // Add prompt if provided (for Groq)
+  if (options?.prompt?.trim()) {
+    form.append("prompt", options.prompt.trim())
+  } else if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+    form.append("prompt", config.groqSttPrompt.trim())
+  }
+
+  // Add language if specified
+  const languageCode = options?.language ||
+    (config.sttProviderId === "groq"
+      ? config.groqSttLanguage || config.sttLanguage
+      : config.openaiSttLanguage || config.sttLanguage)
+
+  if (languageCode && languageCode !== "auto") {
+    form.append("language", languageCode)
+  }
+
+  const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+  const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+  const transcriptResponse = await fetch(
+    config.sttProviderId === "groq"
+      ? `${groqBaseUrl}/audio/transcriptions`
+      : `${openaiBaseUrl}/audio/transcriptions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+      },
+      body: form,
+    }
+  )
+
+  if (!transcriptResponse.ok) {
+    const errorText = await transcriptResponse.text()
+    throw new Error(`Transcription failed: ${transcriptResponse.statusText} - ${errorText.slice(0, 300)}`)
+  }
+
+  const result = await transcriptResponse.json()
+  return { text: result.text || "" }
+}
+
+/**
+ * Generate speech audio from text using configured TTS provider
+ */
+async function generateSpeechAudio(
+  text: string,
+  options?: {
+    model?: string
+    voice?: string
+    speed?: number
+    response_format?: string
+  }
+): Promise<{ audio: ArrayBuffer; contentType: string }> {
+  const config = configStore.get()
+  const providerId = config.ttsProviderId || "openai"
+
+  // Preprocess text for TTS
+  let processedText = text
+  if (config.ttsPreprocessingEnabled !== false) {
+    const preprocessingOptions = {
+      removeCodeBlocks: config.ttsRemoveCodeBlocks ?? true,
+      removeUrls: config.ttsRemoveUrls ?? true,
+      convertMarkdown: config.ttsConvertMarkdown ?? true,
+    }
+    processedText = preprocessTextForTTS(text, preprocessingOptions)
+  }
+
+  // Validate processed text
+  const validation = validateTTSText(processedText)
+  if (!validation.isValid) {
+    throw new Error(`TTS validation failed: ${validation.issues.join(", ")}`)
+  }
+
+  let audioBuffer: ArrayBuffer
+  let contentType: string
+
+  if (providerId === "openai") {
+    const model = options?.model || config.openaiTtsModel || "tts-1"
+    const voice = options?.voice || config.openaiTtsVoice || "alloy"
+    const speed = options?.speed || config.openaiTtsSpeed || 1.0
+    const responseFormat = options?.response_format || config.openaiTtsResponseFormat || "mp3"
+
+    const baseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+    const apiKey = config.openaiApiKey
+
+    if (!apiKey) {
+      throw new Error("OpenAI API key is required for TTS")
+    }
+
+    const response = await fetch(`${baseUrl}/audio/speech`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model, input: processedText, voice, speed, response_format: responseFormat }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`OpenAI TTS API error: ${response.statusText} - ${errorText}`)
+    }
+
+    audioBuffer = await response.arrayBuffer()
+    contentType = responseFormat === "opus" ? "audio/opus" :
+                  responseFormat === "aac" ? "audio/aac" :
+                  responseFormat === "flac" ? "audio/flac" :
+                  responseFormat === "wav" ? "audio/wav" :
+                  responseFormat === "pcm" ? "audio/pcm" : "audio/mpeg"
+  } else if (providerId === "groq") {
+    const model = options?.model || config.groqTtsModel || "canopylabs/orpheus-v1-english"
+    const defaultVoice = model === "canopylabs/orpheus-arabic-saudi" ? "fahad" : "troy"
+    const voice = options?.voice || config.groqTtsVoice || defaultVoice
+
+    const baseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+    const apiKey = config.groqApiKey
+
+    if (!apiKey) {
+      throw new Error("Groq API key is required for TTS")
+    }
+
+    const response = await fetch(`${baseUrl}/audio/speech`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model, input: processedText, voice, response_format: "wav" }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      if (errorText.includes("requires terms acceptance")) {
+        const modelParam = model === "canopylabs/orpheus-arabic-saudi"
+          ? "canopylabs%2Forpheus-arabic-saudi"
+          : "canopylabs%2Forpheus-v1-english"
+        throw new Error(`Groq TTS requires terms acceptance. Visit https://console.groq.com/playground?model=${modelParam}`)
+      }
+      throw new Error(`Groq TTS API error: ${response.statusText} - ${errorText}`)
+    }
+
+    audioBuffer = await response.arrayBuffer()
+    contentType = "audio/wav"
+  } else if (providerId === "gemini") {
+    const model = options?.model || config.geminiTtsModel || "gemini-2.5-flash-preview-tts"
+    const voice = options?.voice || config.geminiTtsVoice || "Kore"
+
+    const baseUrl = config.geminiBaseUrl || "https://generativelanguage.googleapis.com"
+    const apiKey = config.geminiApiKey
+
+    if (!apiKey) {
+      throw new Error("Gemini API key is required for TTS")
+    }
+
+    const response = await fetch(`${baseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: processedText }] }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } }
+        }
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Gemini TTS API error: ${response.statusText} - ${errorText}`)
+    }
+
+    const result = await response.json()
+    const audioData = result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
+
+    if (!audioData) {
+      throw new Error("No audio data received from Gemini TTS API")
+    }
+
+    // Convert base64 to ArrayBuffer
+    const binaryString = atob(audioData)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    audioBuffer = bytes.buffer
+    contentType = "audio/wav"
+  } else {
+    throw new Error(`Unsupported TTS provider: ${providerId}`)
+  }
+
+  return { audio: audioBuffer, contentType }
 }
 
 interface RunAgentOptions {
@@ -403,6 +640,14 @@ export async function startRemoteServer() {
     strictPreflight: false, // Don't be strict about preflight requests
   })
 
+  // Configure multipart for audio file uploads
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 25 * 1024 * 1024, // 25MB max (OpenAI limit)
+      files: 1,
+    },
+  })
+
   // Auth hook (skip for OPTIONS preflight requests)
   fastify.addHook("onRequest", async (req, reply) => {
     // Skip auth for OPTIONS requests (CORS preflight)
@@ -547,6 +792,246 @@ export async function startRemoteServer() {
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to fetch models", error)
       return reply.code(500).send({ error: error?.message || "Failed to fetch models" })
+    }
+  })
+
+  // ============================================
+  // Audio Endpoints (OpenAI-compatible)
+  // ============================================
+
+  // POST /v1/audio/transcriptions - Transcribe audio to text (OpenAI-compatible)
+  fastify.post("/v1/audio/transcriptions", async (req, reply) => {
+    try {
+      const data = await req.file()
+      if (!data) {
+        return reply.code(400).send({ error: "No audio file provided" })
+      }
+
+      const audioBuffer = await data.toBuffer()
+      const filename = data.filename || "audio.webm"
+
+      // Extract optional parameters from multipart fields
+      const fields = data.fields as Record<string, any>
+      const model = fields?.model?.value
+      const language = fields?.language?.value
+      const prompt = fields?.prompt?.value
+      const responseFormat = fields?.response_format?.value || "json"
+
+      diagnosticsService.logInfo("remote-server", `Transcribing audio: ${filename} (${audioBuffer.length} bytes)`)
+
+      const result = await transcribeAudio(audioBuffer, filename, {
+        model,
+        language,
+        prompt,
+        response_format: responseFormat,
+      })
+
+      diagnosticsService.logInfo("remote-server", `Transcription complete: ${result.text.length} chars`)
+
+      // Return in OpenAI-compatible format
+      if (responseFormat === "text") {
+        return reply.type("text/plain").send(result.text)
+      } else if (responseFormat === "verbose_json") {
+        return reply.send({
+          task: "transcribe",
+          language: language || "en",
+          duration: 0, // We don't have this info
+          text: result.text,
+        })
+      }
+      // Default JSON format
+      return reply.send({ text: result.text })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Transcription failed", error)
+      return reply.code(500).send({ error: error?.message || "Transcription failed" })
+    }
+  })
+
+  // POST /v1/audio/speech - Generate speech from text (OpenAI-compatible)
+  fastify.post("/v1/audio/speech", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const input = body?.input
+
+      if (!input || typeof input !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'input' text" })
+      }
+
+      const model = body?.model
+      const voice = body?.voice
+      const speed = body?.speed
+      const responseFormat = body?.response_format
+
+      diagnosticsService.logInfo("remote-server", `Generating speech: ${input.length} chars`)
+
+      const result = await generateSpeechAudio(input, {
+        model,
+        voice,
+        speed,
+        response_format: responseFormat,
+      })
+
+      diagnosticsService.logInfo("remote-server", `Speech generated: ${result.audio.byteLength} bytes`)
+
+      // Return audio binary directly
+      return reply
+        .type(result.contentType)
+        .send(Buffer.from(result.audio))
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Speech generation failed", error)
+      return reply.code(500).send({ error: error?.message || "Speech generation failed" })
+    }
+  })
+
+  // POST /v1/audio/chat - Combined: transcribe audio, run agent, return text + optional audio
+  // This is a custom endpoint that combines STT -> Agent -> TTS in one call
+  fastify.post("/v1/audio/chat", async (req, reply) => {
+    try {
+      const data = await req.file()
+      if (!data) {
+        return reply.code(400).send({ error: "No audio file provided" })
+      }
+
+      const audioBuffer = await data.toBuffer()
+      const filename = data.filename || "audio.webm"
+
+      // Extract optional parameters from multipart fields
+      const fields = data.fields as Record<string, any>
+      const conversationId = fields?.conversation_id?.value
+      const returnAudio = fields?.return_audio?.value === "true" || fields?.return_audio?.value === true
+      const sttModel = fields?.stt_model?.value
+      const sttLanguage = fields?.language?.value
+      const ttsModel = fields?.tts_model?.value
+      const ttsVoice = fields?.voice?.value
+      const isStreaming = fields?.stream?.value === "true" || fields?.stream?.value === true
+
+      diagnosticsService.logInfo("remote-server", `Audio chat: ${filename} (${audioBuffer.length} bytes), returnAudio=${returnAudio}`)
+
+      // Step 1: Transcribe audio
+      const transcription = await transcribeAudio(audioBuffer, filename, {
+        model: sttModel,
+        language: sttLanguage,
+      })
+
+      if (!transcription.text.trim()) {
+        return reply.code(400).send({ error: "Could not transcribe audio - no speech detected" })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Transcribed: "${transcription.text.substring(0, 100)}..."`)
+
+      // Step 2: Run agent with transcribed text
+      if (isStreaming) {
+        // SSE streaming mode
+        const requestOrigin = req.headers.origin || "*"
+        reply.raw.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          "Access-Control-Allow-Origin": requestOrigin,
+          "Access-Control-Allow-Credentials": "true",
+        })
+
+        const writeSSE = (eventData: object) => {
+          reply.raw.write(`data: ${JSON.stringify(eventData)}\n\n`)
+        }
+
+        // Send transcription event
+        writeSSE({ type: "transcription", data: { text: transcription.text } })
+
+        const onProgress = (update: AgentProgressUpdate) => {
+          writeSSE({ type: "progress", data: update })
+        }
+
+        try {
+          const agentResult = await runAgent({
+            prompt: transcription.text,
+            conversationId,
+            onProgress,
+          })
+
+          recordHistory(agentResult.content)
+          const model = resolveActiveModelId(configStore.get())
+
+          // Optionally generate audio response
+          let audioBase64: string | undefined
+          let audioContentType: string | undefined
+
+          if (returnAudio) {
+            try {
+              const audioResult = await generateSpeechAudio(agentResult.content, {
+                model: ttsModel,
+                voice: ttsVoice,
+              })
+              audioBase64 = Buffer.from(audioResult.audio).toString("base64")
+              audioContentType = audioResult.contentType
+            } catch (ttsError: any) {
+              diagnosticsService.logWarning("remote-server", "TTS generation failed in streaming mode", ttsError)
+            }
+          }
+
+          writeSSE({
+            type: "done",
+            data: {
+              transcription: transcription.text,
+              content: agentResult.content,
+              conversation_id: agentResult.conversationId,
+              conversation_history: agentResult.conversationHistory,
+              model,
+              audio: audioBase64,
+              audio_content_type: audioContentType,
+            },
+          })
+        } catch (agentError: any) {
+          writeSSE({
+            type: "error",
+            data: { message: agentError?.message || "Agent processing failed" },
+          })
+        } finally {
+          reply.raw.end()
+        }
+
+        return reply
+      }
+
+      // Non-streaming mode
+      const agentResult = await runAgent({
+        prompt: transcription.text,
+        conversationId,
+      })
+
+      recordHistory(agentResult.content)
+      const model = resolveActiveModelId(configStore.get())
+
+      // Optionally generate audio response
+      let audioBase64: string | undefined
+      let audioContentType: string | undefined
+
+      if (returnAudio) {
+        try {
+          const audioResult = await generateSpeechAudio(agentResult.content, {
+            model: ttsModel,
+            voice: ttsVoice,
+          })
+          audioBase64 = Buffer.from(audioResult.audio).toString("base64")
+          audioContentType = audioResult.contentType
+        } catch (ttsError: any) {
+          diagnosticsService.logWarning("remote-server", "TTS generation failed", ttsError)
+          // Continue without audio - don't fail the whole request
+        }
+      }
+
+      return reply.send({
+        transcription: transcription.text,
+        content: agentResult.content,
+        conversation_id: agentResult.conversationId,
+        conversation_history: agentResult.conversationHistory,
+        model,
+        audio: audioBase64,
+        audio_content_type: audioContentType,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Audio chat failed", error)
+      return reply.code(500).send({ error: error?.message || "Audio chat failed" })
     }
   })
 

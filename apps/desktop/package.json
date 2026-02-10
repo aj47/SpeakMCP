@@ -46,6 +46,7 @@
     "@ai-sdk/openai": "^3.0.1",
     "@egoist/electron-panel-window": "^8.0.3",
     "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.3.0",
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-scroll-area": "^1.2.9",

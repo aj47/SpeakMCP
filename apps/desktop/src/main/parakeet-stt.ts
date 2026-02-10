@@ -126,9 +126,12 @@ function getSherpaLibraryPath(): string | null {
 
   const possiblePaths: string[] = []
 
-  // For packaged app, check resources directory
+  // For packaged app, check extraResources directory first (bundled by electron-builder)
   if (app.isPackaged) {
-    // In packaged app, node_modules is in resources/app/node_modules
+    possiblePaths.push(
+      path.join(process.resourcesPath, platformPackage)
+    )
+    // Legacy: also check node_modules in case it was bundled there
     possiblePaths.push(
       path.join(process.resourcesPath, "app", "node_modules", platformPackage)
     )

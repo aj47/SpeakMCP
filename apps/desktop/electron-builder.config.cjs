@@ -1,5 +1,87 @@
 // @ts-check
 
+// Resolve sherpa-onnx native package paths for bundling into the packaged app.
+// sherpa-onnx is an optionalDependency that pnpm hoists to the root .pnpm store,
+// so electron-builder doesn't include it automatically. We find and bundle it via extraResources.
+//
+// This block is wrapped in try-catch because electron-vite also loads this config file
+// (to read appId/productName) and converts require() calls to ESM imports that fail
+// for Node built-ins. When that happens, we just return empty arrays (no sherpa bundling needed
+// during the vite build step — only during electron-builder packaging).
+let _sherpaResources = {};
+try {
+  const _path = require('path');
+  const _fs = require('fs');
+
+  /**
+   * @param {string} platform
+   * @param {string} arch
+   * @returns {string | null}
+   */
+  function _findSherpaPackagePath(platform, arch) {
+    const platformPackage = `sherpa-onnx-${platform}-${arch}`;
+
+    // Check pnpm virtual store (monorepo root)
+    const rootPnpmBase = _path.join(__dirname, '..', '..', 'node_modules', '.pnpm');
+    if (_fs.existsSync(rootPnpmBase)) {
+      try {
+        const dirs = _fs.readdirSync(rootPnpmBase);
+        const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`));
+        if (platformDir) {
+          const libPath = _path.join(rootPnpmBase, platformDir, 'node_modules', platformPackage);
+          if (_fs.existsSync(libPath)) return libPath;
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Check local pnpm store
+    const localPnpmBase = _path.join(__dirname, 'node_modules', '.pnpm');
+    if (_fs.existsSync(localPnpmBase)) {
+      try {
+        const dirs = _fs.readdirSync(localPnpmBase);
+        const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`));
+        if (platformDir) {
+          const libPath = _path.join(localPnpmBase, platformDir, 'node_modules', platformPackage);
+          if (_fs.existsSync(libPath)) return libPath;
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Check standard node_modules
+    const standardPath = _path.join(__dirname, 'node_modules', platformPackage);
+    if (_fs.existsSync(standardPath)) return standardPath;
+
+    const rootStandardPath = _path.join(__dirname, '..', '..', 'node_modules', platformPackage);
+    if (_fs.existsSync(rootStandardPath)) return rootStandardPath;
+
+    console.warn(`[electron-builder] Could not find ${platformPackage} - local TTS/STT may not work in packaged app`);
+    return null;
+  }
+
+  /**
+   * @param {string} platform
+   * @param {string} arch
+   * @returns {Array<{from: string, to: string, filter: string[]}>}
+   */
+  function _sherpaExtraResources(platform, arch) {
+    const sherpaPath = _findSherpaPackagePath(platform, arch);
+    if (!sherpaPath) return [];
+    console.log(`[electron-builder] Bundling sherpa-onnx from: ${sherpaPath}`);
+    return [{ from: sherpaPath, to: `sherpa-onnx-${platform}-${arch}`, filter: ['**/*'] }];
+  }
+
+  _sherpaResources = {
+    macArm64: _sherpaExtraResources('darwin', 'arm64'),
+    macX64: _sherpaExtraResources('darwin', 'x64'),
+    winX64: _sherpaExtraResources('win', 'x64'),
+    linuxX64: _sherpaExtraResources('linux', 'x64'),
+    linuxArm64: _sherpaExtraResources('linux', 'arm64'),
+  };
+} catch {
+  // Running inside electron-vite ESM context — sherpa bundling not needed here
+  _sherpaResources = { macArm64: [], macX64: [], winX64: [], linuxX64: [], linuxArm64: [] };
+}
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: "app.speakmcp",
@@ -59,7 +141,9 @@ module.exports = {
         from: "resources/bundled-skills",
         to: "bundled-skills",
         filter: ["**/*"]
-      }
+      },
+      // sherpa-onnx native libraries for local TTS/STT
+      ..._sherpaResources.winX64,
     ]
   },
   nsis: {
@@ -85,7 +169,10 @@ module.exports = {
         from: "resources/bundled-skills",
         to: "bundled-skills",
         filter: ["**/*"]
-      }
+      },
+      // sherpa-onnx native libraries for local TTS/STT
+      ..._sherpaResources.macArm64,
+      ..._sherpaResources.macX64,
     ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
@@ -244,7 +331,10 @@ module.exports = {
         from: "resources/bundled-skills",
         to: "bundled-skills",
         filter: ["**/*"]
-      }
+      },
+      // sherpa-onnx native libraries for local TTS/STT
+      ..._sherpaResources.linuxX64,
+      ..._sherpaResources.linuxArm64,
     ]
   },
   deb: {

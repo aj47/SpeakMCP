@@ -79,10 +79,10 @@ importers:
         version: 3.38.6
       sherpa-onnx-node:
         specifier: ^1.12.23
-        version: 1.12.23
+        version: 1.12.24
       tar:
         specifier: ^7.5.6
-        version: 7.5.6
+        version: 7.5.7
       unbzip2-stream:
         specifier: ^1.4.3
         version: 1.4.3
@@ -3707,12 +3707,6 @@ packages:
       expo: '*'
       react-native: '*'
 
-  expo-constants@18.0.13:
-    resolution: {integrity: sha512-FnZn12E1dRYKDHlAdIyNFhBurKTS3F9CrfrBDJI5m3D7U17KBHMQ6JEfYlSj7LG7t+Ulr+IKaj58L1k5gBwTcQ==}
-    peerDependencies:
-      expo: '*'
-      react-native: '*'
-
   expo-crypto@15.0.8:
     resolution: {integrity: sha512-aF7A914TB66WIlTJvl5J6/itejfY78O7dq3ibvFltL9vnTALJ/7LYHvLT4fwmx9yUNS6ekLBtDGWivFWnj2Fcw==}
     peerDependencies:
@@ -6144,31 +6138,36 @@ packages:
     resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
     engines: {node: '>= 0.4'}
 
-  sherpa-onnx-darwin-arm64@1.12.23:
-    resolution: {integrity: sha512-zbjNUUH/IXhjRyRJ9mpcWVOGIVr31a/qXBPsfOYc7U8cgwcq33Vmj2OzoLYWQF6T+puqCAE4nMxFAxJvdZekhg==}
+  sherpa-onnx-darwin-arm64@1.12.24:
+    resolution: {integrity: sha512-MCwAEr5X+gRRblcny0KLYApO/xPquNWAwha3eJONdMy7tI4tjm6gEo1uFVG6gx9jt4PoWE1XoCoOUnJilCaIug==}
     cpu: [arm64]
     os: [darwin]
 
-  sherpa-onnx-darwin-x64@1.12.23:
-    resolution: {integrity: sha512-hgPhBG85bgULJo5xS5xvh1A9+D6GBPwhZ8QCvWvh7YP1kF9UZTF1r5hWBOzZiR2Ax0gQMbxVvw1t/NpR2N7HWA==}
+  sherpa-onnx-darwin-x64@1.12.24:
+    resolution: {integrity: sha512-uWAKvAmNfVwBb2SHF/L4nP7cLeYq+zdClGOjsWhMKH5K9kxsdqbrDcjyhXMs8fpwIVdgfey1/XZW8OvGm0y+Tw==}
     cpu: [x64]
     os: [darwin]
 
-  sherpa-onnx-linux-x64@1.12.23:
-    resolution: {integrity: sha512-pUZIdDvPtyRXQDGo9R9MIBf2AFUzfgcGmutoulsEdH3hpK6JteR7Z/5pfrZIIqe/O99djAjEHK4AlwLHC2jiZw==}
+  sherpa-onnx-linux-arm64@1.12.24:
+    resolution: {integrity: sha512-2OFozWq24qijR4LKccSA1WOF05xWcPyWmGujKAoMyGXulfQWmsvvXeK7VxgWqbyZ4t2KSFtUoegUHfMdv2w+Kg==}
+    cpu: [arm64]
+    os: [linux]
+
+  sherpa-onnx-linux-x64@1.12.24:
+    resolution: {integrity: sha512-KEIT8V78uuaXtCOpOkhll2kZ+aWew/9ES8D6iJbI3xN+qFIPiW+W5N66YIVEGNwoqGCo9lOSAwUGz0wmvgpAPw==}
     cpu: [x64]
     os: [linux]
 
-  sherpa-onnx-node@1.12.23:
-    resolution: {integrity: sha512-09SRixVSjsajxeCV8Hy9R5J4IHPtw7vNgaIcEokdh/LpU7sY+e12z9uHHIMMMgNiInyGEH74wIwjLXms+W7qRA==}
+  sherpa-onnx-node@1.12.24:
+    resolution: {integrity: sha512-5RJs5sGODZDJtpLO6PAIZz5MrZ7ZUO5AOJtAlxaw/6bPB2wFfFLNOaHKbetuBsfzIlncWc3q0AQdq/ud19L6SQ==}
 
-  sherpa-onnx-win-ia32@1.12.23:
-    resolution: {integrity: sha512-MyLsK7r6dd7paglyTgb8UHTXTEFqOzA91u6VDV64Lq8rDGuOFVYioxX7vlwmGe1A9o7VhuOPNaKcRjEPtVDhBQ==}
+  sherpa-onnx-win-ia32@1.12.24:
+    resolution: {integrity: sha512-mQrHcYoJl13Z5/OJlmxxWJDE+/3EDQlDevDg265Q/Y6qPtqNdA6AcHw6mNfTp47DaR0L+XeE7MT79ncsJbFnBA==}
     cpu: [ia32]
     os: [win32]
 
-  sherpa-onnx-win-x64@1.12.23:
-    resolution: {integrity: sha512-pdHEYMJiYy8+xzH2WkBVS4/hnRwqjY8FaWnjs0NBgQZnPmc/k4M+TAiauTOuFDNK4GPwFQnjwrCGx6jI9AOkOg==}
+  sherpa-onnx-win-x64@1.12.24:
+    resolution: {integrity: sha512-HBtIjEM/FzmAYOqDBZanwXtwKJ8NEZ+FOrM+t5acqEzEGUVNyhD5BJRBDtR1WUA8sqnWTrTnYAG6GhFsNcBAOg==}
     cpu: [x64]
     os: [win32]
 
@@ -6435,15 +6434,10 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
-    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
-  tar@7.5.2:
-    resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
-    engines: {node: '>=18'}
-    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
-
-  tar@7.5.6:
-    resolution: {integrity: sha512-xqUeu2JAIJpXyvskvU3uvQW8PAmHrtXp2KDuMJwQqW8Sqq0CaZBAQ+dKS3RBXVhU4wC5NjAdKrmh84241gO9cA==}
+  tar@7.5.7:
+    resolution: {integrity: sha512-fov56fJiRuThVFXD6o6/Q354S7pnWMJIVlDBYijsTNx6jKSE4pvrDTs6lUnmGvNyfJwFQQwWy3owKz1ucIhveQ==}
     engines: {node: '>=18'}
 
   temp-dir@2.0.0:
@@ -6880,8 +6874,8 @@ packages:
   which-module@2.0.1:
     resolution: {integrity: sha512-iBdZ57RDvnOR9AGBhML2vFZf7h8vmBjhoaZqODJBFWHVtKkDmKuHai3cx5PgVMrX5YDNp27AofYbAwctSS+vhQ==}
 
-  which-typed-array@1.1.19:
-    resolution: {integrity: sha512-rEvr90Bck4WZt9HHFC4DJMsjvu7x+r6bImz0/BrbWb7A2djJ8hnZMrWnHo9F8ssv0OMErasDhftrfROTyqSDrw==}
+  which-typed-array@1.1.20:
+    resolution: {integrity: sha512-LYfpUkmqwl0h9A2HL09Mms427Q1RZWuOHsukfVcKRq9q95iQxdw0ix1JQrqbcDR9PH1QDwf5Qo8OZb5lksZ8Xg==}
     engines: {node: '>= 0.4'}
 
   which@2.0.2:
@@ -8027,7 +8021,7 @@ snapshots:
       source-map-support: 0.5.21
       stacktrace-parser: 0.1.11
       structured-headers: 0.4.1
-      tar: 7.5.2
+      tar: 7.5.7
       terminal-link: 2.1.1
       undici: 6.22.0
       wrap-ansi: 7.0.0
@@ -11036,15 +11030,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  expo-constants@18.0.13(expo@54.0.30(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.1.17)(react@19.1.0)):
-    dependencies:
-      '@expo/config': 12.0.13
-      '@expo/env': 2.0.8
-      expo: 54.0.30(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
-      react-native: 0.81.4(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.1.17)(react@19.1.0)
-    transitivePeerDependencies:
-      - supports-color
-
   expo-crypto@15.0.8(expo@54.0.30(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)):
     dependencies:
       base64-js: 1.5.1
@@ -11826,7 +11811,7 @@ snapshots:
 
   is-typed-array@1.1.15:
     dependencies:
-      which-typed-array: 1.1.19
+      which-typed-array: 1.1.20
 
   is-unicode-supported@0.1.0: {}
 
@@ -14015,28 +14000,32 @@ snapshots:
 
   shell-quote@1.8.3: {}
 
-  sherpa-onnx-darwin-arm64@1.12.23:
+  sherpa-onnx-darwin-arm64@1.12.24:
     optional: true
 
-  sherpa-onnx-darwin-x64@1.12.23:
+  sherpa-onnx-darwin-x64@1.12.24:
     optional: true
 
-  sherpa-onnx-linux-x64@1.12.23:
+  sherpa-onnx-linux-arm64@1.12.24:
     optional: true
 
-  sherpa-onnx-node@1.12.23:
+  sherpa-onnx-linux-x64@1.12.24:
+    optional: true
+
+  sherpa-onnx-node@1.12.24:
     optionalDependencies:
-      sherpa-onnx-darwin-arm64: 1.12.23
-      sherpa-onnx-darwin-x64: 1.12.23
-      sherpa-onnx-linux-x64: 1.12.23
-      sherpa-onnx-win-ia32: 1.12.23
-      sherpa-onnx-win-x64: 1.12.23
+      sherpa-onnx-darwin-arm64: 1.12.24
+      sherpa-onnx-darwin-x64: 1.12.24
+      sherpa-onnx-linux-arm64: 1.12.24
+      sherpa-onnx-linux-x64: 1.12.24
+      sherpa-onnx-win-ia32: 1.12.24
+      sherpa-onnx-win-x64: 1.12.24
     optional: true
 
-  sherpa-onnx-win-ia32@1.12.23:
+  sherpa-onnx-win-ia32@1.12.24:
     optional: true
 
-  sherpa-onnx-win-x64@1.12.23:
+  sherpa-onnx-win-x64@1.12.24:
     optional: true
 
   side-channel-list@1.0.0:
@@ -14328,22 +14317,13 @@ snapshots:
       mkdirp: 1.0.4
       yallist: 4.0.0
 
-  tar@7.5.2:
+  tar@7.5.7:
     dependencies:
       '@isaacs/fs-minipass': 4.0.1
       chownr: 3.0.0
       minipass: 7.1.2
       minizlib: 3.1.0
       yallist: 5.0.0
-
-  tar@7.5.6:
-    dependencies:
-      '@isaacs/fs-minipass': 4.0.1
-      chownr: 3.0.0
-      minipass: 7.1.2
-      minizlib: 3.1.0
-      yallist: 5.0.0
-    optional: true
 
   temp-dir@2.0.0: {}
 
@@ -14629,7 +14609,7 @@ snapshots:
       is-arguments: 1.2.0
       is-generator-function: 1.1.2
       is-typed-array: 1.1.15
-      which-typed-array: 1.1.19
+      which-typed-array: 1.1.20
 
   utils-merge@1.0.1: {}
 
@@ -14762,7 +14742,7 @@ snapshots:
 
   which-module@2.0.1: {}
 
-  which-typed-array@1.1.19:
+  which-typed-array@1.1.20:
     dependencies:
       available-typed-arrays: 1.0.7
       call-bind: 1.0.8

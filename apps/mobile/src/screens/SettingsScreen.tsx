@@ -628,6 +628,27 @@ export default function SettingsScreen({ navigation }: any) {
       >
         <Text style={styles.h1}>Settings</Text>
 
+        {connectionError && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>⚠️ {connectionError}</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.primaryButton, isCheckingConnection && styles.primaryButtonDisabled]}
+          onPress={onSave}
+          disabled={isCheckingConnection}
+        >
+          {isCheckingConnection ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
+              <Text style={styles.primaryButtonText}>  Checking connection...</Text>
+            </View>
+          ) : (
+            <Text style={styles.primaryButtonText}>Connect</Text>
+          )}
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>Appearance</Text>
         <View style={styles.themeSelector}>
           {THEME_OPTIONS.map((option) => (
@@ -1008,26 +1029,6 @@ export default function SettingsScreen({ navigation }: any) {
           </>
         )}
 
-        {connectionError && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>⚠️ {connectionError}</Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.primaryButton, isCheckingConnection && styles.primaryButtonDisabled]}
-          onPress={onSave}
-          disabled={isCheckingConnection}
-        >
-          {isCheckingConnection ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
-              <Text style={styles.primaryButtonText}>  Checking connection...</Text>
-            </View>
-          ) : (
-            <Text style={styles.primaryButtonText}>Save & Start Chatting</Text>
-          )}
-        </TouchableOpacity>
       </ScrollView>
 
       <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>

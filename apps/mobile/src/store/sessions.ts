@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, SessionListItem, generateSessionId, generateMessageId, generateSessionTitle, sessionToListItem } from '../types/session';
 import { ChatMessage } from '../lib/openaiClient';
+import { SettingsApiClient } from '../lib/settingsApi';
+import { syncConversations, SyncResult } from '../lib/syncService';
 
 const SESSIONS_KEY = 'chat_sessions_v1';
 const CURRENT_SESSION_KEY = 'current_session_id_v1';
@@ -31,6 +33,11 @@ export interface SessionStore {
   setServerConversationIdForSession: (sessionId: string, serverConversationId: string) => Promise<void>;
   getServerConversationId: () => string | undefined;
   findSessionByServerConversationId: (serverConversationId: string) => Session | null;
+
+  // Sync with server
+  syncWithServer: (client: SettingsApiClient) => Promise<SyncResult>;
+  isSyncing: boolean;
+  lastSyncResult: SyncResult | null;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -243,7 +250,9 @@ export function useSessions(): SessionStore {
   }, [sessions, currentSessionId]);
 
   const getSessionList = useCallback((): SessionListItem[] => {
-    return sessions.map(sessionToListItem);
+    // Sort sessions by updatedAt in descending order (most recently active first)
+    const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    return sortedSessions.map(sessionToListItem);
   }, [sessions]);
 
   const addMessage = useCallback(async (
@@ -311,7 +320,7 @@ export function useSessions(): SessionStore {
     // Pre-compute session messages for consistency
     const sessionMessages = messages.map((m, idx) => ({
       id: generateMessageId(),
-      role: m.role as 'system' | 'user' | 'assistant',
+      role: m.role as 'user' | 'assistant' | 'tool',
       content: m.content || '',
       timestamp: now + idx,
       toolCalls: m.toolCalls,
@@ -361,7 +370,7 @@ export function useSessions(): SessionStore {
     // Pre-compute session messages for consistency
     const sessionMessages = messages.map((m, idx) => ({
       id: generateMessageId(),
-      role: m.role as 'system' | 'user' | 'assistant',
+      role: m.role as 'user' | 'assistant' | 'tool',
       content: m.content || '',
       timestamp: now + idx,
       toolCalls: m.toolCalls,
@@ -473,6 +482,91 @@ export function useSessions(): SessionStore {
     return sessions.find(s => s.serverConversationId === serverConversationId) || null;
   }, []);
 
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false); // Non-state lock to guarantee mutual exclusion
+  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
+
+  // Sync sessions with server
+  const syncWithServer = useCallback(async (client: SettingsApiClient): Promise<SyncResult> => {
+    // Use ref for synchronous check to prevent race conditions between rapid invocations
+    if (isSyncingRef.current) {
+      return { pulled: 0, pushed: 0, updated: 0, errors: ['Sync already in progress'] };
+    }
+    isSyncingRef.current = true;
+    setIsSyncing(true);
+
+    try {
+      // Take snapshot before async operations
+      const snapshotSessions = sessionsRef.current;
+      const { result, sessions: syncedSessions } = await syncConversations(client, snapshotSessions);
+
+      // Only update if there were actual changes
+      if (result.pulled > 0 || result.pushed > 0 || result.updated > 0) {
+        // Smart merge: preserve any local changes that occurred during sync
+        const currentSessions = sessionsRef.current;
+        const syncedById = new Map(syncedSessions.map(s => [s.id, s]));
+        const snapshotById = new Map(snapshotSessions.map(s => [s.id, s]));
+
+        // Build merged result
+        const mergedSessions: Session[] = [];
+        const seenIds = new Set<string>();
+
+        // First, process current sessions - preserve if modified during sync
+        for (const current of currentSessions) {
+          seenIds.add(current.id);
+          const snapshot = snapshotById.get(current.id);
+          const synced = syncedById.get(current.id);
+
+          // If session was modified locally during sync (updatedAt changed since snapshot), keep current version
+          if (snapshot && current.updatedAt > snapshot.updatedAt) {
+            mergedSessions.push(current);
+          } else if (synced) {
+            // Session wasn't modified during sync, use synced version
+            mergedSessions.push(synced);
+          } else {
+            // Session exists in current but not in synced (e.g., newly created during sync)
+            mergedSessions.push(current);
+          }
+        }
+
+        // Add any new sessions from sync that don't exist in current
+        // Collect all new sessions first, then add at once to preserve their relative order
+        const newSessionsToAdd: Session[] = [];
+        for (const synced of syncedSessions) {
+          if (!seenIds.has(synced.id)) {
+            newSessionsToAdd.push(synced);
+          }
+        }
+        mergedSessions.unshift(...newSessionsToAdd);
+
+        // Update ref and state
+        sessionsRef.current = mergedSessions;
+        setSessions(mergedSessions);
+
+        // Queue async save
+        queueSave(async () => {
+          await saveSessions(mergedSessions);
+        });
+      }
+
+      setLastSyncResult(result);
+      return result;
+    } catch (err: any) {
+      const errorResult: SyncResult = {
+        pulled: 0,
+        pushed: 0,
+        updated: 0,
+        errors: [err.message || 'Unknown sync error'],
+      };
+      setLastSyncResult(errorResult);
+      return errorResult;
+    } finally {
+      isSyncingRef.current = false;
+      setIsSyncing(false);
+    }
+  }, [queueSave]);
+
   return {
     sessions,
     currentSessionId,
@@ -491,6 +585,9 @@ export function useSessions(): SessionStore {
     setServerConversationIdForSession,
     getServerConversationId,
     findSessionByServerConversationId,
+    syncWithServer,
+    isSyncing,
+    lastSyncResult,
   };
 }
 

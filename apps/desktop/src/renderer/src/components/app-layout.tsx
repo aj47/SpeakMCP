@@ -23,6 +23,9 @@ export const Component = () => {
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
   const configQuery = useConfigQuery()
 
+  const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
+  const memoriesEnabled = configQuery.data?.memoriesEnabled !== false  // default true
+
   const settingsNavLinks: NavLinkItem[] = [
     {
       text: "General",
@@ -34,6 +37,12 @@ export const Component = () => {
       href: "/settings/models",
       icon: "i-mingcute-brain-line",
     },
+    // Only show Memories when enabled
+    ...(memoriesEnabled ? [{
+      text: "Memories",
+      href: "/memories",
+      icon: "i-mingcute-book-2-line",
+    }] : []),
     {
       text: "Profile",
       href: "/settings/tools",
@@ -54,10 +63,21 @@ export const Component = () => {
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
     },
-    {
+    // Only show WhatsApp settings when enabled
+    ...(whatsappEnabled ? [{
       text: "WhatsApp",
       href: "/settings/whatsapp",
       icon: "i-mingcute-message-4-line",
+    }] : []),
+    {
+      text: "Agent Personas",
+      href: "/settings/agent-personas",
+      icon: "i-mingcute-group-line",
+    },
+    {
+      text: "External Agents",
+      href: "/settings/external-agents",
+      icon: "i-mingcute-robot-line",
     },
   ]
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import { AgentProgressUpdate } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, OctagonX, Expand, Shrink } from "lucide-react"
+import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -16,6 +16,9 @@ import { OverlayFollowUpInput } from "./overlay-follow-up-input"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 import { getToolResultsSummary } from "@speakmcp/shared"
+import { ToolExecutionStats } from "./tool-execution-stats"
+import { ACPSessionBadge } from "./acp-session-badge"
+import { AgentSummaryView } from "./agent-summary-view"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -63,6 +66,11 @@ type DisplayItem =
       isComplete: boolean
       calls: Array<{ name: string; arguments: any }>
       results: Array<{ success: boolean; content: string; error?: string }>
+      executionStats?: {
+        durationMs?: number
+        totalTokens?: number
+        model?: string
+      }
     } }
   | { kind: "tool_approval"; id: string; data: {
       approvalId: string
@@ -81,6 +89,7 @@ type DisplayItem =
       text: string
       isStreaming: boolean
     } }
+  | { kind: "delegation"; id: string; data: ACPDelegationProgress }
 
 
 // Compact message component for space efficiency
@@ -569,6 +578,11 @@ const AssistantWithToolsBubble: React.FC<{
     isComplete: boolean
     calls: Array<{ name: string; arguments: any }>
     results: Array<{ success: boolean; content: string; error?: string }>
+    executionStats?: {
+      durationMs?: number
+      totalTokens?: number
+      model?: string
+    }
   }
   isExpanded: boolean
   onToggleExpand: () => void
@@ -732,6 +746,9 @@ const AssistantWithToolsBubble: React.FC<{
                   </div>
                 )
               })}
+              {data.executionStats && (
+                <ToolExecutionStats stats={data.executionStats} compact />
+              )}
             </div>
           )}
         </div>
@@ -974,6 +991,411 @@ const RetryStatusBanner: React.FC<{
   )
 }
 
+// Subagent Conversation Message - individual message in the collapsible conversation
+const SubAgentConversationMessage: React.FC<{
+  message: ACPSubAgentMessage
+  agentName: string
+  isExpanded: boolean
+  onToggleExpand: () => void
+}> = ({ message, agentName, isExpanded, onToggleExpand }) => {
+  const [isCopied, setIsCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setIsCopied(true)
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current)
+      }
+      copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy message:", err)
+    }
+  }
+
+  const isLongContent = message.content.length > 300
+  const shouldShowToggle = isLongContent
+
+  const getRoleStyle = () => {
+    switch (message.role) {
+      case 'user':
+        return "border-l-2 border-blue-400 bg-blue-50/50 dark:bg-blue-900/20"
+      case 'assistant':
+        return "border-l-2 border-purple-400 bg-purple-50/50 dark:bg-purple-900/20"
+      case 'tool':
+        return "border-l-2 border-amber-400 bg-amber-50/50 dark:bg-amber-900/20"
+      default:
+        return "border-l-2 border-gray-400 bg-gray-50/50 dark:bg-gray-900/20"
+    }
+  }
+
+  const getRoleIcon = () => {
+    switch (message.role) {
+      case 'user': return "📤"
+      case 'assistant': return "🤖"
+      case 'tool': return "🔧"
+      default: return "💬"
+    }
+  }
+
+  const getRoleLabel = () => {
+    switch (message.role) {
+      case 'user': return "Task"
+      case 'assistant': return agentName
+      case 'tool': return message.toolName || "Tool"
+      default: return "Message"
+    }
+  }
+
+  return (
+    <div className={cn("rounded-md text-xs transition-all", getRoleStyle())}>
+      <div
+        className={cn(
+          "flex items-start gap-2 px-2 py-1.5",
+          shouldShowToggle && "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+        )}
+        onClick={shouldShowToggle ? onToggleExpand : undefined}
+      >
+        <span className="opacity-60 mt-0.5 flex-shrink-0">{getRoleIcon()}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+              {getRoleLabel()}
+            </span>
+            {message.timestamp && (
+              <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <div className={cn(
+            "whitespace-pre-wrap break-words text-gray-700 dark:text-gray-300",
+            !isExpanded && isLongContent && "line-clamp-3"
+          )}>
+            {message.content}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={handleCopy}
+            className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            title={isCopied ? "Copied!" : "Copy message"}
+          >
+            {isCopied ? (
+              <CheckCheck className="h-3 w-3 text-green-500" />
+            ) : (
+              <Copy className="h-3 w-3 opacity-50 hover:opacity-100" />
+            )}
+          </button>
+          {shouldShowToggle && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleExpand() }}
+              className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronUp className="h-3 w-3 opacity-60" />
+              ) : (
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Collapsible Subagent Conversation Panel
+const SubAgentConversationPanel: React.FC<{
+  conversation: ACPSubAgentMessage[]
+  agentName: string
+  isOpen: boolean
+  onToggle: () => void
+}> = ({ conversation, agentName, isOpen, onToggle }) => {
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({})
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const toggleMessage = (index: number) => {
+    setExpandedMessages(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }))
+  }
+
+  const handleCopyAll = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const fullConversation = conversation.map(msg => {
+      const role = msg.role === 'user' ? 'Task' : msg.role === 'assistant' ? agentName : (msg.toolName || 'Tool')
+      return `[${role}]\n${msg.content}`
+    }).join('\n\n---\n\n')
+    try {
+      await navigator.clipboard.writeText(fullConversation)
+    } catch (err) {
+      console.error("Failed to copy conversation:", err)
+    }
+  }
+
+  return (
+    <div className="mt-3 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      {/* Collapsible Header */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        onClick={onToggle}
+      >
+        <Bot className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
+        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+          Subagent Conversation
+        </span>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          {conversation.length} messages
+        </Badge>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={handleCopyAll}
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            title="Copy entire conversation"
+          >
+            <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+          </button>
+          {isOpen ? (
+            <ChevronUp className="h-4 w-4 text-gray-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-gray-500" />
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible Content */}
+      {isOpen && (
+        <div
+          ref={scrollRef}
+          className="max-h-[400px] overflow-y-auto p-2 space-y-2 bg-white/50 dark:bg-black/20"
+        >
+          {conversation.map((msg, idx) => (
+            <SubAgentConversationMessage
+              key={idx}
+              message={msg}
+              agentName={agentName}
+              isExpanded={expandedMessages[idx] ?? false}
+              onToggleExpand={() => toggleMessage(idx)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Delegation Bubble - shows status of delegated subagent tasks
+// The entire component is collapsible, and conversations persist after completion
+const DelegationBubble: React.FC<{
+  delegation: ACPDelegationProgress
+  isExpanded?: boolean
+  onToggleExpand?: () => void
+}> = ({ delegation, isExpanded = true, onToggleExpand }) => {
+  const [isConversationOpen, setIsConversationOpen] = useState(false)
+  const isRunning = delegation.status === 'running' || delegation.status === 'pending'
+  const isCompleted = delegation.status === 'completed'
+  const isFailed = delegation.status === 'failed'
+  const isCancelled = delegation.status === 'cancelled'
+  const hasConversation = delegation.conversation && delegation.conversation.length > 0
+
+  // Track live elapsed time only while running
+  const [liveElapsed, setLiveElapsed] = useState(0)
+  
+  useEffect(() => {
+    // Only run timer while the delegation is actively running
+    if (!isRunning) {
+      return undefined
+    }
+    
+    // Update immediately
+    setLiveElapsed(Math.round((Date.now() - delegation.startTime) / 1000))
+    
+    // Update every second
+    const interval = setInterval(() => {
+      setLiveElapsed(Math.round((Date.now() - delegation.startTime) / 1000))
+    }, 1000)
+    
+    return () => clearInterval(interval)
+  }, [isRunning, delegation.startTime])
+
+  // Calculate duration:
+  // - If endTime exists (completed/failed), use it for accurate final duration
+  // - If still running, use the live timer
+  // - Fallback: shouldn't happen, but use endTime-based or 0
+  const duration = delegation.endTime
+    ? Math.round((delegation.endTime - delegation.startTime) / 1000)
+    : isRunning
+      ? liveElapsed
+      : 0
+
+  const statusColor = isCompleted
+    ? 'border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/30'
+    : isFailed
+    ? 'border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/30'
+    : isCancelled
+    ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30'
+    : 'border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30'
+
+  const headerColor = isCompleted
+    ? 'bg-green-100/50 dark:bg-green-900/30 border-green-200 dark:border-green-800'
+    : isFailed
+    ? 'bg-red-100/50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+    : isCancelled
+    ? 'bg-amber-100/50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'
+    : 'bg-blue-100/50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
+
+  const textColor = isCompleted
+    ? 'text-green-800 dark:text-green-200'
+    : isFailed
+    ? 'text-red-800 dark:text-red-200'
+    : isCancelled
+    ? 'text-amber-800 dark:text-amber-200'
+    : 'text-blue-800 dark:text-blue-200'
+
+  const iconColor = isCompleted
+    ? 'text-green-600 dark:text-green-400'
+    : isFailed
+    ? 'text-red-600 dark:text-red-400'
+    : isCancelled
+    ? 'text-amber-600 dark:text-amber-400'
+    : 'text-blue-600 dark:text-blue-400'
+
+  const handleHeaderClick = () => {
+    onToggleExpand?.()
+  }
+
+  return (
+    <div className={cn("rounded-lg border overflow-hidden", statusColor)}>
+      {/* Header - clickable to collapse/expand entire bubble */}
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity",
+          isExpanded && "border-b",
+          headerColor
+        )}
+        onClick={handleHeaderClick}
+      >
+        <Bot className={cn("h-3.5 w-3.5", iconColor)} />
+        <span className={cn("text-xs font-medium", textColor)}>
+          {delegation.agentName}
+        </span>
+        {hasConversation && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-gray-500 dark:text-gray-400">
+            {delegation.conversation!.length} msgs
+          </Badge>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          {isRunning && (
+            <Loader2 className={cn("h-3 w-3 animate-spin", iconColor)} />
+          )}
+          {isCompleted && (
+            <Check className={cn("h-3 w-3", iconColor)} />
+          )}
+          {isFailed && (
+            <XCircle className={cn("h-3 w-3", iconColor)} />
+          )}
+          {isCancelled && (
+            <OctagonX className={cn("h-3 w-3", iconColor)} />
+          )}
+          <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400 ml-1">
+            {duration}s
+          </span>
+          {/* Collapse/Expand chevron */}
+          {isExpanded ? (
+            <ChevronUp className="h-3.5 w-3.5 text-gray-400 ml-1" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 text-gray-400 ml-1" />
+          )}
+        </div>
+      </div>
+
+      {/* Collapsed preview - show task snippet when collapsed */}
+      {!isExpanded && (
+        <div className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 truncate">
+          {delegation.task.length > 60
+            ? `${delegation.task.substring(0, 60)}...`
+            : delegation.task}
+        </div>
+      )}
+
+      {/* Content - only shown when expanded */}
+      {isExpanded && (
+        <div className="px-3 py-2">
+          <p className={cn("text-xs", textColor.replace('800', '700').replace('200', '300'))}>
+            {delegation.task.length > 100
+              ? `${delegation.task.substring(0, 100)}...`
+              : delegation.task}
+          </p>
+
+          {/* Progress message */}
+          {delegation.progressMessage && (
+            <p className={cn("text-xs mt-1 italic", textColor.replace('800', '600').replace('200', '400'))}>
+              {delegation.progressMessage}
+            </p>
+          )}
+
+          {/* Collapsible conversation panel - persists after completion */}
+          {hasConversation && (
+            <SubAgentConversationPanel
+              conversation={delegation.conversation!}
+              agentName={delegation.agentName}
+              isOpen={isConversationOpen}
+              onToggle={() => setIsConversationOpen(!isConversationOpen)}
+            />
+          )}
+
+          {/* Result summary (when conversation is collapsed) */}
+          {!isConversationOpen && delegation.resultSummary && (
+            <div className="mt-2 p-2 rounded bg-white/50 dark:bg-black/20">
+              <p className="text-xs text-gray-700 dark:text-gray-300">
+                {delegation.resultSummary.length > 150
+                  ? `${delegation.resultSummary.substring(0, 150)}...`
+                  : delegation.resultSummary}
+              </p>
+            </div>
+          )}
+
+          {/* Error message */}
+          {delegation.error && (
+            <div className="mt-2 p-2 rounded bg-red-100/50 dark:bg-red-900/30">
+              <p className="text-xs text-red-700 dark:text-red-300">
+                {delegation.error}
+              </p>
+            </div>
+          )}
+
+          {/* Status footer */}
+          <div className="flex items-center justify-between mt-2">
+            <span className={cn("text-xs", textColor.replace('800', '600').replace('200', '400'))}>
+              {isRunning ? 'Running' : isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : 'Failed'}
+            </span>
+            {hasConversation && !isConversationOpen && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsConversationOpen(true) }}
+                className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                View conversation
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Streaming Content Bubble - shows real-time LLM response as it's being generated
 const StreamingContentBubble: React.FC<{
   streamingContent: {
@@ -1062,6 +1484,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   // Expansion state management - preserve across re-renders
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+
+  // Tab state for Chat/Summary view toggle (only relevant when dual-model is enabled)
+  const [activeTab, setActiveTab] = useState<"chat" | "summary">("chat")
 
   // Get current conversation ID for deep-linking and session focus control
   const currentConversationId = useConversationStore((s) => s.currentConversationId)
@@ -1186,21 +1611,30 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const handleApproveToolCall = async () => {
     const approvalId = progress?.pendingToolApproval?.approvalId
-    if (!approvalId) return
+    console.log(`[Tool Approval UI] handleApproveToolCall called, approvalId=${approvalId}`)
+    if (!approvalId) {
+      console.log(`[Tool Approval UI] No approvalId found, returning early`)
+      return
+    }
     // Synchronous check to prevent double-click race condition
-    if (respondingApprovalIdRef.current === approvalId) return
+    if (respondingApprovalIdRef.current === approvalId) {
+      console.log(`[Tool Approval UI] Already responding to this approval, skipping`)
+      return
+    }
 
     respondingApprovalIdRef.current = approvalId
     setRespondingApprovalId(approvalId)
+    console.log(`[Tool Approval UI] Calling tipcClient.respondToToolApproval with approvalId=${approvalId}, approved=true`)
     try {
-      await tipcClient.respondToToolApproval({
+      const result = await tipcClient.respondToToolApproval({
         approvalId,
         approved: true,
       })
+      console.log(`[Tool Approval UI] respondToToolApproval returned:`, result)
       // Don't reset respondingApprovalId on success - keep showing "Processing..."
       // The approval bubble will be removed when pendingToolApproval is cleared from progress
     } catch (error) {
-      console.error("Failed to approve tool call:", error)
+      console.error("[Tool Approval UI] Failed to approve tool call:", error)
       // Only reset on error so user can retry
       respondingApprovalIdRef.current = null
       setRespondingApprovalId(null)
@@ -1209,21 +1643,30 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
 
   const handleDenyToolCall = async () => {
     const approvalId = progress?.pendingToolApproval?.approvalId
-    if (!approvalId) return
+    console.log(`[Tool Approval UI] handleDenyToolCall called, approvalId=${approvalId}`)
+    if (!approvalId) {
+      console.log(`[Tool Approval UI] No approvalId found for deny, returning early`)
+      return
+    }
     // Synchronous check to prevent double-click race condition
-    if (respondingApprovalIdRef.current === approvalId) return
+    if (respondingApprovalIdRef.current === approvalId) {
+      console.log(`[Tool Approval UI] Already responding to this approval (deny), skipping`)
+      return
+    }
 
     respondingApprovalIdRef.current = approvalId
     setRespondingApprovalId(approvalId)
+    console.log(`[Tool Approval UI] Calling tipcClient.respondToToolApproval with approvalId=${approvalId}, approved=false`)
     try {
-      await tipcClient.respondToToolApproval({
+      const result = await tipcClient.respondToToolApproval({
         approvalId,
         approved: false,
       })
+      console.log(`[Tool Approval UI] respondToToolApproval (deny) returned:`, result)
       // Don't reset respondingApprovalId on success - keep showing "Processing..."
       // The approval bubble will be removed when pendingToolApproval is cleared from progress
     } catch (error) {
-      console.error("Failed to deny tool call:", error)
+      console.error("[Tool Approval UI] Failed to deny tool call:", error)
       // Only reset on error so user can retry
       respondingApprovalIdRef.current = null
       setRespondingApprovalId(null)
@@ -1245,6 +1688,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     contextInfo,
     modelInfo,
     profileName,
+    acpSessionInfo,
   } = progress
 
   // Detect if agent was stopped by kill switch
@@ -1418,6 +1862,17 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       const aIndex = ++roleCounters.assistant
       const execTimestamp = next?.timestamp ?? m.timestamp
       const toolExecId = generateToolExecutionId(m.toolCalls, execTimestamp)
+
+      // Look for a matching step with executionStats (match by tool name from tool_call steps)
+      // or find the most recent tool_call step with stats
+      const toolCallNames = m.toolCalls.map(c => c.name)
+      const matchingStep = steps?.find(
+        step =>
+          step.type === "tool_call" &&
+          step.executionStats &&
+          (step.title?.includes(toolCallNames[0]) || toolCallNames.some(name => step.title?.includes(name)))
+      )
+
       displayItems.push({
         kind: "assistant_with_tools",
         id: `assistant-tools-${aIndex}-${toolExecId}`,
@@ -1427,6 +1882,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           isComplete: m.isComplete,
           calls: m.toolCalls,
           results,
+          // Attach executionStats from the matching step if found
+          executionStats: matchingStep?.executionStats ? {
+            durationMs: matchingStep.executionStats.durationMs,
+            totalTokens: matchingStep.executionStats.totalTokens,
+            model: matchingStep.subagentId,
+          } : undefined,
         },
       })
       if (next && next.role === "tool" && next.toolResults) {
@@ -1447,14 +1908,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     }
   }
 
-  // Add pending tool approval to display items if present
-  if (progress.pendingToolApproval) {
-    displayItems.push({
-      kind: "tool_approval",
-      id: `approval-${progress.pendingToolApproval.approvalId}`,
-      data: progress.pendingToolApproval,
-    })
-  }
+  // NOTE: Tool approval is now rendered separately outside the scroll area for visibility
+  // It is NOT added to displayItems anymore to ensure it stays visible regardless of scroll position
 
   // Add retry status to display items if present
   if (progress.retryInfo && progress.retryInfo.isRetrying) {
@@ -1473,6 +1928,53 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       data: progress.streamingContent,
     })
   }
+
+  // Add delegation progress items from steps
+  for (const step of progress.steps) {
+    if (step.delegation) {
+      displayItems.push({
+        kind: "delegation",
+        id: `delegation-${step.delegation.runId}`,
+        data: step.delegation,
+      })
+    }
+  }
+
+  // Sort all display items by timestamp to ensure delegations appear in chronological order
+  // Items without timestamps (tool_approval, streaming) will be handled separately
+  const getItemTimestamp = (item: DisplayItem): number | null => {
+    switch (item.kind) {
+      case "message":
+        return item.data.timestamp
+      case "tool_execution":
+        return item.data.timestamp
+      case "assistant_with_tools":
+        return item.data.timestamp
+      case "delegation":
+        return item.data.startTime
+      case "retry_status":
+        return item.data.startedAt
+      case "tool_approval":
+      case "streaming":
+        // These represent current state and should stay at the end
+        return null
+    }
+  }
+
+  // Separate items with timestamps from "current state" items (approval, streaming)
+  const timestampedItems = displayItems.filter(item => getItemTimestamp(item) !== null)
+  const currentStateItems = displayItems.filter(item => getItemTimestamp(item) === null)
+
+  // Sort timestamped items chronologically
+  timestampedItems.sort((a, b) => {
+    const tsA = getItemTimestamp(a) ?? 0
+    const tsB = getItemTimestamp(b) ?? 0
+    return tsA - tsB
+  })
+
+  // Replace displayItems with sorted items, keeping current state items at the end
+  displayItems.length = 0
+  displayItems.push(...timestampedItems, ...currentStateItems)
 
   // Determine the last assistant message among display items (by position, not timestamp)
   const lastAssistantDisplayIndex = (() => {
@@ -1787,8 +2289,43 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         {/* Collapsible content */}
         {!isCollapsed && (
           <>
-            {/* Message Stream */}
-            <div className="relative flex-1 min-h-0" onClick={(e) => e.stopPropagation()}>
+            {/* Tab toggle for Chat/Summary view - only show when summaries exist */}
+            {(progress.stepSummaries?.length ?? 0) > 0 && (
+              <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/5" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("chat"); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+                    activeTab === "chat"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <MessageSquare className="h-3 w-3" />
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("summary"); }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+                    activeTab === "summary"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Brain className="h-3 w-3" />
+                  Summary
+                  <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">
+                    {progress.stepSummaries?.length ?? 0}
+                  </Badge>
+                </button>
+              </div>
+            )}
+
+            {/* Message Stream (Chat Tab) */}
+            <div className={cn("relative flex-1 min-h-0", activeTab !== "chat" && (progress.stepSummaries?.length ?? 0) > 0 && "hidden")} onClick={(e) => e.stopPropagation()}>
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
@@ -1842,6 +2379,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                         return <RetryStatusBanner key={itemKey} retryInfo={item.data} />
                       } else if (item.kind === "streaming") {
                         return <StreamingContentBubble key={itemKey} streamingContent={item.data} />
+                      } else if (item.kind === "delegation") {
+                        const delegationExpanded = expandedItems[itemKey] ?? true
+                        return (
+                          <DelegationBubble
+                            key={itemKey}
+                            delegation={item.data}
+                            isExpanded={delegationExpanded}
+                            onToggleExpand={() => toggleItemExpansion(itemKey, true)}
+                          />
+                        )
                       } else {
                         return (
                           <ToolExecutionBubble
@@ -1862,6 +2409,28 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               </div>
             </div>
 
+            {/* Tool Approval - Fixed position outside scroll area */}
+            {progress.pendingToolApproval && (
+              <div className="flex-shrink-0">
+                <ToolApprovalBubble
+                  approval={progress.pendingToolApproval}
+                  onApprove={handleApproveToolCall}
+                  onDeny={handleDenyToolCall}
+                  isResponding={isRespondingToApproval}
+                />
+              </div>
+            )}
+
+            {/* Summary View Tab */}
+            {activeTab === "summary" && (progress.stepSummaries?.length ?? 0) > 0 && (
+              <div className="relative flex-1 min-h-0 overflow-y-auto p-3" onClick={(e) => e.stopPropagation()}>
+                <AgentSummaryView
+                  progress={progress}
+                  conversationId={progress.conversationId}
+                />
+              </div>
+            )}
+
             {/* Footer with status info */}
             <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground flex-shrink-0 flex items-center gap-2">
               {profileName && (
@@ -1869,10 +2438,15 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   {profileName}
                 </span>
               )}
-              {profileName && modelInfo && !isComplete && (
+              {(profileName && (modelInfo || acpSessionInfo) && !isComplete) && (
                 <span className="text-muted-foreground/50">•</span>
               )}
-              {!isComplete && modelInfo && (
+              {/* ACP Session info for tile variant */}
+              {acpSessionInfo && (
+                <ACPSessionBadge info={acpSessionInfo} />
+              )}
+              {/* Model info - only show for non-ACP sessions */}
+              {!isComplete && modelInfo && !acpSessionInfo && (
                 <span className="text-[10px] truncate max-w-[100px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>
                   {modelInfo.provider}/{modelInfo.model.split('/').pop()?.substring(0, 15)}
                 </span>
@@ -1986,8 +2560,12 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
               {profileName}
             </span>
           )}
-          {/* Model and provider info */}
-          {!isComplete && modelInfo && (
+          {/* ACP Session info (agent and model from ACP) */}
+          {acpSessionInfo && (
+            <ACPSessionBadge info={acpSessionInfo} />
+          )}
+          {/* Model and provider info - only show for non-ACP sessions */}
+          {!isComplete && modelInfo && !acpSessionInfo && (
             <span className="text-[10px] text-muted-foreground/70 truncate max-w-[120px]" title={`${modelInfo.provider}: ${modelInfo.model}`}>
               {modelInfo.provider}/{modelInfo.model.split('/').pop()?.substring(0, 20)}
             </span>
@@ -2059,8 +2637,43 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         </div>
       </div>
 
-      {/* Message Stream - Left-aligned content */}
-      <div className="relative flex-1 min-h-0">
+      {/* Tab toggle for Chat/Summary view - only show when summaries exist */}
+      {(progress.stepSummaries?.length ?? 0) > 0 && (
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border/30 bg-muted/5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("chat"); }}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+              activeTab === "chat"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            Chat
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveTab("summary"); }}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors",
+              activeTab === "summary"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <Brain className="h-3 w-3" />
+            Summary
+            <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0 h-4">
+              {progress.stepSummaries?.length ?? 0}
+            </Badge>
+          </button>
+        </div>
+      )}
+
+      {/* Message Stream - Left-aligned content (Chat Tab) */}
+      <div className={cn("relative flex-1 min-h-0", activeTab !== "chat" && (progress.stepSummaries?.length ?? 0) > 0 && "hidden")}>
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
@@ -2130,6 +2743,16 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       streamingContent={item.data}
                     />
                   )
+                } else if (item.kind === "delegation") {
+                  const delegationExpanded = expandedItems[itemKey] ?? true
+                  return (
+                    <DelegationBubble
+                      key={itemKey}
+                      delegation={item.data}
+                      isExpanded={delegationExpanded}
+                      onToggleExpand={() => toggleItemExpansion(itemKey, true)}
+                    />
+                  )
                 } else {
                   return (
                     <ToolExecutionBubble
@@ -2148,8 +2771,29 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
             </div>
           )}
         </div>
-
       </div>
+
+      {/* Tool Approval - Fixed position outside scroll area for overlay variant */}
+      {progress.pendingToolApproval && (
+        <div className="flex-shrink-0 mx-2 mb-2">
+          <ToolApprovalBubble
+            approval={progress.pendingToolApproval}
+            onApprove={handleApproveToolCall}
+            onDeny={handleDenyToolCall}
+            isResponding={isRespondingToApproval}
+          />
+        </div>
+      )}
+
+      {/* Summary View Tab */}
+      {activeTab === "summary" && (progress.stepSummaries?.length ?? 0) > 0 && (
+        <div className="relative flex-1 min-h-0 overflow-y-auto p-3" onClick={(e) => e.stopPropagation()}>
+          <AgentSummaryView
+            progress={progress}
+            conversationId={progress.conversationId}
+          />
+        </div>
+      )}
 
       {/* Message Queue Panel - shows queued messages in overlay */}
       {hasQueuedMessages && progress.conversationId && (

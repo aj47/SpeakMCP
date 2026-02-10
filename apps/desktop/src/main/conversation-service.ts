@@ -120,12 +120,14 @@ export class ConversationService {
   }
 
 
-  async saveConversation(conversation: Conversation): Promise<void> {
+  async saveConversation(conversation: Conversation, preserveTimestamp: boolean = false): Promise<void> {
     this.ensureConversationsFolder()
     const conversationPath = this.getConversationPath(conversation.id)
 
-    // Update the updatedAt timestamp
-    conversation.updatedAt = Date.now()
+    // Update the updatedAt timestamp unless preserving client-supplied value
+    if (!preserveTimestamp) {
+      conversation.updatedAt = Date.now()
+    }
 
     // Save conversation to file
     fs.writeFileSync(conversationPath, JSON.stringify(conversation, null, 2))

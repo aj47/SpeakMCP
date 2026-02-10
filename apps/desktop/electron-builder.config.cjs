@@ -95,7 +95,10 @@ module.exports = {
     hardenedRuntime: process.env.ENABLE_HARDENED_RUNTIME === 'true',
     // Skip signing native extensions that cause timestamp issues
     signIgnore: [
-      "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node"
+      "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node",
+      // sherpa-onnx native libraries (already signed by package maintainers)
+      "node_modules/sherpa-onnx-darwin-*/sherpa-onnx.node",
+      "node_modules/sherpa-onnx-darwin-*/*.dylib"
     ],
     target: [
       {

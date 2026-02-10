@@ -358,4 +358,9 @@ export const toolApprovalManager = {
     }
     state.pendingToolApprovals.clear()
   },
+
+  // Get the count of pending approvals (for debugging)
+  getPendingApprovalCount(): number {
+    return state.pendingToolApprovals.size
+  },
 }

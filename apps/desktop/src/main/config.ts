@@ -61,6 +61,9 @@ const getConfig = () => {
   const isWindows = process.platform === 'win32'
 
   const defaultConfig: Partial<Config> = {
+    // Onboarding - not completed by default for new users
+    onboardingCompleted: false,
+
     // Recording shortcut: On Windows, use Ctrl+/ to avoid conflicts with common shortcuts
     // On macOS, Hold Ctrl is fine since Cmd is used for most shortcuts
     shortcut: isWindows ? "ctrl-slash" : "hold-ctrl",
@@ -112,7 +115,11 @@ const getConfig = () => {
     // Theme preference defaults
     themePreference: "system",
 
-	    // App behavior
+    // Parakeet STT defaults
+    parakeetNumThreads: 2,
+    parakeetModelDownloaded: false,
+
+    // App behavior
 	    launchAtLogin: false,
 	    hideDockIcon: false,
 
@@ -188,6 +195,26 @@ const getConfig = () => {
 
     // Streamer Mode - hides sensitive info for screen sharing
     streamerModeEnabled: false,
+
+    // Langfuse Observability - disabled by default
+    langfuseEnabled: false,
+    langfusePublicKey: undefined,
+    langfuseSecretKey: undefined,
+    langfuseBaseUrl: undefined, // Uses cloud.langfuse.com by default
+
+    // Dual-Model Agent Mode defaults
+    dualModelEnabled: false,
+    dualModelSummarizationFrequency: "every_response",
+    dualModelSummaryDetailLevel: "compact",
+    dualModelAutoSaveImportant: false,
+    dualModelInjectMemories: false,
+
+    // Memory System defaults - enabled by default for backwards compatibility
+    memoriesEnabled: true,
+
+    // ACP Tool Injection - when true, injects SpeakMCP builtin tools into ACP agent sessions
+    // This allows ACP agents to use delegation, settings management, etc.
+    acpInjectBuiltinTools: true,
 
   }
 

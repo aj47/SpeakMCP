@@ -5,7 +5,7 @@ import fs from "fs"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
@@ -294,8 +294,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
       : mcpService.getAvailableTools()
 
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-      // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, false, profileSnapshot?.mcpServerConfig)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, false, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -396,7 +396,7 @@ export async function startRemoteServer() {
     // When origin is ["*"] or includes "*", use true to reflect the request origin
     // This is needed because credentials: true doesn't work with literal "*"
     origin: corsOrigins.includes("*") ? true : corsOrigins,
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     maxAge: 86400, // Cache preflight for 24 hours
@@ -789,6 +789,7 @@ export async function startRemoteServer() {
         transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
         mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
         ttsEnabled: cfg.ttsEnabled ?? true,
+        whatsappEnabled: cfg.whatsappEnabled ?? false,
         // Agent settings
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
       })
@@ -814,6 +815,9 @@ export async function startRemoteServer() {
       }
       if (typeof body.ttsEnabled === "boolean") {
         updates.ttsEnabled = body.ttsEnabled
+      }
+      if (typeof body.whatsappEnabled === "boolean") {
+        updates.whatsappEnabled = body.whatsappEnabled
       }
       if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
         // Coerce to integer to avoid surprising iteration counts with floats
@@ -853,6 +857,16 @@ export async function startRemoteServer() {
 
       configStore.save({ ...cfg, ...updates })
       diagnosticsService.logInfo("remote-server", `Updated settings: ${Object.keys(updates).join(", ")}`)
+
+      // Trigger WhatsApp MCP server lifecycle if whatsappEnabled changed
+      if (updates.whatsappEnabled !== undefined) {
+        try {
+          const prevEnabled = cfg.whatsappEnabled ?? false
+          await handleWhatsAppToggle(prevEnabled, updates.whatsappEnabled)
+        } catch (_e) {
+          // lifecycle is best-effort
+        }
+      }
 
       return reply.send({
         success: true,
@@ -1037,6 +1051,244 @@ export async function startRemoteServer() {
     }
   })
 
+  // Helper function to validate message objects
+  const validateMessages = (messages: Array<{ role: string; content: unknown }>): string | null => {
+    const validRoles = ["user", "assistant", "tool"]
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg === null || msg === undefined || typeof msg !== "object") {
+        return `Invalid message ${i}: expected an object`
+      }
+      if (!msg.role || !validRoles.includes(msg.role)) {
+        return `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}`
+      }
+      if (typeof msg.content !== "string") {
+        return `Invalid content in message ${i}: expected string`
+      }
+    }
+    return null
+  }
+
+  // GET /v1/conversations - List all conversations
+  fastify.get("/v1/conversations", async (_req, reply) => {
+    try {
+      const conversations = await conversationService.getConversationHistory()
+      diagnosticsService.logInfo("remote-server", `Listed ${conversations.length} conversations`)
+      return reply.send({ conversations })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to list conversations", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list conversations" })
+    }
+  })
+
+  // POST /v1/conversations - Create a new conversation from mobile data
+  fastify.post("/v1/conversations", async (req, reply) => {
+    try {
+      // Validate request body is a valid object
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return reply.code(400).send({ error: "Request body must be a JSON object" })
+      }
+
+      const body = req.body as {
+        title?: string
+        messages: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          timestamp?: number
+          toolCalls?: Array<{ name: string; arguments: any }>
+          toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        }>
+        createdAt?: number
+        updatedAt?: number
+      }
+
+      if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+        return reply.code(400).send({ error: "Missing or invalid messages array" })
+      }
+
+      // Validate each message object
+      const validationError = validateMessages(body.messages)
+      if (validationError) {
+        return reply.code(400).send({ error: validationError })
+      }
+
+      const conversationId = conversationService.generateConversationIdPublic()
+      const now = Date.now()
+
+      // Generate title from first message if not provided
+      const firstMessageContent = body.messages[0]?.content || ""
+      const title = body.title || (firstMessageContent.length > 50
+        ? `${firstMessageContent.slice(0, 50)}...`
+        : firstMessageContent || "New Conversation")
+
+      // Convert input messages to ConversationMessage format with IDs
+      const messages = body.messages.map((msg, index) => ({
+        id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp ?? now,
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+      }))
+
+      const conversation = {
+        id: conversationId,
+        title,
+        createdAt: body.createdAt ?? now,
+        updatedAt: body.updatedAt ?? now,
+        messages,
+      }
+
+      await conversationService.saveConversation(conversation, true)
+      diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} with ${messages.length} messages`)
+
+      return reply.code(201).send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to create conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to create conversation" })
+    }
+  })
+
+  // PUT /v1/conversations/:id - Update an existing conversation
+  fastify.put("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      // Validate conversation ID format to prevent path traversal attacks
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
+      // Validate request body is a valid object
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return reply.code(400).send({ error: "Request body must be a JSON object" })
+      }
+
+      const body = req.body as {
+        title?: string
+        messages?: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          timestamp?: number
+          toolCalls?: Array<{ name: string; arguments: any }>
+          toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        }>
+        updatedAt?: number
+      }
+
+      const now = Date.now()
+      let conversation = await conversationService.loadConversation(conversationId)
+
+      if (!conversation) {
+        // Create new conversation with the provided ID
+        if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+          return reply.code(400).send({ error: "Conversation not found and no messages provided to create it" })
+        }
+
+        // Validate each message object
+        const validationError = validateMessages(body.messages)
+        if (validationError) {
+          return reply.code(400).send({ error: validationError })
+        }
+
+        const firstMessageContent = body.messages[0]?.content || ""
+        const title = body.title || (firstMessageContent.length > 50
+          ? `${firstMessageContent.slice(0, 50)}...`
+          : firstMessageContent || "New Conversation")
+
+        const messages = body.messages.map((msg, index) => ({
+          id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp ?? now,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        }))
+
+        conversation = {
+          id: conversationId,
+          title,
+          createdAt: now,
+          updatedAt: body.updatedAt ?? now,
+          messages,
+        }
+
+        await conversationService.saveConversation(conversation, true)
+        diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} via PUT with ${messages.length} messages`)
+      } else {
+        // Update existing conversation
+        if (body.title !== undefined) {
+          conversation.title = body.title
+        }
+
+        if (body.messages !== undefined && !Array.isArray(body.messages)) {
+          return reply.code(400).send({ error: "messages field must be an array" })
+        }
+
+        if (body.messages && Array.isArray(body.messages)) {
+          // Validate each message object
+          const validationError = validateMessages(body.messages)
+          if (validationError) {
+            return reply.code(400).send({ error: validationError })
+          }
+
+          conversation.messages = body.messages.map((msg, index) => ({
+            id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp ?? now,
+            toolCalls: msg.toolCalls,
+            toolResults: msg.toolResults,
+          }))
+        }
+
+        conversation.updatedAt = body.updatedAt ?? now
+
+        await conversationService.saveConversation(conversation, true)
+        diagnosticsService.logInfo("remote-server", `Updated conversation ${conversationId}`)
+      }
+
+      return reply.send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to update conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to update conversation" })
+    }
+  })
+
   // Kill switch endpoint - emergency stop all agent sessions
   fastify.post("/v1/emergency-stop", async (_req, reply) => {
     console.log("[KILLSWITCH] /v1/emergency-stop endpoint called")
@@ -1065,6 +1317,68 @@ export async function startRemoteServer() {
       return reply.code(500).send({
         success: false,
         error: error?.message || "Emergency stop failed",
+      })
+    }
+  })
+
+  // MCP Protocol Endpoints - Expose SpeakMCP builtin tools to external agents
+  // These endpoints implement a simplified MCP-over-HTTP protocol
+
+  // POST /mcp/tools/list - List all available builtin tools
+  fastify.post("/mcp/tools/list", async (_req, reply) => {
+    try {
+      const { builtinTools } = await import("./builtin-tools")
+
+      // Convert to MCP format
+      const tools = builtinTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }))
+
+      return reply.send({
+        tools,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "MCP tools/list error", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list tools" })
+    }
+  })
+
+  // POST /mcp/tools/call - Execute a builtin tool
+  fastify.post("/mcp/tools/call", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const { name, arguments: args } = body
+
+      if (!name || typeof name !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'name' parameter" })
+      }
+
+      const { executeBuiltinTool, isBuiltinTool } = await import("./builtin-tools")
+
+      // Validate that this is a builtin tool
+      if (!isBuiltinTool(name)) {
+        return reply.code(400).send({ error: `Unknown builtin tool: ${name}` })
+      }
+
+      // Execute the tool
+      const result = await executeBuiltinTool(name, args || {})
+
+      if (!result) {
+        return reply.code(500).send({ error: "Tool execution returned null" })
+      }
+
+      // Return in MCP format
+      return reply.send({
+        content: result.content,
+        isError: result.isError,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "MCP tools/call error", error)
+      return reply.code(500).send({
+        content: [{ type: "text", text: error?.message || "Tool execution failed" }],
+        isError: true,
       })
     }
   })

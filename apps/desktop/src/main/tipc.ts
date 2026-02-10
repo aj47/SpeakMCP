@@ -18,6 +18,7 @@ import {
   showPanelWindowAndStartMcpRecording,
   WAVEFORM_MIN_HEIGHT,
   MIN_WAVEFORM_WIDTH,
+  clearPanelOpenedWithMain,
 } from "./window"
 import {
   app,
@@ -26,6 +27,7 @@ import {
   shell,
   systemPreferences,
   dialog,
+  BrowserWindow,
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder, conversationsFolder } from "./config"
@@ -37,6 +39,7 @@ import {
   Conversation,
   ConversationHistoryItem,
   AgentProgressUpdate,
+  ACPAgentConfig,
   SessionProfileSnapshot,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
@@ -62,6 +65,57 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
 import { profileService } from "./profile-service"
+import { agentProfileService } from "./agent-profile-service"
+import { acpService, ACPRunRequest } from "./acp-service"
+import { processTranscriptWithACPAgent } from "./acp-main-agent"
+import { fetchModelsDevData, getModelFromModelsDevByProviderId, findBestModelMatch, refreshModelsDevCache } from "./models-dev-service"
+import * as parakeetStt from "./parakeet-stt"
+
+/**
+ * Convert Float32Array audio samples to WAV format buffer
+ */
+function float32ToWav(samples: Float32Array, sampleRate: number): Buffer {
+  const numChannels = 1
+  const bitsPerSample = 16
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8)
+  const blockAlign = numChannels * (bitsPerSample / 8)
+  const dataSize = samples.length * (bitsPerSample / 8)
+  const headerSize = 44
+  const totalSize = headerSize + dataSize
+
+  const buffer = Buffer.alloc(totalSize)
+  let offset = 0
+
+  // RIFF header
+  buffer.write('RIFF', offset); offset += 4
+  buffer.writeUInt32LE(totalSize - 8, offset); offset += 4
+  buffer.write('WAVE', offset); offset += 4
+
+  // fmt subchunk
+  buffer.write('fmt ', offset); offset += 4
+  buffer.writeUInt32LE(16, offset); offset += 4 // subchunk1Size (16 for PCM)
+  buffer.writeUInt16LE(1, offset); offset += 2  // audioFormat (1 = PCM)
+  buffer.writeUInt16LE(numChannels, offset); offset += 2
+  buffer.writeUInt32LE(sampleRate, offset); offset += 4
+  buffer.writeUInt32LE(byteRate, offset); offset += 4
+  buffer.writeUInt16LE(blockAlign, offset); offset += 2
+  buffer.writeUInt16LE(bitsPerSample, offset); offset += 2
+
+  // data subchunk
+  buffer.write('data', offset); offset += 4
+  buffer.writeUInt32LE(dataSize, offset); offset += 4
+
+  // Convert Float32 samples to 16-bit PCM
+  for (let i = 0; i < samples.length; i++) {
+    // Clamp to [-1, 1] and scale to 16-bit signed integer range
+    const sample = Math.max(-1, Math.min(1, samples[i]))
+    const intSample = Math.round(sample * 32767)
+    buffer.writeInt16LE(intSample, offset)
+    offset += 2
+  }
+
+  return buffer
+}
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
@@ -159,6 +213,46 @@ async function processWithAgentMode(
 ): Promise<string> {
   const config = configStore.get()
 
+  // Check if ACP main agent mode is enabled - route to ACP agent instead of LLM API
+  if (config.mainAgentMode === "acp" && config.mainAgentName) {
+    logLLM(`[processWithAgentMode] ACP mode enabled, routing to agent: ${config.mainAgentName}`)
+
+    // Create conversation title for session tracking
+    const conversationTitle = text.length > 50 ? text.substring(0, 50) + "..." : text
+
+    // Start tracking this agent session (or reuse existing one)
+    const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+
+    // Process with ACP agent
+    const result = await processTranscriptWithACPAgent(text, {
+      agentName: config.mainAgentName,
+      conversationId: conversationId || sessionId,
+      sessionId,
+    })
+
+    // Save assistant response to conversation history if we have a conversation ID
+    // Note: User message is already added by createMcpTextInput or processQueuedMessages
+    if (conversationId && result.response) {
+      await conversationService.addMessageToConversation(
+        conversationId,
+        result.response,
+        "assistant"
+      )
+    }
+
+    // Mark session as completed
+    if (result.success) {
+      logLLM(`[processWithAgentMode] ACP mode completed successfully for session ${sessionId}, conversation ${conversationId}`)
+      agentSessionTracker.completeSession(sessionId, "ACP agent completed successfully")
+    } else {
+      logLLM(`[processWithAgentMode] ACP mode failed for session ${sessionId}: ${result.error}`)
+      agentSessionTracker.errorSession(sessionId, result.error || "Unknown error")
+    }
+
+    logLLM(`[processWithAgentMode] ACP mode returning, queue processing should trigger in .finally()`)
+    return result.response || result.error || "No response from agent"
+  }
+
   // NOTE: Don't clear all agent progress here - we support multiple concurrent sessions
   // Each session manages its own progress lifecycle independently
 
@@ -238,14 +332,14 @@ async function processWithAgentMode(
         // Wait for user response
         const approved = await approvalPromise
 
-        // Clear the pending approval from the UI by emitting without pendingToolApproval
+        // Clear the pending approval from the UI by explicitly setting pendingToolApproval to undefined
         await emitAgentProgress({
           sessionId,
           currentIteration: 0,
           maxIterations: config.mcpMaxIterations ?? 10,
           steps: [],
           isComplete: false,
-          // No pendingToolApproval - clears it
+          pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
         })
 
         if (!approved) {
@@ -262,8 +356,8 @@ async function processWithAgentMode(
       }
 
       // Execute the tool call (approval either not required or was granted)
-      // Pass profileSnapshot.mcpServerConfig for session-aware server availability checks
-      return await mcpService.executeToolCall(toolCall, onProgress, true, profileSnapshot?.mcpServerConfig)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, true, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     // Load previous conversation history if continuing a conversation
@@ -377,6 +471,8 @@ async function processWithAgentMode(
   }
 }
 import { diagnosticsService } from "./diagnostics"
+import { memoryService } from "./memory-service"
+import { summarizationService } from "./summarization-service"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted } from "./utils"
 import { writeText, writeTextWithFocusRestore } from "./keyboard"
@@ -412,11 +508,14 @@ const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
  * Uses a per-conversation lock to prevent concurrent processing of the same queue.
  */
 async function processQueuedMessages(conversationId: string): Promise<void> {
+  logLLM(`[processQueuedMessages] Starting queue processing for ${conversationId}`)
 
   // Try to acquire processing lock - if another processor is already running, skip
   if (!messageQueueService.tryAcquireProcessingLock(conversationId)) {
+    logLLM(`[processQueuedMessages] Failed to acquire lock for ${conversationId}`)
     return
   }
+  logLLM(`[processQueuedMessages] Acquired lock for ${conversationId}`)
 
   try {
     while (true) {
@@ -429,6 +528,12 @@ async function processQueuedMessages(conversationId: string): Promise<void> {
       // Peek at the next message without removing it
       const queuedMessage = messageQueueService.peek(conversationId)
       if (!queuedMessage) {
+        logLLM(`[processQueuedMessages] No more pending messages in queue for ${conversationId}`)
+        // Debug: log the actual queue state
+        const allMessages = messageQueueService.getQueue(conversationId)
+        if (allMessages.length > 0) {
+          logLLM(`[processQueuedMessages] Queue has ${allMessages.length} messages but peek returned null. First message status: ${allMessages[0]?.status}`)
+        }
         return // No more messages in queue
       }
 
@@ -540,6 +645,8 @@ export const router = {
 
     if (panel) {
       suppressPanelAutoShow(1000)
+      // Clear the "opened with main" flag since panel is being explicitly hidden
+      clearPanelOpenedWithMain()
       panel.hide()
       logApp(`[hidePanelWindow] Panel hidden`)
     }
@@ -792,7 +899,9 @@ export const router = {
   respondToToolApproval: t.procedure
     .input<{ approvalId: string; approved: boolean }>()
     .action(async ({ input }) => {
+      logApp(`[Tool Approval] respondToToolApproval called: approvalId=${input.approvalId}, approved=${input.approved}`)
       const success = toolApprovalManager.respondToApproval(input.approvalId, input.approved)
+      logApp(`[Tool Approval] respondToApproval result: success=${success}`)
       return { success }
     }),
 
@@ -865,6 +974,8 @@ export const router = {
         items.push({
           label: "Close",
           click() {
+            // Clear the "opened with main" flag since panel is being hidden
+            clearPanelOpenedWithMain()
             panelWindow?.hide()
           },
         })
@@ -951,6 +1062,59 @@ export const router = {
       return mcpService.revokeOAuthTokens(serverName)
     }),
 
+  // Parakeet (local) STT model management
+  getParakeetModelStatus: t.procedure.action(async () => {
+    return parakeetStt.getModelStatus()
+  }),
+
+  downloadParakeetModel: t.procedure.action(async () => {
+    await parakeetStt.downloadModel()
+    return { success: true }
+  }),
+
+  initializeParakeetRecognizer: t.procedure
+    .input<{ numThreads?: number }>()
+    .action(async ({ input }) => {
+      await parakeetStt.initializeRecognizer(input.numThreads)
+      return { success: true }
+    }),
+
+  // Kitten (local) TTS model management
+  getKittenModelStatus: t.procedure.action(async () => {
+    const { getKittenModelStatus } = await import('./kitten-tts')
+    return getKittenModelStatus()
+  }),
+
+  downloadKittenModel: t.procedure.action(async () => {
+    const { downloadKittenModel } = await import('./kitten-tts')
+    await downloadKittenModel((progress) => {
+      // Send progress to renderer via webContents, guarding against destroyed windows
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+          win.webContents.send('kitten-model-download-progress', progress)
+        }
+      })
+    })
+    return { success: true }
+  }),
+
+  synthesizeWithKitten: t.procedure
+    .input<{
+      text: string
+      voiceId?: number
+      speed?: number
+    }>()
+    .action(async ({ input }) => {
+      const { synthesize } = await import('./kitten-tts')
+      const result = await synthesize(input.text, input.voiceId, input.speed)
+      // Convert Float32Array samples to WAV format
+      const wavBuffer = float32ToWav(result.samples, result.sampleRate)
+      return {
+        audio: wavBuffer.toString('base64'),
+        sampleRate: result.sampleRate
+      }
+    }),
+
   createRecording: t.procedure
     .input<{
       recording: ArrayBuffer
@@ -962,56 +1126,73 @@ export const router = {
       const config = configStore.get()
       let transcript: string
 
-      // Use OpenAI or Groq for transcription
-      const form = new FormData()
-      form.append(
-        "file",
-        new File([input.recording], "recording.webm", { type: "audio/webm" }),
-      )
-      form.append(
-        "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
-      )
-      form.append("response_format", "json")
+      if (config.sttProviderId === "parakeet") {
+        // Use Parakeet (local) STT
+        if (!parakeetStt.isModelReady()) {
+          throw new Error("Parakeet model not downloaded. Please download it in Settings.")
+        }
 
-      // Add prompt parameter for Groq if provided
-      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
-        form.append("prompt", config.groqSttPrompt.trim())
-      }
+        // Initialize recognizer if needed
+        await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-      // Add language parameter if specified
-      const languageCode = config.sttProviderId === "groq"
-        ? config.groqSttLanguage || config.sttLanguage
-        : config.openaiSttLanguage || config.sttLanguage;
+        // TODO: Audio format conversion needed
+        // The input is webm ArrayBuffer from MediaRecorder
+        // Parakeet expects Float32Array samples at 16kHz mono
+        // For now, this will not work correctly until audio conversion is added
+        transcript = await parakeetStt.transcribe(input.recording, 16000)
+        transcript = await postProcessTranscript(transcript)
+      } else {
+        // Use OpenAI or Groq for transcription
+        const form = new FormData()
+        form.append(
+          "file",
+          new File([input.recording], "recording.webm", { type: "audio/webm" }),
+        )
+        form.append(
+          "model",
+          config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
+        )
+        form.append("response_format", "json")
 
-      if (languageCode && languageCode !== "auto") {
-        form.append("language", languageCode)
-      }
+        // Add prompt parameter for Groq if provided
+        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+          form.append("prompt", config.groqSttPrompt.trim())
+        }
 
-      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+        // Add language parameter if specified
+        const languageCode = config.sttProviderId === "groq"
+          ? config.groqSttLanguage || config.sttLanguage
+          : config.openaiSttLanguage || config.sttLanguage;
 
-      const transcriptResponse = await fetch(
-        config.sttProviderId === "groq"
-          ? `${groqBaseUrl}/audio/transcriptions`
-          : `${openaiBaseUrl}/audio/transcriptions`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+        if (languageCode && languageCode !== "auto") {
+          form.append("language", languageCode)
+        }
+
+        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+        const transcriptResponse = await fetch(
+          config.sttProviderId === "groq"
+            ? `${groqBaseUrl}/audio/transcriptions`
+            : `${openaiBaseUrl}/audio/transcriptions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+            },
+            body: form,
           },
-          body: form,
-        },
-      )
+        )
 
-      if (!transcriptResponse.ok) {
-        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        if (!transcriptResponse.ok) {
+          const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
 
-        throw new Error(message)
+          throw new Error(message)
+        }
+
+        const json: { text: string } = await transcriptResponse.json()
+        transcript = await postProcessTranscript(json.text)
       }
-
-      const json: { text: string } = await transcriptResponse.json()
-      transcript = await postProcessTranscript(json.text)
 
       const history = getRecordingHistory()
       const item: RecordingHistoryItem = {
@@ -1037,6 +1218,8 @@ export const router = {
 
       const panel = WINDOWS.get("panel")
       if (panel) {
+        // Clear the "opened with main" flag since panel is being hidden
+        clearPanelOpenedWithMain()
         panel.hide()
       }
 
@@ -1092,6 +1275,8 @@ export const router = {
 
       const panel = WINDOWS.get("panel")
       if (panel) {
+        // Clear the "opened with main" flag since panel is being hidden
+        clearPanelOpenedWithMain()
         panel.hide()
       }
 
@@ -1202,6 +1387,7 @@ export const router = {
         })
         .finally(() => {
           // Process queued messages after this session completes (success or error)
+          logLLM(`[createMcpTextInput] .finally() triggered for conversation ${conversationId}, calling processQueuedMessages`)
           processQueuedMessages(conversationId!).catch((err) => {
             logLLM("[createMcpTextInput] Error processing queued messages:", err)
           })
@@ -1237,52 +1423,66 @@ export const router = {
             logApp(`[createMcpRecording] Active session ${activeSessionId} found for conversation ${input.conversationId}, will queue transcript`)
 
             // Transcribe the audio first
-            const form = new FormData()
-            form.append(
-              "file",
-              new File([input.recording], "recording.webm", { type: "audio/webm" }),
-            )
-            form.append(
-              "model",
-              config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
-            )
-            form.append("response_format", "json")
+            if (config.sttProviderId === "parakeet") {
+              // Use Parakeet (local) STT
+              if (!parakeetStt.isModelReady()) {
+                throw new Error("Parakeet model not downloaded. Please download it in Settings.")
+              }
 
-            if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
-              form.append("prompt", config.groqSttPrompt.trim())
-            }
+              await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-            const languageCode = config.sttProviderId === "groq"
-              ? config.groqSttLanguage || config.sttLanguage
-              : config.openaiSttLanguage || config.sttLanguage
+              // TODO: Audio format conversion needed
+              // The input is webm ArrayBuffer from MediaRecorder
+              // Parakeet expects Float32Array samples at 16kHz mono
+              transcript = await parakeetStt.transcribe(input.recording, 16000)
+            } else {
+              const form = new FormData()
+              form.append(
+                "file",
+                new File([input.recording], "recording.webm", { type: "audio/webm" }),
+              )
+              form.append(
+                "model",
+                config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
+              )
+              form.append("response_format", "json")
 
-            if (languageCode && languageCode !== "auto") {
-              form.append("language", languageCode)
-            }
+              if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+                form.append("prompt", config.groqSttPrompt.trim())
+              }
 
-            const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-            const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+              const languageCode = config.sttProviderId === "groq"
+                ? config.groqSttLanguage || config.sttLanguage
+                : config.openaiSttLanguage || config.sttLanguage
 
-            const transcriptResponse = await fetch(
-              config.sttProviderId === "groq"
-                ? `${groqBaseUrl}/audio/transcriptions`
-                : `${openaiBaseUrl}/audio/transcriptions`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+              if (languageCode && languageCode !== "auto") {
+                form.append("language", languageCode)
+              }
+
+              const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+              const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+              const transcriptResponse = await fetch(
+                config.sttProviderId === "groq"
+                  ? `${groqBaseUrl}/audio/transcriptions`
+                  : `${openaiBaseUrl}/audio/transcriptions`,
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+                  },
+                  body: form,
                 },
-                body: form,
-              },
-            )
+              )
 
-            if (!transcriptResponse.ok) {
-              const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-              throw new Error(message)
+              if (!transcriptResponse.ok) {
+                const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+                throw new Error(message)
+              }
+
+              const json: { text: string } = await transcriptResponse.json()
+              transcript = json.text
             }
-
-            const json: { text: string } = await transcriptResponse.json()
-            transcript = json.text
 
             // Save the recording file
             const recordingId = Date.now().toString()
@@ -1408,54 +1608,68 @@ export const router = {
         })
 
         // First, transcribe the audio using the same logic as regular recording
-      // Use OpenAI or Groq for transcription
-      const form = new FormData()
-      form.append(
-        "file",
-        new File([input.recording], "recording.webm", { type: "audio/webm" }),
-      )
-      form.append(
-        "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
-      )
-      form.append("response_format", "json")
+        if (config.sttProviderId === "parakeet") {
+          // Use Parakeet (local) STT
+          if (!parakeetStt.isModelReady()) {
+            throw new Error("Parakeet model not downloaded. Please download it in Settings.")
+          }
 
-      if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
-        form.append("prompt", config.groqSttPrompt.trim())
-      }
+          await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-      // Add language parameter if specified
-      const languageCode = config.sttProviderId === "groq"
-        ? config.groqSttLanguage || config.sttLanguage
-        : config.openaiSttLanguage || config.sttLanguage;
+          // TODO: Audio format conversion needed
+          // The input is webm ArrayBuffer from MediaRecorder
+          // Parakeet expects Float32Array samples at 16kHz mono
+          transcript = await parakeetStt.transcribe(input.recording, 16000)
+        } else {
+          // Use OpenAI or Groq for transcription
+          const form = new FormData()
+          form.append(
+            "file",
+            new File([input.recording], "recording.webm", { type: "audio/webm" }),
+          )
+          form.append(
+            "model",
+            config.sttProviderId === "groq" ? "whisper-large-v3-turbo" : "whisper-1",
+          )
+          form.append("response_format", "json")
 
-      if (languageCode && languageCode !== "auto") {
-        form.append("language", languageCode)
-      }
+          if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+            form.append("prompt", config.groqSttPrompt.trim())
+          }
 
-      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+          // Add language parameter if specified
+          const languageCode = config.sttProviderId === "groq"
+            ? config.groqSttLanguage || config.sttLanguage
+            : config.openaiSttLanguage || config.sttLanguage;
 
-      const transcriptResponse = await fetch(
-        config.sttProviderId === "groq"
-          ? `${groqBaseUrl}/audio/transcriptions`
-          : `${openaiBaseUrl}/audio/transcriptions`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
-          },
-          body: form,
-        },
-      )
+          if (languageCode && languageCode !== "auto") {
+            form.append("language", languageCode)
+          }
 
-      if (!transcriptResponse.ok) {
-        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
-        throw new Error(message)
-      }
+          const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+          const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
 
-      const json: { text: string } = await transcriptResponse.json()
-      transcript = json.text
+          const transcriptResponse = await fetch(
+            config.sttProviderId === "groq"
+              ? `${groqBaseUrl}/audio/transcriptions`
+              : `${openaiBaseUrl}/audio/transcriptions`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+              },
+              body: form,
+            },
+          )
+
+          if (!transcriptResponse.ok) {
+            const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+            throw new Error(message)
+          }
+
+          const json: { text: string } = await transcriptResponse.json()
+          transcript = json.text
+        }
 
       // Create or continue conversation
       let conversationId = input.conversationId
@@ -1750,7 +1964,34 @@ export const router = {
       } catch (_e) {
         // lifecycle is best-effort
       }
+
+      // Reinitialize Langfuse if any Langfuse config fields changed
+      // This ensures config changes take effect without requiring app restart
+      try {
+        const langfuseConfigChanged =
+          (prev as any)?.langfuseEnabled !== (merged as any)?.langfuseEnabled ||
+          (prev as any)?.langfuseSecretKey !== (merged as any)?.langfuseSecretKey ||
+          (prev as any)?.langfusePublicKey !== (merged as any)?.langfusePublicKey ||
+          (prev as any)?.langfuseBaseUrl !== (merged as any)?.langfuseBaseUrl
+
+        if (langfuseConfigChanged) {
+          const { reinitializeLangfuse } = await import("./langfuse-service")
+          reinitializeLangfuse()
+        }
+      } catch (_e) {
+        // Langfuse reinitialization is best-effort
+      }
     }),
+
+  // Check if langfuse package is installed (for UI to show install instructions)
+  isLangfuseInstalled: t.procedure.action(async () => {
+    try {
+      const { isLangfuseInstalled } = await import("./langfuse-service")
+      return isLangfuseInstalled()
+    } catch {
+      return false
+    }
+  }),
 
   recordEvent: t.procedure
     .input<{ type: "start" | "end"; mcpMode?: boolean }>()
@@ -2318,6 +2559,13 @@ export const router = {
           audioBuffer = await generateGroqTTS(processedText, input, config)
         } else if (providerId === "gemini") {
           audioBuffer = await generateGeminiTTS(processedText, input, config)
+        } else if (providerId === "kitten") {
+          const { synthesize } = await import('./kitten-tts')
+          const voiceId = config.kittenVoiceId ?? 0 // Default to Voice 2 - Male
+          const result = await synthesize(processedText, voiceId, input.speed)
+          const wavBuffer = float32ToWav(result.samples, result.sampleRate)
+          // Convert Buffer to ArrayBuffer
+          audioBuffer = new Uint8Array(wavBuffer).buffer
         } else {
           throw new Error(`Unsupported TTS provider: ${providerId}`)
         }
@@ -2350,6 +2598,31 @@ export const router = {
       const { fetchModelsForPreset } = await import("./models-service")
       return fetchModelsForPreset(input.baseUrl, input.apiKey)
     }),
+
+  // Get enhanced model info from models.dev
+  getModelInfo: t.procedure
+    .input<{ modelId: string; providerId?: string }>()
+    .action(async ({ input }) => {
+      // If providerId is given, use specific provider lookup
+      if (input.providerId) {
+        const model = getModelFromModelsDevByProviderId(input.modelId, input.providerId)
+        return model || null
+      }
+      // Otherwise, search across ALL providers using fuzzy matching
+      const matchResult = findBestModelMatch(input.modelId)
+      return matchResult?.model || null
+    }),
+
+  // Get all models.dev data
+  getModelsDevData: t.procedure.action(async () => {
+    return await fetchModelsDevData()
+  }),
+
+  // Force refresh models.dev cache
+  refreshModelsData: t.procedure.action(async () => {
+    await refreshModelsDevCache()
+    return { success: true }
+  }),
 
   // Conversation Management
   getConversationHistory: t.procedure.action(async () => {
@@ -2694,14 +2967,14 @@ export const router = {
       mcpToolsGeminiModel?: string
       currentModelPresetId?: string
       // STT Provider settings
-      sttProviderId?: "openai" | "groq"
+      sttProviderId?: "openai" | "groq" | "parakeet"
       // Transcript Post-Processing settings
       transcriptPostProcessingProviderId?: "openai" | "groq" | "gemini"
       transcriptPostProcessingOpenaiModel?: string
       transcriptPostProcessingGroqModel?: string
       transcriptPostProcessingGeminiModel?: string
       // TTS Provider settings
-      ttsProviderId?: "openai" | "groq" | "gemini"
+      ttsProviderId?: "openai" | "groq" | "gemini" | "kitten"
     }>()
     .action(async ({ input }) => {
         return profileService.updateProfileModelConfig(input.profileId, {
@@ -2968,6 +3241,278 @@ export const router = {
       return true
     }),
 
+  // ACP Agent Configuration handlers
+  getAcpAgents: t.procedure.action(async () => {
+    const config = configStore.get()
+    const externalAgents = config.acpAgents || []
+    // Include internal agent in the list, but filter out any persisted 'internal' entries
+    // from externalAgents to avoid duplicates (can happen after toggling enabled state)
+    const { getInternalAgentConfig } = await import('./acp/acp-router-tools')
+    const internalAgent = getInternalAgentConfig()
+    // Merge any persisted enabled state from config into the internal agent
+    const persistedInternalAgent = externalAgents.find(a => a.name === 'internal')
+    if (persistedInternalAgent && typeof persistedInternalAgent.enabled === 'boolean') {
+      internalAgent.enabled = persistedInternalAgent.enabled
+    }
+    const filteredExternalAgents = externalAgents.filter(a => a.name !== 'internal')
+    return [internalAgent, ...filteredExternalAgents]
+  }),
+
+  saveAcpAgent: t.procedure
+    .input<{ agent: ACPAgentConfig }>()
+    .action(async ({ input }) => {
+      // Block saving agent with reserved name "internal" to avoid config conflicts
+      // The internal agent is a built-in and should not be persisted as an external agent
+      if (input.agent.name === 'internal') {
+        return { success: false, error: 'Cannot save agent with reserved name "internal"' }
+      }
+
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      // Check if agent with this name already exists
+      const existingIndex = agents.findIndex(a => a.name === input.agent.name)
+
+      if (existingIndex >= 0) {
+        // Update existing agent
+        agents[existingIndex] = input.agent
+      } else {
+        // Add new agent
+        agents.push(input.agent)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+      return { success: true }
+    }),
+
+  deleteAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const filteredAgents = agents.filter(a => a.name !== input.agentName)
+
+      configStore.save({ ...config, acpAgents: filteredAgents })
+      return { success: true }
+    }),
+
+  toggleAcpAgentEnabled: t.procedure
+    .input<{ agentName: string; enabled: boolean }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      const agents = config.acpAgents || []
+
+      const agentIndex = agents.findIndex(a => a.name === input.agentName)
+      if (agentIndex >= 0) {
+        agents[agentIndex] = { ...agents[agentIndex], enabled: input.enabled }
+      } else {
+        // Agent not in config (e.g., built-in 'internal' agent) - add an entry to persist enabled state
+        // We include displayName to satisfy the ACPAgentConfig contract and avoid undefined issues
+        agents.push({
+          name: input.agentName,
+          displayName: input.agentName === 'internal' ? 'SpeakMCP Internal' : input.agentName,
+          enabled: input.enabled,
+          isInternal: input.agentName === 'internal',
+          connection: { type: 'internal' as const }
+        } as import('../shared/types').ACPAgentConfig)
+      }
+
+      configStore.save({ ...config, acpAgents: agents })
+
+      // When disabling an agent, automatically stop it if it's running
+      if (!input.enabled) {
+        const agentStatus = acpService.getAgentStatus(input.agentName)
+        if (agentStatus && (agentStatus.status === "ready" || agentStatus.status === "starting")) {
+          try {
+            await acpService.stopAgent(input.agentName)
+          } catch (error) {
+            // Log but don't fail the toggle operation
+            logApp(`[ACP] Failed to auto-stop agent ${input.agentName} on disable:`, error)
+          }
+        }
+      }
+
+      return { success: true }
+    }),
+
+  // ACP Agent Runtime handlers
+  getAcpAgentStatuses: t.procedure.action(async () => {
+    return acpService.getAgents()
+  }),
+
+  spawnAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.spawnAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  stopAcpAgent: t.procedure
+    .input<{ agentName: string }>()
+    .action(async ({ input }) => {
+      try {
+        await acpService.stopAgent(input.agentName)
+        return { success: true }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }),
+
+  runAcpTask: t.procedure
+    .input<{ request: ACPRunRequest }>()
+    .action(async ({ input }) => {
+      return acpService.runTask(input.request)
+    }),
+
+  // Get all subagent delegations with conversations for a session
+  getSubagentDelegations: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      const { getAllDelegationsForSession } = await import("./acp/acp-router-tools")
+      return getAllDelegationsForSession(input.sessionId)
+    }),
+
+  // Get details of a specific subagent delegation
+  getSubagentDelegationDetails: t.procedure
+    .input<{ runId: string }>()
+    .action(async ({ input }) => {
+      const { getDelegatedRunDetails } = await import("./acp/acp-router-tools")
+      return getDelegatedRunDetails(input.runId)
+    }),
+
+  // ============================================================================
+  // Agent Profile Handlers (Unified Profile + ACP Agent)
+  // ============================================================================
+
+  getAgentProfiles: t.procedure.action(async () => {
+    return agentProfileService.getAll()
+  }),
+
+  getAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getById(input.id)
+    }),
+
+  getAgentProfileByName: t.procedure
+    .input<{ name: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getByName(input.name)
+    }),
+
+  createAgentProfile: t.procedure
+    .input<{
+      profile: {
+        name: string
+        displayName: string
+        description?: string
+        systemPrompt?: string
+        guidelines?: string
+
+        properties?: Record<string, string>
+        modelConfig?: import("@shared/types").ProfileModelConfig
+        toolConfig?: import("@shared/types").AgentProfileToolConfig
+        skillsConfig?: import("@shared/types").ProfileSkillsConfig
+        connection: import("@shared/types").AgentProfileConnection
+        isStateful?: boolean
+        enabled: boolean
+        isUserProfile?: boolean
+        isAgentTarget?: boolean
+        isDefault?: boolean
+        autoSpawn?: boolean
+      }
+    }>()
+    .action(async ({ input }) => {
+      return agentProfileService.create(input.profile)
+    }),
+
+  updateAgentProfile: t.procedure
+    .input<{
+      id: string
+      updates: Partial<import("@shared/types").AgentProfile>
+    }>()
+    .action(async ({ input }) => {
+      return agentProfileService.update(input.id, input.updates)
+    }),
+
+  deleteAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.delete(input.id)
+    }),
+
+  getUserProfiles: t.procedure.action(async () => {
+    return agentProfileService.getUserProfiles()
+  }),
+
+  getAgentTargets: t.procedure.action(async () => {
+    return agentProfileService.getAgentTargets()
+  }),
+
+  getEnabledAgentTargets: t.procedure.action(async () => {
+    return agentProfileService.getEnabledAgentTargets()
+  }),
+
+  getCurrentAgentProfile: t.procedure.action(async () => {
+    return agentProfileService.getCurrentProfile()
+  }),
+
+  setCurrentAgentProfile: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      agentProfileService.setCurrentProfile(input.id)
+      return { success: true }
+    }),
+
+  getAgentProfilesByRole: t.procedure
+    .input<{ role: import("@shared/types").AgentProfileRole }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getByRole(input.role)
+    }),
+
+  getExternalAgents: t.procedure.action(async () => {
+    return agentProfileService.getExternalAgents()
+  }),
+
+  getAgentProfileConversation: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      return agentProfileService.getConversation(input.profileId)
+    }),
+
+  setAgentProfileConversation: t.procedure
+    .input<{
+      profileId: string
+      messages: import("@shared/types").ConversationMessage[]
+    }>()
+    .action(async ({ input }) => {
+      agentProfileService.setConversation(input.profileId, input.messages)
+      return { success: true }
+    }),
+
+  clearAgentProfileConversation: t.procedure
+    .input<{ profileId: string }>()
+    .action(async ({ input }) => {
+      agentProfileService.clearConversation(input.profileId)
+      return { success: true }
+    }),
+
+  reloadAgentProfiles: t.procedure.action(async () => {
+    agentProfileService.reload()
+    return { success: true }
+  }),
+
   // Agent Skills Management
   getSkills: t.procedure.action(async () => {
     const { skillsService } = await import("./skills-service")
@@ -3198,6 +3743,122 @@ export const router = {
       const { skillsService } = await import("./skills-service")
       const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
       return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+    }),
+
+  // Memory service handlers
+  // Get all memories - optionally filtered by profile
+  getAllMemories: t.procedure
+    .input<{ profileId?: string }>()
+    .action(async ({ input }) => {
+      const profileId = input?.profileId
+      if (profileId) {
+        return memoryService.getMemoriesByProfile(profileId)
+      }
+      return memoryService.getAllMemories()
+    }),
+
+  // Get memories for the current profile (convenience method)
+  getMemoriesForCurrentProfile: t.procedure.action(async () => {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      return memoryService.getMemoriesByProfile(currentProfile.id)
+    }
+    return memoryService.getAllMemories()
+  }),
+
+  getMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.getMemory(input.id)
+    }),
+
+  saveMemoryFromSummary: t.procedure
+    .input<{
+      summary: import("../shared/types").AgentStepSummary
+      title?: string
+      userNotes?: string
+      tags?: string[]
+      conversationTitle?: string
+      conversationId?: string
+      profileId?: string
+    }>()
+    .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      const memory = memoryService.createMemoryFromSummary(
+        input.summary,
+        input.title,
+        input.userNotes,
+        input.tags,
+        input.conversationTitle,
+        input.conversationId,
+        profileId,
+      )
+      const success = await memoryService.saveMemory(memory)
+      return { success, memory: success ? memory : null }
+    }),
+
+  updateMemory: t.procedure
+    .input<{
+      id: string
+      updates: Partial<Omit<import("../shared/types").AgentMemory, "id" | "createdAt">>
+    }>()
+    .action(async ({ input }) => {
+      return memoryService.updateMemory(input.id, input.updates)
+    }),
+
+  deleteMemory: t.procedure
+    .input<{ id: string }>()
+    .action(async ({ input }) => {
+      return memoryService.deleteMemory(input.id)
+    }),
+
+  deleteMultipleMemories: t.procedure
+    .input<{ ids: string[] }>()
+    .action(async ({ input }) => {
+      const profileId = profileService.getCurrentProfile()?.id
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteMultipleMemories(input.ids, profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
+    }),
+
+  deleteAllMemories: t.procedure
+    .action(async () => {
+      const profileId = profileService.getCurrentProfile()?.id
+      if (!profileId) {
+        throw new Error("No current profile selected")
+      }
+      const result = await memoryService.deleteAllMemories(profileId)
+      if (result.error) {
+        throw new Error(result.error)
+      }
+      return result.deletedCount
+    }),
+
+  searchMemories: t.procedure
+    .input<{ query: string; profileId?: string }>()
+    .action(async ({ input }) => {
+      // Use provided profileId, or fall back to current profile
+      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      return memoryService.searchMemories(input.query, profileId)
+    }),
+
+  // Summarization service handlers
+  getSessionSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getSummaries(input.sessionId)
+    }),
+
+  getImportantSummaries: t.procedure
+    .input<{ sessionId: string }>()
+    .action(async ({ input }) => {
+      return summarizationService.getImportantSummaries(input.sessionId)
     }),
 }
 

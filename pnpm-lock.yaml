@@ -73,6 +73,19 @@ importers:
       zustand:
         specifier: ^5.0.8
         version: 5.0.9(@types/react@18.3.27)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
+    optionalDependencies:
+      langfuse:
+        specifier: ^3.38.6
+        version: 3.38.6
+      sherpa-onnx-node:
+        specifier: ^1.12.23
+        version: 1.12.23
+      tar:
+        specifier: ^7.5.6
+        version: 7.5.6
+      unbzip2-stream:
+        specifier: ^1.4.3
+        version: 1.4.3
     devDependencies:
       '@egoist/tailwindcss-icons':
         specifier: ^1.8.1
@@ -4554,6 +4567,14 @@ packages:
     resolution: {integrity: sha512-mnIlAEMu4OyEvUNdzco9xpuB9YVcPkQec+QsgycBCtPZvEqWPCDPfbAE4OJMdBBWpZWtpCn1xw9jJYlwjWI5zQ==}
     hasBin: true
 
+  langfuse-core@3.38.6:
+    resolution: {integrity: sha512-EcZXa+DK9FJdi1I30+u19eKjuBJ04du6j2Nybk19KKCuraLczg/ppkTQcGvc4QOk//OAi3qUHrajUuV74RXsBQ==}
+    engines: {node: '>=18'}
+
+  langfuse@3.38.6:
+    resolution: {integrity: sha512-mtwfsNGIYvObRh+NYNGlJQJDiBN+Wr3Hnr++wN25mxuOpSTdXX+JQqVCyAqGL5GD2TAXRZ7COsN42Vmp9krYmg==}
+    engines: {node: '>=18'}
+
   launch-editor@2.12.0:
     resolution: {integrity: sha512-giOHXoOtifjdHqUamwKq6c49GzBdLjvxrd2D+Q4V6uOHopJv7p9VJxikDsQ/CBXZbEITgUqSVHXLTG3VhPP1Dg==}
 
@@ -5118,6 +5139,10 @@ packages:
   music-metadata@11.10.5:
     resolution: {integrity: sha512-G0i86zpL7AARmZx8XEkHBVf7rJMQDFfGEFc1C83//rKHGuaK0gwxmNNeo9mjm4g07KUwoT0s0dW7g5QwZhi+qQ==}
     engines: {node: '>=18'}
+
+  mustache@4.2.0:
+    resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
+    hasBin: true
 
   mz@2.7.0:
     resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
@@ -6119,6 +6144,34 @@ packages:
     resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
     engines: {node: '>= 0.4'}
 
+  sherpa-onnx-darwin-arm64@1.12.23:
+    resolution: {integrity: sha512-zbjNUUH/IXhjRyRJ9mpcWVOGIVr31a/qXBPsfOYc7U8cgwcq33Vmj2OzoLYWQF6T+puqCAE4nMxFAxJvdZekhg==}
+    cpu: [arm64]
+    os: [darwin]
+
+  sherpa-onnx-darwin-x64@1.12.23:
+    resolution: {integrity: sha512-hgPhBG85bgULJo5xS5xvh1A9+D6GBPwhZ8QCvWvh7YP1kF9UZTF1r5hWBOzZiR2Ax0gQMbxVvw1t/NpR2N7HWA==}
+    cpu: [x64]
+    os: [darwin]
+
+  sherpa-onnx-linux-x64@1.12.23:
+    resolution: {integrity: sha512-pUZIdDvPtyRXQDGo9R9MIBf2AFUzfgcGmutoulsEdH3hpK6JteR7Z/5pfrZIIqe/O99djAjEHK4AlwLHC2jiZw==}
+    cpu: [x64]
+    os: [linux]
+
+  sherpa-onnx-node@1.12.23:
+    resolution: {integrity: sha512-09SRixVSjsajxeCV8Hy9R5J4IHPtw7vNgaIcEokdh/LpU7sY+e12z9uHHIMMMgNiInyGEH74wIwjLXms+W7qRA==}
+
+  sherpa-onnx-win-ia32@1.12.23:
+    resolution: {integrity: sha512-MyLsK7r6dd7paglyTgb8UHTXTEFqOzA91u6VDV64Lq8rDGuOFVYioxX7vlwmGe1A9o7VhuOPNaKcRjEPtVDhBQ==}
+    cpu: [ia32]
+    os: [win32]
+
+  sherpa-onnx-win-x64@1.12.23:
+    resolution: {integrity: sha512-pdHEYMJiYy8+xzH2WkBVS4/hnRwqjY8FaWnjs0NBgQZnPmc/k4M+TAiauTOuFDNK4GPwFQnjwrCGx6jI9AOkOg==}
+    cpu: [x64]
+    os: [win32]
+
   side-channel-list@1.0.0:
     resolution: {integrity: sha512-FCLHtRD/gnpCiCHEiJLOwdmFP+wzCmDEkc9y7NsYxeF4u7Btsn1ZuwgwJGxImImHicJArLP4R0yX4c2KCrMrTA==}
     engines: {node: '>= 0.4'}
@@ -6382,9 +6435,15 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
 
   tar@7.5.2:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
+    engines: {node: '>=18'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
+
+  tar@7.5.6:
+    resolution: {integrity: sha512-xqUeu2JAIJpXyvskvU3uvQW8PAmHrtXp2KDuMJwQqW8Sqq0CaZBAQ+dKS3RBXVhU4wC5NjAdKrmh84241gO9cA==}
     engines: {node: '>=18'}
 
   temp-dir@2.0.0:
@@ -6419,6 +6478,9 @@ packages:
 
   throat@5.0.0:
     resolution: {integrity: sha512-fcwX4mndzpLQKBS1DVYhGAcYaYt7vsHNIvQV+WXMvnow5cgjPphq5CaayLaGsjRdSCKZFNGt7/GYAuXaNOiYCA==}
+
+  through@2.3.8:
+    resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
 
   tiny-conventional-commits-parser@0.0.1:
     resolution: {integrity: sha512-N5+AZWdBeHNSgTIaxvx0+9mFrnW4H1BbjQ84H7i3TuWSkno8Hju886hLaHZhE/hYEKrfrfl/uHurqpZJHDuYGQ==}
@@ -6579,6 +6641,9 @@ packages:
   uint8array-extras@1.5.0:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
     engines: {node: '>=18'}
+
+  unbzip2-stream@1.4.3:
+    resolution: {integrity: sha512-mlExGW4w71ebDJviH16lQLtZS32VKqsSfk80GCfUlwT/4/hNRFsoscrF/c++9xinkMzECL1uL9DDwXqFWkruPg==}
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -11976,6 +12041,16 @@ snapshots:
 
   lan-network@0.1.7: {}
 
+  langfuse-core@3.38.6:
+    dependencies:
+      mustache: 4.2.0
+    optional: true
+
+  langfuse@3.38.6:
+    dependencies:
+      langfuse-core: 3.38.6
+    optional: true
+
   launch-editor@2.12.0:
     dependencies:
       picocolors: 1.1.1
@@ -12823,6 +12898,9 @@ snapshots:
       uint8array-extras: 1.5.0
     transitivePeerDependencies:
       - supports-color
+
+  mustache@4.2.0:
+    optional: true
 
   mz@2.7.0:
     dependencies:
@@ -13937,6 +14015,30 @@ snapshots:
 
   shell-quote@1.8.3: {}
 
+  sherpa-onnx-darwin-arm64@1.12.23:
+    optional: true
+
+  sherpa-onnx-darwin-x64@1.12.23:
+    optional: true
+
+  sherpa-onnx-linux-x64@1.12.23:
+    optional: true
+
+  sherpa-onnx-node@1.12.23:
+    optionalDependencies:
+      sherpa-onnx-darwin-arm64: 1.12.23
+      sherpa-onnx-darwin-x64: 1.12.23
+      sherpa-onnx-linux-x64: 1.12.23
+      sherpa-onnx-win-ia32: 1.12.23
+      sherpa-onnx-win-x64: 1.12.23
+    optional: true
+
+  sherpa-onnx-win-ia32@1.12.23:
+    optional: true
+
+  sherpa-onnx-win-x64@1.12.23:
+    optional: true
+
   side-channel-list@1.0.0:
     dependencies:
       es-errors: 1.3.0
@@ -14234,6 +14336,15 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
+  tar@7.5.6:
+    dependencies:
+      '@isaacs/fs-minipass': 4.0.1
+      chownr: 3.0.0
+      minipass: 7.1.2
+      minizlib: 3.1.0
+      yallist: 5.0.0
+    optional: true
+
   temp-dir@2.0.0: {}
 
   temp-file@3.4.0:
@@ -14272,6 +14383,9 @@ snapshots:
       real-require: 0.2.0
 
   throat@5.0.0: {}
+
+  through@2.3.8:
+    optional: true
 
   tiny-conventional-commits-parser@0.0.1: {}
 
@@ -14397,6 +14511,12 @@ snapshots:
   ufo@1.6.1: {}
 
   uint8array-extras@1.5.0: {}
+
+  unbzip2-stream@1.4.3:
+    dependencies:
+      buffer: 5.7.1
+      through: 2.3.8
+    optional: true
 
   undici-types@6.21.0: {}
 

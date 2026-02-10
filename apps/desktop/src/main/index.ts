@@ -21,7 +21,15 @@ import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
 import { startRemoteServer } from "./remote-server"
-import { initializeBundledSkills, skillsService } from "./skills-service"
+import { acpService } from "./acp-service"
+import { agentProfileService } from "./agent-profile-service"
+import { initializeBundledSkills, skillsService, startSkillsFolderWatcher } from "./skills-service"
+import {
+  startCloudflareTunnel,
+  startNamedCloudflareTunnel,
+  checkCloudflaredInstalled,
+} from "./cloudflare-tunnel"
+import { initModelsDevService } from "./models-dev-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -99,8 +107,11 @@ app.whenReady().then(() => {
 
   if (accessibilityGranted) {
     // Check if onboarding has been completed
+    // Skip for existing users who have already configured models (pre-onboarding installs)
     const cfg = configStore.get()
-    const needsOnboarding = !cfg.onboardingCompleted
+    const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+    const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+    const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
     if (needsOnboarding) {
       createMainWindow({ url: "/onboarding" })
@@ -137,6 +148,30 @@ app.whenReady().then(() => {
       logApp("Failed to initialize MCP service on startup:", error)
     })
 
+  // Initialize models.dev service (fetches model metadata in background)
+  initModelsDevService()
+  logApp("Models.dev service initialization started")
+
+  // Initialize ACP service (spawns auto-start agents)
+  acpService
+    .initialize()
+    .then(() => {
+      logApp("ACP service initialized successfully")
+
+      // Sync agent profiles to ACP registry (unified service - preferred)
+      try {
+        agentProfileService.syncAgentProfilesToACPRegistry()
+        logApp("Agent profiles synced to ACP registry")
+      } catch (error) {
+        logApp("Failed to sync agent profiles to ACP registry:", error)
+      }
+
+
+    })
+    .catch((error) => {
+      logApp("Failed to initialize ACP service:", error)
+    })
+
   // Initialize bundled skills (copy from app resources to App Data if needed)
   // Then scan the skills folder to import any new skills into the registry
   try {
@@ -148,6 +183,9 @@ app.whenReady().then(() => {
     if (importedSkills.length > 0) {
       logApp(`Imported ${importedSkills.length} skills from skills folder`)
     }
+
+    // Start watching skills folder for changes (auto-refresh without app restart)
+    startSkillsFolderWatcher()
   } catch (error) {
     logApp("Failed to initialize bundled skills:", error)
   }
@@ -156,7 +194,61 @@ app.whenReady().then(() => {
 	    const cfg = configStore.get()
 	    if (cfg.remoteServerEnabled) {
 	      startRemoteServer()
-	        .then(() => logApp("Remote server started"))
+	        .then(async () => {
+	          logApp("Remote server started")
+
+	          // Auto-start Cloudflare tunnel if enabled
+	          // Wrapped in try/catch to isolate tunnel errors from remote server startup reporting
+	          if (cfg.cloudflareTunnelAutoStart) {
+	            try {
+	              const cloudflaredInstalled = await checkCloudflaredInstalled()
+	              if (!cloudflaredInstalled) {
+	                logApp("Cloudflare tunnel auto-start skipped: cloudflared not installed")
+	                return
+	              }
+
+	              const tunnelMode = cfg.cloudflareTunnelMode || "quick"
+
+	              if (tunnelMode === "named") {
+	                // For named tunnels, we need tunnel ID and hostname
+	                if (!cfg.cloudflareTunnelId || !cfg.cloudflareTunnelHostname) {
+	                  logApp("Cloudflare tunnel auto-start skipped: named tunnel requires tunnel ID and hostname")
+	                  return
+	                }
+	                startNamedCloudflareTunnel({
+	                  tunnelId: cfg.cloudflareTunnelId,
+	                  hostname: cfg.cloudflareTunnelHostname,
+	                  credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
+	                })
+	                  .then((result) => {
+	                    if (result.success) {
+	                      logApp(`Cloudflare named tunnel started: ${result.url}`)
+	                    } else {
+	                      logApp(`Cloudflare named tunnel failed to start: ${result.error}`)
+	                    }
+	                  })
+	                  .catch((err) =>
+	                    logApp(`Cloudflare named tunnel error: ${err instanceof Error ? err.message : String(err)}`)
+	                  )
+	              } else {
+	                // Quick tunnel
+	                startCloudflareTunnel()
+	                  .then((result) => {
+	                    if (result.success) {
+	                      logApp(`Cloudflare quick tunnel started: ${result.url}`)
+	                    } else {
+	                      logApp(`Cloudflare quick tunnel failed to start: ${result.error}`)
+	                    }
+	                  })
+	                  .catch((err) =>
+	                    logApp(`Cloudflare quick tunnel error: ${err instanceof Error ? err.message : String(err)}`)
+	                  )
+	              }
+	            } catch (err) {
+	              logApp(`Cloudflare tunnel auto-start error: ${err instanceof Error ? err.message : String(err)}`)
+	            }
+	          }
+	        })
 	        .catch((err) =>
 	          logApp(
 	            `Remote server failed to start: ${err instanceof Error ? err.message : String(err)}`,
@@ -177,8 +269,11 @@ app.whenReady().then(() => {
     if (accessibilityGranted) {
       if (!WINDOWS.get("main")) {
         // Check if onboarding has been completed
+        // Skip for existing users who have already configured models (pre-onboarding installs)
         const cfg = configStore.get()
-        const needsOnboarding = !cfg.onboardingCompleted
+        const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+        const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+        const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
         if (needsOnboarding) {
           createMainWindow({ url: "/onboarding" })
@@ -200,6 +295,11 @@ app.whenReady().then(() => {
   app.on("before-quit", async (event) => {
     makePanelWindowClosable()
 
+    // Shutdown ACP agents gracefully
+    acpService.shutdown().catch((error) => {
+      console.error('[App] Error shutting down ACP service:', error)
+    })
+
     // Prevent re-entry during cleanup
     if (isCleaningUp) {
       return
@@ -216,13 +316,17 @@ app.whenReady().then(() => {
       await Promise.race([
         mcpService.cleanup(),
         new Promise<void>((_, reject) => {
-          timeoutId = setTimeout(
+          const id = setTimeout(
             () => reject(new Error("MCP cleanup timeout")),
             CLEANUP_TIMEOUT_MS
           )
+          timeoutId = id
           // unref() ensures this timer won't keep the event loop alive
-          // if cleanup finishes quickly
-          timeoutId.unref()
+          // if cleanup finishes quickly (only available in Node.js)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (id && typeof (id as any).unref === "function") {
+            (id as any).unref()
+          }
         }),
       ])
     } catch (error) {

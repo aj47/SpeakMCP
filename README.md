@@ -1,7 +1,3 @@
-# SpeakMCP
-
-🎤 **AI-powered voice assistant with MCP integration** - A fork of [Whispo](https://github.com/egoist/whispo) that transforms your voice into intelligent actions with advanced speech recognition, LLM processing, and Model Context Protocol (MCP) tool execution.
-
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](./LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-31.0.2-47848f.svg)](https://electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](https://www.typescriptlang.org/)
@@ -49,6 +45,7 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 | **🎤 Voice** | Hold-to-record, 30+ languages, Fn toggle mode, auto-insert to any app |
 | **🔊 TTS** | 50+ AI voices via OpenAI, Groq, and Gemini with auto-play |
 | **🤖 MCP Agent** | Tool execution, OAuth 2.1 auth, real-time progress, conversation context |
+| **📊 Observability** | [Langfuse](https://langfuse.com/) integration for LLM tracing, token usage, and debugging |
 | **🛠️ Platform** | macOS/Windows/Linux, rate limit handling, multi-provider AI |
 | **🎨 UX** | Dark/light themes, resizable panels, kill switch, conversation history |
 

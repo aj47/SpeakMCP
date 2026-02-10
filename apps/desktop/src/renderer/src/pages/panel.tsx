@@ -9,7 +9,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
 import { TextInputPanel, TextInputPanelRef } from "@renderer/components/text-input-panel"
 import { PanelResizeWrapper } from "@renderer/components/panel-resize-wrapper"
-import { logUI } from "@renderer/lib/debug"
 import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer/stores"
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
@@ -411,6 +410,10 @@ export function Component() {
       setShowTextInput(false)
       // Clear text input state in main process so panel doesn't stay in textInput mode (positioning/sizing)
       tipcClient.clearTextInputState({})
+      // Set recording state immediately to show waveform UI without waiting for async mic init
+      // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
+      setRecording(true)
+      recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData())
       recorderRef.current?.startRecording()
     })
@@ -449,6 +452,11 @@ export function Component() {
         mcpModeRef.current = false
         // Track if recording was triggered via UI button click
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Set recording state immediately to show waveform UI without waiting for async mic init
+        // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
+        setRecording(true)
+        recordingRef.current = true
+        setVisualizerData(() => getInitialVisualizerData())
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
@@ -461,7 +469,6 @@ export function Component() {
   useEffect(() => {
     const unlisten = rendererHandlers.showTextInput.listen((data) => {
       // Reset any previous pending state to ensure textarea is enabled
-      logUI('[Panel] showTextInput received: resetting text input mutations and enabling textarea')
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
@@ -615,7 +622,6 @@ export function Component() {
       targetMode = "agent"
       // When switching to agent mode, stop any ongoing recording
       if (recordingRef.current) {
-        logUI('[Panel] Switching to agent mode - stopping ongoing recording')
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false

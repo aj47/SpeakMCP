@@ -12,9 +12,11 @@
 
 import { generateText, streamText, tool as aiTool } from "ai"
 import { jsonSchema } from "ai"
+import { randomUUID } from "crypto"
 import {
   createLanguageModel,
   getCurrentProviderId,
+  getCurrentModelName,
   getTranscriptProviderId,
   type ProviderType,
 } from "./ai-sdk-provider"
@@ -23,6 +25,35 @@ import type { LLMToolCallResponse, MCPTool } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
+import {
+  createLLMGeneration,
+  endLLMGeneration,
+  isLangfuseEnabled,
+} from "./langfuse-service"
+
+/**
+ * Build token usage object for Langfuse, only including it when at least one token field is present.
+ * This avoids reporting 0 tokens when the provider doesn't return usage data.
+ */
+function buildTokenUsage(usage?: { inputTokens?: number; outputTokens?: number }): {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+} | undefined {
+  const inputTokens = usage?.inputTokens
+  const outputTokens = usage?.outputTokens
+
+  // Only include usage when at least one token field is present
+  if (inputTokens === undefined && outputTokens === undefined) {
+    return undefined
+  }
+
+  return {
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
+  }
+}
 
 /**
  * Sanitize tool name for provider compatibility.
@@ -63,13 +94,30 @@ function sanitizeToolName(name: string, suffix?: string): string {
 /**
  * Restore original tool name from sanitized version using the provided map.
  * Falls back to simple replacement if no map is provided (for JSON response parsing).
+ *
+ * Note: Some LLM proxies (e.g., certain OpenAI-compatible gateways) may prepend
+ * "proxy_" to tool names in responses. We strip this prefix only when we have
+ * a toolNameMap to verify the mapping, to avoid conflicts with legitimate tools
+ * whose names actually start with "proxy_".
  */
 function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
-  // If we have a map, use it for exact lookup (preferred method)
+  // First, try exact match with the sanitized name (handles legitimate "proxy_" prefixed tools)
   if (toolNameMap && toolNameMap.has(sanitizedName)) {
     return toolNameMap.get(sanitizedName)!
   }
+
+  // If no exact match, we have a map, and name starts with "proxy_", try stripping the prefix
+  // This handles LLM proxies that prepend "proxy_" to tool names in responses
+  // We only do this when toolNameMap is provided so we can verify the stripped name exists
+  if (toolNameMap && sanitizedName.startsWith("proxy_")) {
+    const cleanedName = sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
+    if (toolNameMap.has(cleanedName)) {
+      return toolNameMap.get(cleanedName)!
+    }
+  }
+
   // Fallback: reverse the sanitization for JSON responses where we don't have the map
+  // We don't strip "proxy_" here since we can't verify if it's a legitimate tool name
   return sanitizedName.replace(/__COLON__/g, ":")
 }
 
@@ -166,9 +214,34 @@ function calculateBackoffDelay(
 }
 
 /**
+ * Check if an error is an empty response error.
+ * Empty responses should fail fast without backoff since they typically indicate:
+ * - API endpoint issues
+ * - Authentication problems
+ * - Malformed requests
+ * These won't resolve by waiting, so exponential backoff wastes time.
+ * See: https://github.com/aj47/SpeakMCP/issues/964
+ */
+function isEmptyResponseError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    return (
+      message.includes("empty response") ||
+      message.includes("empty content") ||
+      message.includes("no text") ||
+      message.includes("no content")
+    )
+  }
+  return false
+}
+
+/**
  * Check if an error is retryable.
  * Uses AI SDK structured error fields (statusCode, isRetryable) when available,
  * with fallback to message-based detection for consistency across providers.
+ *
+ * NOTE: Empty response errors are handled separately - they retry immediately
+ * without backoff (see withRetry function).
  */
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
@@ -180,15 +253,21 @@ function isRetryableError(error: unknown): boolean {
       return false
     }
 
+    // Empty response errors are retryable but WITHOUT backoff
+    // They are handled specially in withRetry - return true here so they're not rejected outright
+    if (isEmptyResponseError(error)) {
+      return true
+    }
+
     // Check for AI SDK structured error fields (AI_APICallError, etc.)
     // These errors have statusCode and isRetryable properties
     const errorWithStatus = error as { statusCode?: number; isRetryable?: boolean; status?: number }
-    
+
     // If the error has an explicit isRetryable flag, use it
     if (typeof errorWithStatus.isRetryable === "boolean") {
       return errorWithStatus.isRetryable
     }
-    
+
     // Check for statusCode or status field (AI SDK errors use statusCode)
     const statusCode = errorWithStatus.statusCode ?? errorWithStatus.status
     if (typeof statusCode === "number") {
@@ -210,7 +289,8 @@ function isRetryableError(error: unknown): boolean {
       }
     }
 
-    // Fallback: message-based detection for errors without structured fields
+    // Fallback: message-based detection for transient network issues
+    // NOTE: empty response/content removed - handled separately without backoff
     const message = error.message.toLowerCase()
     return (
       message.includes("rate limit") ||
@@ -221,9 +301,7 @@ function isRetryableError(error: unknown): boolean {
       message.includes("504") ||
       message.includes("timeout") ||
       message.includes("network") ||
-      message.includes("connection") ||
-      message.includes("empty response") ||
-      message.includes("empty content")
+      message.includes("connection")
     )
   }
   return false
@@ -304,13 +382,17 @@ async function withRetry<T>(
         throw error
       }
 
+      // Check for empty response errors - these skip backoff entirely
+      // See: https://github.com/aj47/SpeakMCP/issues/964
+      const isEmptyResponse = isEmptyResponseError(error)
+
       // Check for rate limit (429) using structured error fields when available
       let isRateLimit = false
       if (error instanceof Error) {
         // Check for AI SDK structured error fields (AI_APICallError, etc.)
         const errorWithStatus = error as { statusCode?: number; status?: number }
         const statusCode = errorWithStatus.statusCode ?? errorWithStatus.status
-        
+
         if (typeof statusCode === "number" && statusCode === 429) {
           isRateLimit = true
         } else {
@@ -321,14 +403,35 @@ async function withRetry<T>(
       }
 
       // Rate limits retry indefinitely, other errors respect the limit
+      // Empty response errors also respect the limit but skip backoff
       if (!isRateLimit && attempt >= maxRetries) {
         diagnosticsService.logError(
           "llm-fetch",
           "API call failed after all retries",
-          { attempts: attempt + 1, error }
+          { attempts: attempt + 1, error, isEmptyResponse }
         )
         clearRetryStatus()
         throw lastError
+      }
+
+      // Empty response errors retry immediately without backoff
+      // These typically indicate API/auth issues that won't resolve by waiting
+      if (isEmptyResponse) {
+        logLLM(
+          `⚡ Empty response - retrying immediately (attempt ${attempt + 1}/${maxRetries + 1})`
+        )
+        if (options.onRetryProgress) {
+          options.onRetryProgress({
+            isRetrying: true,
+            attempt: attempt + 1,
+            maxAttempts: maxRetries + 1,
+            delaySeconds: 0,
+            reason: "Empty response - retrying immediately",
+            startedAt: Date.now(),
+          })
+        }
+        attempt++
+        continue
       }
 
       const delay = calculateBackoffDelay(attempt, baseDelay, maxDelay)
@@ -475,6 +578,8 @@ export async function makeLLMCallWithFetch(
           ? convertMCPToolsToAISDKTools(tools)
           : undefined
 
+        const modelName = getCurrentModelName(effectiveProviderId)
+
         if (isDebugLLM()) {
           logLLM("🚀 AI SDK generateText call", {
             provider: effectiveProviderId,
@@ -485,15 +590,42 @@ export async function makeLLMCallWithFetch(
           })
         }
 
-        const result = await generateText({
-          model,
-          system,
-          messages: convertedMessages,
-          abortSignal: abortController.signal,
-          tools: convertedTools?.tools,
-          // Allow the model to choose whether to use tools or respond with text
-          toolChoice: convertedTools?.tools ? "auto" : undefined,
-        })
+        // Create Langfuse generation if enabled
+        const generationId = isLangfuseEnabled() ? randomUUID() : null
+        if (generationId) {
+          createLLMGeneration(sessionId || null, generationId, {
+            name: "LLM Call",
+            model: modelName,
+            modelParameters: {
+              provider: effectiveProviderId,
+              hasTools: !!convertedTools,
+              toolCount: tools?.length || 0,
+            },
+            input: { system, messages: convertedMessages },
+          })
+        }
+
+        let result
+        try {
+          result = await generateText({
+            model,
+            system,
+            messages: convertedMessages,
+            abortSignal: abortController.signal,
+            tools: convertedTools?.tools,
+            // Allow the model to choose whether to use tools or respond with text
+            toolChoice: convertedTools?.tools ? "auto" : undefined,
+          })
+        } catch (error) {
+          // End Langfuse generation with error before rethrowing
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: error instanceof Error ? error.message : "generateText failed",
+            })
+          }
+          throw error
+        }
 
         const text = result.text?.trim() || ""
 
@@ -514,6 +646,14 @@ export async function makeLLMCallWithFetch(
             arguments: tc.input,
           }))
 
+          // End Langfuse generation with tool calls
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              output: JSON.stringify({ content: text, toolCalls }),
+              usage: buildTokenUsage(result.usage),
+            })
+          }
+
           return {
             content: text || undefined,
             toolCalls,
@@ -523,6 +663,12 @@ export async function makeLLMCallWithFetch(
 
         // No tool calls - process as text response
         if (!text && !result.toolCalls?.length) {
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: "LLM returned empty response",
+            })
+          }
           throw new Error("LLM returned empty response")
         }
 
@@ -537,7 +683,13 @@ export async function makeLLMCallWithFetch(
         const jsonObject = extractJsonObject(text)
         if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
           const response = jsonObject as LLMToolCallResponse
-          if (response.needsMoreWork === undefined && !response.toolCalls) {
+          // Don't force needsMoreWork - let llm.ts heuristics decide
+          // This matches plain text behavior and prevents simple JSON responses
+          // like {"content": "Hello"} from forcing unnecessary iterations
+          // (see issue: JSON vs plain text asymmetry in debugging-agents-langfuse.md)
+
+          // Ensure tool calls always continue (matches native AI SDK behavior)
+          if (response.toolCalls && response.toolCalls.length > 0) {
             response.needsMoreWork = true
           }
           // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement
@@ -547,6 +699,13 @@ export async function makeLLMCallWithFetch(
               name: restoreToolName(tc.name, convertedTools?.nameMap),
             }))
           }
+          // End Langfuse generation with JSON response
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              output: JSON.stringify(response),
+              usage: buildTokenUsage(result.usage),
+            })
+          }
           return response
         }
 
@@ -554,6 +713,14 @@ export async function makeLLMCallWithFetch(
         const hasToolMarkers =
           /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(text)
         const cleaned = text.replace(/<\|[^|]*\|>/g, "").trim()
+
+        // End Langfuse generation with text response
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: cleaned || text,
+            usage: buildTokenUsage(result.usage),
+          })
+        }
 
         if (hasToolMarkers) {
           return { content: cleaned, needsMoreWork: true }
@@ -594,6 +761,19 @@ export async function makeLLMCallWithStreaming(
   const abortController = externalAbortController || createSessionAbortController(sessionId)
   const isInternalController = !externalAbortController
 
+  // Create Langfuse generation if enabled
+  const generationId = isLangfuseEnabled() ? randomUUID() : null
+  const modelName = getCurrentModelName(effectiveProviderId)
+
+  if (generationId) {
+    createLLMGeneration(sessionId || null, generationId, {
+      name: "Streaming LLM Call",
+      model: modelName,
+      modelParameters: { provider: effectiveProviderId },
+      input: { system, messages: convertedMessages },
+    })
+  }
+
   try {
     if (isDebugLLM()) {
       logLLM("🚀 AI SDK streamText call", {
@@ -626,12 +806,26 @@ export async function makeLLMCallWithStreaming(
       }
     }
 
+    // End Langfuse generation
+    if (generationId) {
+      endLLMGeneration(generationId, {
+        output: accumulated,
+      })
+    }
+
     return {
       content: accumulated,
       needsMoreWork: undefined,
       toolCalls: undefined,
     }
   } catch (error: any) {
+    // End Langfuse generation with error
+    if (generationId) {
+      endLLMGeneration(generationId, {
+        level: "ERROR",
+        statusMessage: error?.message || "Streaming LLM call failed",
+      })
+    }
     if (error?.name === "AbortError") {
       throw error
     }
@@ -664,6 +858,19 @@ export async function makeTextCompletionWithFetch(
     async () => {
       const abortController = createSessionAbortController(sessionId)
 
+      // Create Langfuse generation if enabled
+      const generationId = isLangfuseEnabled() ? randomUUID() : null
+      const modelName = getCurrentModelName(effectiveProviderId, "transcript")
+
+      if (generationId) {
+        createLLMGeneration(sessionId || null, generationId, {
+          name: "Text Completion",
+          model: modelName,
+          modelParameters: { provider: effectiveProviderId },
+          input: prompt,
+        })
+      }
+
       try {
         // Check for stop signal before starting
         if (
@@ -688,8 +895,25 @@ export async function makeTextCompletionWithFetch(
           abortSignal: abortController.signal,
         })
 
-        return result.text?.trim() || ""
+        const text = result.text?.trim() || ""
+
+        // End Langfuse generation
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: text,
+            usage: buildTokenUsage(result.usage),
+          })
+        }
+
+        return text
       } catch (error) {
+        // End Langfuse generation with error
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            level: "ERROR",
+            statusMessage: error instanceof Error ? error.message : "Text completion failed",
+          })
+        }
         diagnosticsService.logError("llm-fetch", "Text completion failed", error)
         throw error
       } finally {
@@ -727,6 +951,7 @@ export async function verifyCompletionWithFetch(
         }
 
         const model = createLanguageModel(effectiveProviderId)
+        const modelName = getCurrentModelName(effectiveProviderId)
         const { system, messages: convertedMessages } = convertMessages(messages)
 
         if (isDebugLLM()) {
@@ -737,18 +962,60 @@ export async function verifyCompletionWithFetch(
           })
         }
 
-        const result = await generateText({
-          model,
-          system,
-          messages: convertedMessages,
-          abortSignal: abortController.signal,
-        })
+        // Create Langfuse generation if enabled
+        const generationId = isLangfuseEnabled() ? randomUUID() : null
+        if (generationId) {
+          createLLMGeneration(sessionId || null, generationId, {
+            name: "Verification Call",
+            model: modelName,
+            modelParameters: {
+              provider: effectiveProviderId,
+            },
+            input: { system, messages: convertedMessages },
+          })
+        }
+
+        let result
+        try {
+          result = await generateText({
+            model,
+            system,
+            messages: convertedMessages,
+            abortSignal: abortController.signal,
+          })
+        } catch (error) {
+          // End Langfuse generation with error before rethrowing
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              level: "ERROR",
+              statusMessage: error instanceof Error ? error.message : "verification generateText failed",
+            })
+          }
+          throw error
+        }
 
         const text = result.text?.trim() || ""
         const jsonObject = extractJsonObject(text)
 
         if (jsonObject && typeof jsonObject.isComplete === "boolean") {
+          // End Langfuse generation with success
+          if (generationId) {
+            endLLMGeneration(generationId, {
+              output: JSON.stringify(jsonObject),
+              usage: buildTokenUsage(result.usage),
+            })
+          }
           return jsonObject as CompletionVerification
+        }
+
+        // End Langfuse generation with parse failure
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: text,
+            usage: buildTokenUsage(result.usage),
+            level: "WARNING",
+            statusMessage: "Failed to parse verification response as JSON",
+          })
         }
 
         // Conservative default

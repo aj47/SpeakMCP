@@ -19,7 +19,8 @@
     "test:ui": "vitest --ui",
     "start": "electron-vite preview",
     "predev": "pnpm -w run build:shared && npx tsx scripts/ensure-rust-binary.ts",
-    "dev": "electron-vite dev --watch --",
+    "dev": "npx tsx scripts/dev-with-sherpa.ts",
+    "dev:no-sherpa": "electron-vite dev --watch --",
     "prebuild": "npx tsx scripts/ensure-build-dirs.ts",
     "build": "npm run typecheck && npm run test:run && electron-vite build && npm run build-rs",
     "postinstall": "node scripts/postinstall.cjs",
@@ -107,6 +108,12 @@
     "vite": "^5.4.8",
     "vite-tsconfig-paths": "^5.0.1",
     "vitest": "^1.6.0"
+  },
+  "optionalDependencies": {
+    "langfuse": "^3.38.6",
+    "sherpa-onnx-node": "^1.12.23",
+    "tar": "^7.5.6",
+    "unbzip2-stream": "^1.4.3"
   },
   "packageManager": "pnpm@9.12.1+sha512.e5a7e52a4183a02d5931057f7a0dbff9d5e9ce3161e33fa68ae392125b79282a8a8a470a51dfc8a0ed86221442eb2fb57019b0990ed24fab519bf0e1bc5ccfc4"
 }

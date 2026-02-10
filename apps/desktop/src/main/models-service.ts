@@ -1,15 +1,11 @@
 import { configStore } from "./config"
 import { diagnosticsService } from "./diagnostics"
+import { fetchModelsDevData, getModelFromModelsDevByProviderId } from "./models-dev-service"
+import type { ModelsDevModel } from "./models-dev-service"
+import type { ModelInfo, EnhancedModelInfo } from "../shared/types"
 
-export interface ModelInfo {
-  id: string
-  name: string
-  description?: string
-  context_length?: number
-  created?: number
-  /** Whether this model supports speech-to-text transcription */
-  supportsTranscription?: boolean
-}
+// Re-export ModelInfo for backward compatibility
+export type { ModelInfo, EnhancedModelInfo } from "../shared/types"
 
 interface ModelsResponse {
   data: ModelInfo[]
@@ -22,6 +18,91 @@ const modelsCache = new Map<
   { models: ModelInfo[]; timestamp: number }
 >()
 const CACHE_DURATION = 5 * 60 * 1000
+
+/**
+ * Map our provider IDs to models.dev provider IDs
+ * @param providerId - Our provider ID (openai, groq, gemini)
+ * @param baseUrl - Optional base URL to detect OpenRouter
+ * @returns The models.dev provider ID
+ */
+function mapToModelsDevProviderId(providerId: string, baseUrl?: string): string {
+  // Check if using OpenRouter
+  if (providerId === "openai" && baseUrl?.includes("openrouter.ai")) {
+    return "openrouter"
+  }
+
+  // Map our provider IDs to models.dev provider IDs
+  const providerMap: Record<string, string> = {
+    openai: "openai",
+    groq: "groq",
+    gemini: "google",
+  }
+
+  return providerMap[providerId] || providerId
+}
+
+/**
+ * Enhance a ModelInfo object with data from models.dev
+ * @param model - The basic ModelInfo to enhance
+ * @param providerId - Our provider ID (openai, groq, gemini)
+ * @param baseUrl - Optional base URL to detect OpenRouter
+ * @returns Enhanced model info with pricing and capabilities
+ */
+function enhanceModelWithModelsDevData(
+  model: ModelInfo,
+  providerId: string,
+  baseUrl?: string
+): EnhancedModelInfo {
+  const modelsDevProviderId = mapToModelsDevProviderId(providerId, baseUrl)
+  const modelsDevModel = getModelFromModelsDevByProviderId(model.id, modelsDevProviderId)
+
+  if (!modelsDevModel) {
+    // Return as-is if no models.dev data found
+    return model
+  }
+
+  const enhanced: EnhancedModelInfo = {
+    ...model,
+    // Use models.dev name if available, otherwise keep original
+    name: model.name,
+    family: modelsDevModel.family,
+
+    // Capability flags
+    supportsAttachment: modelsDevModel.attachment,
+    supportsReasoning: modelsDevModel.reasoning,
+    supportsToolCalls: modelsDevModel.tool_call,
+    supportsStructuredOutput: modelsDevModel.structured_output,
+    supportsTemperature: modelsDevModel.temperature,
+
+    // Metadata
+    knowledge: modelsDevModel.knowledge,
+    releaseDate: modelsDevModel.release_date,
+    lastUpdated: modelsDevModel.last_updated,
+    openWeights: modelsDevModel.open_weights,
+
+    // Pricing (USD per million tokens)
+    inputCost: modelsDevModel.cost?.input,
+    outputCost: modelsDevModel.cost?.output,
+    reasoningCost: modelsDevModel.cost?.reasoning,
+    cacheReadCost: modelsDevModel.cost?.cache_read,
+    cacheWriteCost: modelsDevModel.cost?.cache_write,
+
+    // Limits
+    contextLimit: modelsDevModel.limit?.context,
+    outputLimit: modelsDevModel.limit?.output,
+
+    // Modalities
+    inputModalities: modelsDevModel.modalities?.input,
+    outputModalities: modelsDevModel.modalities?.output,
+  }
+
+  // Also update context_length if we have it from models.dev and it wasn't set
+  if (!enhanced.context_length && modelsDevModel.limit?.context) {
+    enhanced.context_length = modelsDevModel.limit.context
+  }
+
+  return enhanced
+}
 
 async function fetchOpenAIModels(
   baseUrl?: string,
@@ -487,41 +568,54 @@ export async function fetchAvailableModels(
       },
     )
 
+    // Get base URL for provider to detect OpenRouter
+    let baseUrl: string | undefined
     switch (providerId) {
       case "openai":
-        models = await fetchOpenAIModels(
-          config.openaiBaseUrl,
-          config.openaiApiKey,
-        )
+        baseUrl = config.openaiBaseUrl
+        models = await fetchOpenAIModels(baseUrl, config.openaiApiKey)
         break
       case "groq":
-        models = await fetchGroqModels(config.groqBaseUrl, config.groqApiKey)
+        baseUrl = config.groqBaseUrl
+        models = await fetchGroqModels(baseUrl, config.groqApiKey)
         break
       case "gemini":
-        models = await fetchGeminiModels(
-          config.geminiBaseUrl,
-          config.geminiApiKey,
-        )
+        baseUrl = config.geminiBaseUrl
+        models = await fetchGeminiModels(baseUrl, config.geminiApiKey)
         break
       default:
         throw new Error(`Unsupported provider: ${providerId}`)
     }
 
+    // Trigger models.dev cache population in background (don't await)
+    fetchModelsDevData().catch((err) => {
+      diagnosticsService.logInfo(
+        "models-service",
+        `Background models.dev fetch failed (non-blocking)`,
+        { error: err instanceof Error ? err.message : String(err) }
+      )
+    })
+
+    // Enhance models with models.dev data
+    const enhancedModels = models.map((model) =>
+      enhanceModelWithModelsDevData(model, providerId, baseUrl)
+    )
+
     // Log successful fetch
     diagnosticsService.logInfo(
       "models-service",
-      `Successfully fetched ${models.length} models for ${providerId}`,
+      `Successfully fetched ${enhancedModels.length} models for ${providerId}`,
       {
         providerId,
-        count: models.length,
-        modelIds: models.map(m => m.id),
+        count: enhancedModels.length,
+        modelIds: enhancedModels.map(m => m.id),
       },
     )
 
     // Cache the result only if we have at least one model
-    if (models.length > 0) {
+    if (enhancedModels.length > 0) {
       modelsCache.set(cacheKey, {
-        models,
+        models: enhancedModels,
         timestamp: now,
       })
     } else {
@@ -535,7 +629,7 @@ export async function fetchAvailableModels(
       )
     }
 
-    return models
+    return enhancedModels
   } catch (error) {
     diagnosticsService.logError(
       "models-service",
@@ -548,77 +642,115 @@ export async function fetchAvailableModels(
     )
 
     // Return fallback models if API call fails
-    const fallbackModels = getFallbackModels(providerId)
-    diagnosticsService.logInfo(
-      "models-service",
-      `Returning ${fallbackModels.length} fallback models for ${providerId}`,
-      {
-        providerId,
-        fallbackCount: fallbackModels.length,
-        fallbackIds: fallbackModels.map(m => m.id),
-      },
-    )
-    return fallbackModels
+    // Try async fallback first, then sync fallback
+    try {
+      const fallbackModels = await getFallbackModelsAsync(providerId)
+      diagnosticsService.logInfo(
+        "models-service",
+        `Returning ${fallbackModels.length} fallback models (from models.dev) for ${providerId}`,
+        {
+          providerId,
+          fallbackCount: fallbackModels.length,
+          fallbackIds: fallbackModels.map(m => m.id),
+        },
+      )
+      return fallbackModels
+    } catch {
+      const fallbackModels = getFallbackModels(providerId)
+      diagnosticsService.logInfo(
+        "models-service",
+        `Returning ${fallbackModels.length} fallback models (hardcoded) for ${providerId}`,
+        {
+          providerId,
+          fallbackCount: fallbackModels.length,
+          fallbackIds: fallbackModels.map(m => m.id),
+        },
+      )
+      return fallbackModels
+    }
   }
 }
 
 /**
- * Get fallback models when API calls fail
+ * Minimal hardcoded fallback models - only used when BOTH provider API
+ * AND models.dev cache are unavailable. Keep this list minimal since
+ * models.dev is the primary source for fallback model data.
+ */
+const HARDCODED_FALLBACK_MODELS: Record<string, ModelInfo[]> = {
+  openai: [
+    { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+  ],
+  openrouter: [
+    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini (OpenAI)" },
+    { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (Anthropic)" },
+  ],
+  groq: [
+    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
+  ],
+  google: [
+    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
+  ],
+}
+
+/**
+ * Get fallback models when API calls fail.
+ * First tries to get models from models.dev cache, then falls back to hardcoded models.
+ */
+async function getFallbackModelsAsync(providerId: string): Promise<ModelInfo[]> {
+  const config = configStore.get()
+  const isOpenRouter =
+    providerId === "openai" && config.openaiBaseUrl?.includes("openrouter.ai")
+
+  const modelsDevProviderId = isOpenRouter ? "openrouter" : mapToModelsDevProviderId(providerId)
+
+  try {
+    // Try to get models from models.dev cache
+    const modelsDevData = await fetchModelsDevData()
+    const provider = modelsDevData[modelsDevProviderId]
+
+    if (provider && provider.models && Object.keys(provider.models).length > 0) {
+      const models = Object.entries(provider.models).map(([modelId, modelData]) => {
+        const model: ModelInfo = {
+          id: modelId,
+          name: modelData.name || formatModelName(modelId),
+          context_length: modelData.limit?.context,
+        }
+        return enhanceModelWithModelsDevData(model, providerId, isOpenRouter ? config.openaiBaseUrl : undefined)
+      })
+
+      diagnosticsService.logInfo(
+        "models-service",
+        `Using ${models.length} fallback models from models.dev for ${modelsDevProviderId}`,
+        { providerId, modelsDevProviderId, count: models.length }
+      )
+
+      return models
+    }
+  } catch (error) {
+    diagnosticsService.logInfo(
+      "models-service",
+      `Failed to get fallback models from models.dev, using hardcoded fallbacks`,
+      { providerId, error: error instanceof Error ? error.message : String(error) }
+    )
+  }
+
+  // Fall back to hardcoded models
+  const hardcodedKey = isOpenRouter ? "openrouter" : modelsDevProviderId
+  return HARDCODED_FALLBACK_MODELS[hardcodedKey] || HARDCODED_FALLBACK_MODELS[providerId] || []
+}
+
+/**
+ * Get fallback models synchronously (for backwards compatibility)
+ * This uses the synchronous getModelFromModelsDevByProviderId which requires cache to be loaded
  */
 function getFallbackModels(providerId: string): ModelInfo[] {
   const config = configStore.get()
   const isOpenRouter =
     providerId === "openai" && config.openaiBaseUrl?.includes("openrouter.ai")
 
-  const fallbackModels: Record<string, ModelInfo[]> = {
-    openai: isOpenRouter
-      ? [
-          // OpenRouter popular models
-          { id: "gpt-4o", name: "GPT-4o" },
-          { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-          {
-            id: "anthropic/claude-3.5-sonnet",
-            name: "Claude 3.5 Sonnet (Anthropic)",
-          },
-          { id: "anthropic/claude-3-opus", name: "Claude 3 Opus (Anthropic)" },
-          {
-            id: "meta-llama/llama-3.1-405b-instruct",
-            name: "Llama 3.1 405B Instruct (Meta)",
-          },
-          {
-            id: "meta-llama/llama-3.1-70b-instruct",
-            name: "Llama 3.1 70B Instruct (Meta)",
-          },
-          { id: "google/gemini-1.5-pro", name: "Gemini 1.5 Pro (Google)" },
-          {
-            id: "mistralai/mixtral-8x22b-instruct",
-            name: "Mixtral 8x22B Instruct (Mistral)",
-          },
-        ]
-      : [
-          // Native OpenAI models
-          { id: "gpt-4o", name: "GPT-4o" },
-          { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-          { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
-          { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-        ],
-    groq: [
-      { id: "moonshotai/kimi-k2-instruct", name: "Kimi K2 Instruct (Moonshot AI)" },
-      { id: "gemma2-9b-it", name: "Gemma2 9B IT" },
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
-      { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B Versatile" },
-      { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
-      { id: "openai/gpt-oss-20b", name: "GPT-OSS 20B (OpenAI)" },
-      { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B (OpenAI)" },
-    ],
-    gemini: [
-      { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash" },
-      { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-      { id: "gemini-1.0-pro", name: "Gemini 1.0 Pro" },
-    ],
-  }
-
-  return fallbackModels[providerId] || []
+  // Use hardcoded fallbacks for synchronous access
+  const hardcodedKey = isOpenRouter ? "openrouter" : mapToModelsDevProviderId(providerId)
+  return HARDCODED_FALLBACK_MODELS[hardcodedKey] || HARDCODED_FALLBACK_MODELS[providerId] || []
 }
 
 /**

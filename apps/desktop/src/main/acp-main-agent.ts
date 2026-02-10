@@ -1,0 +1,356 @@
+/**
+ * ACP Main Agent Handler
+ *
+ * Routes transcripts to an ACP agent instead of the LLM API when ACP mode is enabled.
+ * This allows using agents like Claude Code as the "brain" for SpeakMCP.
+ */
+
+import { acpService, ACPContentBlock } from "./acp-service"
+import {
+  getSessionForConversation,
+  setSessionForConversation,
+  clearSessionForConversation,
+  touchSession,
+  setAcpToSpeakMcpSessionMapping,
+} from "./acp-session-state"
+import { emitAgentProgress } from "./emit-agent-progress"
+import { AgentProgressUpdate, AgentProgressStep } from "../shared/types"
+import { logApp } from "./debug"
+import { conversationService } from "./conversation-service"
+
+export interface ACPMainAgentOptions {
+  /** Name of the ACP agent to use */
+  agentName: string
+  /** SpeakMCP conversation ID */
+  conversationId: string
+  /** Force creating a new session even if one exists */
+  forceNewSession?: boolean
+  /** Session ID for progress tracking (from agentSessionTracker) */
+  sessionId: string
+  /** Callback for progress updates */
+  onProgress?: (update: AgentProgressUpdate) => void
+}
+
+export interface ACPMainAgentResult {
+  /** Whether the request succeeded */
+  success: boolean
+  /** The agent's response text */
+  response?: string
+  /** The ACP session ID (for future prompts) */
+  acpSessionId?: string
+  /** Why the agent stopped */
+  stopReason?: string
+  /** Error message if failed */
+  error?: string
+}
+
+/**
+ * Process a transcript using an ACP agent as the main agent.
+ * This bypasses the normal LLM API call and routes directly to the ACP agent.
+ */
+export async function processTranscriptWithACPAgent(
+  transcript: string,
+  options: ACPMainAgentOptions
+): Promise<ACPMainAgentResult> {
+  const { agentName, conversationId, forceNewSession, sessionId, onProgress } = options
+
+  logApp(`[ACP Main] Processing transcript with agent ${agentName} for conversation ${conversationId}`)
+
+  // Track accumulated text across all session updates for streaming display
+  let accumulatedText = ""
+
+  // Counter for generating unique step IDs to avoid collisions in tight loops
+  let stepIdCounter = 0
+  const generateStepId = (prefix: string): string => `${prefix}-${Date.now()}-${++stepIdCounter}`
+
+  // Load existing conversation history for UI display
+  type ConversationHistoryMessage = {
+    role: "user" | "assistant" | "tool"
+    content: string
+    timestamp?: number
+  }
+  let conversationHistory: ConversationHistoryMessage[] = []
+
+  try {
+    const conversation = await conversationService.loadConversation(conversationId)
+    if (conversation) {
+      conversationHistory = conversation.messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+      }))
+    }
+  } catch (err) {
+    logApp(`[ACP Main] Failed to load conversation history: ${err}`)
+  }
+
+  // Helper to get ACP session info for progress updates (Task 3.1)
+  const getAcpSessionInfo = () => {
+    const agentInstance = acpService.getAgentInstance(agentName)
+    if (!agentInstance) return undefined
+    return {
+      agentName: agentInstance.agentInfo?.name,
+      agentTitle: agentInstance.agentInfo?.title,
+      agentVersion: agentInstance.agentInfo?.version,
+      currentModel: agentInstance.sessionInfo?.models?.currentModelId,
+      currentMode: agentInstance.sessionInfo?.modes?.currentModeId,
+      availableModels: agentInstance.sessionInfo?.models?.availableModels?.map(m => ({
+        id: m.modelId,
+        name: m.name,
+        description: m.description,
+      })),
+      availableModes: agentInstance.sessionInfo?.modes?.availableModes?.map(m => ({
+        id: m.id,
+        name: m.name,
+        description: m.description,
+      })),
+    }
+  }
+
+  // Emit progress with optional streaming content and conversation history
+  const emitProgress = async (
+    steps: AgentProgressStep[],
+    isComplete: boolean,
+    finalContent?: string,
+    streamingContent?: { text: string; isStreaming: boolean }
+  ) => {
+    const update: AgentProgressUpdate = {
+      sessionId,
+      conversationId,
+      currentIteration: 1,
+      maxIterations: 1,
+      steps,
+      isComplete,
+      finalContent,
+      streamingContent,
+      conversationHistory,
+      // Include ACP session info in progress updates (Task 3.1)
+      acpSessionInfo: getAcpSessionInfo(),
+    }
+    await emitAgentProgress(update)
+    onProgress?.(update)
+  }
+
+  // Note: User message is already added to conversation by createMcpTextInput or processQueuedMessages
+  // So we don't add it here - it's already in the loaded conversationHistory
+
+  // Show thinking step
+  await emitProgress([
+    {
+      id: generateStepId("acp-thinking"),
+      type: "thinking",
+      title: `Sending to ${agentName}...`,
+      status: "in_progress",
+      timestamp: Date.now(),
+    },
+  ], false)
+
+  try {
+    // Get or create ACP session
+    const existingSession = forceNewSession ? undefined : getSessionForConversation(conversationId)
+    let acpSessionId: string | undefined
+
+    if (existingSession && existingSession.agentName === agentName) {
+      // Reuse existing session
+      acpSessionId = existingSession.sessionId
+      touchSession(conversationId)
+      logApp(`[ACP Main] Reusing existing session ${acpSessionId}`)
+    } else {
+      // Create new session
+      acpSessionId = await acpService.getOrCreateSession(agentName, true)
+      if (!acpSessionId) {
+        throw new Error(`Failed to create session with agent ${agentName}`)
+      }
+      setSessionForConversation(conversationId, acpSessionId, agentName)
+      logApp(`[ACP Main] Created new session ${acpSessionId}`)
+    }
+
+    // Register the ACP session → SpeakMCP session mapping
+    // This is critical for routing tool approval requests to the correct UI session
+    setAcpToSpeakMcpSessionMapping(acpSessionId, sessionId)
+
+    // Set up progress listener for session updates
+    const progressHandler = (event: {
+      agentName: string
+      sessionId: string
+      content?: ACPContentBlock[]
+      isComplete?: boolean
+      toolResponseStats?: {
+        status?: string
+        agentId?: string
+        totalDurationMs?: number
+        totalTokens?: number
+        totalToolUseCount?: number
+        usage?: {
+          input_tokens?: number
+          cache_creation_input_tokens?: number
+          cache_read_input_tokens?: number
+          output_tokens?: number
+        }
+      }
+    }) => {
+      if (event.sessionId !== acpSessionId) return
+
+      // Map content blocks to progress steps and accumulate text
+      const steps: AgentProgressStep[] = []
+      if (event.content) {
+        for (const block of event.content) {
+          if (block.type === "text" && block.text) {
+            // Accumulate text for streaming display
+            accumulatedText += block.text
+            steps.push({
+              id: generateStepId("acp-text"),
+              type: "thinking",
+              title: "Agent response",
+              description: block.text.substring(0, 200) + (block.text.length > 200 ? "..." : ""),
+              status: event.isComplete ? "completed" : "in_progress",
+              timestamp: Date.now(),
+              llmContent: accumulatedText, // Use accumulated text, not just this block
+            })
+          } else if (block.type === "tool_use" && block.name) {
+            const step: AgentProgressStep = {
+              id: generateStepId("acp-tool"),
+              type: "tool_call",
+              title: `Tool: ${block.name}`,
+              status: "in_progress",
+              timestamp: Date.now(),
+            }
+            // Attach execution stats if available from tool response
+            if (event.toolResponseStats) {
+              step.executionStats = {
+                durationMs: event.toolResponseStats.totalDurationMs,
+                totalTokens: event.toolResponseStats.totalTokens,
+                toolUseCount: event.toolResponseStats.totalToolUseCount,
+                inputTokens: event.toolResponseStats.usage?.input_tokens,
+                outputTokens: event.toolResponseStats.usage?.output_tokens,
+                cacheHitTokens: event.toolResponseStats.usage?.cache_read_input_tokens,
+              }
+              step.subagentId = event.toolResponseStats.agentId
+            }
+            steps.push(step)
+          }
+        }
+      }
+
+      // If we have toolResponseStats but no tool_use content block, it's a tool completion update
+      // Emit a step with the execution stats
+      if (event.toolResponseStats && steps.length === 0) {
+        steps.push({
+          id: generateStepId("acp-tool-result"),
+          type: "tool_call",
+          title: "Tool completed",
+          status: "completed",
+          timestamp: Date.now(),
+          executionStats: {
+            durationMs: event.toolResponseStats.totalDurationMs,
+            totalTokens: event.toolResponseStats.totalTokens,
+            toolUseCount: event.toolResponseStats.totalToolUseCount,
+            inputTokens: event.toolResponseStats.usage?.input_tokens,
+            outputTokens: event.toolResponseStats.usage?.output_tokens,
+            cacheHitTokens: event.toolResponseStats.usage?.cache_read_input_tokens,
+          },
+          subagentId: event.toolResponseStats.agentId,
+        })
+      }
+
+      // Always emit with streaming content to show accumulated text
+      // Handle the promise to avoid unhandled rejections in the main process
+      emitProgress(
+        steps.length > 0 ? steps : [{
+          id: generateStepId("acp-streaming"),
+          type: "thinking",
+          title: "Agent response",
+          status: "in_progress",
+          timestamp: Date.now(),
+          llmContent: accumulatedText,
+        }],
+        event.isComplete ?? false,
+        undefined,
+        {
+          text: accumulatedText,
+          isStreaming: !event.isComplete,
+        }
+      ).catch(err => {
+        logApp(`[ACP Main] Failed to emit progress: ${err}`)
+      })
+    }
+
+    acpService.on("sessionUpdate", progressHandler)
+
+    try {
+      // Send the prompt
+      const result = await acpService.sendPrompt(agentName, acpSessionId, transcript)
+
+      // Use accumulated text if result.response is empty but we received streaming content
+      const finalResponse = result.response || accumulatedText || undefined
+
+      // Add assistant response to conversation history for display
+      if (finalResponse) {
+        conversationHistory.push({
+          role: "assistant",
+          content: finalResponse,
+          timestamp: Date.now(),
+        })
+      }
+
+      // Emit completion with final accumulated text
+      await emitProgress([
+        {
+          id: generateStepId("acp-complete"),
+          type: "completion",
+          title: result.success ? "Response complete" : "Request failed",
+          description: result.error,
+          status: result.success ? "completed" : "error",
+          timestamp: Date.now(),
+          llmContent: finalResponse,
+        },
+      ], true, finalResponse, {
+        text: finalResponse || "",
+        isStreaming: false,
+      })
+
+      logApp(`[ACP Main] Completed - success: ${result.success}, response length: ${finalResponse?.length || 0}`)
+
+      return {
+        success: result.success,
+        response: finalResponse,
+        acpSessionId,
+        stopReason: result.stopReason,
+        error: result.error,
+      }
+    } finally {
+      acpService.off("sessionUpdate", progressHandler)
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logApp(`[ACP Main] Error: ${errorMessage}`)
+
+    await emitProgress([
+      {
+        id: generateStepId("acp-error"),
+        type: "completion",
+        title: "Error",
+        description: errorMessage,
+        status: "error",
+        timestamp: Date.now(),
+      },
+    ], true, undefined, {
+      text: accumulatedText,
+      isStreaming: false,
+    })
+
+    return {
+      success: false,
+      error: errorMessage,
+    }
+  }
+}
+
+/**
+ * Start a new session for a conversation, discarding previous context.
+ */
+export function startNewACPSession(conversationId: string): void {
+  clearSessionForConversation(conversationId)
+  logApp(`[ACP Main] Cleared session for conversation ${conversationId}`)
+}
+

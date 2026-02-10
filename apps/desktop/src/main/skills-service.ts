@@ -1,3 +1,4 @@
+
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
@@ -6,6 +7,9 @@ import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { exec } from "child_process"
 import { promisify } from "util"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import type { RendererHandlers } from "./renderer-handlers"
+import { WINDOWS } from "./window"
 
 const execAsync = promisify(exec)
 
@@ -829,34 +833,22 @@ ${skillsContent}
       return ""
     }
 
+    // Progressive disclosure: Only show name + description initially
+    // The LLM must call load_skill_instructions to get the full instructions
     const skillsContent = enabledSkills.map(skill => {
-      // Include skill ID and source info for execute_command tool
-      const skillIdInfo = `**Skill ID:** \`${skill.id}\``
-      const sourceInfo = skill.filePath
-        ? (skill.filePath.startsWith("github:")
-            ? `**Source:** GitHub (${skill.filePath})`
-            : `**Source:** Local`)
-        : ""
-
-      return `## Skill: ${skill.name}
-${skillIdInfo}${sourceInfo ? `\n${sourceInfo}` : ""}
-${skill.description ? `*${skill.description}*\n` : ""}
-${skill.instructions}`
-    }).join("\n\n---\n\n")
+      return `- **${skill.name}** (ID: \`${skill.id}\`): ${skill.description || 'No description'}`
+    }).join("\n")
 
     return `
-# Active Agent Skills
+# Available Agent Skills
 
-## Skills Installation Directory
-**IMPORTANT**: All skills MUST be installed to this ABSOLUTE path:
-\`${skillsFolder}\`
-
-When creating or installing skills, ALWAYS use this exact absolute path. Do NOT use relative paths.
-
-The following skills provide specialized instructions for specific tasks.
-Use \`speakmcp-settings:execute_command\` with the skill's ID to run commands in the skill's directory.
+The following skills are available. To use a skill, call \`speakmcp-settings:load_skill_instructions\` with the skill's ID to get the full instructions.
 
 ${skillsContent}
+
+## Skills Installation Directory
+Skills can be installed to: \`${skillsFolder}\`
+Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in that skill's directory.
 `
   }
 
@@ -1236,3 +1228,194 @@ ${skillsContent}
 
 export const skillsService = new SkillsService()
 
+/**
+ * Notify all renderer windows that the skills folder has changed.
+ * This allows the UI to refresh skills without requiring an app restart.
+ */
+function notifySkillsFolderChanged(): void {
+  const windows = [WINDOWS.get("main"), WINDOWS.get("panel")]
+  for (const win of windows) {
+    if (win) {
+      try {
+        const handlers = getRendererHandlers<RendererHandlers>(win.webContents)
+        handlers.skillsFolderChanged?.send()
+      } catch (e) {
+        // Window may not be ready yet, ignore
+      }
+    }
+  }
+}
+
+// File watcher state
+// On Linux, we need multiple watchers since recursive watching is not supported
+let skillsWatchers: fs.FSWatcher[] = []
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+const DEBOUNCE_MS = 500 // Wait 500ms after last change before notifying
+
+/**
+ * Handle a file system change event from any watcher.
+ */
+function handleWatcherEvent(eventType: string, filename: string | null): void {
+  // On some platforms, fs.watch can emit events where filename is null.
+  // Treat this as an "unknown change" and still trigger the refresh.
+  const isUnknownChange = !filename
+  const isSkillFile = filename?.endsWith("SKILL.md") || filename?.endsWith("skill.md") || filename?.endsWith(".md")
+  const isDirectory = filename ? !filename.includes(".") : false
+
+  if (isUnknownChange || isSkillFile || isDirectory) {
+    logApp(`Skills folder changed: ${eventType} ${filename ?? "(unknown)"}`)
+
+    // Debounce to avoid multiple rapid notifications
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+    }
+
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null
+      // On Linux, refresh subdirectory watchers when structure changes
+      if (process.platform === "linux" && (isDirectory || isUnknownChange)) {
+        refreshLinuxSubdirectoryWatchers()
+      }
+      notifySkillsFolderChanged()
+    }, DEBOUNCE_MS)
+  }
+}
+
+/**
+ * Set up a watcher for a directory and add it to the watchers array.
+ */
+function setupWatcher(dirPath: string): fs.FSWatcher | null {
+  try {
+    const watcher = fs.watch(dirPath, (eventType, filename) => {
+      handleWatcherEvent(eventType, filename)
+    })
+
+    watcher.on("error", (error) => {
+      logApp(`Skills folder watcher error for ${dirPath}:`, error)
+      // Don't stop all watchers on a single error, just log it
+    })
+
+    return watcher
+  } catch (error) {
+    logApp(`Failed to set up watcher for ${dirPath}:`, error)
+    return null
+  }
+}
+
+/**
+ * Refresh subdirectory watchers on Linux.
+ * Called when directory structure changes to pick up new skill folders.
+ */
+function refreshLinuxSubdirectoryWatchers(): void {
+  if (process.platform !== "linux") return
+
+  // Close all existing watchers except the first one (root folder)
+  const rootWatcher = skillsWatchers[0]
+  for (let i = 1; i < skillsWatchers.length; i++) {
+    try {
+      skillsWatchers[i].close()
+    } catch {
+      // Ignore close errors
+    }
+  }
+  skillsWatchers = rootWatcher ? [rootWatcher] : []
+
+  // Re-scan and add watchers for subdirectories
+  try {
+    const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const subDirPath = path.join(skillsFolder, entry.name)
+        const watcher = setupWatcher(subDirPath)
+        if (watcher) {
+          skillsWatchers.push(watcher)
+        }
+      }
+    }
+    logApp(`Linux: Refreshed watchers, now watching ${skillsWatchers.length} directories`)
+  } catch (error) {
+    logApp("Failed to refresh Linux subdirectory watchers:", error)
+  }
+}
+
+/**
+ * Start watching the skills folder for changes.
+ * Automatically notifies the renderer when new skills are added or modified.
+ *
+ * Note: On Linux, fs.watch({ recursive: true }) is not supported, so we set up
+ * individual watchers for the root folder and each skill subdirectory.
+ */
+export function startSkillsFolderWatcher(): void {
+  // Ensure folder exists
+  if (!fs.existsSync(skillsFolder)) {
+    fs.mkdirSync(skillsFolder, { recursive: true })
+  }
+
+  // Don't start duplicate watchers
+  if (skillsWatchers.length > 0) {
+    logApp("Skills folder watcher already running")
+    return
+  }
+
+  try {
+    const isLinux = process.platform === "linux"
+
+    if (isLinux) {
+      // Linux: Set up non-recursive watcher for root folder
+      const rootWatcher = setupWatcher(skillsFolder)
+      if (rootWatcher) {
+        skillsWatchers.push(rootWatcher)
+      }
+
+      // Also watch each existing skill subdirectory (one level deep)
+      const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const subDirPath = path.join(skillsFolder, entry.name)
+          const watcher = setupWatcher(subDirPath)
+          if (watcher) {
+            skillsWatchers.push(watcher)
+          }
+        }
+      }
+
+      logApp(`Started watching skills folder (Linux mode): ${skillsFolder} with ${skillsWatchers.length} watchers`)
+    } else {
+      // macOS and Windows: Use recursive watching
+      const watcher = fs.watch(skillsFolder, { recursive: true }, (eventType, filename) => {
+        handleWatcherEvent(eventType, filename)
+      })
+
+      watcher.on("error", (error) => {
+        logApp("Skills folder watcher error:", error)
+        stopSkillsFolderWatcher()
+      })
+
+      skillsWatchers.push(watcher)
+      logApp(`Started watching skills folder: ${skillsFolder}`)
+    }
+  } catch (error) {
+    logApp("Failed to start skills folder watcher:", error)
+  }
+}
+
+/**
+ * Stop watching the skills folder.
+ */
+export function stopSkillsFolderWatcher(): void {
+  for (const watcher of skillsWatchers) {
+    try {
+      watcher.close()
+    } catch {
+      // Ignore close errors
+    }
+  }
+  if (skillsWatchers.length > 0) {
+    logApp(`Stopped ${skillsWatchers.length} skills folder watcher(s)`)
+    skillsWatchers = []
+  }
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+}

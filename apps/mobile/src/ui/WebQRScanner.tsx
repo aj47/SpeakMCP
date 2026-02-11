@@ -21,12 +21,13 @@ export function WebQRScanner({ onScan, onClose }: WebQRScannerProps) {
 
     let html5QrCode: any = null;
     let mounted = true;
+    let isRunning = false;
 
     const initScanner = async () => {
       try {
         // Dynamic import for web only
         const { Html5Qrcode } = await import('html5-qrcode');
-        
+
         if (!mounted) return;
 
         html5QrCode = new Html5Qrcode('web-qr-reader');
@@ -39,8 +40,18 @@ export function WebQRScanner({ onScan, onClose }: WebQRScannerProps) {
             qrbox: { width: 250, height: 250 },
           },
           (decodedText: string) => {
-            // Success callback
-            html5QrCode.stop().catch(console.error);
+            // Success callback - stop scanner before calling onScan
+            if (isRunning) {
+              isRunning = false;
+              try {
+                const state = html5QrCode.getState?.();
+                if (state === 2 || state === 3) {
+                  html5QrCode.stop().catch(() => {});
+                }
+              } catch {
+                // Ignore stop errors
+              }
+            }
             onScan(decodedText);
           },
           () => {
@@ -48,11 +59,13 @@ export function WebQRScanner({ onScan, onClose }: WebQRScannerProps) {
           }
         );
 
+        isRunning = true;
         if (mounted) {
           setIsStarting(false);
         }
       } catch (err: any) {
         console.error('[WebQRScanner] Error:', err);
+        isRunning = false;
         if (mounted) {
           setIsStarting(false);
           if (err?.message?.includes('Permission denied') || err?.name === 'NotAllowedError') {
@@ -71,7 +84,16 @@ export function WebQRScanner({ onScan, onClose }: WebQRScannerProps) {
     return () => {
       mounted = false;
       if (html5QrCode) {
-        html5QrCode.stop().catch(() => {});
+        try {
+          // Check if scanner is actually running before trying to stop
+          const state = html5QrCode.getState?.();
+          // State 2 = SCANNING, State 3 = PAUSED (both can be stopped)
+          if (state === 2 || state === 3 || isRunning) {
+            html5QrCode.stop().catch(() => {});
+          }
+        } catch {
+          // Ignore errors when stopping - scanner may already be stopped
+        }
       }
     };
   }, [onScan]);

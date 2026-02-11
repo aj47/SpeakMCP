@@ -4,12 +4,33 @@ import { diagnosticsService } from "./diagnostics"
 import { access, constants } from "fs/promises"
 import path from "path"
 import os from "os"
+import { isPrintQR } from "./debug"
 
 // Helper to log to both diagnostics service and console for easier debugging
 function debugLog(message: string): void {
   diagnosticsService.logInfo("cloudflare-tunnel", message)
   // eslint-disable-next-line no-console
   console.log(`[cloudflare-tunnel] ${message}`)
+}
+
+/**
+ * Print a QR code for the tunnel URL to the terminal when --qr flag is set
+ */
+async function printTunnelQR(url: string): Promise<void> {
+  if (!isPrintQR()) return
+  try {
+    const QRCode = await import("qrcode")
+    const qr = await QRCode.toString(url, { type: "terminal", small: true })
+    // eslint-disable-next-line no-console
+    console.log("\n📱 Scan QR code to connect:\n")
+    // eslint-disable-next-line no-console
+    console.log(qr)
+    // eslint-disable-next-line no-console
+    console.log(`🔗 Tunnel URL: ${url}\n`)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[cloudflare-tunnel] Failed to print QR code:", err)
+  }
 }
 
 let tunnelProcess: ChildProcess | null = null
@@ -208,6 +229,7 @@ export async function startCloudflareTunnel(): Promise<{
           tunnelUrl = match[0]
           isStarting = false
           debugLog(`Tunnel URL established`)
+          printTunnelQR(tunnelUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -220,6 +242,7 @@ export async function startCloudflareTunnel(): Promise<{
           tunnelUrl = match[0]
           isStarting = false
           debugLog(`Tunnel URL established`)
+          printTunnelQR(tunnelUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -509,6 +532,7 @@ export async function startNamedCloudflareTunnel(options: {
           isStarting = false
           hasResolved = true
           debugLog(`Named tunnel connected: ${publicUrl}`)
+          printTunnelQR(publicUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })
@@ -522,6 +546,7 @@ export async function startNamedCloudflareTunnel(options: {
           isStarting = false
           hasResolved = true
           debugLog(`Named tunnel connected: ${publicUrl}`)
+          printTunnelQR(publicUrl)
           resolve({ success: true, url: tunnelUrl })
         }
       })

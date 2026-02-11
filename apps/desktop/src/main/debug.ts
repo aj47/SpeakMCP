@@ -7,6 +7,7 @@ export interface DebugFlags {
   mcp: boolean
   acp: boolean
   all: boolean
+  printQr: boolean
 }
 
 const flags: DebugFlags = {
@@ -18,6 +19,7 @@ const flags: DebugFlags = {
   mcp: false,
   acp: false,
   all: false,
+  printQr: false,
 }
 
 function strToBool(v: string | undefined): boolean {
@@ -27,9 +29,24 @@ function strToBool(v: string | undefined): boolean {
 }
 
 export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
-  // CLI flags - support both long and short forms, with and without dashes
+  // CLI flags - support both long and short forms, with and without dashes.
+  // When launched via `pnpm dev -- --qr`, Electron's process.argv looks like:
+  //   ["<electron>", ".", "--", "--qr"]
+  // The "--qr" string is present verbatim after the "--" separator.
   const has = (name: string) => argv.includes(name)
   const hasAny = (...names: string[]) => names.some(name => argv.includes(name))
+
+  // Safe accessor for app.commandLine as an additional fallback
+  let appHasSwitch: (sw: string) => boolean = () => false
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { app } = require("electron") as typeof import("electron")
+    if (app?.commandLine?.hasSwitch) {
+      appHasSwitch = (sw: string) => app.commandLine.hasSwitch(sw)
+    }
+  } catch {
+    // Not in Electron context (e.g. unit tests) — ignore
+  }
 
   const envDebug = (process.env.DEBUG || "").toLowerCase()
   const envParts = envDebug.split(/[,:\s]+/).filter(Boolean)
@@ -87,6 +104,10 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   flags.mcp = all || hasAny("--debug-mcp", "-dmcp", "debug-mcp", "dmcp") || envMCP
   flags.acp = all || hasAny("--debug-acp", "-dacp", "debug-acp", "dacp") || envACP
   flags.all = all
+  // Note: in Electron, process.argv contains ["...", ".", "--", "--qr"] when launched with --qr
+  // The "--qr" string is present verbatim (the "--" separator is also in argv).
+  // Also check app.commandLine.hasSwitch as a fallback for edge cases.
+  flags.printQr = hasAny("--qr", "-qr", "qr") || appHasSwitch("qr")
 
 
 
@@ -137,6 +158,10 @@ export function isDebugMCP(): boolean {
 
 export function isDebugACP(): boolean {
   return flags.acp || flags.all
+}
+
+export function isPrintQR(): boolean {
+  return flags.printQr
 }
 
 function ts(): string {

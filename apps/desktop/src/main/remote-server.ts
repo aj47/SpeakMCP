@@ -154,6 +154,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
   const { prompt, conversationId: inputConversationId, onProgress } = options
   const cfg = configStore.get()
 
+
   // Set agent mode state for process management - ensure clean state
   state.isAgentModeActive = true
   state.shouldStopAgent = false

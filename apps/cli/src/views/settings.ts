@@ -21,6 +21,7 @@ const PROVIDERS = [
   { name: 'OpenAI', id: 'openai' },
   { name: 'Groq', id: 'groq' },
   { name: 'Gemini', id: 'gemini' },
+  { name: 'OpenRouter', id: 'openrouter' },
 ]
 
 // Toggle key type for all boolean settings
@@ -86,6 +87,7 @@ interface FormState {
   openaiApiKey: string
   groqApiKey: string
   geminiApiKey: string
+  openrouterApiKey: string
   // Langfuse keys
   langfusePublicKey: string
   langfuseSecretKey: string
@@ -151,6 +153,7 @@ export class SettingsView extends BaseView {
     openaiApiKey: '',
     groqApiKey: '',
     geminiApiKey: '',
+    openrouterApiKey: '',
     langfusePublicKey: '',
     langfuseSecretKey: '',
     langfuseBaseUrl: '',
@@ -181,10 +184,11 @@ export class SettingsView extends BaseView {
   // Focus management
   private focusedField: 'preset' | 'provider' | 'model' | 'maxIter' | 'apiKeys' | 'agentToggles' | 'ttsToggles' | 'langfuse' | 'toggles' | 'servers' | 'parityMenus' | 'buttons' = 'preset'
   private selectedApiKeyIndex: number = 0
-  private apiKeyProviders: Array<{ key: 'openaiApiKey' | 'groqApiKey' | 'geminiApiKey'; label: string }> = [
+  private apiKeyProviders: Array<{ key: 'openaiApiKey' | 'groqApiKey' | 'geminiApiKey' | 'openrouterApiKey'; label: string }> = [
     { key: 'openaiApiKey', label: 'OpenAI' },
     { key: 'groqApiKey', label: 'Groq' },
     { key: 'geminiApiKey', label: 'Gemini' },
+    { key: 'openrouterApiKey', label: 'OpenRouter' },
   ]
   private selectedServerIndex: number = 0
   private selectedToggleIndex: number = 0
@@ -968,6 +972,7 @@ export class SettingsView extends BaseView {
         openaiApiKey: settings.openaiApiKey || '',
         groqApiKey: settings.groqApiKey || '',
         geminiApiKey: settings.geminiApiKey || '',
+        openrouterApiKey: settings.openrouterApiKey || '',
         currentModelPresetId: presetsResult.currentPresetId || settings.currentModelPresetId || 'builtin-openai',
         serverEnabled: new Map(
           this.mcpServers.map(s => [s.name, s.status === 'connected'])
@@ -1462,6 +1467,9 @@ export class SettingsView extends BaseView {
       }
       if (this.formState.geminiApiKey && !this.formState.geminiApiKey.startsWith('****')) {
         patch.geminiApiKey = this.formState.geminiApiKey
+      }
+      if (this.formState.openrouterApiKey && !this.formState.openrouterApiKey.startsWith('****')) {
+        patch.openrouterApiKey = this.formState.openrouterApiKey
       }
 
       // Langfuse keys — same masking logic

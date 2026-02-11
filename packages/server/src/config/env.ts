@@ -14,6 +14,7 @@ export interface EnvConfig {
   openaiApiKey?: string
   groqApiKey?: string
   geminiApiKey?: string
+  openrouterApiKey?: string
 
   // Langfuse
   langfusePublicKey?: string
@@ -61,6 +62,7 @@ export function getEnvConfig(): EnvConfig {
     openaiApiKey: process.env.SPEAKMCP_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
     groqApiKey: process.env.SPEAKMCP_GROQ_API_KEY || process.env.GROQ_API_KEY,
     geminiApiKey: process.env.SPEAKMCP_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
+    openrouterApiKey: process.env.SPEAKMCP_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY,
 
     // Langfuse
     langfusePublicKey: process.env.LANGFUSE_PUBLIC_KEY,
@@ -105,6 +107,9 @@ export function mergeWithEnvConfig<T extends Record<string, unknown>>(fileConfig
   }
   if (envConfig.geminiApiKey) {
     (merged as any).geminiApiKey = envConfig.geminiApiKey
+  }
+  if (envConfig.openrouterApiKey) {
+    (merged as any).openrouterApiKey = envConfig.openrouterApiKey
   }
 
   // Langfuse from env

@@ -125,6 +125,7 @@ export interface Settings {
   openaiApiKey?: string
   groqApiKey?: string
   geminiApiKey?: string
+  openrouterApiKey?: string
 
   // Langfuse Observability
   langfuseEnabled?: boolean

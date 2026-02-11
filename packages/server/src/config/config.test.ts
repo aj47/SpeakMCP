@@ -257,12 +257,23 @@ describe('env.ts', () => {
       vi.stubEnv('SPEAKMCP_OPENAI_API_KEY', 'sk-openai-key')
       vi.stubEnv('SPEAKMCP_GROQ_API_KEY', 'groq-key')
       vi.stubEnv('SPEAKMCP_GEMINI_API_KEY', 'gemini-key')
+      vi.stubEnv('SPEAKMCP_OPENROUTER_API_KEY', 'openrouter-key')
 
       const config = getEnvConfig()
 
       expect(config.openaiApiKey).toBe('sk-openai-key')
       expect(config.groqApiKey).toBe('groq-key')
       expect(config.geminiApiKey).toBe('gemini-key')
+      expect(config.openrouterApiKey).toBe('openrouter-key')
+    })
+
+    it('should read OPENROUTER_API_KEY from standard env var', () => {
+      vi.stubEnv('SPEAKMCP_OPENROUTER_API_KEY', '')
+      vi.stubEnv('OPENROUTER_API_KEY', 'sk-standard-openrouter')
+
+      const config = getEnvConfig()
+
+      expect(config.openrouterApiKey).toBe('sk-standard-openrouter')
     })
 
     it('should fall back to standard API key env vars', () => {

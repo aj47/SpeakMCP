@@ -1,4 +1,5 @@
 import { cn } from "@renderer/lib/utils"
+import iconPng from "@renderer/assets/icon.png"
 
 interface LoadingSpinnerProps {
   className?: string
@@ -23,7 +24,7 @@ export function LoadingSpinner({
     <div className={cn("flex items-center justify-center", className)}>
       <div className="flex items-center gap-2">
         <img
-          src="../../build/icon.png"
+          src={iconPng}
           alt="Loading..."
           className={cn(sizeClasses[size], "object-contain")}
         />

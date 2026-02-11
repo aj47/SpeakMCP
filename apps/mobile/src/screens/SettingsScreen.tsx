@@ -574,6 +574,12 @@ export default function SettingsScreen({ navigation }: any) {
   };
 
   const handleScanQR = async () => {
+    if (Platform.OS === 'web') {
+      // On web, show the web QR scanner
+      setScanned(false);
+      setShowScanner(true);
+      return;
+    }
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
@@ -582,6 +588,28 @@ export default function SettingsScreen({ navigation }: any) {
     }
     setScanned(false);
     setShowScanner(true);
+  };
+
+  // Handle web QR scan result
+  const handleWebQRScan = (data: string) => {
+    const params = parseQRCode(data);
+    if (params) {
+      setDraft(prev => ({
+        ...prev,
+        ...(params.baseUrl && { baseUrl: params.baseUrl }),
+        ...(params.apiKey && { apiKey: params.apiKey }),
+        ...(params.model && { model: params.model }),
+      }));
+      setShowScanner(false);
+    } else {
+      // Invalid QR - show URL paste as fallback
+      setShowScanner(false);
+      setUrlPasteText('');
+      setShowUrlPaste(true);
+      if (Platform.OS === 'web') {
+        window.alert('Invalid QR code format. Please paste the config URL manually.');
+      }
+    }
   };
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
@@ -1036,25 +1064,38 @@ export default function SettingsScreen({ navigation }: any) {
 
       </ScrollView>
 
-      <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
-        <View style={styles.scannerContainer}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
-          <View style={styles.scannerOverlay}>
-            <View style={styles.scannerFrame} />
-            <Text style={styles.scannerText}>
-              {scanned ? 'Invalid QR code format' : 'Scan a SpeakMCP QR code'}
-            </Text>
+      {/* Native QR Scanner Modal */}
+      {Platform.OS !== 'web' && (
+        <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+          <View style={styles.scannerContainer}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={handleBarCodeScanned}
+            />
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerFrame} />
+              <Text style={styles.scannerText}>
+                {scanned ? 'Invalid QR code format' : 'Scan a SpeakMCP QR code'}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
+              <Text style={styles.closeButtonText}>✕ Close</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
-            <Text style={styles.closeButtonText}>✕ Close</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
+        </Modal>
+      )}
+
+      {/* Web QR Scanner Modal */}
+      {Platform.OS === 'web' && (
+        <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+          <WebQRScanner
+            onScan={handleWebQRScan}
+            onClose={() => setShowScanner(false)}
+          />
+        </Modal>
+      )}
 
       {/* Model Picker Modal */}
       <Modal

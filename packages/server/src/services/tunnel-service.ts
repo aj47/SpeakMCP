@@ -1,4 +1,4 @@
-import { ChildProcessWithoutNullStreams, spawn, spawnSync } from 'child_process'
+import { ChildProcess, ChildProcessWithoutNullStreams, spawn, spawnSync } from 'child_process'
 import { configStore } from '../config'
 
 interface StartTunnelOptions {
@@ -19,7 +19,7 @@ interface TunnelListItem {
 }
 
 interface TunnelState {
-  process: ChildProcessWithoutNullStreams | null
+  process: ChildProcess | null
   mode: 'quick' | 'named' | null
   tunnelId: string | null
   hostname: string | null
@@ -78,7 +78,9 @@ function getProcessCommands(mode: 'quick' | 'named', localUrl: string, tunnelId?
   return ['tunnel', '--url', localUrl]
 }
 
-function attachProcessListeners(process: ChildProcessWithoutNullStreams): void {
+function attachProcessListeners(process: ChildProcess): void {
+  if (!process.stdout || !process.stderr) return
+
   process.stdout.on('data', (chunk: Buffer | string) => {
     const text = chunk.toString()
     for (const line of text.split('\n')) {
@@ -193,7 +195,7 @@ export function startTunnel(options?: StartTunnelOptions): {
 
     const proc = spawn('cloudflared', args, {
       env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'] as const,
     })
 
     tunnelState.process = proc

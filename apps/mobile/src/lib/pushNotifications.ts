@@ -19,15 +19,17 @@ const PUSH_TOKEN_KEY = 'push_token_v2';
 const SERVER_REGISTERED_KEY = 'push_server_registered_v2';
 
 // Configure how notifications are handled when the app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export interface NotificationData {
   type?: 'message' | 'system';
@@ -194,6 +196,7 @@ export async function isRegisteredWithServer(): Promise<boolean> {
  * Clear all notifications and badge (call when app opens)
  */
 export async function clearNotifications(): Promise<void> {
+  if (Platform.OS === 'web') return;
   await Notifications.dismissAllNotificationsAsync();
   await Notifications.setBadgeCountAsync(0);
 }
@@ -252,6 +255,11 @@ export function usePushNotifications(): UsePushNotificationsResult {
   // Initialize state
   useEffect(() => {
     async function init() {
+      if (Platform.OS === 'web') {
+        setIsLoading(false);
+        return;
+      }
+
       const { status } = await Notifications.getPermissionsAsync();
       setPermissionStatus(status);
 
@@ -281,6 +289,7 @@ export function usePushNotifications(): UsePushNotificationsResult {
 
   // Set up notification tap listener
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as NotificationData;
       if (data && onTapRef.current) {

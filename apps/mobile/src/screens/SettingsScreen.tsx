@@ -102,15 +102,6 @@ export default function SettingsScreen({ navigation }: any) {
     return null;
   }, [config.baseUrl, config.apiKey]);
 
-  // Clear pending model update timeout when settingsClient changes
-  // to prevent sending updates to the previous server
-  useEffect(() => {
-    if (modelUpdateTimeoutRef.current) {
-      clearTimeout(modelUpdateTimeoutRef.current);
-      modelUpdateTimeoutRef.current = null;
-    }
-  }, [settingsClient]);
-
   // Fetch remote settings from desktop
   const fetchRemoteSettings = useCallback(async () => {
     if (!settingsClient) {

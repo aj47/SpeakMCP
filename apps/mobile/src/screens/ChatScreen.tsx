@@ -1160,7 +1160,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
       if (!sessionChanged && finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);
-        Speech.speak(processedText, { language: 'en-US' });
+        const speechOptions: Speech.SpeechOptions = {
+          language: 'en-US',
+          rate: config.ttsRate ?? 1.0,
+          pitch: config.ttsPitch ?? 1.0,
+        };
+        if (config.ttsVoiceId) {
+          speechOptions.voice = config.ttsVoiceId;
+        }
+        Speech.speak(processedText, speechOptions);
       }
     } catch (e: any) {
       console.error('[ChatScreen] Chat error:', e);
@@ -1412,7 +1420,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
       if (finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);
-        Speech.speak(processedText, { language: 'en-US' });
+        const speechOptions: Speech.SpeechOptions = {
+          language: 'en-US',
+          rate: config.ttsRate ?? 1.0,
+          pitch: config.ttsPitch ?? 1.0,
+        };
+        if (config.ttsVoiceId) {
+          speechOptions.voice = config.ttsVoiceId;
+        }
+        Speech.speak(processedText, speechOptions);
       }
 
       // Mark as processed on success

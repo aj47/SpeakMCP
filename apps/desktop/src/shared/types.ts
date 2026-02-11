@@ -714,6 +714,12 @@ export type AgentProfile = {
   /** Skills configuration */
   skillsConfig?: ProfileSkillsConfig
 
+  // Working Directory
+  /** Working directory for agent sessions (file operations).
+   *  If not set, defaults to process.cwd().
+   *  This is separate from connection.cwd which is for process spawning. */
+  workingDirectory?: string
+
   // Connection - how to run this agent
   /** Connection configuration for the underlying agent */
   connection: AgentProfileConnection

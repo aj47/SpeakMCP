@@ -24,6 +24,7 @@ interface EditingProfile {
   connectionCommand?: string
   connectionArgs?: string
   connectionBaseUrl?: string
+  workingDirectory?: string
   enabled: boolean
   role: AgentProfileRole
   isUserProfile: boolean
@@ -38,6 +39,7 @@ const emptyProfile: EditingProfile = {
   systemPrompt: "",
   guidelines: "",
   connectionType: "internal",
+  workingDirectory: "",
   enabled: true,
   role: "delegation-target",
   isUserProfile: false,
@@ -114,6 +116,7 @@ export function SettingsAgentPersonas() {
       connectionCommand: profile.connection.command,
       connectionArgs: profile.connection.args?.join(" "),
       connectionBaseUrl: profile.connection.baseUrl,
+      workingDirectory: profile.workingDirectory,
       enabled: profile.enabled,
       role: role,
       isUserProfile: profile.isUserProfile ?? false,
@@ -139,6 +142,7 @@ export function SettingsAgentPersonas() {
       systemPrompt: editing.systemPrompt || undefined,
       guidelines: editing.guidelines || undefined,
       connection,
+      workingDirectory: editing.workingDirectory || undefined,
       enabled: editing.enabled,
       role: editing.role,
       isUserProfile: editing.isUserProfile,
@@ -329,6 +333,20 @@ export function SettingsAgentPersonas() {
               </div>
             </>
           )}
+
+          {/* Working Directory - shown for all connection types */}
+          <div className="space-y-2">
+            <Label htmlFor="workingDirectory">Working Directory</Label>
+            <Input
+              id="workingDirectory"
+              value={editing.workingDirectory ?? ""}
+              onChange={(e) => setEditing({ ...editing, workingDirectory: e.target.value })}
+              placeholder="e.g., ~/projects/my-project (leave empty for app's CWD)"
+            />
+            <p className="text-sm text-muted-foreground">
+              The directory the agent will use for file operations. Supports ~ for home directory.
+            </p>
+          </div>
 
           <div className="flex items-center gap-4">
             <div className="flex items-center space-x-2">

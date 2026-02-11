@@ -21,6 +21,7 @@ interface EditingProfile {
   connectionCommand?: string
   connectionArgs?: string
   connectionBaseUrl?: string
+  workingDirectory?: string
   enabled: boolean
   role: AgentProfileRole
   autoSpawn?: boolean
@@ -28,7 +29,7 @@ interface EditingProfile {
 
 const emptyProfile: EditingProfile = {
   name: "", displayName: "", description: "",
-  connectionType: "acp", enabled: true, role: "external-agent",
+  connectionType: "acp", workingDirectory: "", enabled: true, role: "external-agent",
 }
 
 const AGENT_PRESETS: Record<string, Partial<EditingProfile>> = {
@@ -71,6 +72,7 @@ export function SettingsExternalAgents() {
       description: profile.description ?? "",
       connectionType: profile.connection.type, connectionCommand: profile.connection.command,
       connectionArgs: profile.connection.args?.join(" "), connectionBaseUrl: profile.connection.baseUrl,
+      workingDirectory: profile.workingDirectory,
       enabled: profile.enabled, role: "external-agent", autoSpawn: profile.autoSpawn,
     })
   }
@@ -83,7 +85,8 @@ export function SettingsExternalAgents() {
     const profileData = {
       name: editing.name, displayName: editing.displayName,
       description: editing.description || undefined,
-      connection, enabled: editing.enabled, role: "external-agent" as const,
+      connection, workingDirectory: editing.workingDirectory || undefined,
+      enabled: editing.enabled, role: "external-agent" as const,
       isUserProfile: false, isAgentTarget: true, autoSpawn: editing.autoSpawn,
     }
     if (isCreating) await tipcClient.createAgentProfile({ profile: profileData })
@@ -188,6 +191,13 @@ export function SettingsExternalAgents() {
               <Input id="baseUrl" value={editing.connectionBaseUrl ?? ""} onChange={(e) => setEditing({ ...editing, connectionBaseUrl: e.target.value })} placeholder="e.g., http://localhost:8000" />
             </div>
           )}
+
+          {/* Working Directory - shown for all connection types */}
+          <div className="space-y-2">
+            <Label htmlFor="workingDirectory">Working Directory</Label>
+            <Input id="workingDirectory" value={editing.workingDirectory ?? ""} onChange={(e) => setEditing({ ...editing, workingDirectory: e.target.value })} placeholder="e.g., ~/projects/my-project (leave empty for app's CWD)" />
+            <p className="text-sm text-muted-foreground">The directory the agent will use for file operations. Supports ~ for home directory.</p>
+          </div>
 
           <div className="flex items-center gap-4">
             <div className="flex items-center space-x-2">

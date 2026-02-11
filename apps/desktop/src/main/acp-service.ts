@@ -11,7 +11,8 @@
 import { spawn, ChildProcess } from "child_process"
 import { EventEmitter } from "events"
 import { readFile, writeFile, mkdir, realpath } from "fs/promises"
-import { dirname } from "path"
+import { dirname, resolve, isAbsolute } from "path"
+import { homedir } from "os"
 import { configStore } from "./config"
 import { ACPAgentConfig } from "../shared/types"
 import { toolApprovalManager } from "./state"
@@ -186,6 +187,33 @@ export interface ACPWriteTextFileRequest {
   sessionId: string
   path: string
   content: string
+}
+
+/**
+ * Resolve a working directory path, handling:
+ * - ~ for home directory
+ * - Relative paths (resolved from app's CWD)
+ * - Absolute paths (passed through)
+ * - Undefined/empty (returns process.cwd())
+ */
+function resolveWorkingDirectory(workingDir: string | undefined): string {
+  if (!workingDir || workingDir.trim() === "") {
+    return process.cwd()
+  }
+
+  let resolved = workingDir.trim()
+
+  // Handle ~ for home directory
+  if (resolved.startsWith("~")) {
+    resolved = resolved.replace(/^~/, homedir())
+  }
+
+  // Resolve relative paths from app's CWD
+  if (!isAbsolute(resolved)) {
+    resolved = resolve(process.cwd(), resolved)
+  }
+
+  return resolved
 }
 
 class ACPService extends EventEmitter {
@@ -1372,8 +1400,13 @@ class ACPService extends EventEmitter {
       }
 
       // Use session/new per ACP spec (not session/create)
+      // Get the agent's configured working directory, falling back to process.cwd()
+      const agentProfile = agentProfileService.getByName(agentName)
+      const sessionCwd = resolveWorkingDirectory(agentProfile?.workingDirectory)
+      logACP("REQUEST", agentName, "session/new", `Using CWD: ${sessionCwd}`)
+
       const result = await this.sendRequest(agentName, "session/new", {
-        cwd: process.cwd(),
+        cwd: sessionCwd,
         mcpServers,
       }) as {
         sessionId?: string

@@ -8,6 +8,10 @@ export type AppConfig = {
   handsFree?: boolean; // hands-free voice mode toggle (optional for backward compatibility)
   ttsEnabled?: boolean; // text-to-speech toggle (optional for backward compatibility)
   messageQueueEnabled?: boolean; // message queue toggle (allows queuing messages while agent is busy)
+  // TTS voice settings
+  ttsVoiceId?: string; // Voice identifier (e.g., "Google US English" or native voice URI)
+  ttsRate?: number; // Speech rate (0.1 to 10, default 1.0)
+  ttsPitch?: number; // Voice pitch (0 to 2, default 1.0)
 };
 
 const DEFAULTS: AppConfig = {
@@ -17,6 +21,9 @@ const DEFAULTS: AppConfig = {
   handsFree: false,
   ttsEnabled: true,
   messageQueueEnabled: true,
+  ttsVoiceId: undefined, // Use system default
+  ttsRate: 1.0,
+  ttsPitch: 1.0,
 };
 
 const STORAGE_KEY = 'app_config_v1';

@@ -2,6 +2,7 @@
 [![Electron](https://img.shields.io/badge/Electron-31.0.2-47848f.svg)](https://electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6.3-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)](https://reactjs.org/)
+[![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.0-blue.svg)](https://modelcontextprotocol.io/)
 
 ## 🎬 Preview
 
@@ -48,6 +49,16 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 | **📊 Observability** | [Langfuse](https://langfuse.com/) integration for LLM tracing, token usage, and debugging |
 | **🛠️ Platform** | macOS/Windows/Linux, rate limit handling, multi-provider AI |
 | **🎨 UX** | Dark/light themes, resizable panels, kill switch, conversation history |
+
+## 🔗 MCP Integration
+
+SpeakMCP supports the Model Context Protocol (MCP) for extensible tool integration. Configure MCP servers to add:
+
+- **Filesystem access** - Read/write files via voice
+- **GitHub management** - Issues, PRs, commits through conversation
+- **Database queries** - Query databases with natural language
+
+📖 **[Read the MCP Integration Guide](./docs/MCP-INTEGRATION.md)**
 
 ## 🛠️ Development
 

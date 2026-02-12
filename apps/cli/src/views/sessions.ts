@@ -58,7 +58,7 @@ export class SessionsView extends BaseView {
     })
     const headerText = new TextRenderable(this.renderer, {
       id: 'sessions-header-text',
-      content: ' Sessions                    [/] Search  [N] New  [E] Edit  [D] Delete',
+      content: ` Sessions (${this.sessions.length})          [/] Search  [N] New  [E] Edit  [D] Delete  [Enter] Open`,
       fg: '#FFFFFF',
     })
     header.add(headerText)

@@ -18,8 +18,7 @@ import {
   TextInputKeyPressEventData,
 } from 'react-native';
 
-const darkSpinner = require('../../assets/loading-spinner.gif');
-const lightSpinner = require('../../assets/light-spinner.gif');
+const staticIcon = require('../../assets/speakmcp-icon.png');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
@@ -265,7 +264,7 @@ export default function ChatScreen({ route, navigation }: any) {
           {responding && (
             <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
               <Image
-                source={isDark ? darkSpinner : lightSpinner}
+                source={staticIcon}
                 style={{ width: 28, height: 28 }}
                 resizeMode="contain"
               />
@@ -1954,7 +1953,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Image
-                      source={isDark ? darkSpinner : lightSpinner}
+                      source={staticIcon}
                       style={{ width: 14, height: 14 }}
                       resizeMode="contain"
                     />

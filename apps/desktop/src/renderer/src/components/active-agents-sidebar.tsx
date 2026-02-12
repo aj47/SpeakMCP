@@ -6,7 +6,7 @@ import { cn } from "@renderer/lib/utils"
 import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
-import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
+import { useConversationHistoryQuery, useUnifiedConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
 import { Input } from "@renderer/components/ui/input"
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@renderer/components/ui/dialog"
 import { toast } from "sonner"
-import { ConversationHistoryItem } from "@shared/types"
+import { ConversationHistoryItem, UnifiedConversationHistoryItem, ExternalSessionSource } from "@shared/types"
 import dayjs from "dayjs"
 import relativeTime from "dayjs/plugin/relativeTime"
 
@@ -79,22 +79,23 @@ export function ActiveAgentsSidebar() {
     },
   })
 
-  // Fetch conversation history for past sessions
-  const conversationHistoryQuery = useConversationHistoryQuery()
+  // Fetch unified conversation history (includes external sessions from Augment/Claude Code)
+  const unifiedHistoryQuery = useUnifiedConversationHistoryQuery(200)
   const deleteConversationMutation = useDeleteConversationMutation()
   const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
   // Get filtered past sessions (for total count)
   const filteredPastSessions = useMemo(() => {
-    if (!conversationHistoryQuery.data) return []
+    if (!unifiedHistoryQuery.data) return []
     return searchQuery.trim()
-      ? conversationHistoryQuery.data.filter(
+      ? unifiedHistoryQuery.data.filter(
           (session) =>
             session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            session.preview.toLowerCase().includes(searchQuery.toLowerCase())
+            session.preview.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            session.workspacePath?.toLowerCase().includes(searchQuery.toLowerCase())
         )
-      : conversationHistoryQuery.data
-  }, [conversationHistoryQuery.data, searchQuery])
+      : unifiedHistoryQuery.data
+  }, [unifiedHistoryQuery.data, searchQuery])
 
   // Get visible past sessions with lazy loading
   const visiblePastSessions = useMemo(() => {
@@ -264,16 +265,42 @@ export function ActiveAgentsSidebar() {
   }
 
   // Past sessions handlers
-  const handlePastSessionClick = (conversationId: string) => {
-    logUI('[ActiveAgentsSidebar] Past session clicked:', conversationId)
-    // Navigate to sessions page with the conversation ID
-    navigate(`/${conversationId}`)
+  const handlePastSessionClick = async (session: UnifiedConversationHistoryItem) => {
+    logUI('[ActiveAgentsSidebar] Past session clicked:', session.id, 'source:', session.source)
+
+    if (session.source === 'acp-remote') {
+      // Native session - navigate to it
+      navigate(`/${session.id}`)
+    } else {
+      // External session (Augment or Claude Code) - continue it
+      try {
+        toast.info(`Continuing ${session.source === 'augment' ? 'Augment' : 'Claude Code'} session...`)
+        const result = await tipcClient.continueExternalSession({
+          sessionId: session.id,
+          source: session.source,
+          workspacePath: session.workspacePath,
+        })
+        if (result.success) {
+          toast.success(`Session continued in ${session.workspacePath || 'workspace'}`)
+        } else {
+          toast.error(result.error || 'Failed to continue session')
+        }
+      } catch (error) {
+        console.error("Failed to continue external session:", error)
+        toast.error("Failed to continue session")
+      }
+    }
   }
 
-  const handleDeletePastSession = async (conversationId: string, e: React.MouseEvent) => {
+  const handleDeletePastSession = async (session: UnifiedConversationHistoryItem, e: React.MouseEvent) => {
     e.stopPropagation()
+    // Only allow deleting native sessions
+    if (session.source !== 'acp-remote') {
+      toast.info("External sessions can only be deleted in their source application")
+      return
+    }
     try {
-      await deleteConversationMutation.mutateAsync(conversationId)
+      await deleteConversationMutation.mutateAsync(session.id)
     } catch (error) {
       console.error("Failed to delete session:", error)
       toast.error("Failed to delete session")
@@ -487,15 +514,15 @@ export function ActiveAgentsSidebar() {
             onClick={() => setIsPastSessionsExpanded(!isPastSessionsExpanded)}
             className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
             title="Past Sessions"
-            aria-label={conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0
-              ? `Past Sessions (${conversationHistoryQuery.data.length})`
+            aria-label={unifiedHistoryQuery.data && unifiedHistoryQuery.data.length > 0
+              ? `Past Sessions (${unifiedHistoryQuery.data.length})`
               : "Past Sessions"}
           >
             <Clock className="h-3.5 w-3.5" />
             <span>Past</span>
-            {conversationHistoryQuery.data && conversationHistoryQuery.data.length > 0 && (
+            {unifiedHistoryQuery.data && unifiedHistoryQuery.data.length > 0 && (
               <span className="text-[10px] text-muted-foreground">
-                {conversationHistoryQuery.data.length}
+                {unifiedHistoryQuery.data.length}
               </span>
             )}
           </button>
@@ -512,7 +539,7 @@ export function ActiveAgentsSidebar() {
                 onClick={() => setShowDeleteAllDialog(true)}
                 className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
                 title="Delete all history"
-                disabled={!conversationHistoryQuery.data?.length}
+                disabled={!unifiedHistoryQuery.data?.length}
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -533,12 +560,12 @@ export function ActiveAgentsSidebar() {
                 />
               </div>
             </div>
-            {conversationHistoryQuery.isLoading ? (
+            {unifiedHistoryQuery.isLoading ? (
               <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>Loading sessions...</span>
               </div>
-            ) : conversationHistoryQuery.isError ? (
+            ) : unifiedHistoryQuery.isError ? (
               <p className="px-2 py-2 text-xs text-destructive">Failed to load sessions</p>
             ) : visiblePastSessions.length === 0 ? (
               <p className="px-2 py-2 text-xs text-muted-foreground">No past sessions</p>
@@ -546,31 +573,41 @@ export function ActiveAgentsSidebar() {
               <>
                 {visiblePastSessions.map((session) => (
                   <div
-                    key={session.id}
-                    onClick={() => handlePastSessionClick(session.id)}
+                    key={`${session.source}-${session.id}`}
+                    onClick={() => handlePastSessionClick(session)}
                     className={cn(
                       "group relative cursor-pointer rounded-md px-2 py-1.5 text-xs transition-all",
                       "hover:bg-accent/50"
                     )}
-                    title={`${session.preview}\n${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
+                    title={`${session.preview}\n${session.workspacePath ? `Workspace: ${session.workspacePath}\n` : ''}${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      {/* Source badge */}
+                      {session.source === 'augment' ? (
+                        <span className="shrink-0 h-3 w-3 rounded text-[8px] font-bold flex items-center justify-center bg-purple-500/20 text-purple-400" title="Augment">A</span>
+                      ) : session.source === 'claude-code' ? (
+                        <span className="shrink-0 h-3 w-3 rounded text-[8px] font-bold flex items-center justify-center bg-orange-500/20 text-orange-400" title="Claude Code">C</span>
+                      ) : (
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      )}
                       <p className="flex-1 truncate text-foreground">{session.title}</p>
                       {/* Time ago shown by default, replaced by delete button on hover */}
                       <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums group-hover:hidden">
                         {formatTimestamp(session.updatedAt)}
                       </span>
-                      <button
-                        onClick={(e) => handleDeletePastSession(session.id, e)}
-                        disabled={deleteConversationMutation.isPending}
-                        className={cn(
-                          "shrink-0 rounded p-0.5 hidden transition-all hover:bg-destructive/20 hover:text-destructive group-hover:block"
-                        )}
-                        title="Delete session"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                      {/* Only show delete button for native sessions */}
+                      {session.source === 'acp-remote' && (
+                        <button
+                          onClick={(e) => handleDeletePastSession(session, e)}
+                          disabled={deleteConversationMutation.isPending}
+                          className={cn(
+                            "shrink-0 rounded p-0.5 hidden transition-all hover:bg-destructive/20 hover:text-destructive group-hover:block"
+                          )}
+                          title="Delete session"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

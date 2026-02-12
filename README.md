@@ -1,6 +1,8 @@
 # SpeakMCP
 
-🎤 **AI-powered voice assistant with MCP integration** - A fork of [Whispo](https://github.com/egoist/whispo) that transforms your voice into intelligent actions with advanced speech recognition, LLM processing, and Model Context Protocol (MCP) tool execution.
+🎤 **Voice-to-Action CLI Agent** - Transform your voice into autonomous actions. A fork of [Whispo](https://github.com/egoist/whispo) that combines speech recognition, LLM processing, and MCP tool execution into a unified CLI-first agent architecture.
+
+> **Architecture Philosophy**: Agents as composable CLI pipelines. SpeakMCP is the nervous system for voice-driven automation — pipe voice in, get actions out.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](./LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-31.0.2-47848f.svg)](https://electronjs.org/)
@@ -53,9 +55,16 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 | **🛠️ Platform** | macOS/Windows/Linux, rate limit handling, multi-provider AI |
 | **🎨 UX** | Dark/light themes, resizable panels, kill switch, conversation history |
 
-## 💻 CLI (Terminal UI)
+## 💻 CLI-First Architecture
 
-A terminal-based client that connects to the SpeakMCP server. Requires **[Bun](https://bun.sh/)** runtime.
+SpeakMCP is built CLI-native. Every capability is accessible via terminal — voice recording, TTS, MCP tool execution, and agent orchestration.
+
+### Why CLI-First?
+
+- **Composability**: Pipe voice input into any workflow
+- **Portability**: Run anywhere — local, remote via SSH, containers
+- **Supervision**: Full auditability of agent decisions
+- **Unix Alignment**: Integrate with existing CLI tools and scripts
 
 ### Prerequisites
 
@@ -146,6 +155,8 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for full setup, build commands, trouble
 ## 🤝 Contributing
 
 We welcome contributions! Fork the repo, create a feature branch, and open a Pull Request.
+
+**Build agents, not GUIs** — CLI-first contributions prioritized.
 
 **💬 Get help on [Discord](https://discord.gg/cK9WeQ7jPq)** | **🌐 More info at [techfren.net](https://techfren.net)**
 

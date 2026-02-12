@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-09",
+  "updatedAt": "2026-02-12",
   "description": "CLI parity matrix against desktop capabilities and server API support.",
   "statusEnum": [
     "implemented",
@@ -289,7 +289,7 @@
       "cliSurface": "apps/cli/src/views/sessions.ts",
       "status": "partial",
       "parityType": "direct",
-      "notes": "Client-side title filtering only; full parity search semantics differ."
+      "notes": "Client-side title filtering only in sessions view (/ to search). For full parity: need server-side search endpoint (GET /v1/conversations/search?query=) that searches message content, then wire CLI to use it instead of client-side filter."
     },
     {
       "id": "G-15",

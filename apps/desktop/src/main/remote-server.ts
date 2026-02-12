@@ -12,6 +12,7 @@ import { conversationService } from "./conversation-service"
 import { externalSessionService } from "./external-sessions"
 import { AgentProgressUpdate, SessionProfileSnapshot, ExternalSessionSource } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
+import { emitAgentProgress } from "./emit-agent-progress"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
@@ -1136,13 +1137,61 @@ export async function startRemoteServer() {
       }
 
       diagnosticsService.logInfo("remote-server", `Continuing external session: ${body.source}/${body.sessionId}`)
+
+      // First, load the full session to get conversation history for the UI
+      const fullSession = await externalSessionService.loadSession(body.sessionId, body.source)
+
+      // Call the external session service to load the session in the ACP agent
       const result = await externalSessionService.continueSession(
         body.sessionId,
         body.source,
         body.workspacePath
       )
 
-      if (result.success) {
+      if (result.success && result.sessionId) {
+        const sessionTitle = result.sessionTitle || `${body.source} Session`
+
+        // Create a tracked agent session so it shows in the UI
+        // Start unsnoozed (false) so the session is visible immediately
+        const trackedSessionId = agentSessionTracker.startSession(
+          result.conversationId || body.sessionId,
+          sessionTitle,
+          false // startSnoozed = false, so session shows in UI immediately
+        )
+
+        // Create session state for agent processing
+        agentSessionStateManager.createSession(trackedSessionId)
+
+        // Convert external session messages to conversation history format
+        // This is needed so the UI can display the session content (not "Initializing...")
+        const conversationHistory = fullSession?.messages?.map((msg, index) => ({
+          role: msg.role as 'user' | 'assistant' | 'tool',
+          content: msg.content,
+          timestamp: msg.timestamp || Date.now() - (fullSession.messages.length - index) * 1000,
+        })) || []
+
+        diagnosticsService.logInfo("remote-server", `Created tracked session ${trackedSessionId} for external session ${body.sessionId}`)
+
+        // Emit progress update with conversation history so UI shows session content
+        await emitAgentProgress({
+          sessionId: trackedSessionId,
+          conversationId: result.conversationId || body.sessionId,
+          conversationTitle: sessionTitle,
+          currentIteration: 1,
+          maxIterations: 1,
+          steps: [],
+          isComplete: true, // Mark as complete so UI shows ready state, not processing
+          conversationHistory,
+        })
+
+        diagnosticsService.logInfo("remote-server", `Session ${trackedSessionId} marked as ready with ${conversationHistory.length} messages`)
+
+        return reply.send({
+          ...result,
+          trackedSessionId,
+          message: `${body.source === 'augment' ? 'Augment' : 'Claude Code'} session continued successfully`,
+        })
+      } else if (result.success) {
         return reply.send(result)
       } else {
         return reply.code(400).send(result)

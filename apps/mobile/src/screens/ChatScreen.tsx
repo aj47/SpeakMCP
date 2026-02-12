@@ -337,32 +337,11 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 	// Stable ref to the latest send() to avoid stale closures in speech callbacks
 	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
-	// Voice debug logging - enabled in dev mode OR when VOICE_DEBUG query param is set
-	// To enable in production: add ?voice_debug=1 to the URL
-	const voiceDebugEnabled = useRef<boolean | null>(null);
-	const voiceLogSeqRef = useRef(0);
+	// Voice debug logging - only in dev mode
 	const voiceLog = useCallback((msg: string, extra?: any) => {
-		// Lazy-init debug flag
-		if (voiceDebugEnabled.current === null) {
-			if (__DEV__) {
-				voiceDebugEnabled.current = true;
-			} else if (Platform.OS === 'web' && typeof window !== 'undefined') {
-				try {
-					const params = new URLSearchParams(window.location.search);
-					voiceDebugEnabled.current = params.get('voice_debug') === '1';
-				} catch {
-					voiceDebugEnabled.current = false;
-				}
-			} else {
-				voiceDebugEnabled.current = false;
-			}
-		}
-		if (!voiceDebugEnabled.current) return;
-		voiceLogSeqRef.current += 1;
-		const seq = voiceLogSeqRef.current;
-		const timestamp = new Date().toISOString().slice(11, 23);
-		if (typeof extra !== 'undefined') console.log(`[Voice ${timestamp} #${seq}] ${msg}`, extra);
-		else console.log(`[Voice ${timestamp} #${seq}] ${msg}`);
+		if (!__DEV__) return;
+		if (typeof extra !== 'undefined') console.log(`[Voice] ${msg}`, extra);
+		else console.log(`[Voice] ${msg}`);
 	}, []);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
@@ -383,6 +362,36 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Auto-scroll state and ref for mobile chat
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Ref for mic button to attach native DOM listeners on web
+  const micButtonRef = useRef<View>(null);
+
+  // Attach native DOM event listeners on web to prevent text selection on long press
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !micButtonRef.current) return;
+
+    // @ts-ignore - Get the underlying DOM element from React Native Web
+    const domNode = micButtonRef.current as any;
+    if (!domNode || typeof domNode.addEventListener !== 'function') return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Prevent default to stop text selection on long press
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const handleContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Use passive: false to allow preventDefault
+    domNode.addEventListener('touchstart', handleTouchStart, { passive: false });
+    domNode.addEventListener('contextmenu', handleContextMenu, { passive: false });
+
+    return () => {
+      domNode.removeEventListener('touchstart', handleTouchStart);
+      domNode.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   // Track scroll timeout for debouncing rapid message updates
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2381,10 +2390,6 @@ export default function ChatScreen({ route, navigation }: any) {
           </TouchableOpacity>
           <View 
             style={styles.micWrapper}
-            // @ts-ignore - Web-specific props to prevent text selection on long press
-            {...(Platform.OS === 'web' ? {
-              onContextMenu: (e: any) => { e.preventDefault(); voiceLog('mic:onContextMenu prevented'); },
-            } : {})}
           >
             <Pressable
               style={[
@@ -2393,59 +2398,27 @@ export default function ChatScreen({ route, navigation }: any) {
                 // @ts-ignore - Web-specific CSS to prevent text selection
                 Platform.OS === 'web' && { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'manipulation' },
               ]}
-              // @ts-ignore - Web-specific touch handlers to prevent text selection
-              {...(Platform.OS === 'web' ? {
-                onTouchStart: (e: any) => { 
-                  e.preventDefault(); 
-                  voiceLog('mic:onTouchStart (web)', { touches: e.touches?.length });
-                },
-                onTouchEnd: (e: any) => { 
-                  e.preventDefault();
-                  voiceLog('mic:onTouchEnd (web)');
-                },
-                onTouchCancel: (e: any) => {
-                  voiceLog('mic:onTouchCancel (web) - text selection may have triggered');
-                },
-              } : {})}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
-					lastGrantTimeRef.current = Date.now();
-					voiceLog('mic:onPressIn', {
-						gestureId: voiceGestureIdRef.current,
-						listening: listeningRef.current,
-						starting: startingRef.current,
-						platform: Platform.OS,
-					});
-					if (!listeningRef.current) startRecording(e);
+                lastGrantTimeRef.current = Date.now();
+                voiceLog('mic:onPressIn');
+                if (!listeningRef.current) startRecording(e);
               } : undefined}
               onPressOut={!handsFree ? () => {
                 const now = Date.now();
                 const dt = now - lastGrantTimeRef.current;
                 const delay = Math.max(0, minHoldMs - dt);
-					voiceLog('mic:onPressOut', {
-						gestureId: voiceGestureIdRef.current,
-						listening: listeningRef.current,
-						dt,
-						delay,
-						platform: Platform.OS,
-					});
+                voiceLog('mic:onPressOut');
                 if (delay > 0) {
-						setTimeout(() => {
-							voiceLog('mic:onPressOut -> delayed stop fired', {
-								gestureId: voiceGestureIdRef.current,
-								listening: listeningRef.current,
-							});
-							if (listeningRef.current) stopRecordingAndHandle();
-						}, delay);
+                  setTimeout(() => {
+                    if (listeningRef.current) stopRecordingAndHandle();
+                  }, delay);
                 } else {
-	                  if (listeningRef.current) stopRecordingAndHandle();
+                  if (listeningRef.current) stopRecordingAndHandle();
                 }
               } : undefined}
               onPress={handsFree ? () => {
-					voiceLog('mic:onPress (handsFree)', {
-						gestureId: voiceGestureIdRef.current,
-						listening: listeningRef.current,
-					});
-					if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
+                voiceLog('mic:onPress (handsFree)');
+                if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >
               <Text style={styles.micText} selectable={false}>

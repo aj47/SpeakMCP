@@ -10,8 +10,8 @@ import { useProfile } from '../store/profile';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { SessionListItem } from '../types/session';
 
-const darkSpinner = require('../../assets/loading-spinner.gif');
-const lightSpinner = require('../../assets/light-spinner.gif');
+// Ported from acp-remote: Replace animated GIF spinners with static icon for better performance
+const staticIcon = require('../../assets/speakmcp-icon.png');
 
 interface Props {
   navigation: any;
@@ -77,7 +77,7 @@ export default function SessionListScreen({ navigation }: Props) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <Image
-          source={isDark ? darkSpinner : lightSpinner}
+          source={staticIcon}
           style={styles.spinner}
           resizeMode="contain"
         />

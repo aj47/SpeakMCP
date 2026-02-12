@@ -337,14 +337,32 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 	// Stable ref to the latest send() to avoid stale closures in speech callbacks
 	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
-	// Voice debug logging (dev-only) to help diagnose recording/send lifecycle.
+	// Voice debug logging - enabled in dev mode OR when VOICE_DEBUG query param is set
+	// To enable in production: add ?voice_debug=1 to the URL
+	const voiceDebugEnabled = useRef<boolean | null>(null);
 	const voiceLogSeqRef = useRef(0);
 	const voiceLog = useCallback((msg: string, extra?: any) => {
-		if (!__DEV__) return;
+		// Lazy-init debug flag
+		if (voiceDebugEnabled.current === null) {
+			if (__DEV__) {
+				voiceDebugEnabled.current = true;
+			} else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+				try {
+					const params = new URLSearchParams(window.location.search);
+					voiceDebugEnabled.current = params.get('voice_debug') === '1';
+				} catch {
+					voiceDebugEnabled.current = false;
+				}
+			} else {
+				voiceDebugEnabled.current = false;
+			}
+		}
+		if (!voiceDebugEnabled.current) return;
 		voiceLogSeqRef.current += 1;
 		const seq = voiceLogSeqRef.current;
-		if (typeof extra !== 'undefined') console.log(`[Voice ${seq}] ${msg}`, extra);
-		else console.log(`[Voice ${seq}] ${msg}`);
+		const timestamp = new Date().toISOString().slice(11, 23);
+		if (typeof extra !== 'undefined') console.log(`[Voice ${timestamp} #${seq}] ${msg}`, extra);
+		else console.log(`[Voice ${timestamp} #${seq}] ${msg}`);
 	}, []);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
@@ -2361,17 +2379,41 @@ export default function ChatScreen({ route, navigation }: any) {
           >
             <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
           </TouchableOpacity>
-          <View style={styles.micWrapper}>
-            <TouchableOpacity
-              style={[styles.mic, listening && styles.micOn]}
-              activeOpacity={0.7}
-              delayPressIn={0}
+          <View 
+            style={styles.micWrapper}
+            // @ts-ignore - Web-specific props to prevent text selection on long press
+            {...(Platform.OS === 'web' ? {
+              onContextMenu: (e: any) => { e.preventDefault(); voiceLog('mic:onContextMenu prevented'); },
+            } : {})}
+          >
+            <Pressable
+              style={[
+                styles.mic,
+                listening && styles.micOn,
+                // @ts-ignore - Web-specific CSS to prevent text selection
+                Platform.OS === 'web' && { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'manipulation' },
+              ]}
+              // @ts-ignore - Web-specific touch handlers to prevent text selection
+              {...(Platform.OS === 'web' ? {
+                onTouchStart: (e: any) => { 
+                  e.preventDefault(); 
+                  voiceLog('mic:onTouchStart (web)', { touches: e.touches?.length });
+                },
+                onTouchEnd: (e: any) => { 
+                  e.preventDefault();
+                  voiceLog('mic:onTouchEnd (web)');
+                },
+                onTouchCancel: (e: any) => {
+                  voiceLog('mic:onTouchCancel (web) - text selection may have triggered');
+                },
+              } : {})}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
 					lastGrantTimeRef.current = Date.now();
 					voiceLog('mic:onPressIn', {
 						gestureId: voiceGestureIdRef.current,
 						listening: listeningRef.current,
 						starting: startingRef.current,
+						platform: Platform.OS,
 					});
 					if (!listeningRef.current) startRecording(e);
               } : undefined}
@@ -2384,6 +2426,7 @@ export default function ChatScreen({ route, navigation }: any) {
 						listening: listeningRef.current,
 						dt,
 						delay,
+						platform: Platform.OS,
 					});
                 if (delay > 0) {
 						setTimeout(() => {
@@ -2405,13 +2448,13 @@ export default function ChatScreen({ route, navigation }: any) {
 					if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >
-              <Text style={styles.micText}>
+              <Text style={styles.micText} selectable={false}>
                 {listening ? '🎙️' : '🎤'}
               </Text>
-              <Text style={[styles.micLabel, listening && styles.micLabelOn]}>
+              <Text style={[styles.micLabel, listening && styles.micLabelOn]} selectable={false}>
                 {handsFree ? (listening ? 'Stop' : 'Talk') : (listening ? '...' : 'Hold')}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
           <TextInput
             style={styles.input}
@@ -2512,6 +2555,7 @@ function createStyles(theme: Theme) {
       backgroundColor: theme.colors.primary,
       borderColor: theme.colors.primary,
     },
+
     micText: {
       fontSize: 18,
     },

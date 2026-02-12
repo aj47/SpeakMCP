@@ -273,6 +273,7 @@ export class AugmentSessionProvider implements ExternalSessionProvider {
         success: true,
         sessionId: result.sessionId,
         conversationId: session.id, // Use original session ID as conversation ID
+        sessionTitle: session.title,
       }
     } catch (error) {
       logApp(`[AugmentProvider] Failed to continue session: ${error}`)

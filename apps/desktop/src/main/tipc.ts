@@ -2750,11 +2750,64 @@ export const router = {
     .input<{ sessionId: string; source: ExternalSessionSource; workspacePath?: string }>()
     .action(async ({ input }) => {
       logApp(`[tipc] continueExternalSession called: ${input.source}/${input.sessionId}`)
-      return externalSessionService.continueSession(
+
+      // First, load the full session to get conversation history for the UI
+      const fullSession = await externalSessionService.loadSession(input.sessionId, input.source)
+
+      // Call the external session service to load the session in the ACP agent
+      const result = await externalSessionService.continueSession(
         input.sessionId,
         input.source,
         input.workspacePath
       )
+
+      // If successful, create an agent session for UI tracking
+      if (result.success && result.sessionId) {
+        const sessionTitle = result.sessionTitle || `${input.source} Session`
+
+        // Create a tracked agent session so it shows in the UI
+        // Start unsnoozed (false) so the session is visible immediately
+        const trackedSessionId = agentSessionTracker.startSession(
+          result.conversationId,
+          sessionTitle,
+          false // startSnoozed = false, so session shows in UI immediately
+        )
+
+        // Create session state for agent processing
+        agentSessionStateManager.createSession(trackedSessionId)
+
+        // Convert external session messages to conversation history format
+        // This is needed so the UI can display the session content (not "Initializing...")
+        const conversationHistory = fullSession?.messages?.map((msg, index) => ({
+          role: msg.role as 'user' | 'assistant' | 'tool',
+          content: msg.content,
+          timestamp: msg.timestamp || Date.now() - (fullSession.messages.length - index) * 1000,
+        })) || []
+
+        logApp(`[tipc] continueExternalSession: Created tracked session ${trackedSessionId} for external session ${input.sessionId}`)
+
+        // Emit progress update with conversation history so UI shows session content
+        await emitAgentProgress({
+          sessionId: trackedSessionId,
+          conversationId: result.conversationId,
+          conversationTitle: sessionTitle,
+          currentIteration: 1,
+          maxIterations: 1,
+          steps: [],
+          isComplete: true, // Mark as complete so UI shows ready state, not processing
+          conversationHistory,
+        })
+
+        logApp(`[tipc] continueExternalSession: Session ${trackedSessionId} marked as ready with ${conversationHistory.length} messages`)
+
+        // Return with the tracked session ID for UI reference
+        return {
+          ...result,
+          trackedSessionId,
+        }
+      }
+
+      return result
     }),
 
   getExternalSessionProviders: t.procedure.action(async () => {

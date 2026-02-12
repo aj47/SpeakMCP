@@ -76,6 +76,8 @@ export interface ContinueSessionResult {
   sessionId?: string
   /** Conversation ID for tracking */
   conversationId?: string
+  /** Session title for display */
+  sessionTitle?: string
   /** Error message if failed */
   error?: string
 }

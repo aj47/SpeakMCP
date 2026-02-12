@@ -300,6 +300,7 @@ export class ClaudeCodeSessionProvider implements ExternalSessionProvider {
         success: true,
         sessionId: session.id,
         conversationId: session.id,
+        sessionTitle: session.title,
       }
     } catch (error) {
       logApp(`[ClaudeCodeProvider] Failed to continue session: ${error}`)

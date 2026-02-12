@@ -44,6 +44,8 @@ Three converging forces have made 2026 the year MCP crosses the chasm:
 
 ### 1. Enterprise Adoption
 
+> **Forward-looking statement:** Major cloud platforms are increasingly adopting MCP-like patterns. For example, Microsoft's Azure AI services, Red Hat's OpenShift, and Salesforce's Einstein platform have all announced MCP integrations or compatibility layers. (Sources: respective company documentation and announcements.)
+
 Microsoft Azure now ships MCP endpoints by default. Red Hat integrates MCP into OpenShift. Salesforce includes MCP connectors in their Einstein platform.
 
 When the enterprise vendors standardize on a protocol, the market has spoken.

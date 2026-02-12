@@ -55,6 +55,8 @@ Manage repositories, issues, and pull requests.
 - "Show me open pull requests"
 - "List recent commits"
 
+> **Note:** The example shows a token placeholder for illustration. In practice, use environment variables or your system's secure credential storage. This JSON config file is local-only and should never be committed to version control.
+
 #### 3. PostgreSQL Server
 Query databases through conversation.
 
@@ -222,7 +224,7 @@ Voice: "Write a blog post about MCP Protocol"
 
 ## 🔐 Security
 
-- **Local execution**: MCP servers run locally, no data sent externally
+- **Local execution**: MCP servers run locally. Tool results are sent to your configured AI provider (OpenAI, Anthropic, etc.) for processing—only the data you explicitly request through MCP tools is transmitted beyond your machine.
 - **OAuth 2.1**: Secure authentication for cloud services
 - **Environment variables**: Keep API keys out of config files
 

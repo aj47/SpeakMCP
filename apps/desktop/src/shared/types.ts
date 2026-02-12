@@ -394,6 +394,30 @@ export interface ConversationHistoryItem {
   preview: string
 }
 
+/**
+ * Source of an external session
+ */
+export type ExternalSessionSource = 'augment' | 'claude-code' | 'speakmcp'
+
+/**
+ * Extended ConversationHistoryItem with external session info
+ */
+export interface UnifiedConversationHistoryItem {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+  lastMessage: string
+  preview: string
+  /** Source of the session */
+  source: ExternalSessionSource
+  /** Workspace path (for external sessions) */
+  workspacePath?: string
+  /** File path (for external sessions, used for loading) */
+  filePath?: string
+}
+
 export type ProfileMcpServerConfig = {
   disabledServers?: string[]
   disabledTools?: string[]

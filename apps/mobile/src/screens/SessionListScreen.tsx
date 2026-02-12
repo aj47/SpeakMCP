@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo } from 'react';
+import { useLayoutEffect, useMemo, useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
@@ -7,8 +7,10 @@ import { useSessionContext, SessionStore } from '../store/sessions';
 import { useConnectionManager } from '../store/connectionManager';
 import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
+import { useConfigContext } from '../store/config';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
-import { SessionListItem } from '../types/session';
+import { SessionListItem, ExternalSessionSource, UnifiedSessionListItem } from '../types/session';
+import { createExtendedSettingsApiClient, UnifiedConversation } from '../lib/settingsApi';
 
 const staticIcon = require('../../assets/speakmcp-icon.png');
 
@@ -22,6 +24,49 @@ export default function SessionListScreen({ navigation }: Props) {
   const connectionManager = useConnectionManager();
   const { connectionInfo } = useTunnelConnection();
   const { currentProfile } = useProfile();
+  const { config } = useConfigContext();
+
+  // State for unified sessions (external + local)
+  const [unifiedSessions, setUnifiedSessions] = useState<UnifiedSessionListItem[]>([]);
+  const [loadingExternal, setLoadingExternal] = useState(false);
+
+  // Fetch unified conversation history from server
+  const fetchUnifiedSessions = useCallback(async () => {
+    if (!config.baseUrl || !config.apiKey) return;
+
+    setLoadingExternal(true);
+    try {
+      const client = createExtendedSettingsApiClient(config.baseUrl, config.apiKey);
+      const { conversations } = await client.getUnifiedConversations(100);
+
+      // Transform to UnifiedSessionListItem format
+      const items: UnifiedSessionListItem[] = conversations.map(conv => ({
+        id: conv.id,
+        title: conv.title || 'Untitled',
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt,
+        messageCount: conv.messageCount || 0,
+        lastMessage: conv.lastMessage || '',
+        preview: conv.preview || '',
+        source: conv.source,
+        workspacePath: conv.workspacePath,
+        filePath: conv.filePath,
+      }));
+
+      setUnifiedSessions(items);
+    } catch (error) {
+      console.warn('[SessionListScreen] Failed to fetch unified sessions:', error);
+      // Fall back to empty - local sessions will still show
+      setUnifiedSessions([]);
+    } finally {
+      setLoadingExternal(false);
+    }
+  }, [config.baseUrl, config.apiKey]);
+
+  // Fetch unified sessions on mount and when config changes
+  useEffect(() => {
+    fetchUnifiedSessions();
+  }, [fetchUnifiedSessions]);
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
@@ -70,7 +115,20 @@ export default function SessionListScreen({ navigation }: Props) {
   }, [navigation, theme, connectionInfo.state, connectionInfo.retryCount, currentProfile]);
   const insets = useSafeAreaInsets();
   const sessionStore = useSessionContext();
-  const sessions = sessionStore.getSessionList();
+
+  // Merge local sessions with unified sessions from server
+  // Use unified sessions if available, otherwise fall back to local only
+  const sessions: UnifiedSessionListItem[] = useMemo(() => {
+    if (unifiedSessions.length > 0) {
+      // Use unified sessions from server (already includes all sources)
+      return unifiedSessions;
+    }
+    // Fall back to local sessions only (mark as speakmcp source)
+    return sessionStore.getSessionList().map(s => ({
+      ...s,
+      source: 'speakmcp' as ExternalSessionSource,
+    }));
+  }, [unifiedSessions, sessionStore]);
 
   if (!sessionStore.ready) {
     return (
@@ -90,16 +148,52 @@ export default function SessionListScreen({ navigation }: Props) {
     navigation.navigate('Chat');
   };
 
-  const handleSelectSession = (sessionId: string) => {
-    sessionStore.setCurrentSession(sessionId);
-    navigation.navigate('Chat');
+  const handleSelectSession = async (item: UnifiedSessionListItem) => {
+    if (item.source === 'speakmcp') {
+      // Local/SpeakMCP session - use local session store
+      sessionStore.setCurrentSession(item.id);
+      navigation.navigate('Chat');
+    } else {
+      // External session (Augment/Claude Code) - continue via API
+      if (!config.baseUrl || !config.apiKey) {
+        Alert.alert('Error', 'Not connected to server');
+        return;
+      }
+
+      try {
+        const client = createExtendedSettingsApiClient(config.baseUrl, config.apiKey);
+        const result = await client.continueExternalSession(item.id, item.source, item.workspacePath);
+
+        if (result.success) {
+          Alert.alert(
+            'Session Continued',
+            result.message || `${item.source === 'augment' ? 'Augment' : 'Claude Code'} session continued on desktop`
+          );
+        } else {
+          Alert.alert('Error', result.error || 'Failed to continue session');
+        }
+      } catch (error: any) {
+        Alert.alert('Error', error?.message || 'Failed to continue session');
+      }
+    }
   };
 
-  const handleDeleteSession = (session: SessionListItem) => {
+  const handleDeleteSession = (session: UnifiedSessionListItem) => {
+    // Only allow deleting local/SpeakMCP sessions
+    if (session.source !== 'speakmcp') {
+      Alert.alert(
+        'Cannot Delete',
+        `${session.source === 'augment' ? 'Augment' : 'Claude Code'} sessions can only be deleted from the desktop app.`
+      );
+      return;
+    }
+
     const doDelete = () => {
       // Clean up connection for this session (fixes #608)
       connectionManager.removeConnection(session.id);
       sessionStore.deleteSession(session.id);
+      // Refresh unified sessions
+      fetchUnifiedSessions();
     };
 
     if (Platform.OS === 'web') {
@@ -156,26 +250,52 @@ export default function SessionListScreen({ navigation }: Props) {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  const renderSession = ({ item }: { item: SessionListItem }) => {
-    const isActive = item.id === sessionStore.currentSessionId;
-    
+  // Get source badge style
+  const getSourceBadge = (source: ExternalSessionSource) => {
+    switch (source) {
+      case 'augment':
+        return { label: 'A', color: '#8B5CF6' }; // Purple for Augment
+      case 'claude-code':
+        return { label: 'C', color: '#F97316' }; // Orange for Claude Code
+      default:
+        return null; // No badge for native speakmcp
+    }
+  };
+
+  const renderSession = ({ item }: { item: UnifiedSessionListItem }) => {
+    const isActive = item.source === 'speakmcp' && item.id === sessionStore.currentSessionId;
+    const badge = getSourceBadge(item.source);
+
     return (
       <TouchableOpacity
         style={[styles.sessionItem, isActive && styles.sessionItemActive]}
-        onPress={() => handleSelectSession(item.id)}
+        onPress={() => handleSelectSession(item)}
         onLongPress={() => handleDeleteSession(item)}
       >
         <View style={styles.sessionHeader}>
-          <Text style={styles.sessionTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+            {badge && (
+              <View style={[styles.sourceBadge, { backgroundColor: badge.color }]}>
+                <Text style={styles.sourceBadgeText}>{badge.label}</Text>
+              </View>
+            )}
+            <Text style={[styles.sessionTitle, { flex: 1 }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+          </View>
           <Text style={styles.sessionDate}>{formatDate(item.updatedAt)}</Text>
         </View>
+        {item.workspacePath && (
+          <Text style={styles.workspacePath} numberOfLines={1}>
+            📁 {item.workspacePath.split('/').slice(-2).join('/')}
+          </Text>
+        )}
         <Text style={styles.sessionPreview} numberOfLines={2}>
           {item.preview || 'No messages yet'}
         </Text>
         <Text style={styles.sessionMeta}>
           {item.messageCount} message{item.messageCount !== 1 ? 's' : ''}
+          {item.source !== 'speakmcp' && ` • ${item.source === 'augment' ? 'Augment' : 'Claude Code'}`}
         </Text>
       </TouchableOpacity>
     );
@@ -302,6 +422,25 @@ function createStyles(theme: Theme) {
     sessionMeta: {
       ...theme.typography.caption,
       color: theme.colors.mutedForeground,
+    },
+    sourceBadge: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 6,
+    },
+    sourceBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    workspacePath: {
+      ...theme.typography.caption,
+      color: theme.colors.mutedForeground,
+      marginBottom: 4,
+      opacity: 0.8,
     },
     emptyState: {
       alignItems: 'center',

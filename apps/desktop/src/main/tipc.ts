@@ -70,6 +70,8 @@ import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
 import { fetchModelsDevData, getModelFromModelsDevByProviderId, findBestModelMatch, refreshModelsDevCache } from "./models-dev-service"
 import * as parakeetStt from "./parakeet-stt"
+import { externalSessionService } from "./external-sessions"
+import type { ExternalSessionSource, UnifiedConversationHistoryItem } from "../shared/types"
 
 /**
  * Convert Float32Array audio samples to WAV format buffer
@@ -2729,6 +2731,38 @@ export const router = {
 
   deleteAllConversations: t.procedure.action(async () => {
     await conversationService.deleteAllConversations()
+  }),
+
+  // External Session Management (Augment, Claude Code)
+  getUnifiedConversationHistory: t.procedure
+    .input<{ limit?: number }>()
+    .action(async ({ input }): Promise<UnifiedConversationHistoryItem[]> => {
+      logApp("[tipc] getUnifiedConversationHistory called")
+      const nativeConversations = await conversationService.getConversationHistory()
+      const result = await externalSessionService.getUnifiedConversationHistory(
+        nativeConversations,
+        input?.limit || 100
+      )
+      return result
+    }),
+
+  continueExternalSession: t.procedure
+    .input<{ sessionId: string; source: ExternalSessionSource; workspacePath?: string }>()
+    .action(async ({ input }) => {
+      logApp(`[tipc] continueExternalSession called: ${input.source}/${input.sessionId}`)
+      return externalSessionService.continueSession(
+        input.sessionId,
+        input.source,
+        input.workspacePath
+      )
+    }),
+
+  getExternalSessionProviders: t.procedure.action(async () => {
+    const providers = await externalSessionService.getAvailableProviders()
+    return providers.map(p => ({
+      source: p.source,
+      displayName: p.displayName,
+    }))
   }),
 
   openConversationsFolder: t.procedure.action(async () => {

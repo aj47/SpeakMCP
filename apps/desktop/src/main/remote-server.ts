@@ -9,7 +9,8 @@ import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
 import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
-import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
+import { externalSessionService } from "./external-sessions"
+import { AgentProgressUpdate, SessionProfileSnapshot, ExternalSessionSource } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
@@ -1079,6 +1080,76 @@ export async function startRemoteServer() {
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to list conversations", error)
       return reply.code(500).send({ error: error?.message || "Failed to list conversations" })
+    }
+  })
+
+  // GET /v1/conversations/unified - List all conversations including external sessions (Augment, Claude Code)
+  fastify.get("/v1/conversations/unified", async (req, reply) => {
+    try {
+      const query = req.query as { limit?: string }
+      const limit = query.limit ? parseInt(query.limit, 10) : 100
+
+      const nativeConversations = await conversationService.getConversationHistory()
+      const unifiedHistory = await externalSessionService.getUnifiedConversationHistory(
+        nativeConversations,
+        limit
+      )
+      diagnosticsService.logInfo("remote-server", `Listed ${unifiedHistory.length} unified conversations`)
+      return reply.send({ conversations: unifiedHistory })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to list unified conversations", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list unified conversations" })
+    }
+  })
+
+  // GET /v1/external-sessions/providers - List available external session providers
+  fastify.get("/v1/external-sessions/providers", async (_req, reply) => {
+    try {
+      const providers = await externalSessionService.getAvailableProviders()
+      return reply.send({
+        providers: providers.map(p => ({
+          source: p.source,
+          displayName: p.displayName,
+        }))
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to list external session providers", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list providers" })
+    }
+  })
+
+  // POST /v1/external-sessions/continue - Continue an external session (Augment or Claude Code)
+  fastify.post("/v1/external-sessions/continue", async (req, reply) => {
+    try {
+      const body = req.body as {
+        sessionId: string
+        source: ExternalSessionSource
+        workspacePath?: string
+      }
+
+      if (!body.sessionId || !body.source) {
+        return reply.code(400).send({ error: "sessionId and source are required" })
+      }
+
+      if (body.source !== 'augment' && body.source !== 'claude-code') {
+        return reply.code(400).send({ error: "source must be 'augment' or 'claude-code'" })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Continuing external session: ${body.source}/${body.sessionId}`)
+      const result = await externalSessionService.continueSession(
+        body.sessionId,
+        body.source,
+        body.workspacePath
+      )
+
+      if (result.success) {
+        return reply.send(result)
+      } else {
+        return reply.code(400).send(result)
+      }
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to continue external session", error)
+      return reply.code(500).send({ error: error?.message || "Failed to continue session" })
     }
   })
 

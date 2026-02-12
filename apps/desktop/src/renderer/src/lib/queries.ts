@@ -51,6 +51,27 @@ export const useConversationHistoryQuery = () =>
     },
   })
 
+export const useUnifiedConversationHistoryQuery = (limit: number = 100) =>
+  useQuery({
+    queryKey: ["unified-conversation-history", limit],
+    queryFn: async () => {
+      const result = await tipcClient.getUnifiedConversationHistory({ limit })
+      return result
+    },
+    // Longer stale time since we're reading from external files
+    staleTime: 30000,
+  })
+
+export const useExternalSessionProvidersQuery = () =>
+  useQuery({
+    queryKey: ["external-session-providers"],
+    queryFn: async () => {
+      const result = await tipcClient.getExternalSessionProviders()
+      return result
+    },
+    staleTime: 60000, // Rarely changes
+  })
+
 export const useConversationQuery = (conversationId: string | null) =>
   useQuery({
     queryKey: ["conversation", conversationId],

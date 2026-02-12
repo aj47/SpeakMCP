@@ -4,9 +4,13 @@
   "type": "module",
   "description": "AI-powered dictation tool with MCP integration",
   "main": "./out/main/index.js",
+  "bin": {
+    "speakmcp": "./dist-cli/index.js"
+  },
   "author": "SpeakMCP",
   "homepage": "https://github.com/aj47/SpeakMCP",
   "scripts": {
+    "build:cli": "tsc -p tsconfig.cli.json",
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
@@ -46,7 +50,10 @@
     "@ai-sdk/openai": "^3.0.1",
     "@egoist/electron-panel-window": "^8.0.3",
     "@fastify/cors": "^11.1.0",
+    "@inquirer/prompts": "^8.2.0",
     "@modelcontextprotocol/sdk": "^1.24.3",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-scroll-area": "^1.2.9",
     "@radix-ui/react-tabs": "^1.1.13",
@@ -56,6 +63,7 @@
     "fastify": "^5.6.1",
     "highlight.js": "^11.11.1",
     "openai": "^5.10.2",
+    "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",

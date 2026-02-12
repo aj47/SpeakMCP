@@ -8,6 +8,7 @@ export interface DebugFlags {
   acp: boolean
   all: boolean
   printQr: boolean
+  headless: boolean
 }
 
 const flags: DebugFlags = {
@@ -20,6 +21,7 @@ const flags: DebugFlags = {
   acp: false,
   all: false,
   printQr: false,
+  headless: false,
 }
 
 function strToBool(v: string | undefined): boolean {
@@ -108,6 +110,8 @@ export function initDebugFlags(argv: string[] = process.argv): DebugFlags {
   // The "--qr" string is present verbatim (the "--" separator is also in argv).
   // Also check app.commandLine.hasSwitch as a fallback for edge cases.
   flags.printQr = hasAny("--qr", "-qr", "qr") || appHasSwitch("qr")
+  // Headless mode - skip window creation, start only remote server
+  flags.headless = hasAny("--headless", "-hl", "headless") || appHasSwitch("headless") || strToBool(process.env.ACP_HEADLESS)
 
 
 
@@ -162,6 +166,10 @@ export function isDebugACP(): boolean {
 
 export function isPrintQR(): boolean {
   return flags.printQr
+}
+
+export function isHeadless(): boolean {
+  return flags.headless
 }
 
 function ts(): string {

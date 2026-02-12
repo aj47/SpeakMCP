@@ -30,6 +30,7 @@ import {
   checkCloudflaredInstalled,
 } from "./cloudflare-tunnel"
 import { initModelsDevService } from "./models-dev-service"
+import { isHeadless } from "./debug"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -105,34 +106,44 @@ app.whenReady().then(() => {
 
   logApp("Serve protocol registered")
 
-  if (accessibilityGranted) {
-    // Check if onboarding has been completed
-    // Skip for existing users who have already configured models (pre-onboarding installs)
-    const cfg = configStore.get()
-    const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
-    const hasSelectedPreset = cfg.currentModelPresetId !== undefined
-    const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
-
-    if (needsOnboarding) {
-      createMainWindow({ url: "/onboarding" })
-      logApp("Main window created (showing onboarding)")
-    } else {
-      createMainWindow()
-      logApp("Main window created")
-    }
-  } else {
-    createSetupWindow()
-    logApp("Setup window created (accessibility not granted)")
+  // Headless mode: skip all window/UI creation, only run services
+  const headlessMode = isHeadless()
+  if (headlessMode) {
+    logApp("Running in headless mode - skipping window creation")
+    // eslint-disable-next-line no-console
+    console.log("[ACP Remote] Headless mode enabled - no GUI windows will be created")
   }
 
-  createPanelWindow()
-  logApp("Panel window created")
+  if (!headlessMode) {
+    if (accessibilityGranted) {
+      // Check if onboarding has been completed
+      // Skip for existing users who have already configured models (pre-onboarding installs)
+      const cfg = configStore.get()
+      const hasCustomPresets = cfg.modelPresets && cfg.modelPresets.length > 0
+      const hasSelectedPreset = cfg.currentModelPresetId !== undefined
+      const needsOnboarding = !cfg.onboardingCompleted && !hasCustomPresets && !hasSelectedPreset
 
-  listenToKeyboardEvents()
-  logApp("Keyboard event listener started")
+      if (needsOnboarding) {
+        createMainWindow({ url: "/onboarding" })
+        logApp("Main window created (showing onboarding)")
+      } else {
+        createMainWindow()
+        logApp("Main window created")
+      }
+    } else {
+      createSetupWindow()
+      logApp("Setup window created (accessibility not granted)")
+    }
 
-  initTray()
-  logApp("System tray initialized")
+    createPanelWindow()
+    logApp("Panel window created")
+
+    listenToKeyboardEvents()
+    logApp("Keyboard event listener started")
+
+    initTray()
+    logApp("System tray initialized")
+  }
 
   mcpService
     .initialize()
@@ -192,10 +203,19 @@ app.whenReady().then(() => {
 
 	  try {
 	    const cfg = configStore.get()
-	    if (cfg.remoteServerEnabled) {
+	    // In headless mode, always start the remote server
+	    const shouldStartServer = headlessMode || cfg.remoteServerEnabled
+	    if (shouldStartServer) {
 	      startRemoteServer()
 	        .then(async () => {
 	          logApp("Remote server started")
+	          if (headlessMode) {
+	            const port = cfg.remoteServerPort || 3210
+	            // eslint-disable-next-line no-console
+	            console.log(`[ACP Remote] Server listening on http://localhost:${port}`)
+	            // eslint-disable-next-line no-console
+	            console.log(`[ACP Remote] Use 'acp-remote qr' to get connection QR code`)
+	          }
 
 	          // Auto-start Cloudflare tunnel if enabled
 	          // Wrapped in try/catch to isolate tunnel errors from remote server startup reporting
@@ -223,6 +243,10 @@ app.whenReady().then(() => {
 	                  .then((result) => {
 	                    if (result.success) {
 	                      logApp(`Cloudflare named tunnel started: ${result.url}`)
+	                      if (headlessMode) {
+	                        // eslint-disable-next-line no-console
+	                        console.log(`[ACP Remote] Cloudflare tunnel: ${result.url}`)
+	                      }
 	                    } else {
 	                      logApp(`Cloudflare named tunnel failed to start: ${result.error}`)
 	                    }
@@ -236,6 +260,10 @@ app.whenReady().then(() => {
 	                  .then((result) => {
 	                    if (result.success) {
 	                      logApp(`Cloudflare quick tunnel started: ${result.url}`)
+	                      if (headlessMode) {
+	                        // eslint-disable-next-line no-console
+	                        console.log(`[ACP Remote] Cloudflare tunnel: ${result.url}`)
+	                      }
 	                    } else {
 	                      logApp(`Cloudflare quick tunnel failed to start: ${result.error}`)
 	                    }
@@ -344,6 +372,10 @@ app.whenReady().then(() => {
 })
 
 app.on("window-all-closed", () => {
+  // In headless mode, don't quit when windows close (there are none anyway)
+  if (isHeadless()) {
+    return
+  }
   if (process.platform !== "darwin") {
     app.quit()
   }

@@ -873,7 +873,18 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Request superseded within same session, skipping onToken update');
           return;
         }
-        streamingText += tok;
+        // Handle both delta tokens and full-text updates:
+        // - Delta tokens: small increments to append (e.g., "Hello", " world")
+        // - Full-text updates: complete accumulated text from streamingContent.text
+        // Detect full-text updates: if tok starts with or equals streamingText, it's a full replacement.
+        // This prevents double-words when progress events send the full accumulated text.
+        if (tok.startsWith(streamingText) && tok.length >= streamingText.length) {
+          // Full-text update: replace instead of append
+          streamingText = tok;
+        } else {
+          // Delta token: append
+          streamingText += tok;
+        }
 
         setMessages((m) => {
           const copy = [...m];
@@ -1216,7 +1227,18 @@ export default function ChatScreen({ route, navigation }: any) {
       const onToken = (tok: string) => {
         if (sessionStore.currentSessionId !== requestSessionId) return;
         if (activeRequestIdRef.current !== thisRequestId) return;
-        streamingText += tok;
+        // Handle both delta tokens and full-text updates:
+        // - Delta tokens: small increments to append (e.g., "Hello", " world")
+        // - Full-text updates: complete accumulated text from streamingContent.text
+        // Detect full-text updates: if tok starts with or equals streamingText, it's a full replacement.
+        // This prevents double-words when progress events send the full accumulated text.
+        if (tok.startsWith(streamingText) && tok.length >= streamingText.length) {
+          // Full-text update: replace instead of append
+          streamingText = tok;
+        } else {
+          // Delta token: append
+          streamingText += tok;
+        }
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {

@@ -10,6 +10,11 @@ pnpm install              # Install dependencies (must use pnpm)
 pnpm build-rs             # Build Rust keyboard binary (required before dev)
 pnpm dev                  # Start Electron app in dev mode
 
+# CLI Development (NEW - PR #988)
+cd apps/cli && bun run src/index.ts           # Run CLI in embedded mode
+cd apps/cli && bun run src/index.ts --debug   # Run with verbose logging
+cd packages/server && pnpm dev                 # Run server standalone
+
 # Testing
 pnpm test                 # Run all tests (vitest)
 pnpm --filter @speakmcp/desktop test:run  # Run desktop tests once
@@ -46,7 +51,9 @@ REMOTE_DEBUGGING_PORT=9222 pnpm dev -- -d
 
 - `apps/desktop/` - Electron desktop app (main package)
 - `apps/mobile/` - React Native/Expo mobile app
+- `apps/cli/` - Terminal-based TUI client (NEW - see PR #988)
 - `packages/shared/` - Shared types, colors, and utilities used by both apps
+- `packages/server/` - Standalone MCP server with SSE streaming (NEW - see PR #988)
 
 ### Desktop App Architecture
 
@@ -72,6 +79,40 @@ REMOTE_DEBUGGING_PORT=9222 pnpm dev -- -d
 **Rust Binary** (`apps/desktop/speakmcp-rs/`):
 - Native keyboard monitoring and text injection
 - Built separately via `pnpm build-rs`
+
+### CLI App Architecture (NEW - PR #988)
+
+**Terminal TUI Client** (`apps/cli/`):
+- Standalone terminal-based client with full feature parity to desktop app
+- Supports three connection modes:
+  1. **Embedded Server** (default): Runs `@speakmcp/server` in-process
+  2. **External Server**: Connects to remote server via `--url`
+  3. **Auto-discover**: Probes default ports (3210, 3211, 3212, 8080)
+- Cloudflare tunnel support with QR code rendering
+- Full keyboard shortcuts and interactive settings
+- Built with OpenTUI framework
+
+**Standalone Server** (`packages/server/`):
+- Fastify-based MCP server with OpenAI-compatible SSE streaming
+- Library exports: `@speakmcp/server/server` and `@speakmcp/server/config`
+- Cloudflare tunnel integration for remote access
+- Dual build: CLI entry (with shebang) + library exports
+
+### CLI Quick Commands
+
+```bash
+# Embedded mode (recommended - one command)
+cd apps/cli && bun run src/index.ts
+
+# With debug logging
+cd apps/cli && bun run src/index.ts --debug
+
+# External server mode
+cd apps/cli && bun run src/index.ts --url http://localhost:3210 --api-key <key>
+
+# Custom port
+cd apps/cli && bun run src/index.ts --port 3211 --no-server
+```
 
 ### IPC Communication
 

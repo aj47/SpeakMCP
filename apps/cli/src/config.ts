@@ -175,3 +175,49 @@ export async function loadConfig(cliArgs: CliArgs): Promise<CliConfig> {
   }
 }
 
+export interface ValidationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+}
+
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function validateConfig(config: Partial<CliConfig>): ValidationResult {
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  // Check server URL format
+  if (config.serverUrl && !isValidUrl(config.serverUrl)) {
+    errors.push(`Invalid server URL: ${config.serverUrl}. Must be http:// or https://`)
+  }
+
+  // Check API key requirement
+  if (config.serverUrl && !config.apiKey) {
+    warnings.push('serverUrl is set but no apiKey — server may reject requests')
+  }
+
+  // Check conversation ID format (basic sanity check)
+  if (config.conversationId && typeof config.conversationId !== 'string') {
+    errors.push('conversationId must be a string')
+  }
+
+  // Check theme value
+  if (config.theme && !['dark', 'light'].includes(config.theme)) {
+    warnings.push(`Unknown theme "${config.theme}", will use default (dark)`)
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings
+  }
+}
+

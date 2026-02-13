@@ -6,6 +6,8 @@
  * consistent TTS output across platforms.
  */
 
+import { removeUrlsAndEmails } from './url-utils'
+
 export interface TTSPreprocessingOptions {
   removeCodeBlocks?: boolean
   removeUrls?: boolean
@@ -91,10 +93,8 @@ function removeCodeBlocks(text: string): string {
 }
 
 /** Removes URLs and replaces them with descriptive text */
-function removeUrls(text: string): string {
-  text = text.replace(/https?:\/\/[^\s]+/g, " [web link] ")
-  text = text.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, " [email address] ")
-  return text
+export function removeUrls(text: string): string {
+  return removeUrlsAndEmails(text)
 }
 
 /** Converts markdown formatting to speech-friendly equivalents */

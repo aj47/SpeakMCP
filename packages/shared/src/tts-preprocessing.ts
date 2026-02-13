@@ -146,7 +146,7 @@ function convertNumbers(text: string): string {
   // Currency: $1,234.56 → "1234 dollars 56 cents", €500 → "500 euros"
   text = text.replace(/[$€£¥]\s?(\d{1,3}(,\d{3})*(\.\d{2})?)/g, " $1")
   text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 dollars $2 cents")
-  text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $3")
+  text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $2")
 
   // Percentages: 50% → "50 percent", 12.5% → "12 point 5 percent"
   text = text.replace(/(\d+(\.\d+)?)\s*%/g, "$1 percent")

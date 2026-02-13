@@ -132,6 +132,25 @@ function cleanSymbols(text: string): string {
   return text
 }
 
+/** Converts currency amounts to speech-friendly format
+ * @example "$1,234.56" → "1234 dollars 56 cents"
+ * @example "€500" → "500 euros"
+ * @example "£50.99" → "50 pounds 99 pence"
+ */
+export function convertCurrency(text: string): string {
+  // Handle currency symbols with amounts: $1,234.56, €500, £50.99, ¥1000
+  text = text.replace(/[$€£¥]\s?(\d{1,3}(,\d{3})*(\.\d{2})?)/g, " $1")
+  
+  // Handle explicit currency words with amounts: 50.99 USD, 100 EUR, 50 GBP
+  text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 dollars $2 cents")
+  text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $2")
+  
+  // Handle pounds specifically: £50.99 → "50 pounds 99 pence"
+  text = text.replace(/(\d+)\.(\d{2})\s*(pounds?|GBP)/gi, "$1 pounds $2 pence")
+  
+  return text
+}
+
 /** Converts numbers to more speech-friendly formats */
 function convertNumbers(text: string): string {
   // Version numbers: v1.2.3 or 1.2.3 → "version 1 point 2 point 3"
@@ -143,10 +162,8 @@ function convertNumbers(text: string): string {
   // Phone numbers: (123) 456-7890 → "123 456 7890", 123-456-7890 → "123 456 7890"
   text = text.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, (match) => match.replace(/[-.\s()]/g, " "))
 
-  // Currency: $1,234.56 → "1234 dollars 56 cents", €500 → "500 euros"
-  text = text.replace(/[$€£¥]\s?(\d{1,3}(,\d{3})*(\.\d{2})?)/g, " $1")
-  text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 dollars $2 cents")
-  text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $2")
+  // Currency conversion (delegate to convertCurrency)
+  text = convertCurrency(text)
 
   // Percentages: 50% → "50 percent", 12.5% → "12 point 5 percent"
   text = text.replace(/(\d+(\.\d+)?)\s*%/g, "$1 percent")

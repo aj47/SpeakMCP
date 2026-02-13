@@ -13,6 +13,7 @@ import {
   convertMarkdownToSpeech,
   cleanSymbols,
   convertNumbers,
+  convertCurrency,
   normalizeWhitespace,
   truncateText,
   validateTTSText,
@@ -383,5 +384,47 @@ Visit https://example.com`
     const result = preprocessTextForTTS(input)
     expect(result).toContain("[code block]")
     expect(result).toContain("[web link]")
+  })
+})
+
+describe("convertCurrency", () => {
+  it("should convert USD with dollars and cents", () => {
+    expect(convertCurrency("$1,234.56")).toBe(" 1234 dollars 56 cents")
+  })
+
+  it("should convert USD without cents", () => {
+    expect(convertCurrency("$500")).toBe(" 500")
+  })
+
+  it("should convert EUR amounts", () => {
+    expect(convertCurrency("€500")).toBe(" 500 euros")
+    expect(convertCurrency("€1,234.56")).toBe(" 1234 euros 56 cents")
+  })
+
+  it("should convert GBP amounts with pence", () => {
+    expect(convertCurrency("£50.99")).toBe(" 50 pounds 99 pence")
+  })
+
+  it("should convert JPY amounts", () => {
+    expect(convertCurrency("¥1000")).toBe(" 1000")
+    expect(convertCurrency("¥1000 yen")).toBe(" 1000 yen")
+  })
+
+  it("should handle explicit currency words", () => {
+    expect(convertCurrency("50.99 USD")).toBe("50 dollars 99 cents USD")
+    expect(convertCurrency("100 EUR")).toBe("100 EUR")
+    expect(convertCurrency("75.50 GBP")).toBe("75 pounds 50 pence GBP")
+  })
+
+  it("should handle multiple currencies in one string", () => {
+    const input = "Price is $50.00 plus €25.00"
+    const result = convertCurrency(input)
+    expect(result).toContain("50 dollars 50 cents")
+    expect(result).toContain("25 euros")
+  })
+
+  it("should handle currency without space after symbol", () => {
+    expect(convertCurrency("$50")).toBe(" 50")
+    expect(convertCurrency("€100")).toBe(" 100")
   })
 })

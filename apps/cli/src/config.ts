@@ -21,6 +21,10 @@ export interface CliArgs {
   debug?: boolean
   help?: boolean
   version?: boolean
+  resetConfig?: boolean
+  deleteConfig?: boolean
+  exportConfig?: boolean
+  showConfigPath?: boolean
 }
 
 export function parseArgs(args: string[]): CliArgs {
@@ -70,6 +74,18 @@ export function parseArgs(args: string[]): CliArgs {
       case '--debug':
         result.debug = true
         break
+      case '--reset-config':
+        result.resetConfig = true
+        break
+      case '--delete-config':
+        result.deleteConfig = true
+        break
+      case '--export-config':
+        result.exportConfig = true
+        break
+      case '--show-config-path':
+        result.showConfigPath = true
+        break
     }
   }
   
@@ -95,6 +111,12 @@ Options:
   --no-server             Don't start embedded server, only connect to external
   --debug                 Enable debug logging
 
+Config Management:
+  --reset-config          Reset config to default values
+  --delete-config         Delete config file
+  --export-config         Export current config to stdout (JSON)
+  --show-config-path      Show config file path
+
 Environment Variables:
   SPEAKMCP_URL            Server URL (skips embedded server)
   SPEAKMCP_API_KEY        API key for authentication
@@ -105,6 +127,8 @@ Examples:
   speakmcp --port 8080                              # Embedded server on port 8080
   speakmcp --url http://localhost:3210 --api-key k  # Connect to external server
   speakmcp --no-server                              # Only auto-discover, no embedded
+  speakmcp --reset-config                           # Reset config to defaults
+  speakmcp --export-config                          # Show current config
 `)
 }
 

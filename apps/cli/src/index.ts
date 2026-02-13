@@ -8,7 +8,7 @@
  * 2. External server: connects to a running server via --url
  */
 
-import { parseArgs, showHelp, showVersion, loadConfig, autoDiscoverServer, type CliArgs } from './config'
+import { parseArgs, showHelp, showVersion, loadConfig, autoDiscoverServer, resetConfig, deleteConfig, exportConfig, getConfigPath, type CliArgs } from './config'
 import { SpeakMcpClient } from './client'
 import { App } from './app'
 import crypto from 'crypto'
@@ -75,6 +75,29 @@ async function main(): Promise<void> {
 
   if (args.version) {
     showVersion()
+    process.exit(0)
+  }
+
+  // Handle config management commands
+  if (args.showConfigPath) {
+    console.log(getConfigPath())
+    process.exit(0)
+  }
+
+  if (args.exportConfig) {
+    console.log(exportConfig())
+    process.exit(0)
+  }
+
+  if (args.deleteConfig) {
+    deleteConfig()
+    console.log('✅ Config deleted')
+    process.exit(0)
+  }
+
+  if (args.resetConfig) {
+    resetConfig()
+    console.log('✅ Config reset to defaults')
     process.exit(0)
   }
 

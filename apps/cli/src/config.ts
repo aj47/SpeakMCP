@@ -3,9 +3,9 @@
  * Priority: CLI flags > env vars > config file > auto-discovery
  */
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { homedir } from 'os'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import type { CliConfig } from './types'
 
 const DEFAULT_PORTS = [3210, 3211, 3212, 8080]
@@ -173,5 +173,30 @@ export async function loadConfig(cliArgs: CliArgs): Promise<CliConfig> {
     conversationId: cliArgs.conversationId || envConversation || fileConfig.conversationId,
     theme: fileConfig.theme || 'dark'
   }
+}
+
+function ensureConfigDir(): void {
+  if (!existsSync(CONFIG_DIR)) {
+    mkdirSync(CONFIG_DIR, { recursive: true })
+  }
+}
+
+export function saveConfig(config: Partial<CliConfig>): void {
+  ensureConfigDir()
+  
+  // Merge with existing config to preserve fields not in the partial
+  const existing = loadConfigFile()
+  const merged = { ...existing, ...config }
+  
+  writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2))
+}
+
+export function exportConfig(): string {
+  const config = loadConfigFile()
+  return JSON.stringify(config, null, 2)
+}
+
+export function getConfigPath(): string {
+  return CONFIG_FILE
 }
 

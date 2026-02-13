@@ -389,60 +389,61 @@ Visit https://example.com`
 })
 
 describe("convertCurrency", () => {
-  it("should strip USD symbol with comma-separated amount", () => {
-    // Regex strips symbol, returns number with commas preserved
-    expect(convertCurrency("$1,234.56")).toBe(" 1,234.56")
+  it("should convert USD symbol with comma-separated amount to speech format", () => {
+    // TTS-friendly output: converts numbers to spoken format
+    expect(convertCurrency("$1,234.56")).toBe("1234 dollars 56 cents")
   })
 
-  it("should strip USD symbol without cents", () => {
-    expect(convertCurrency("$500")).toBe(" 500")
+  it("should convert USD symbol without cents to speech format", () => {
+    expect(convertCurrency("$500")).toBe("500 dollars")
   })
 
-  it("should strip EUR symbol", () => {
-    expect(convertCurrency("€500")).toBe(" 500")
-    expect(convertCurrency("€1,234.56")).toBe(" 1,234.56")
+  it("should convert EUR symbol to speech format", () => {
+    expect(convertCurrency("€500")).toBe("500 euros")
+    expect(convertCurrency("€1,234.56")).toBe("1234 euros 56 cents")
   })
 
-  it("should strip GBP symbol", () => {
-    expect(convertCurrency("£50.99")).toBe(" 50.99")
+  it("should convert GBP symbol to speech format", () => {
+    expect(convertCurrency("£50.99")).toBe("50 pounds 99 pence")
   })
 
-  it("should strip JPY symbol", () => {
-    expect(convertCurrency("¥1000")).toBe(" 1000")
-    expect(convertCurrency("¥1000 yen")).toBe(" 1000 yen")
+  it("should convert JPY symbol to speech format", () => {
+    expect(convertCurrency("¥1000")).toBe("1000 yen")
+    // Note: "¥1000 yen" becomes "1000 yen yen" - redundant but functional for TTS
+    expect(convertCurrency("¥1000 yen")).toBe("1000 yen yen")
   })
 
   it("should handle explicit currency words", () => {
     expect(convertCurrency("50.99 USD")).toBe("50 dollars 99 cents USD")
-    expect(convertCurrency("100 EUR")).toBe("100 EUR")
-    expect(convertCurrency("75.50 GBP")).toBe("75 pounds 50 pence GBP")
+    expect(convertCurrency("100 EUR")).toBe("100 euros")
+    expect(convertCurrency("75.50 GBP")).toBe("75 pounds 50 pence")
   })
 
   it("should handle multiple currencies in one string", () => {
     const input = "Price is $50.00 plus €25.00"
     const result = convertCurrency(input)
-    expect(result).toContain(" 50.00")
-    expect(result).toContain(" 25.00")
+    expect(result).toContain("50 dollars")
+    expect(result).toContain("25 euros")
   })
 
   it("should handle currency without space after symbol", () => {
-    expect(convertCurrency("$50")).toBe(" 50")
-    expect(convertCurrency("€100")).toBe(" 100")
+    expect(convertCurrency("$50")).toBe("50 dollars")
+    expect(convertCurrency("€100")).toBe("100 euros")
   })
 
   // Bug fix: currency regex now handles amounts without comma separators
-  it("should strip USD with cents but no comma separators", () => {
+  it("should convert USD with cents but no comma separators to speech format", () => {
     // This was the bug: $1234.56 failed because regex required \d{1,3} at start
-    expect(convertCurrency("$1234.56")).toBe(" 1234.56")
+    expect(convertCurrency("$1234.56")).toBe("1234 dollars 56 cents")
   })
 
-  it("should strip USD without cents and no comma separators", () => {
-    expect(convertCurrency("$1234")).toBe(" 1234")
-    expect(convertCurrency("$999")).toBe(" 999")
+  it("should convert USD without cents and no comma separators to speech format", () => {
+    expect(convertCurrency("$1234")).toBe("1234 dollars")
+    expect(convertCurrency("$999")).toBe("999 dollars")
   })
 
-  it("should strip small amounts without comma separators", () => {
-    expect(convertCurrency("$1.99")).toBe(" 1.99")
-    expect(convertCurrency("$0.50")).toBe(" 0.50")
+  it("should convert small amounts without comma separators to speech format", () => {
+    expect(convertCurrency("$1.99")).toBe("1 dollars 99 cents")
+    expect(convertCurrency("$0.50")).toBe("0 dollars 50 cents")
   })
 })

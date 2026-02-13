@@ -139,21 +139,56 @@ export function cleanSymbols(text: string): string {
  * @example "100 EUR" → "100 euros"
  */
 export function convertCurrency(text: string): string {
-  // Handle currency symbols with amounts: $50.25, €100, £50.99, ¥1000
-  // Convert decimal amounts to speech format: $50.25 → "50 dollars 25 cents"
-  text = text.replace(/[$€£¥]\s?(\d+(?:,\d{3})*(?:\.\d{2})?)/g, (match, amount) => {
+  // Handle USD ($) with amounts: $50, $50.25
+  text = text.replace(/\$(\s?)(\d+(?:,\d{3})*(?:\.\d{2})?)/g, (_match, _space, amount) => {
     const cleaned = amount.replace(/,/g, "")
     const parts = cleaned.split(".")
     if (parts.length === 2 && parts[1].length === 2) {
       return `${parts[0]} dollars ${parts[1]} cents`
     }
-    return ` ${cleaned}`
+    return `${cleaned} dollars`
   })
-  
-  // Handle explicit currency codes: 50 USD → "50 dollars", 100 EUR → "100 euros"
+
+  // Handle EUR (€) with amounts: €50, €50.25
+  text = text.replace(/€(\s?)(\d+(?:,\d{3})*(?:\.\d{2})?)/g, (_match, _space, amount) => {
+    const cleaned = amount.replace(/,/g, "")
+    const parts = cleaned.split(".")
+    if (parts.length === 2 && parts[1].length === 2) {
+      return `${parts[0]} euros ${parts[1]} cents`
+    }
+    return `${cleaned} euros`
+  })
+
+  // Handle GBP (£) with amounts: £50, £50.99
+  text = text.replace(/£(\s?)(\d+(?:,\d{3})*(?:\.\d{2})?)/g, (_match, _space, amount) => {
+    const cleaned = amount.replace(/,/g, "")
+    const parts = cleaned.split(".")
+    if (parts.length === 2 && parts[1].length === 2) {
+      return `${parts[0]} pounds ${parts[1]} pence`
+    }
+    return `${cleaned} pounds`
+  })
+
+  // Handle JPY (¥) with amounts: ¥1000 (yen doesn't use cents)
+  text = text.replace(/¥(\s?)(\d+(?:,\d{3})*)/g, (_match, _space, amount) => {
+    const cleaned = amount.replace(/,/g, "")
+    return `${cleaned} yen`
+  })
+
+  // Handle explicit currency codes: 50.99 USD → "50 dollars 99 cents USD"
+  // Handle decimals: 50.99 USD → "50 dollars 99 cents USD"
+  text = text.replace(/(\d+)\.(\d+)\s*(USD|dollars?)\b/gi, "$1 dollars $2 cents $3")
   text = text.replace(/(\d+)\s*(USD|dollars?)\b/gi, "$1 dollars")
+
+  // Handle EUR with decimals: 50.99 EUR → "50 euros 99 cents"
+  text = text.replace(/(\d+)\.(\d+)\s*(EUR|euros?)\b/gi, "$1 euros $2 cents")
   text = text.replace(/(\d+)\s*(EUR|euros?)\b/gi, "$1 euros")
+
+  // Handle GBP with decimals: 75.50 GBP → "75 pounds 50 pence"
+  text = text.replace(/(\d+)\.(\d+)\s*(GBP|pounds?)\b/gi, "$1 pounds $2 pence")
   text = text.replace(/(\d+)\s*(GBP|pounds?)\b/gi, "$1 pounds")
+
+  // Handle JPY: 1000 JPY → "1000 yen"
   text = text.replace(/(\d+)\s*(JPY|yens?)\b/gi, "$1 yen")
   
   // Clean up any remaining extra spaces

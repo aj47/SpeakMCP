@@ -111,6 +111,7 @@
   },
   "optionalDependencies": {
     "langfuse": "^3.38.6",
+    "onnxruntime-node": "^1.19.2",
     "sherpa-onnx-node": "^1.12.23",
     "tar": "^7.5.6",
     "unbzip2-stream": "^1.4.3"

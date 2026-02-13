@@ -146,6 +146,12 @@ const getConfig = () => {
     // Gemini TTS defaults
     geminiTtsModel: "gemini-2.5-flash-preview-tts",
     geminiTtsVoice: "Kore",
+    // Supertonic TTS defaults
+    supertonicVoice: "M1",
+    supertonicLanguage: "en",
+    supertonicSpeed: 1.05,
+    supertonicSteps: 5,
+
     // Provider Section Collapse defaults - collapsed by default
     providerSectionCollapsedOpenai: true,
     providerSectionCollapsedGroq: true,

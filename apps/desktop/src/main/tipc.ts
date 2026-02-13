@@ -1115,6 +1115,48 @@ export const router = {
       }
     }),
 
+  // Supertonic (local) TTS model management
+  getSupertonicModelStatus: t.procedure.action(async () => {
+    const { getSupertonicModelStatus } = await import('./supertonic-tts')
+    return getSupertonicModelStatus()
+  }),
+
+  downloadSupertonicModel: t.procedure.action(async () => {
+    const { downloadSupertonicModel } = await import('./supertonic-tts')
+    await downloadSupertonicModel((progress) => {
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+          win.webContents.send('supertonic-model-download-progress', progress)
+        }
+      })
+    })
+    return { success: true }
+  }),
+
+  synthesizeWithSupertonic: t.procedure
+    .input<{
+      text: string
+      voice?: string
+      lang?: string
+      speed?: number
+      steps?: number
+    }>()
+    .action(async ({ input }) => {
+      const { synthesize } = await import('./supertonic-tts')
+      const result = await synthesize(
+        input.text,
+        input.voice,
+        input.lang,
+        input.speed,
+        input.steps,
+      )
+      const wavBuffer = float32ToWav(result.samples, result.sampleRate)
+      return {
+        audio: wavBuffer.toString('base64'),
+        sampleRate: result.sampleRate
+      }
+    }),
+
   createRecording: t.procedure
     .input<{
       recording: ArrayBuffer
@@ -2566,6 +2608,15 @@ export const router = {
           const wavBuffer = float32ToWav(result.samples, result.sampleRate)
           // Convert Buffer to ArrayBuffer
           audioBuffer = new Uint8Array(wavBuffer).buffer
+        } else if (providerId === "supertonic") {
+          const { synthesize } = await import('./supertonic-tts')
+          const voice = config.supertonicVoice ?? "M1"
+          const lang = config.supertonicLanguage ?? "en"
+          const speed = input.speed ?? config.supertonicSpeed ?? 1.05
+          const steps = config.supertonicSteps ?? 5
+          const result = await synthesize(processedText, voice, lang, speed, steps)
+          const wavBuffer = float32ToWav(result.samples, result.sampleRate)
+          audioBuffer = new Uint8Array(wavBuffer).buffer
         } else {
           throw new Error(`Unsupported TTS provider: ${providerId}`)
         }
@@ -2974,7 +3025,7 @@ export const router = {
       transcriptPostProcessingGroqModel?: string
       transcriptPostProcessingGeminiModel?: string
       // TTS Provider settings
-      ttsProviderId?: "openai" | "groq" | "gemini" | "kitten"
+      ttsProviderId?: "openai" | "groq" | "gemini" | "kitten" | "supertonic"
     }>()
     .action(async ({ input }) => {
         return profileService.updateProfileModelConfig(input.profileId, {

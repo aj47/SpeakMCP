@@ -350,7 +350,8 @@ describe("preprocessTextForTTS - Integration", () => {
     const input = `**Bold** thinking content. More text.`
     const result = preprocessTextForTTS(input)
     expect(result).not.toContain("**")
-    expect(result).not.toContain("thinking content")
+    // "thinking content" is regular text, not a thinking block - should remain
+    expect(result).toContain("thinking content")
   })
 
   it("should handle all options disabled", () => {

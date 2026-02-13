@@ -80,12 +80,12 @@ export function preprocessTextForTTS(
 }
 
 /** Removes thinking blocks (<think>...</think>) from text */
-function removeThinkingBlocks(text: string): string {
+export function removeThinkingBlocks(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, "")
 }
 
 /** Removes code blocks and replaces them with descriptive text */
-function removeCodeBlocks(text: string): string {
+export function removeCodeBlocks(text: string): string {
   text = text.replace(/```[\s\S]*?```/g, " [code block] ")
   text = text.replace(/`([^`]+)`/g, " $1 ")
   text = text.replace(/<[^>]*>/g, " ")
@@ -98,7 +98,7 @@ export function removeUrls(text: string): string {
 }
 
 /** Converts markdown formatting to speech-friendly equivalents */
-function convertMarkdownToSpeech(text: string): string {
+export function convertMarkdownToSpeech(text: string): string {
   text = text.replace(/^#{1,6}\s+(.+)$/gm, "Heading: $1.")
   text = text.replace(/\*\*([^*]+)\*\*/g, "$1")
   text = text.replace(/__([^_]+)__/g, "$1")
@@ -112,7 +112,7 @@ function convertMarkdownToSpeech(text: string): string {
 }
 
 /** Cleans up symbols that don't read well in speech */
-function cleanSymbols(text: string): string {
+export function cleanSymbols(text: string): string {
   const symbolReplacements: Record<string, string> = {
     "&": " and ", "@": " at ", "#": " hash ", "%": " percent ",
     "++": " plus plus ", "--": " minus minus ", "=>": " arrow ", "->": " arrow ",
@@ -153,7 +153,7 @@ export function convertCurrency(text: string): string {
 }
 
 /** Converts numbers to more speech-friendly formats */
-function convertNumbers(text: string): string {
+export function convertNumbers(text: string): string {
   // Version numbers: v1.2.3 or 1.2.3 → "version 1 point 2 point 3"
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
 
@@ -179,7 +179,7 @@ function convertNumbers(text: string): string {
 }
 
 /** Normalizes whitespace and cleans up the text */
-function normalizeWhitespace(text: string): string {
+export function normalizeWhitespace(text: string): string {
   text = text.replace(/\s+/g, " ")
   text = text.trim()
   text = text.replace(/([a-zA-Z0-9])\s*$/, "$1.")
@@ -188,7 +188,7 @@ function normalizeWhitespace(text: string): string {
 }
 
 /** Truncates text at a reasonable sentence boundary */
-function truncateText(text: string, maxLength: number): string {
+export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text
   const truncated = text.substring(0, maxLength)
   const lastSentenceEnd = Math.max(

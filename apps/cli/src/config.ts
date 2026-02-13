@@ -206,3 +206,17 @@ export function deleteConfig(): void {
   }
 }
 
+export function resetConfig(): void {
+  ensureConfigDir()
+  
+  // Reset to default values
+  const defaults: CliConfig = {
+    serverUrl: '',
+    apiKey: '',
+    conversationId: undefined,
+    theme: 'dark'
+  }
+  
+  writeFileSync(CONFIG_FILE, JSON.stringify(defaults, null, 2))
+}
+

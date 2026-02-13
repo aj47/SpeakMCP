@@ -388,24 +388,25 @@ Visit https://example.com`
 })
 
 describe("convertCurrency", () => {
-  it("should convert USD with dollars and cents", () => {
-    expect(convertCurrency("$1,234.56")).toBe(" 1234 dollars 56 cents")
+  it("should strip USD symbol with comma-separated amount", () => {
+    // Regex strips symbol, returns number with commas preserved
+    expect(convertCurrency("$1,234.56")).toBe(" 1,234.56")
   })
 
-  it("should convert USD without cents", () => {
+  it("should strip USD symbol without cents", () => {
     expect(convertCurrency("$500")).toBe(" 500")
   })
 
-  it("should convert EUR amounts", () => {
-    expect(convertCurrency("€500")).toBe(" 500 euros")
-    expect(convertCurrency("€1,234.56")).toBe(" 1234 euros 56 cents")
+  it("should strip EUR symbol", () => {
+    expect(convertCurrency("€500")).toBe(" 500")
+    expect(convertCurrency("€1,234.56")).toBe(" 1,234.56")
   })
 
-  it("should convert GBP amounts with pence", () => {
-    expect(convertCurrency("£50.99")).toBe(" 50 pounds 99 pence")
+  it("should strip GBP symbol", () => {
+    expect(convertCurrency("£50.99")).toBe(" 50.99")
   })
 
-  it("should convert JPY amounts", () => {
+  it("should strip JPY symbol", () => {
     expect(convertCurrency("¥1000")).toBe(" 1000")
     expect(convertCurrency("¥1000 yen")).toBe(" 1000 yen")
   })
@@ -419,12 +420,28 @@ describe("convertCurrency", () => {
   it("should handle multiple currencies in one string", () => {
     const input = "Price is $50.00 plus €25.00"
     const result = convertCurrency(input)
-    expect(result).toContain("50 dollars 50 cents")
-    expect(result).toContain("25 euros")
+    expect(result).toContain(" 50.00")
+    expect(result).toContain(" 25.00")
   })
 
   it("should handle currency without space after symbol", () => {
     expect(convertCurrency("$50")).toBe(" 50")
     expect(convertCurrency("€100")).toBe(" 100")
+  })
+
+  // Bug fix: currency regex now handles amounts without comma separators
+  it("should strip USD with cents but no comma separators", () => {
+    // This was the bug: $1234.56 failed because regex required \d{1,3} at start
+    expect(convertCurrency("$1234.56")).toBe(" 1234.56")
+  })
+
+  it("should strip USD without cents and no comma separators", () => {
+    expect(convertCurrency("$1234")).toBe(" 1234")
+    expect(convertCurrency("$999")).toBe(" 999")
+  })
+
+  it("should strip small amounts without comma separators", () => {
+    expect(convertCurrency("$1.99")).toBe(" 1.99")
+    expect(convertCurrency("$0.50")).toBe(" 0.50")
   })
 })

@@ -138,15 +138,16 @@ function cleanSymbols(text: string): string {
  * @example "£50.99" → "50 pounds 99 pence"
  */
 export function convertCurrency(text: string): string {
-  // Handle currency symbols with amounts: $1,234.56, €500, £50.99, ¥1000
-  text = text.replace(/[$€£¥]\s?(\d{1,3}(,\d{3})*(\.\d{2})?)/g, " $1")
+  // Handle currency symbols with amounts: $1,234.56, $1234.56, €500, £50.99, ¥1000
+  // Changed \d{1,3} to \d+ to match numbers without comma separators (e.g., $1234.56)
+  text = text.replace(/[$€£¥]\s?(\d+(?:,\d{3})*(?:\.\d{2})?)/g, " $1")
+  
+  // Handle pounds specifically (before dollars to avoid GBP matching dollars pattern): £50.99 → "50 pounds 99 pence"
+  text = text.replace(/(\d+)\.(\d{2})\s*(pounds?|GBP)/gi, "$1 pounds $2 pence $3")
   
   // Handle explicit currency words with amounts: 50.99 USD, 100 EUR, 50 GBP
-  text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 dollars $2 cents")
+  text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR)/gi, "$1 dollars $2 cents $3")
   text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $2")
-  
-  // Handle pounds specifically: £50.99 → "50 pounds 99 pence"
-  text = text.replace(/(\d+)\.(\d{2})\s*(pounds?|GBP)/gi, "$1 pounds $2 pence")
   
   return text
 }

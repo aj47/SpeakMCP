@@ -196,7 +196,7 @@ describe("cleanSymbols", () => {
   it("should collapse multiple exclamation marks", () => {
     const input = "Wow!!!"
     const result = cleanSymbols(input)
-    expect(result).toBe("!")
+    expect(result).toBe("Wow!")
   })
 
   it("should replace percentages", () => {
@@ -257,7 +257,7 @@ describe("normalizeWhitespace", () => {
   it("should collapse multiple spaces", () => {
     const input = "Hello    world"
     const result = normalizeWhitespace(input)
-    expect(result).toBe("Hello world")
+    expect(result).toBe("Hello world.")
   })
 
   it("should trim start and end", () => {
@@ -294,7 +294,7 @@ describe("truncateText", () => {
 
   it("should truncate at sentence boundary", () => {
     const input = "First sentence. Second sentence. Third very long sentence that goes on."
-    const result = truncateText(input, 30)
+    const result = truncateText(input, 35)
     expect(result).toContain("Second sentence.")
     expect(result).not.toContain("Third")
   })

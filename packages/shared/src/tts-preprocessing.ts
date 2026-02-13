@@ -136,18 +136,28 @@ export function cleanSymbols(text: string): string {
  * @example "$1,234.56" → "1234 dollars 56 cents"
  * @example "€500" → "500 euros"
  * @example "£50.99" → "50 pounds 99 pence"
+ * @example "100 EUR" → "100 euros"
  */
 export function convertCurrency(text: string): string {
-  // Handle currency symbols with amounts: $1,234.56, $1234.56, €500, £50.99, ¥1000
-  // Changed \d{1,3} to \d+ to match numbers without comma separators (e.g., $1234.56)
-  text = text.replace(/[$€£¥]\s?(\d+(?:,\d{3})*(?:\.\d{2})?)/g, " $1")
+  // Handle currency symbols with amounts: $50.25, €100, £50.99, ¥1000
+  // Convert decimal amounts to speech format: $50.25 → "50 dollars 25 cents"
+  text = text.replace(/[$€£¥]\s?(\d+(?:,\d{3})*(?:\.\d{2})?)/g, (match, amount) => {
+    const cleaned = amount.replace(/,/g, "")
+    const parts = cleaned.split(".")
+    if (parts.length === 2 && parts[1].length === 2) {
+      return `${parts[0]} dollars ${parts[1]} cents`
+    }
+    return ` ${cleaned}`
+  })
   
-  // Handle pounds specifically (before dollars to avoid GBP matching dollars pattern): £50.99 → "50 pounds 99 pence"
-  text = text.replace(/(\d+)\.(\d{2})\s*(pounds?|GBP)/gi, "$1 pounds $2 pence $3")
+  // Handle explicit currency codes: 50 USD → "50 dollars", 100 EUR → "100 euros"
+  text = text.replace(/(\d+)\s*(USD|dollars?)\b/gi, "$1 dollars")
+  text = text.replace(/(\d+)\s*(EUR|euros?)\b/gi, "$1 euros")
+  text = text.replace(/(\d+)\s*(GBP|pounds?)\b/gi, "$1 pounds")
+  text = text.replace(/(\d+)\s*(JPY|yens?)\b/gi, "$1 yen")
   
-  // Handle explicit currency words with amounts: 50.99 USD, 100 EUR, 50 GBP
-  text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR)/gi, "$1 dollars $2 cents $3")
-  text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $2")
+  // Clean up any remaining extra spaces
+  text = text.replace(/\s+/g, " ")
   
   return text
 }
@@ -157,14 +167,14 @@ export function convertNumbers(text: string): string {
   // Version numbers: v1.2.3 or 1.2.3 → "version 1 point 2 point 3"
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
 
-  // Decimal numbers with dots: 3.14 → "3 point 14"
+  // Currency conversion first (delegate to convertCurrency) - must run before decimal regex
+  text = convertCurrency(text)
+
+  // Decimal numbers with dots: 3.14 → "3 point 14" (only for non-currency amounts now)
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
 
   // Phone numbers: (123) 456-7890 → "123 456 7890", 123-456-7890 → "123 456 7890"
   text = text.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, (match) => match.replace(/[-.\s()]/g, " "))
-
-  // Currency conversion (delegate to convertCurrency)
-  text = convertCurrency(text)
 
   // Percentages: 50% → "50 percent", 12.5% → "12 point 5 percent"
   text = text.replace(/(\d+(\.\d+)?)\s*%/g, "$1 percent")
@@ -182,6 +192,7 @@ export function convertNumbers(text: string): string {
 export function normalizeWhitespace(text: string): string {
   text = text.replace(/\s+/g, " ")
   text = text.trim()
+  // Only add trailing period if text ends with alphanumeric and doesn't already end with punctuation
   text = text.replace(/([a-zA-Z0-9])\s*$/, "$1.")
   text = text.replace(/([.!?])\s+/g, "$1 ")
   return text

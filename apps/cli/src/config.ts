@@ -3,7 +3,7 @@
  * Priority: CLI flags > env vars > config file > auto-discovery
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
 import { homedir } from 'os'
 import { join, dirname } from 'path'
 import type { CliConfig } from './types'
@@ -198,5 +198,11 @@ export function exportConfig(): string {
 
 export function getConfigPath(): string {
   return CONFIG_FILE
+}
+
+export function deleteConfig(): void {
+  if (existsSync(CONFIG_FILE)) {
+    unlinkSync(CONFIG_FILE)
+  }
 }
 

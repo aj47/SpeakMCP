@@ -134,11 +134,29 @@ function cleanSymbols(text: string): string {
 
 /** Converts numbers to more speech-friendly formats */
 function convertNumbers(text: string): string {
+  // Version numbers: v1.2.3 or 1.2.3 → "version 1 point 2 point 3"
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
+
+  // Decimal numbers with dots: 3.14 → "3 point 14"
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
+
+  // Phone numbers: (123) 456-7890 → "123 456 7890", 123-456-7890 → "123 456 7890"
+  text = text.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, (match) => match.replace(/[-.\s()]/g, " "))
+
+  // Currency: $1,234.56 → "1234 dollars 56 cents", €500 → "500 euros"
+  text = text.replace(/[$€£¥]\s?(\d{1,3}(,\d{3})*(\.\d{2})?)/g, " $1")
+  text = text.replace(/(\d+)\.(\d{2})\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 dollars $2 cents")
+  text = text.replace(/(\d+)\s*(dollars?|USD|EUR|GBP|JPY)/gi, "$1 $3")
+
+  // Percentages: 50% → "50 percent", 12.5% → "12 point 5 percent"
+  text = text.replace(/(\d+(\.\d+)?)\s*%/g, "$1 percent")
+
+  // Ordinal numbers: 1st, 2nd, 3rd, 4th → "1st", "2nd", etc. (keep as-is for TTS to handle)
+
   // Remove commas from numbers - TTS engines pronounce large numbers naturally
   // Use lookahead to match any comma between digits (handles 1,234,567,890 etc.)
   text = text.replace(/(\d),(?=\d)/g, "$1")
+
   return text
 }
 

@@ -1135,10 +1135,9 @@ export const router = {
         // Initialize recognizer if needed
         await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-        // TODO: Audio format conversion needed
-        // The input is webm ArrayBuffer from MediaRecorder
-        // Parakeet expects Float32Array samples at 16kHz mono
-        // For now, this will not work correctly until audio conversion is added
+        // TODO(AUDIO-FORMAT): Convert webm/opus ArrayBuffer to Float32Array at 16kHz mono
+        // Issue: MediaRecorder produces webm/opus, but Parakeet expects Float32Array samples
+        // Required: 1) Parse webm/opus to PCM, 2) Resample to 16kHz, 3) Convert to mono Float32Array
         transcript = await parakeetStt.transcribe(input.recording, 16000)
         transcript = await postProcessTranscript(transcript)
       } else {
@@ -1431,9 +1430,9 @@ export const router = {
 
               await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-              // TODO: Audio format conversion needed
-              // The input is webm ArrayBuffer from MediaRecorder
-              // Parakeet expects Float32Array samples at 16kHz mono
+              // TODO(AUDIO-FORMAT): Convert webm/opus ArrayBuffer to Float32Array at 16kHz mono
+              // Issue: MediaRecorder produces webm/opus, but Parakeet expects Float32Array samples
+              // Required: 1) Parse webm/opus to PCM, 2) Resample to 16kHz, 3) Convert to mono Float32Array
               transcript = await parakeetStt.transcribe(input.recording, 16000)
             } else {
               const form = new FormData()
@@ -1616,9 +1615,9 @@ export const router = {
 
           await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-          // TODO: Audio format conversion needed
-          // The input is webm ArrayBuffer from MediaRecorder
-          // Parakeet expects Float32Array samples at 16kHz mono
+          // TODO(AUDIO-FORMAT): Convert webm/opus ArrayBuffer to Float32Array at 16kHz mono
+          // Issue: MediaRecorder produces webm/opus, but Parakeet expects Float32Array samples
+          // Required: 1) Parse webm/opus to PCM, 2) Resample to 16kHz, 3) Convert to mono Float32Array
           transcript = await parakeetStt.transcribe(input.recording, 16000)
         } else {
           // Use OpenAI or Groq for transcription

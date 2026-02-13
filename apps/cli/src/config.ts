@@ -3,7 +3,7 @@
  * Priority: CLI flags > env vars > config file > auto-discovery
  */
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { CliConfig } from './types'
@@ -122,6 +122,27 @@ function loadConfigFile(): Partial<CliConfig> {
     // Ignore config file errors
   }
   return {}
+}
+
+export function ensureConfigDir(): void {
+  try {
+    if (!existsSync(CONFIG_DIR)) {
+      mkdirSync(CONFIG_DIR, { recursive: true })
+    }
+  } catch {
+    // Ignore directory errors
+  }
+}
+
+export function saveConfig(config: Partial<CliConfig>): void {
+  ensureConfigDir()
+  try {
+    const currentConfig = loadConfigFile()
+    const mergedConfig = { ...currentConfig, ...config }
+    writeFileSync(CONFIG_FILE, JSON.stringify(mergedConfig, null, 2))
+  } catch {
+    // Silently fail on save errors
+  }
 }
 
 async function probeServer(url: string): Promise<boolean> {

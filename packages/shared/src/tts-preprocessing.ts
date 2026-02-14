@@ -75,12 +75,26 @@ export function preprocessForTTS(
 /** Removes thinking blocks (</minimax:tool_call>…</minimax:tool_call>, <thinking>…</thinking>) from text */
 export function removeThinkingBlocks(text: string): string {
   // Remove XML-style thinking/thought blocks and their content (case-insensitive)
-  // Match <thinking>...</thinking> and <function_call>...</think> formats
-  let result = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-  result = result.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, "")
+  // Match <thinking>...</thinking> and </minimax:tool_call>...</thinking> formats
+  // Handle nested tags by iteratively removing innermost blocks first
+  
+  let result = text
+  let previous
+  
+  // Keep removing until no more changes
+  do {
+    previous = result
+    
+    // Pattern 1: <thinking>...</thinking>
+    result = result.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    
+    // Pattern 2: <function_call>...</thinking>
+    result = result.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, "")
+    
+  } while (result !== previous)
+  
   return result
 }
-
 /** Removes code blocks and replaces them with descriptive text */
 export function removeCodeBlocks(text: string): string {
   text = text.replace(/```[\s\S]*?```/g, " [code block] ")
@@ -89,11 +103,9 @@ export function removeCodeBlocks(text: string): string {
   return text
 }
 
-/** Removes URLs and replaces them with descriptive text */
 export function removeUrls(text: string): string {
   return removeUrlsAndEmails(text)
 }
-
 /** Converts markdown formatting to speech-friendly equivalents */
 export function convertMarkdownToSpeech(text: string): string {
   text = text.replace(/^#{1,6}\s+(.+)$/gm, "Heading: $1.")

@@ -33,11 +33,61 @@ export interface BaseChatMessage {
 }
 
 /**
+ * Session source types - identifies where a session originated from
+ */
+export enum SessionSourceType {
+  NATIVE = 'native',
+  AUGMENT = 'augment',
+  CLAUDE_CODE = 'claude_code',
+  EXTERNAL = 'external',
+}
+
+/**
+ * Session source badge - visual indicator for session source in UI
+ */
+export interface SessionSourceBadge {
+  type: SessionSourceType;
+  label: string;
+  color: string;
+  icon?: string;
+}
+
+/**
+ * Source mapping for session badges
+ */
+export const SESSION_SOURCE_BADGES: Record<SessionSourceType, SessionSourceBadge> = {
+  [SessionSourceType.NATIVE]: {
+    type: SessionSourceType.NATIVE,
+    label: 'SpeakMCP',
+    color: '#6366f1',
+  },
+  [SessionSourceType.AUGMENT]: {
+    type: SessionSourceType.AUGMENT,
+    label: 'A',
+    color: '#8b5cf6', // Purple badge
+  },
+  [SessionSourceType.CLAUDE_CODE]: {
+    type: SessionSourceType.CLAUDE_CODE,
+    label: 'C',
+    color: '#f59e0b', // Orange badge
+  },
+  [SessionSourceType.EXTERNAL]: {
+    type: SessionSourceType.EXTERNAL,
+    label: 'External',
+    color: '#6b7280',
+  },
+};
+
+/**
  * Conversation history message - used in API responses and conversation storage.
  * Extends BaseChatMessage with an optional timestamp.
  */
 export interface ConversationHistoryMessage extends BaseChatMessage {
   timestamp?: number;
+  /** Source of this message (native or external session) */
+  sourceType?: SessionSourceType;
+  /** Session ID for grouping messages from the same session */
+  sessionId?: string;
 }
 
 /**

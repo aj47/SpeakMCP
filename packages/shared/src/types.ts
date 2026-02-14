@@ -44,12 +44,15 @@ export enum SessionSourceType {
 
 /**
  * Session source badge - visual indicator for session source in UI
+ * Includes badges for Augment (purple A) and Claude Code (orange C)
  */
 export interface SessionSourceBadge {
   type: SessionSourceType;
   label: string;
   color: string;
   icon?: string;
+  /** CSS class for styling */
+  cssClass?: string;
 }
 
 /**
@@ -59,27 +62,32 @@ export type MessageSource = SessionSourceType;
 
 /**
  * Source mapping for session badges
+ * Displays badges for Augment (purple A) and Claude Code (orange C)
  */
 export const SESSION_SOURCE_BADGES: Record<SessionSourceType, SessionSourceBadge> = {
   [SessionSourceType.NATIVE]: {
     type: SessionSourceType.NATIVE,
     label: 'SpeakMCP',
     color: '#6366f1',
+    cssClass: 'badge-native',
   },
   [SessionSourceType.AUGMENT]: {
     type: SessionSourceType.AUGMENT,
     label: 'A',
-    color: '#8b5cf6', // Purple badge
+    color: '#8b5cf6', // Purple badge for Augment
+    cssClass: 'badge-augment',
   },
   [SessionSourceType.CLAUDE_CODE]: {
     type: SessionSourceType.CLAUDE_CODE,
     label: 'C',
-    color: '#f59e0b', // Orange badge
+    color: '#f59e0b', // Orange badge for Claude Code
+    cssClass: 'badge-claude-code',
   },
   [SessionSourceType.EXTERNAL]: {
     type: SessionSourceType.EXTERNAL,
     label: 'External',
     color: '#6b7280',
+    cssClass: 'badge-external',
   },
 };
 

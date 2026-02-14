@@ -1,6 +1,6 @@
 /**
  * Claude Code Session Provider
- *
+ * 
  * Reads sessions from ~/.claude/projects/ directory.
  * Sessions are JSONL files with one JSON object per line.
  * Project folders are named with encoded paths (e.g., -Users-ajjoobandi-Development-project)
@@ -8,9 +8,15 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import type { MessageSource } from './types';
-import type { SessionData, SessionMessage } from './session-store';
+import { log } from '../debug';
+import type {
+  ExternalSessionProvider,
+  ExternalSessionMetadata,
+  ExternalSession,
+  ExternalSessionMessage,
+  ContinueSessionOptions,
+  ContinueSessionResult,
+} from './external-session-types';
 
 // Claude Code JSONL line structure (partial)
 interface ClaudeCodeLine {
@@ -32,7 +38,8 @@ interface ClaudeCodeLine {
  * Get the Claude Code projects directory path
  */
 export function getClaudeProjectsPath(): string {
-  return path.join(os.homedir(), '.claude', 'projects');
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '/home/user';
+  return path.join(homeDir, '.claude', 'projects');
 }
 
 /**
@@ -47,29 +54,16 @@ function decodeProjectPath(folderName: string): string {
 /**
  * Parse first few lines of JSONL to get session metadata
  */
-export async function parseClaudeCodeSessionMetadata(
-  filePath: string,
-  projectPath: string
-): Promise<{
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  source: MessageSource;
-  workspacePath?: string;
-  messageCount: number;
-  preview: string;
-  filePath: string;
-} | null> {
+async function parseSessionMetadata(filePath: string, projectPath: string): Promise<ExternalSessionMetadata | null> {
   try {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const lines = content.split('\n').filter(l => l.trim());
-
+    
     if (lines.length === 0) return null;
-
+    
     // Parse first line to get session info
     const firstLine: ClaudeCodeLine = JSON.parse(lines[0]);
-
+    
     // Skip agent warmup files and queue operations
     if (firstLine.type === 'queue-operation') {
       // Find first actual message
@@ -77,13 +71,11 @@ export async function parseClaudeCodeSessionMetadata(
         try {
           const parsed = JSON.parse(l);
           return parsed.type === 'user' || parsed.type === 'assistant';
-        } catch {
-          return false;
-        }
+        } catch { return false; }
       });
       if (!firstMessage) return null;
     }
-
+    
     // Find first user message for preview
     let preview = '';
     let title = '';
@@ -102,201 +94,185 @@ export async function parseClaudeCodeSessionMetadata(
           }
           break;
         }
-      } catch {
-        // skip malformed lines
-      }
+      } catch { /* skip malformed lines */ }
     }
-
+    
     // Get file stats for timestamps
     const stats = await fs.promises.stat(filePath);
-
-    // Extract session ID from filename (UUID.jsonl or session-*.jsonl)
+    
+    // Extract session ID from filename (UUID.jsonl or agent-xxx.jsonl)
     const fileName = path.basename(filePath, '.jsonl');
     const sessionId = firstLine.sessionId || fileName;
-
+    
     return {
       id: sessionId,
       title: title || fileName,
       createdAt: stats.birthtimeMs,
       updatedAt: stats.mtimeMs,
-      source: 'claude-code' as MessageSource,
+      source: 'claude-code',
       workspacePath: firstLine.cwd || projectPath,
       messageCount: lines.length,
       preview,
       filePath,
     };
   } catch (error) {
-    console.error(`[ClaudeCodeProvider] Failed to parse session ${filePath}:`, error);
+    log(`[ClaudeCodeProvider] Failed to parse session ${filePath}: ${error}`);
     return null;
   }
 }
 
-/**
- * Load full Claude Code session data
- */
-export async function loadClaudeCodeSession(
-  sessionId: string,
-  filePath: string
-): Promise<(SessionData & { source: MessageSource }) | null> {
-  try {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const lines = content.split('\n').filter(l => l.trim());
-
-    const messages: SessionMessage[] = [];
-    let cwd: string | undefined;
-
-    for (const line of lines) {
-      try {
-        const parsed: ClaudeCodeLine = JSON.parse(line);
-        if (!cwd && parsed.cwd) cwd = parsed.cwd;
-
-        if ((parsed.type === 'user' || parsed.type === 'assistant') && parsed.message) {
-          const content = parsed.message.content;
-          const textContent = typeof content === 'string'
-            ? content
-            : (content.find(c => c.type === 'text')?.text || '');
-
-          messages.push({
-            role: parsed.message.role,
-            content: textContent,
-            source: 'claude-code',
-            timestamp: new Date(parsed.timestamp).getTime(),
-          });
-        }
-      } catch {
-        // skip malformed lines
-      }
+export class ClaudeCodeSessionProvider implements ExternalSessionProvider {
+  readonly source = 'claude-code' as const;
+  readonly displayName = 'Claude Code';
+  
+  private projectsPath: string;
+  private metadataCache: Map<string, ExternalSessionMetadata> = new Map();
+  private lastCacheTime: number = 0;
+  private readonly CACHE_TTL_MS = 30000; // 30 seconds
+  
+  constructor() {
+    this.projectsPath = getClaudeProjectsPath();
+  }
+  
+  async isAvailable(): Promise<boolean> {
+    try {
+      await fs.promises.access(this.projectsPath, fs.constants.R_OK);
+      return true;
+    } catch {
+      return false;
     }
-
-    const firstMessage = messages.find(m => m.role === 'user');
-
-    const sessionData: SessionData & { source: MessageSource } = {
-      id: sessionId,
-      conversationId: sessionId,
-      messages,
-      metadata: {
-        title: firstMessage?.content.slice(0, 50) || `Claude Code ${sessionId.slice(0, 8)}`,
-        model: undefined,
-        lastSource: 'claude-code',
-        tags: ['claude-code'],
-        workspacePath: cwd,
-      },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      source: 'claude-code',
-    };
-
-    return sessionData;
-  } catch (error) {
-    console.error(`[ClaudeCodeProvider] Failed to load session ${sessionId}:`, error);
-    return null;
   }
-}
+  
+  async getSessionMetadata(limit: number = 100): Promise<ExternalSessionMetadata[]> {
+    // Check cache validity
+    const now = Date.now();
+    if (this.metadataCache.size > 0 && (now - this.lastCacheTime) < this.CACHE_TTL_MS) {
+      const cached = Array.from(this.metadataCache.values());
+      return cached.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+    }
+    
+    try {
+      // List all project directories
+      const projectDirs = await fs.promises.readdir(this.projectsPath);
+      const allSessions: Array<{ filePath: string; projectPath: string; mtime: number }> = [];
 
-/**
- * List all Claude Code session metadata
- */
-export async function listClaudeCodeSessions(
-  limit: number = 100
-): Promise<Array<{
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  source: MessageSource;
-  workspacePath?: string;
-  messageCount: number;
-  preview: string;
-  filePath: string;
-}>> {
-  const projectsPath = getClaudeProjectsPath();
+      // Scan each project directory for session files
+      for (const projectDir of projectDirs) {
+        const projectFullPath = path.join(this.projectsPath, projectDir);
+        const projectPath = decodeProjectPath(projectDir);
 
-  try {
-    await fs.promises.access(projectsPath, fs.constants.R_OK);
-  } catch {
-    // Claude Code not installed or projects directory doesn't exist
-    return [];
-  }
+        try {
+          const stat = await fs.promises.stat(projectFullPath);
+          if (!stat.isDirectory()) continue;
 
-  try {
-    // List all project directories
-    const projectDirs = await fs.promises.readdir(projectsPath);
-    const allSessions: Array<{ filePath: string; projectPath: string; mtime: number }> = [];
+          const files = await fs.promises.readdir(projectFullPath);
+          for (const file of files) {
+            // Only process .jsonl files that look like sessions (UUID or session-*)
+            if (!file.endsWith('.jsonl')) continue;
+            // Skip agent-* files (these are sub-agent warmup sessions)
+            if (file.startsWith('agent-')) continue;
 
-    // Scan each project directory for session files
-    for (const projectDir of projectDirs) {
-      const projectFullPath = path.join(projectsPath, projectDir);
-      const projectPath = decodeProjectPath(projectDir);
-
-      try {
-        const stat = await fs.promises.stat(projectFullPath);
-        if (!stat.isDirectory()) continue;
-
-        const files = await fs.promises.readdir(projectFullPath);
-        for (const file of files) {
-          // Only process .jsonl files that look like sessions (UUID or session-*)
-          if (!file.endsWith('.jsonl')) continue;
-          // Skip agent-* files (these are sub-agent warmup sessions)
-          if (file.startsWith('agent-')) continue;
-
-          const filePath = path.join(projectFullPath, file);
-          try {
-            const fileStat = await fs.promises.stat(filePath);
-            if (fileStat.isFile()) {
-              allSessions.push({ filePath, projectPath, mtime: fileStat.mtimeMs });
-            }
-          } catch {
-            // skip inaccessible files
+            const filePath = path.join(projectFullPath, file);
+            try {
+              const fileStat = await fs.promises.stat(filePath);
+              if (fileStat.isFile()) {
+                allSessions.push({ filePath, projectPath, mtime: fileStat.mtimeMs });
+              }
+            } catch { /* skip inaccessible files */ }
           }
-        }
-      } catch {
-        // skip inaccessible directories
+        } catch { /* skip inaccessible directories */ }
       }
+
+      // Sort by modification time and take limit
+      const sortedSessions = allSessions
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, limit);
+
+      // Parse metadata in parallel
+      const CONCURRENCY = 10;
+      const results: ExternalSessionMetadata[] = [];
+
+      for (let i = 0; i < sortedSessions.length; i += CONCURRENCY) {
+        const batch = sortedSessions.slice(i, i + CONCURRENCY);
+        const batchResults = await Promise.all(
+          batch.map(({ filePath, projectPath }) => parseSessionMetadata(filePath, projectPath))
+        );
+        results.push(...batchResults.filter((r): r is ExternalSessionMetadata => r !== null));
+      }
+
+      // Update cache
+      this.metadataCache.clear();
+      for (const meta of results) {
+        this.metadataCache.set(meta.id, meta);
+      }
+      this.lastCacheTime = now;
+
+      return results.sort((a, b) => b.updatedAt - a.updatedAt);
+    } catch (error) {
+      log(`[ClaudeCodeProvider] Failed to list sessions: ${error}`);
+      return [];
+    }
+  }
+
+  async loadSession(sessionId: string): Promise<ExternalSession | null> {
+    // Check cache for file path
+    const cached = this.metadataCache.get(sessionId);
+    if (!cached?.filePath) {
+      log(`[ClaudeCodeProvider] Session ${sessionId} not found in cache`);
+      return null;
     }
 
-    // Sort by modification time and take limit
-    const sortedSessions = allSessions
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, limit);
+    try {
+      const content = await fs.promises.readFile(cached.filePath, 'utf-8');
+      const lines = content.split('\n').filter(l => l.trim());
 
-    // Parse metadata in parallel
-    const CONCURRENCY = 10;
-    const results: Array<{
-      id: string;
-      title: string;
-      createdAt: number;
-      updatedAt: number;
-      source: MessageSource;
-      workspacePath?: string;
-      messageCount: number;
-      preview: string;
-      filePath: string;
-    }> = [];
+      const messages: ExternalSessionMessage[] = [];
+      let cwd: string | undefined;
 
-    for (let i = 0; i < sortedSessions.length; i += CONCURRENCY) {
-      const batch = sortedSessions.slice(i, i + CONCURRENCY);
-      const batchResults = await Promise.all(
-        batch.map(({ filePath, projectPath }) => parseClaudeCodeSessionMetadata(filePath, projectPath))
-      );
-      results.push(...batchResults.filter((r): r is NonNullable<typeof r> => r !== null));
+      for (const line of lines) {
+        try {
+          const parsed: ClaudeCodeLine = JSON.parse(line);
+          if (!cwd && parsed.cwd) cwd = parsed.cwd;
+
+          if ((parsed.type === 'user' || parsed.type === 'assistant') && parsed.message) {
+            const content = parsed.message.content;
+            const textContent = typeof content === 'string'
+              ? content
+              : (content.find(c => c.type === 'text')?.text || '');
+
+            messages.push({
+              role: parsed.message.role,
+              content: textContent,
+              timestamp: new Date(parsed.timestamp).getTime(),
+            });
+          }
+        } catch { /* skip malformed lines */ }
+      }
+
+      return {
+        ...cached,
+        messages,
+        workspacePath: cwd || cached.workspacePath,
+      };
+    } catch (error) {
+      log(`[ClaudeCodeProvider] Failed to load session ${sessionId}: ${error}`);
+      return null;
     }
+  }
 
-    return results.sort((a, b) => b.updatedAt - a.updatedAt);
-  } catch (error) {
-    console.error(`[ClaudeCodeProvider] Failed to list sessions:`, error);
-    return [];
+  async continueSession(options: ContinueSessionOptions): Promise<ContinueSessionResult> {
+    const { session, workspacePath } = options;
+    
+    // For Claude Code sessions, we can open the session in Claude Code CLI
+    // This is a placeholder - actual implementation depends on how SpeakMCP integrates with Claude Code
+
+    log(`[ClaudeCodeProvider] Continue session request: ${session.id}`);
+
+    return {
+      success: false,
+      error: 'Session continuation for Claude Code requires external integration. Use Claude Code CLI directly.',
+    };
   }
 }
 
-/**
- * Check if Claude Code is available (projects directory exists)
- */
-export async function isClaudeCodeAvailable(): Promise<boolean> {
-  const projectsPath = getClaudeProjectsPath();
-  try {
-    await fs.promises.access(projectsPath, fs.constants.R_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export const claudeCodeSessionProvider = new ClaudeCodeSessionProvider();

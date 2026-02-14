@@ -7,9 +7,15 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import type { MessageSource } from './types';
-import type { SessionData, SessionMessage, SessionMetadata } from './session-store';
+import { log } from '../debug';
+import type {
+  ExternalSessionProvider,
+  ExternalSessionMetadata,
+  ExternalSession,
+  ExternalSessionMessage,
+  ContinueSessionOptions,
+  ContinueSessionResult,
+} from './external-session-types';
 
 // Augment session file structure (partial, only what we need)
 interface AugmentSessionFile {
@@ -41,7 +47,8 @@ interface AugmentSessionFile {
  * Get the Augment sessions directory path
  */
 export function getAugmentSessionsPath(): string {
-  return path.join(os.homedir(), '.augment', 'sessions');
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '/home/user';
+  return path.join(homeDir, '.augment', 'sessions');
 }
 
 /**
@@ -58,19 +65,7 @@ function extractWorkspacePath(session: AugmentSessionFile): string | undefined {
 /**
  * Parse Augment session file to metadata (fast, minimal parsing)
  */
-export async function parseAugmentSessionMetadata(
-  filePath: string
-): Promise<{
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  source: MessageSource;
-  workspacePath?: string;
-  messageCount: number;
-  preview: string;
-  filePath: string;
-} | null> {
+async function parseSessionMetadata(filePath: string): Promise<ExternalSessionMetadata | null> {
   try {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const session: AugmentSessionFile = JSON.parse(content);
@@ -84,164 +79,167 @@ export async function parseAugmentSessionMetadata(
       title: session.title || preview.slice(0, 50) || 'Untitled Session',
       createdAt: new Date(session.created).getTime(),
       updatedAt: new Date(session.modified).getTime(),
-      source: 'augment' as MessageSource,
+      source: 'augment',
       workspacePath: extractWorkspacePath(session),
       messageCount: session.chatHistory?.length ? session.chatHistory.length * 2 : 0,
       preview,
       filePath,
     };
   } catch (error) {
-    console.error(`[AugmentProvider] Failed to parse session ${filePath}:`, error);
+    log(`[AugmentProvider] Failed to parse session ${filePath}: ${error}`);
     return null;
   }
 }
 
-/**
- * Load full Augment session data
- */
-export async function loadAugmentSession(
-  sessionId: string,
-  filePath?: string
-): Promise<(SessionData & { source: MessageSource }) | null> {
-  const sessionsPath = getAugmentSessionsPath();
-  const actualFilePath = filePath || path.join(sessionsPath, `${sessionId}.json`);
+export class AugmentSessionProvider implements ExternalSessionProvider {
+  readonly source = 'augment' as const;
+  readonly displayName = 'Augment';
 
-  try {
-    const content = await fs.promises.readFile(actualFilePath, 'utf-8');
-    const session: AugmentSessionFile = JSON.parse(content);
+  private sessionsPath: string;
+  private metadataCache: Map<string, ExternalSessionMetadata> = new Map();
+  private lastCacheTime: number = 0;
+  private readonly CACHE_TTL_MS = 30000; // 30 seconds
 
-    // Convert chat history to messages
-    const messages: SessionMessage[] = [];
-    for (const exchange of session.chatHistory || []) {
-      if (exchange.exchange.request_message) {
-        messages.push({
-          role: 'user',
-          content: exchange.exchange.request_message,
-          source: 'augment',
-          timestamp: exchange.finishedAt ? new Date(exchange.finishedAt).getTime() : Date.now(),
-        });
-      }
-      if (exchange.exchange.response_text) {
-        messages.push({
-          role: 'assistant',
-          content: exchange.exchange.response_text,
-          source: 'augment',
-          timestamp: exchange.finishedAt ? new Date(exchange.finishedAt).getTime() : Date.now(),
-        });
-      }
+  constructor() {
+    this.sessionsPath = getAugmentSessionsPath();
+  }
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      await fs.promises.access(this.sessionsPath, fs.constants.R_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getSessionMetadata(limit: number = 100): Promise<ExternalSessionMetadata[]> {
+    // Check cache validity
+    const now = Date.now();
+    if (this.metadataCache.size > 0 && (now - this.lastCacheTime) < this.CACHE_TTL_MS) {
+      const cached = Array.from(this.metadataCache.values());
+      return cached.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
     }
 
-    const firstMessage = session.chatHistory?.[0]?.exchange?.request_message || '';
+    try {
+      const files = await fs.promises.readdir(this.sessionsPath);
+      const jsonFiles = files.filter(f => f.endsWith('.json')).slice(0, limit * 2);
 
-    const sessionData: SessionData & { source: MessageSource } = {
-      id: session.sessionId,
-      conversationId: session.sessionId,
-      messages,
-      metadata: {
-        title: session.title || firstMessage.slice(0, 50) || 'Untitled Session',
-        model: undefined,
-        lastSource: 'augment',
-        tags: ['augment'],
-        workspacePath: extractWorkspacePath(session),
-      },
-      createdAt: new Date(session.created).getTime(),
-      updatedAt: new Date(session.modified).getTime(),
-      source: 'augment',
-    };
-
-    return sessionData;
-  } catch (error) {
-    console.error(`[AugmentProvider] Failed to load session ${sessionId}:`, error);
-    return null;
-  }
-}
-
-/**
- * List all Augment session metadata
- */
-export async function listAugmentSessions(
-  limit: number = 100
-): Promise<Array<{
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  source: MessageSource;
-  workspacePath?: string;
-  messageCount: number;
-  preview: string;
-  filePath: string;
-}>> {
-  const sessionsPath = getAugmentSessionsPath();
-
-  try {
-    await fs.promises.access(sessionsPath, fs.constants.R_OK);
-  } catch {
-    // Augment not installed or sessions directory doesn't exist
-    return [];
-  }
-
-  try {
-    const files = await fs.promises.readdir(sessionsPath);
-    const jsonFiles = files.filter(f => f.endsWith('.json')).slice(0, limit * 2);
-
-    // Get file stats for sorting by modification time
-    const fileStats = await Promise.all(
-      jsonFiles.map(async (file) => {
-        const filePath = path.join(sessionsPath, file);
-        try {
-          const stats = await fs.promises.stat(filePath);
-          return { file, filePath, mtime: stats.mtimeMs };
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    // Sort by modification time (most recent first) and take limit
-    const sortedFiles = fileStats
-      .filter((f): f is NonNullable<typeof f> => f !== null)
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, limit);
-
-    // Parse metadata in parallel (with concurrency limit)
-    const CONCURRENCY = 10;
-    const results: Array<{
-      id: string;
-      title: string;
-      createdAt: number;
-      updatedAt: number;
-      source: MessageSource;
-      workspacePath?: string;
-      messageCount: number;
-      preview: string;
-      filePath: string;
-    }> = [];
-
-    for (let i = 0; i < sortedFiles.length; i += CONCURRENCY) {
-      const batch = sortedFiles.slice(i, i + CONCURRENCY);
-      const batchResults = await Promise.all(
-        batch.map(({ filePath }) => parseAugmentSessionMetadata(filePath))
+      // Get file stats for sorting by modification time
+      const fileStats = await Promise.all(
+        jsonFiles.map(async (file) => {
+          const filePath = path.join(this.sessionsPath, file);
+          try {
+            const stats = await fs.promises.stat(filePath);
+            return { file, filePath, mtime: stats.mtimeMs };
+          } catch {
+            return null;
+          }
+        })
       );
-      results.push(...batchResults.filter((r): r is NonNullable<typeof r> => r !== null));
+
+      // Sort by modification time (most recent first) and take limit
+      const sortedFiles = fileStats
+        .filter((f): f is NonNullable<typeof f> => f !== null)
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, limit);
+
+      // Parse metadata in parallel (with concurrency limit)
+      const CONCURRENCY = 10;
+      const results: ExternalSessionMetadata[] = [];
+
+      for (let i = 0; i < sortedFiles.length; i += CONCURRENCY) {
+        const batch = sortedFiles.slice(i, i + CONCURRENCY);
+        const batchResults = await Promise.all(
+          batch.map(({ filePath }) => parseSessionMetadata(filePath))
+        );
+        results.push(...batchResults.filter((r): r is ExternalSessionMetadata => r !== null));
+      }
+
+      // Update cache
+      this.metadataCache.clear();
+      for (const meta of results) {
+        this.metadataCache.set(meta.id, meta);
+      }
+      this.lastCacheTime = now;
+
+      return results.sort((a, b) => b.updatedAt - a.updatedAt);
+    } catch (error) {
+      log(`[AugmentProvider] Failed to list sessions: ${error}`);
+      return [];
+    }
+  }
+
+  async loadSession(sessionId: string): Promise<ExternalSession | null> {
+    // Check cache for file path
+    let filePath = this.metadataCache.get(sessionId)?.filePath;
+
+    if (!filePath) {
+      // Try to find the file
+      filePath = path.join(this.sessionsPath, `${sessionId}.json`);
     }
 
-    return results.sort((a, b) => b.updatedAt - a.updatedAt);
-  } catch (error) {
-    console.error(`[AugmentProvider] Failed to list sessions:`, error);
-    return [];
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const session: AugmentSessionFile = JSON.parse(content);
+
+      // Convert chat history to messages
+      const messages: ExternalSessionMessage[] = [];
+
+      for (const exchange of session.chatHistory || []) {
+        if (exchange.exchange.request_message) {
+          messages.push({
+            role: 'user',
+            content: exchange.exchange.request_message,
+            timestamp: exchange.finishedAt ? new Date(exchange.finishedAt).getTime() : undefined,
+          });
+        }
+
+        if (exchange.exchange.response_text) {
+          messages.push({
+            role: 'assistant',
+            content: exchange.exchange.response_text,
+            timestamp: exchange.finishedAt ? new Date(exchange.finishedAt).getTime() : undefined,
+          });
+        }
+      }
+
+      const firstMessage = session.chatHistory?.[0]?.exchange?.request_message || '';
+
+      return {
+        id: session.sessionId,
+        title: session.title || firstMessage.slice(0, 50) || 'Untitled Session',
+        createdAt: new Date(session.created).getTime(),
+        updatedAt: new Date(session.modified).getTime(),
+        source: 'augment',
+        workspacePath: extractWorkspacePath(session),
+        messageCount: messages.length,
+        preview: firstMessage.slice(0, 200),
+        filePath,
+        messages,
+        agentMetadata: {
+          workspaceId: session.workspaceId,
+        },
+      };
+    } catch (error) {
+      log(`[AugmentProvider] Failed to load session ${sessionId}: ${error}`);
+      return null;
+    }
+  }
+
+  async continueSession(options: ContinueSessionOptions): Promise<ContinueSessionResult> {
+    const { session, workspacePath } = options;
+
+    // For Augment sessions, we need to spawn the Augment agent
+    // This is a placeholder - actual implementation depends on how SpeakMCP integrates with Augment
+
+    log(`[AugmentProvider] Continue session request: ${session.id}`);
+
+    return {
+      success: false,
+      error: 'Session continuation for Augment requires external integration. Use Augment directly.',
+    };
   }
 }
 
-/**
- * Check if Augment is available (sessions directory exists)
- */
-export async function isAugmentAvailable(): Promise<boolean> {
-  const sessionsPath = getAugmentSessionsPath();
-  try {
-    await fs.promises.access(sessionsPath, fs.constants.R_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export const augmentSessionProvider = new AugmentSessionProvider();

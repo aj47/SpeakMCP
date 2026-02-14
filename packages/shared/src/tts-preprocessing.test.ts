@@ -7,6 +7,7 @@ import {
   convertMarkdownToSpeech,
   cleanSymbols,
   convertNumbers,
+  convertCurrency,
   normalizeWhitespace,
   truncateText,
   validateTTSText,
@@ -148,6 +149,36 @@ describe("convertNumbers", () => {
   it("handles decimal numbers", () => {
     const input = "3.14159"
     expect(convertNumbers(input)).toContain("3 point 14159")
+  })
+})
+
+describe("convertCurrency", () => {
+  it("converts USD with cents", () => {
+    expect(convertCurrency("$1,234.56")).toBe("1234 dollars and 56 cents")
+  })
+
+  it("converts USD without cents", () => {
+    expect(convertCurrency("$500")).toBe("500 dollars")
+  })
+
+  it("converts GBP", () => {
+    expect(convertCurrency("£1,500")).toBe("1500 pounds")
+  })
+
+  it("converts EUR", () => {
+    expect(convertCurrency("€100.50")).toBe("100 euros and 50 cents")
+  })
+
+  it("converts JPY (no cents)", () => {
+    expect(convertCurrency("¥1000")).toBe("1000")
+  })
+
+  it("handles currency with space", () => {
+    expect(convertCurrency("$ 100.25")).toBe("100 dollars and 25 cents")
+  })
+
+  it("handles zero cents", () => {
+    expect(convertCurrency("$50.00")).toBe("50 dollars")
   })
 })
 

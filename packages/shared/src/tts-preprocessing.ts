@@ -140,40 +140,54 @@ function cleanSymbols(text: string): string {
  */
 function convertCurrency(text: string): string {
   // Match currency symbols followed by numbers with optional commas and decimals
-  // Currency symbols: $, £, €, ¥, ₹, ₩, ₽, ฿, etc.
-  // Pattern: symbol + digits (with optional commas) + optional decimal part
-  return text.replace(/[$£€¥₹₩₽฿¢]\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/g, (match, numberPart) => {
-    // Remove commas from integer part
-    const integerPart = numberPart.replace(/,/g, "")
+  // Currency symbols: $, £, €, ¥, ₹, ₩, ₽, ฿, ¢
+  const currencySymbols = "[$£€¥₹₩₽฿¢]"
+  const numberPattern = "\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?"
+  const regex = new RegExp(currencySymbols + "\\s*(" + numberPattern + ")", "g")
+  
+  return text.replace(regex, (match, numberPart) => {
+    // Find decimal point position
+    const decimalIndex = numberPart.indexOf(".")
     
-    // Check if there's a decimal part
-    const decimalMatch = numberPart.match /\.(\d+)/
-    
-    if (decimalMatch) {
-      const cents = decimalMatch[1]
-      // Remove leading zeros from cents for natural speech
-      const centsValue = parseInt(cents, 10)
-      const centsDisplay = centsValue === 0 ? "" : ` and ${centsValue} cents`
-      return `${integerPart} dollars${centsDisplay}`
+    // Extract integer part (before decimal) and remove commas
+    let integerPart: string
+    if (decimalIndex > -1) {
+      integerPart = numberPart.slice(0, decimalIndex).replace(/,/g, "")
     } else {
-      // No decimal part - just the amount
-      // Detect currency type and use appropriate unit
-      if (match.startsWith("£")) {
-        return `${integerPart} pounds`
-      } else if (match.startsWith("€")) {
-        return `${integerPart} euros`
-      } else if (match.startsWith("¥") || match.startsWith("₹") || match.startsWith("₩")) {
-        return `${integerPart}` // Asian currencies typically don't use cents
-      } else if (match.startsWith("₽")) {
-        return `${integerPart} rubles`
-      } else if (match.startsWith("฿")) {
-        return `${integerPart} baht`
-      } else if (match.startsWith("¢")) {
-        return `${integerPart} cents`
-      } else {
-        // Default to dollars for $ and unspecified
-        return `${integerPart} dollars`
-      }
+      integerPart = numberPart.replace(/,/g, "")
+    }
+    
+    // Determine the currency unit based on the symbol
+    let currencyUnit: string
+    if (match.startsWith("£")) {
+      currencyUnit = "pounds"
+    } else if (match.startsWith("€")) {
+      currencyUnit = "euros"
+    } else if (match.startsWith("¥") || match.startsWith("₹") || match.startsWith("₩")) {
+      currencyUnit = "" // Asian currencies typically don't use cents
+    } else if (match.startsWith("₽")) {
+      currencyUnit = "rubles"
+    } else if (match.startsWith("฿")) {
+      currencyUnit = "baht"
+    } else if (match.startsWith("¢")) {
+      currencyUnit = "cents"
+    } else {
+      // Default to dollars for $ and unspecified
+      currencyUnit = "dollars"
+    }
+    
+    // Handle decimal part (cents) - only for currencies that use cents
+    if (decimalIndex > -1 && currencyUnit) {
+      const cents = numberPart.slice(decimalIndex + 1)
+      const centsValue = parseInt(cents, 10) || 0
+      const centsDisplay = centsValue === 0 ? "" : ` and ${centsValue} cents`
+      return `${integerPart} ${currencyUnit}${centsDisplay}`
+    } else if (currencyUnit) {
+      // No decimal but has currency unit
+      return `${integerPart} ${currencyUnit}`
+    } else {
+      // No currency unit (like yen)
+      return integerPart
     }
   })
 }

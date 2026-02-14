@@ -1,5 +1,5 @@
-import { useLayoutEffect, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image } from 'react-native';
+import { useLayoutEffect, useMemo, useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image, ActivityIndicator, SectionList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
@@ -7,11 +7,13 @@ import { useSessionContext, SessionStore } from '../store/sessions';
 import { useConnectionManager } from '../store/connectionManager';
 import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
+import { useConfigContext } from '../store/config';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
-import { SessionListItem } from '../types/session';
+import { ACPSessionBadge } from '../ui/ACPSessionBadge';
+import { SessionListItem, ExternalSessionSource } from '../types/session';
+import { ExtendedSettingsApiClient, UnifiedConversation, ExternalSessionProvider } from '../lib/settingsApi';
 
-const darkSpinner = require('../../assets/loading-spinner.gif');
-const lightSpinner = require('../../assets/light-spinner.gif');
+const staticIcon = require('../../assets/speakmcp-icon.png');
 
 interface Props {
   navigation: any;
@@ -23,6 +25,40 @@ export default function SessionListScreen({ navigation }: Props) {
   const connectionManager = useConnectionManager();
   const { connectionInfo } = useTunnelConnection();
   const { currentProfile } = useProfile();
+  const { config } = useConfigContext();
+
+  // External sessions state
+  const [externalSessions, setExternalSessions] = useState<UnifiedConversation[]>([]);
+  const [externalProviders, setExternalProviders] = useState<ExternalSessionProvider[]>([]);
+  const [loadingExternal, setLoadingExternal] = useState(false);
+  const [showExternalSessions, setShowExternalSessions] = useState(false);
+
+  // Fetch external sessions
+  const fetchExternalSessions = useCallback(async () => {
+    if (!config.baseUrl || !config.apiKey) return;
+    setLoadingExternal(true);
+    try {
+      const client = new ExtendedSettingsApiClient(config.baseUrl, config.apiKey);
+      const [sessionsRes, providersRes] = await Promise.allSettled([
+        client.getUnifiedConversations(20),
+        client.getExternalSessionProviders(),
+      ]);
+      if (sessionsRes.status === 'fulfilled') {
+        setExternalSessions(sessionsRes.value.conversations.filter(c => c.source !== 'acp-remote'));
+      }
+      if (providersRes.status === 'fulfilled') {
+        setExternalProviders(providersRes.value.providers);
+      }
+    } catch (error) {
+      console.log('[SessionList] External sessions not available:', error);
+    } finally {
+      setLoadingExternal(false);
+    }
+  }, [config.baseUrl, config.apiKey]);
+
+  useEffect(() => {
+    fetchExternalSessions();
+  }, [fetchExternalSessions]);
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
@@ -77,7 +113,7 @@ export default function SessionListScreen({ navigation }: Props) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <Image
-          source={isDark ? darkSpinner : lightSpinner}
+          source={staticIcon}
           style={styles.spinner}
           resizeMode="contain"
         />
@@ -204,6 +240,56 @@ export default function SessionListScreen({ navigation }: Props) {
         )}
       </View>
 
+      {/* External sessions toggle */}
+      {externalSessions.length > 0 && (
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.externalToggle}
+            onPress={() => setShowExternalSessions(!showExternalSessions)}
+          >
+            <Text style={styles.externalToggleText}>
+              {showExternalSessions ? '▼' : '▶'} External Sessions ({externalSessions.length})
+            </Text>
+          </TouchableOpacity>
+          {loadingExternal && <ActivityIndicator size="small" color={theme.colors.primary} />}
+        </View>
+      )}
+
+      {/* External sessions list */}
+      {showExternalSessions && externalSessions.length > 0 && (
+        <FlatList
+          data={externalSessions}
+          renderItem={({ item }) => {
+            const provider = externalProviders.find(p => p.source === item.source);
+            return (
+              <View style={[styles.sessionItem, styles.externalSessionItem]}>
+                <View style={styles.sessionHeader}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.sourceBadge, { backgroundColor: getSourceColor(item.source) + '22' }]}>
+                      <Text style={[styles.sourceBadgeText, { color: getSourceColor(item.source) }]}>
+                        {provider?.displayName || item.source}
+                      </Text>
+                    </View>
+                    <Text style={styles.sessionTitle} numberOfLines={1}>{item.title}</Text>
+                  </View>
+                  <Text style={styles.sessionDate}>{formatDate(item.updatedAt)}</Text>
+                </View>
+                {item.preview && (
+                  <Text style={styles.sessionPreview} numberOfLines={2}>{item.preview}</Text>
+                )}
+                <Text style={styles.sessionMeta}>
+                  {item.messageCount} message{item.messageCount !== 1 ? 's' : ''}
+                  {item.workspacePath ? ` • ${item.workspacePath.split('/').pop()}` : ''}
+                </Text>
+              </View>
+            );
+          }}
+          keyExtractor={(item) => `ext-${item.source}-${item.id}`}
+          contentContainerStyle={styles.list}
+          style={{ maxHeight: 300 }}
+        />
+      )}
+
       <FlatList
         data={sessions}
         renderItem={renderSession}
@@ -213,6 +299,15 @@ export default function SessionListScreen({ navigation }: Props) {
       />
     </View>
   );
+}
+
+function getSourceColor(source: ExternalSessionSource): string {
+  switch (source) {
+    case 'augment': return '#7c3aed'; // purple
+    case 'claude-code': return '#f97316'; // orange
+    case 'acp-remote': return '#3b82f6'; // blue
+    default: return '#6b7280'; // gray
+  }
 }
 
 function createStyles(theme: Theme) {
@@ -316,6 +411,29 @@ function createStyles(theme: Theme) {
       ...theme.typography.body,
       color: theme.colors.mutedForeground,
       textAlign: 'center',
+    },
+    externalToggle: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    externalToggleText: {
+      ...theme.typography.body,
+      color: theme.colors.primary,
+      fontWeight: '500',
+      fontSize: 14,
+    },
+    externalSessionItem: {
+      borderLeftWidth: 3,
+      borderLeftColor: theme.colors.primary + '66',
+    },
+    sourceBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    sourceBadgeText: {
+      fontSize: 10,
+      fontWeight: '600',
     },
   });
 }

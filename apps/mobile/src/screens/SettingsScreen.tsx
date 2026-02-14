@@ -11,6 +11,8 @@ import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
 import { usePushNotifications } from '../lib/pushNotifications';
 import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
+import { WebQRScanner } from '../ui/WebQRScanner';
+import { TTSSettings } from '../ui/TTSSettings';
 
 function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
   try {
@@ -88,6 +90,10 @@ export default function SettingsScreen({ navigation }: any) {
   // Preset picker state
   const [showPresetPicker, setShowPresetPicker] = useState(false);
 
+  // URL paste state (web fallback for QR scanner)
+  const [showUrlPaste, setShowUrlPaste] = useState(false);
+  const [urlPasteText, setUrlPasteText] = useState('');
+
   // Custom model input state (for debouncing)
   const [customModelDraft, setCustomModelDraft] = useState('');
   const modelUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,15 +107,6 @@ export default function SettingsScreen({ navigation }: any) {
     }
     return null;
   }, [config.baseUrl, config.apiKey]);
-
-  // Clear pending model update timeout when settingsClient changes
-  // to prevent sending updates to the previous server
-  useEffect(() => {
-    if (modelUpdateTimeoutRef.current) {
-      clearTimeout(modelUpdateTimeoutRef.current);
-      modelUpdateTimeoutRef.current = null;
-    }
-  }, [settingsClient]);
 
   // Fetch remote settings from desktop
   const fetchRemoteSettings = useCallback(async () => {
@@ -581,6 +578,12 @@ export default function SettingsScreen({ navigation }: any) {
   };
 
   const handleScanQR = async () => {
+    if (Platform.OS === 'web') {
+      // On web, show the web QR scanner
+      setScanned(false);
+      setShowScanner(true);
+      return;
+    }
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
@@ -589,6 +592,48 @@ export default function SettingsScreen({ navigation }: any) {
     }
     setScanned(false);
     setShowScanner(true);
+  };
+
+  // Handle web QR scan result
+  const handleWebQRScan = (data: string) => {
+    const params = parseQRCode(data);
+    if (params) {
+      setDraft(prev => ({
+        ...prev,
+        ...(params.baseUrl && { baseUrl: params.baseUrl }),
+        ...(params.apiKey && { apiKey: params.apiKey }),
+        ...(params.model && { model: params.model }),
+      }));
+      setShowScanner(false);
+    } else {
+      // Invalid QR - show URL paste as fallback
+      setShowScanner(false);
+      setUrlPasteText('');
+      setShowUrlPaste(true);
+      if (Platform.OS === 'web') {
+        window.alert('Invalid QR code format. Please paste the config URL manually.');
+      }
+    }
+  };
+
+  // Handle URL paste (web fallback)
+  const handleUrlPaste = () => {
+    if (!urlPasteText.trim()) return;
+    const params = parseQRCode(urlPasteText.trim());
+    if (params) {
+      setDraft(prev => ({
+        ...prev,
+        ...(params.baseUrl && { baseUrl: params.baseUrl }),
+        ...(params.apiKey && { apiKey: params.apiKey }),
+        ...(params.model && { model: params.model }),
+      }));
+      setShowUrlPaste(false);
+      setUrlPasteText('');
+    } else {
+      if (Platform.OS === 'web') {
+        window.alert('Invalid config URL format. Expected: speakmcp://config?baseUrl=...&apiKey=...');
+      }
+    }
   };
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
@@ -715,6 +760,17 @@ export default function SettingsScreen({ navigation }: any) {
             thumbColor={draft.ttsEnabled !== false ? theme.colors.primaryForeground : theme.colors.background}
           />
         </View>
+
+        {draft.ttsEnabled !== false && (
+          <TTSSettings
+            voiceId={draft.ttsVoiceId}
+            rate={draft.ttsRate ?? 1.0}
+            pitch={draft.ttsPitch ?? 1.0}
+            onVoiceChange={(v) => setDraft({ ...draft, ttsVoiceId: v })}
+            onRateChange={(r) => setDraft({ ...draft, ttsRate: r })}
+            onPitchChange={(p) => setDraft({ ...draft, ttsPitch: p })}
+          />
+        )}
 
         <View style={styles.row}>
           <Text style={styles.label}>Message Queuing</Text>
@@ -1031,23 +1087,99 @@ export default function SettingsScreen({ navigation }: any) {
 
       </ScrollView>
 
-      <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
-        <View style={styles.scannerContainer}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
-          <View style={styles.scannerOverlay}>
-            <View style={styles.scannerFrame} />
-            <Text style={styles.scannerText}>
-              {scanned ? 'Invalid QR code format' : 'Scan a SpeakMCP QR code'}
-            </Text>
+      {/* Native QR Scanner Modal */}
+      {Platform.OS !== 'web' && (
+        <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+          <View style={styles.scannerContainer}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={handleBarCodeScanned}
+            />
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerFrame} />
+              <Text style={styles.scannerText}>
+                {scanned ? 'Invalid QR code format' : 'Scan a SpeakMCP QR code'}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
+              <Text style={styles.closeButtonText}>✕ Close</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
-            <Text style={styles.closeButtonText}>✕ Close</Text>
-          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* Web QR Scanner Modal */}
+      {Platform.OS === 'web' && (
+        <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
+          <WebQRScanner
+            onScan={handleWebQRScan}
+            onClose={() => setShowScanner(false)}
+          />
+        </Modal>
+      )}
+
+      {/* URL Paste Modal (fallback for web) */}
+      <Modal
+        visible={showUrlPaste}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowUrlPaste(false);
+          setUrlPasteText('');
+        }}
+      >
+        <View style={styles.importModalOverlay}>
+          <View style={styles.importModalContainer}>
+            <View style={styles.importModalHeader}>
+              <Text style={styles.importModalTitle}>Paste Config URL</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowUrlPaste(false);
+                  setUrlPasteText('');
+                }}
+              >
+                <Text style={styles.importModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.importModalDescription}>
+              Paste a SpeakMCP config URL (speakmcp://config?...) below.
+            </Text>
+
+            <TextInput
+              style={styles.importJsonInput}
+              value={urlPasteText}
+              onChangeText={setUrlPasteText}
+              placeholder="speakmcp://config?baseUrl=...&apiKey=..."
+              placeholderTextColor={theme.colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.importModalActions}>
+              <TouchableOpacity
+                style={styles.importModalCancelButton}
+                onPress={() => {
+                  setShowUrlPaste(false);
+                  setUrlPasteText('');
+                }}
+              >
+                <Text style={styles.importModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.importModalImportButton,
+                  !urlPasteText.trim() && styles.importModalImportButtonDisabled,
+                ]}
+                onPress={handleUrlPaste}
+                disabled={!urlPasteText.trim()}
+              >
+                <Text style={styles.importModalImportText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 

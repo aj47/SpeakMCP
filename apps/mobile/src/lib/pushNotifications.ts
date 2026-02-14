@@ -41,9 +41,10 @@ export interface NotificationData {
 // ============================================
 
 /**
- * Check if push notifications are supported (requires physical device)
+ * Check if push notifications are supported (requires physical device, not web)
  */
 export function isSupported(): boolean {
+  if (Platform.OS === 'web') return false;
   return Device.isDevice;
 }
 

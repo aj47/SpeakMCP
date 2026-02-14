@@ -233,6 +233,83 @@ export class SettingsApiClient {
   }
 }
 
+// ACP Session Types
+export interface ACPModelOrMode {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+// Raw server response types (server uses modelId for models, id for modes)
+interface ACPSessionInfoRaw {
+  agentName?: string;
+  agentTitle?: string;
+  agentVersion?: string;
+  sessionId?: string;
+  currentModelId?: string;
+  currentModeId?: string;
+  availableModels?: Array<{ modelId: string; name: string; description?: string }>;
+  availableModes?: Array<{ id: string; name: string; description?: string }>;
+}
+
+export interface ACPSessionInfo {
+  agentName?: string;
+  agentTitle?: string;
+  agentVersion?: string;
+  sessionId?: string;
+  currentModel?: string;
+  currentMode?: string;
+  availableModels?: ACPModelOrMode[];
+  availableModes?: ACPModelOrMode[];
+}
+
+// Transform raw server response to normalized format
+function normalizeACPSessionInfo(raw: ACPSessionInfoRaw): ACPSessionInfo {
+  return {
+    agentName: raw.agentName,
+    agentTitle: raw.agentTitle,
+    agentVersion: raw.agentVersion,
+    sessionId: raw.sessionId,
+    currentModel: raw.currentModelId,
+    currentMode: raw.currentModeId,
+    // Normalize models: server uses modelId, we use id
+    availableModels: raw.availableModels?.map(m => ({
+      id: m.modelId,
+      name: m.name,
+      description: m.description,
+    })),
+    // Modes already use id
+    availableModes: raw.availableModes,
+  };
+}
+
+export interface ACPSetModelModeResult {
+  success: boolean;
+  currentModelId?: string;
+  currentModeId?: string;
+  error?: string;
+}
+
+// External Session Types (for unified conversation history)
+export type ExternalSessionSource = 'augment' | 'claude-code' | 'acp-remote';
+
+export interface UnifiedConversation extends ServerConversation {
+  source: ExternalSessionSource;
+  workspacePath?: string;
+  filePath?: string;
+}
+
+export interface ExternalSessionProvider {
+  source: ExternalSessionSource;
+  displayName: string;
+}
+
+export interface ContinueSessionResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
 // Push notification registration/unregistration
 export interface PushTokenRegistration {
   token: string;
@@ -247,8 +324,70 @@ export interface PushStatusResponse {
   platforms: string[];
 }
 
-// Extended client with push notification methods
+// Extended client with push notification and ACP methods
 export class ExtendedSettingsApiClient extends SettingsApiClient {
+  // External Session Management (unified conversation history)
+  async getUnifiedConversations(limit?: number): Promise<{ conversations: UnifiedConversation[] }> {
+    const query = limit ? `?limit=${limit}` : '';
+    return this.request<{ conversations: UnifiedConversation[] }>(`/conversations/unified${query}`);
+  }
+
+  async getExternalSessionProviders(): Promise<{ providers: ExternalSessionProvider[] }> {
+    return this.request<{ providers: ExternalSessionProvider[] }>('/external-sessions/providers');
+  }
+
+  async continueExternalSession(
+    sessionId: string,
+    source: ExternalSessionSource,
+    workspacePath?: string
+  ): Promise<ContinueSessionResult> {
+    return this.request<ContinueSessionResult>('/external-sessions/continue', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, source, workspacePath }),
+    });
+  }
+
+  // ACP Session Management
+  async getACPSession(): Promise<ACPSessionInfo | null> {
+    try {
+      const raw = await this.request<ACPSessionInfoRaw>('/acp/session');
+      return normalizeACPSessionInfo(raw);
+    } catch (error: any) {
+      // Return null if no session (404) rather than throwing
+      if (error?.message?.includes('404') || error?.message?.includes('No main agent')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async getACPSessionForAgent(agentName: string): Promise<ACPSessionInfo | null> {
+    try {
+      const raw = await this.request<ACPSessionInfoRaw>(`/acp/session/${encodeURIComponent(agentName)}`);
+      return normalizeACPSessionInfo(raw);
+    } catch (error: any) {
+      // Return null if no session (404) rather than throwing
+      if (error?.message?.includes('404') || error?.message?.includes('No active session')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async setACPSessionModel(agentName: string, sessionId: string, modelId: string): Promise<ACPSetModelModeResult> {
+    return this.request<ACPSetModelModeResult>('/acp/session/model', {
+      method: 'POST',
+      body: JSON.stringify({ agentName, sessionId, modelId }),
+    });
+  }
+
+  async setACPSessionMode(agentName: string, sessionId: string, modeId: string): Promise<ACPSetModelModeResult> {
+    return this.request<ACPSetModelModeResult>('/acp/session/mode', {
+      method: 'POST',
+      body: JSON.stringify({ agentName, sessionId, modeId }),
+    });
+  }
+
   // Register push notification token
   async registerPushToken(registration: PushTokenRegistration): Promise<{ success: boolean; message: string; tokenCount: number }> {
     return this.request('/push/register', {

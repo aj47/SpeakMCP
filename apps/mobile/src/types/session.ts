@@ -12,6 +12,22 @@ export interface ChatMessage {
 // Re-export shared types for convenience
 export type { ToolCall, ToolResult } from '@speakmcp/shared';
 
+// External session source type (matches desktop's ExternalSessionSource)
+export type ExternalSessionSource = 'augment' | 'claude-code' | 'acp-remote';
+
+// Unified session list item with source information
+export interface UnifiedSessionListItem extends SessionListItem {
+  source: ExternalSessionSource;
+  workspacePath?: string;
+  filePath?: string;
+}
+
+// External session provider info
+export interface ExternalSessionProvider {
+  source: ExternalSessionSource;
+  displayName: string;
+}
+
 export interface Session {
   id: string;
   title: string;

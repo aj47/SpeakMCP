@@ -18,8 +18,7 @@ import {
   TextInputKeyPressEventData,
 } from 'react-native';
 
-const darkSpinner = require('../../assets/loading-spinner.gif');
-const lightSpinner = require('../../assets/light-spinner.gif');
+const staticIcon = require('../../assets/speakmcp-icon.png');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useConfigContext, saveConfig } from '../store/config';
@@ -43,6 +42,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme, hexToRgba } from '../ui/theme';
 import { MarkdownRenderer } from '../ui/MarkdownRenderer';
+import { ACPSessionBadge } from '../ui/ACPSessionBadge';
 
 export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -222,25 +222,27 @@ export default function ChatScreen({ route, navigation }: any) {
       headerTitle: () => (
         <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 17, fontWeight: '600', color: theme.colors.foreground }}>Chat</Text>
-          {currentProfile && (
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: theme.colors.primary + '33',
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              borderRadius: 10,
-              marginTop: 2,
-            }}>
-              <Text style={{
-                fontSize: 11,
-                color: theme.colors.primary,
-                fontWeight: '500',
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            {currentProfile && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: theme.colors.primary + '33',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
               }}>
-                {currentProfile.name}
-              </Text>
-            </View>
-          )}
+                <Text style={{
+                  fontSize: 11,
+                  color: theme.colors.primary,
+                  fontWeight: '500',
+                }}>
+                  {currentProfile.name}
+                </Text>
+              </View>
+            )}
+            <ACPSessionBadge compact />
+          </View>
         </View>
       ),
       headerLeft: () => (
@@ -265,7 +267,7 @@ export default function ChatScreen({ route, navigation }: any) {
           {responding && (
             <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
               <Image
-                source={isDark ? darkSpinner : lightSpinner}
+                source={staticIcon}
                 style={{ width: 28, height: 28 }}
                 resizeMode="contain"
               />
@@ -338,14 +340,11 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 	// Stable ref to the latest send() to avoid stale closures in speech callbacks
 	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
-	// Voice debug logging (dev-only) to help diagnose recording/send lifecycle.
-	const voiceLogSeqRef = useRef(0);
+	// Voice debug logging - only in dev mode
 	const voiceLog = useCallback((msg: string, extra?: any) => {
-		if (!__DEV__) return;
-		voiceLogSeqRef.current += 1;
-		const seq = voiceLogSeqRef.current;
-		if (typeof extra !== 'undefined') console.log(`[Voice ${seq}] ${msg}`, extra);
-		else console.log(`[Voice ${seq}] ${msg}`);
+	 	if (!__DEV__) return;
+	 	if (typeof extra !== 'undefined') console.log(`[Voice] ${msg}`, extra);
+	 	else console.log(`[Voice] ${msg}`);
 	}, []);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
@@ -366,6 +365,35 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Auto-scroll state and ref for mobile chat
   const scrollViewRef = useRef<ScrollView>(null);
+  // Ref for mic button to attach native DOM listeners on web
+  const micButtonRef = useRef<View>(null);
+
+  // Attach native DOM event listeners on web to prevent text selection on long press
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !micButtonRef.current) return;
+
+    // @ts-ignore - Get the underlying DOM element from React Native Web
+    const domNode = micButtonRef.current as any;
+    if (!domNode || typeof domNode.addEventListener !== 'function') return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Prevent default to stop text selection on long press
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const handleContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Use passive: false to allow preventDefault
+    domNode.addEventListener('touchstart', handleTouchStart, { passive: false });
+    domNode.addEventListener('contextmenu', handleContextMenu, { passive: false });
+
+    return () => {
+      domNode.removeEventListener('touchstart', handleTouchStart);
+      domNode.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   // Track scroll timeout for debouncing rapid message updates
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -873,7 +901,18 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Request superseded within same session, skipping onToken update');
           return;
         }
-        streamingText += tok;
+        // Handle both delta tokens and full-text updates:
+        // - Delta tokens: small increments to append (e.g., "Hello", " world")
+        // - Full-text updates: complete accumulated text from streamingContent.text
+        // Detect full-text updates: if tok starts with or equals streamingText, it's a full replacement.
+        // This prevents double-words when progress events send the full accumulated text.
+        if (tok.startsWith(streamingText) && tok.length >= streamingText.length) {
+          // Full-text update: replace instead of append
+          streamingText = tok;
+        } else {
+          // Delta token: append
+          streamingText += tok;
+        }
 
         setMessages((m) => {
           const copy = [...m];
@@ -1043,7 +1082,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
       if (!sessionChanged && finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);
-        Speech.speak(processedText, { language: 'en-US' });
+        const speechOptions: Speech.SpeechOptions = {
+          language: 'en-US',
+          rate: config.ttsRate ?? 1.0,
+          pitch: config.ttsPitch ?? 1.0,
+        };
+        if (config.ttsVoiceId) {
+          speechOptions.voice = config.ttsVoiceId;
+        }
+        Speech.speak(processedText, speechOptions);
       }
     } catch (e: any) {
       console.error('[ChatScreen] Chat error:', e);
@@ -1216,7 +1263,18 @@ export default function ChatScreen({ route, navigation }: any) {
       const onToken = (tok: string) => {
         if (sessionStore.currentSessionId !== requestSessionId) return;
         if (activeRequestIdRef.current !== thisRequestId) return;
-        streamingText += tok;
+        // Handle both delta tokens and full-text updates:
+        // - Delta tokens: small increments to append (e.g., "Hello", " world")
+        // - Full-text updates: complete accumulated text from streamingContent.text
+        // Detect full-text updates: if tok starts with or equals streamingText, it's a full replacement.
+        // This prevents double-words when progress events send the full accumulated text.
+        if (tok.startsWith(streamingText) && tok.length >= streamingText.length) {
+          // Full-text update: replace instead of append
+          streamingText = tok;
+        } else {
+          // Delta token: append
+          streamingText += tok;
+        }
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {
@@ -1287,7 +1345,15 @@ export default function ChatScreen({ route, navigation }: any) {
 
       if (finalText && config.ttsEnabled !== false) {
         const processedText = preprocessTextForTTS(finalText);
-        Speech.speak(processedText, { language: 'en-US' });
+        const speechOptions: Speech.SpeechOptions = {
+          language: 'en-US',
+          rate: config.ttsRate ?? 1.0,
+          pitch: config.ttsPitch ?? 1.0,
+        };
+        if (config.ttsVoiceId) {
+          speechOptions.voice = config.ttsVoiceId;
+        }
+        Speech.speak(processedText, speechOptions);
       }
 
       // Mark as processed on success
@@ -1932,7 +1998,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Image
-                      source={isDark ? darkSpinner : lightSpinner}
+                      source={staticIcon}
                       style={{ width: 14, height: 14 }}
                       resizeMode="contain"
                     />
@@ -2340,57 +2406,47 @@ export default function ChatScreen({ route, navigation }: any) {
           >
             <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
           </TouchableOpacity>
-          <View style={styles.micWrapper}>
-            <TouchableOpacity
-              style={[styles.mic, listening && styles.micOn]}
-              activeOpacity={0.7}
-              delayPressIn={0}
+          <View
+            ref={micButtonRef}
+            style={styles.micWrapper}
+          >
+            <Pressable
+              style={[
+                styles.mic,
+                listening && styles.micOn,
+                // @ts-ignore - Web-specific CSS to prevent text selection
+                Platform.OS === 'web' && { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'manipulation' },
+              ]}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
-					lastGrantTimeRef.current = Date.now();
-					voiceLog('mic:onPressIn', {
-						gestureId: voiceGestureIdRef.current,
-						listening: listeningRef.current,
-						starting: startingRef.current,
-					});
-					if (!listeningRef.current) startRecording(e);
+                lastGrantTimeRef.current = Date.now();
+                voiceLog('mic:onPressIn');
+                if (!listeningRef.current) startRecording(e);
               } : undefined}
               onPressOut={!handsFree ? () => {
                 const now = Date.now();
                 const dt = now - lastGrantTimeRef.current;
                 const delay = Math.max(0, minHoldMs - dt);
-					voiceLog('mic:onPressOut', {
-						gestureId: voiceGestureIdRef.current,
-						listening: listeningRef.current,
-						dt,
-						delay,
-					});
+                voiceLog('mic:onPressOut');
                 if (delay > 0) {
-						setTimeout(() => {
-							voiceLog('mic:onPressOut -> delayed stop fired', {
-								gestureId: voiceGestureIdRef.current,
-								listening: listeningRef.current,
-							});
-							if (listeningRef.current) stopRecordingAndHandle();
-						}, delay);
+                  setTimeout(() => {
+                    if (listeningRef.current) stopRecordingAndHandle();
+                  }, delay);
                 } else {
-	                  if (listeningRef.current) stopRecordingAndHandle();
+                  if (listeningRef.current) stopRecordingAndHandle();
                 }
               } : undefined}
               onPress={handsFree ? () => {
-					voiceLog('mic:onPress (handsFree)', {
-						gestureId: voiceGestureIdRef.current,
-						listening: listeningRef.current,
-					});
-					if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
+                voiceLog('mic:onPress (handsFree)');
+                if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >
-              <Text style={styles.micText}>
+              <Text style={styles.micText} selectable={false}>
                 {listening ? '🎙️' : '🎤'}
               </Text>
-              <Text style={[styles.micLabel, listening && styles.micLabelOn]}>
+              <Text style={[styles.micLabel, listening && styles.micLabelOn]} selectable={false}>
                 {handsFree ? (listening ? 'Stop' : 'Talk') : (listening ? '...' : 'Hold')}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
           <TextInput
             style={styles.input}

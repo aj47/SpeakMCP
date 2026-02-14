@@ -19,6 +19,7 @@ export interface SourceConfig {
 
 /**
  * Source display configuration mapping
+ * Includes badges for Augment (purple A) and Claude Code (orange C)
  */
 export const SOURCE_CONFIGS: Record<MessageSource, SourceConfig> = {
   native: {
@@ -29,12 +30,12 @@ export const SOURCE_CONFIGS: Record<MessageSource, SourceConfig> = {
   augment: {
     icon: 'A',
     label: 'Augment',
-    color: '#8b5cf6', // purple
+    color: '#8b5cf6', // purple badge
   },
   'claude-code': {
     icon: 'C',
     label: 'Claude Code',
-    color: '#f97316', // orange
+    color: '#f59e0b', // orange badge
   },
   mobile: {
     icon: '📱',

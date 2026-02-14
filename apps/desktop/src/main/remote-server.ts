@@ -14,6 +14,9 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
+import { loadExternalSession, getExternalProviders, listExternalSessions } from "../../../shared/src/external-session-service"
+import { emitAgentProgress } from "./emit-agent-progress"
+import type { MessageSource } from "../../../shared/src/types"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -1286,6 +1289,107 @@ export async function startRemoteServer() {
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to update conversation", error)
       return reply.code(500).send({ error: error?.message || "Failed to update conversation" })
+    }
+  })
+
+  // External Session Endpoints - For continuing Augment and Claude Code sessions
+
+  // GET /v1/external-sessions/providers - List available external session providers
+  fastify.get("/v1/external-sessions/providers", async (_req, reply) => {
+    try {
+      const providers = await getExternalProviders()
+      return reply.send({ providers })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get external providers", error)
+      return reply.code(500).send({ error: error?.message || "Failed to get providers" })
+    }
+  })
+
+  // GET /v1/external-sessions - List external sessions from all providers
+  fastify.get("/v1/external-sessions", async (_req, reply) => {
+    try {
+      const limit = parseInt(String(_req.query.limit || "100"))
+      const sessions = await listExternalSessions(limit)
+      return reply.send({ sessions })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to list external sessions", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list sessions" })
+    }
+  })
+
+  // POST /v1/external-sessions/continue - Continue an external session (Augment or Claude Code)
+  fastify.post("/v1/external-sessions/continue", async (req, reply) => {
+    try {
+      const body = req.body as {
+        sessionId: string
+        source: MessageSource
+        workspacePath?: string
+      }
+
+      if (!body.sessionId || !body.source) {
+        return reply.code(400).send({ error: "sessionId and source are required" })
+      }
+
+      if (body.source !== 'augment' && body.source !== 'claude-code') {
+        return reply.code(400).send({ error: "source must be 'augment' or 'claude-code'" })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Continuing external session: ${body.source}/${body.sessionId}`)
+
+      // Load the full session to get conversation history for the UI
+      const fullSession = await loadExternalSession(body.sessionId, body.source)
+
+      if (!fullSession) {
+        return reply.code(404).send({ error: `External session not found: ${body.sessionId}` })
+      }
+
+      // Create a tracked agent session so it shows in the UI
+      const sessionTitle = fullSession.metadata?.title || `${body.source} Session`
+      const conversationId = `ext-${body.source}-${body.sessionId.slice(0, 8)}`
+
+      // Start unsnoozed (false) so the session is visible immediately
+      const trackedSessionId = agentSessionTracker.startSession(
+        conversationId,
+        sessionTitle,
+        false // startSnoozed = false
+      )
+
+      // Create session state for agent processing
+      agentSessionStateManager.createSession(trackedSessionId)
+
+      // Convert external session messages to conversation history format
+      const conversationHistory = fullSession.messages?.map((msg, index) => ({
+        role: msg.role as 'user' | 'assistant' | 'tool',
+        content: msg.content,
+        timestamp: msg.timestamp || Date.now() - ((fullSession.messages?.length || 1) - index) * 1000,
+      })) || []
+
+      // Emit progress update with conversation history so UI shows session content
+      await emitAgentProgress({
+        sessionId: trackedSessionId,
+        conversationId,
+        conversationTitle: sessionTitle,
+        currentIteration: 1,
+        maxIterations: 1,
+        steps: [],
+        isComplete: true,
+        conversationHistory,
+      })
+
+      diagnosticsService.logInfo("remote-server", `Created tracked session ${trackedSessionId} for external session with ${conversationHistory.length} messages`)
+
+      return reply.send({
+        success: true,
+        trackedSessionId,
+        sessionId: trackedSessionId,
+        conversationId,
+        sessionTitle,
+        message: `${body.source === 'augment' ? 'Augment' : 'Claude Code'} session continued successfully`,
+        conversationHistory,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to continue external session", error)
+      return reply.code(500).send({ error: error?.message || "Failed to continue session" })
     }
   })
 

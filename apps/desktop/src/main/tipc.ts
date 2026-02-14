@@ -3860,6 +3860,88 @@ export const router = {
     .action(async ({ input }) => {
       return summarizationService.getImportantSummaries(input.sessionId)
     }),
+
+  // External Session Continuation
+  // Ported from acp-remote to enable continuing external sessions (Augment, Claude Code)
+  continueExternalSession: t.procedure
+    .input<{
+      sessionId: string
+      source: 'augment' | 'claude-code'
+      workspacePath?: string
+    }>()
+    .action(async ({ input }) => {
+      logApp(`[tipc] continueExternalSession called: ${input.source}/${input.sessionId}`)
+
+      // Import the external session service dynamically to avoid circular dependencies
+      const { loadExternalSession } = await import("@shared/external-session-service")
+
+      // First, load the full session to get conversation history for the UI
+      const fullSession = await loadExternalSession(input.sessionId, input.source as any)
+
+      if (!fullSession) {
+        return {
+          success: false,
+          error: `Failed to load external session: ${input.sessionId}`,
+        }
+      }
+
+      // Convert external session messages to conversation history format for UI
+      const conversationHistory = fullSession.messages?.map((msg, index) => ({
+        role: msg.role as 'user' | 'assistant' | 'tool',
+        content: msg.content,
+        timestamp: msg.timestamp || Date.now() - ((fullSession.messages?.length || 1) - index) * 1000,
+      })) || []
+
+      // Start an ACP agent session for tracking
+      const sessionTitle = fullSession.metadata?.title || `${input.source} Session`
+      const conversationId = `ext-${input.source}-${input.sessionId.slice(0, 8)}`
+
+      // Create a tracked agent session so it shows in the UI
+      // Start unsnoozed (false) so the session is visible immediately
+      const trackedSessionId = agentSessionTracker.startSession(
+        conversationId,
+        sessionTitle,
+        false
+      )
+
+      // Create session state for agent processing
+      agentSessionStateManager.createSession(trackedSessionId)
+
+      logApp(`[tipc] continueExternalSession: Created tracked session ${trackedSessionId}`)
+
+      // Emit progress update with conversation history so UI shows session content
+      await emitAgentProgress({
+        sessionId: trackedSessionId,
+        conversationId,
+        conversationTitle: sessionTitle,
+        currentIteration: 1,
+        maxIterations: 1,
+        steps: [],
+        isComplete: false, // Session is ready, awaiting user input
+        conversationHistory,
+      })
+
+      return {
+        success: true,
+        sessionId: trackedSessionId,
+        conversationId,
+        conversationHistory,
+      }
+    }),
+
+  listExternalSessions: t.procedure
+    .input<{ limit?: number }>()
+    .action(async ({ input }) => {
+      const { listExternalSessions } = await import("@shared/external-session-service")
+      return listExternalSessions(input.limit || 100)
+    }),
+
+  loadExternalSession: t.procedure
+    .input<{ sessionId: string; source: 'augment' | 'claude-code' }>()
+    .action(async ({ input }) => {
+      const { loadExternalSession } = await import("@shared/external-session-service")
+      return loadExternalSession(input.sessionId, input.source as any)
+    }),
 }
 
 // TTS Provider Implementation Functions

@@ -3,6 +3,7 @@
  * Provides session save/load functionality for external session continuation
  */
 
+export type { MessageSource } from './types';
 import { MessageSource } from './types';
 
 export interface SessionData {

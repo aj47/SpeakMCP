@@ -48,7 +48,14 @@ export async function restoreSession(
       return { success: false, error: 'Session not found' };
     }
 
-    // Check age
+    // Check expiresAt in metadata first
+    if (session.metadata.expiresAt && Date.now() > session.metadata.expiresAt) {
+      const age = Date.now() - session.updatedAt;
+      options.onExpired?.(sessionId, age);
+      return { success: false, error: 'Session expired' };
+    }
+
+    // Check age based on updatedAt
     const age = Date.now() - session.updatedAt;
     if (age > maxAgeMs) {
       options.onExpired?.(sessionId, age);

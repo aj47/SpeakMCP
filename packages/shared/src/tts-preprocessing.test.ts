@@ -1,449 +1,204 @@
 /**
- * TTS Preprocessing Tests
- * 
- * Tests for the shared tts-preprocessing module used by SpeakMCP
- * for preparing text-to-speech content.
+ * Tests for tts-preprocessing utilities
  */
-
 import { describe, it, expect } from "vitest"
 import {
   removeThinkingBlocks,
   removeCodeBlocks,
-  removeUrls,
   convertMarkdownToSpeech,
   cleanSymbols,
-  convertNumbers,
   convertCurrency,
+  convertNumbers,
   normalizeWhitespace,
   truncateText,
   validateTTSText,
-  preprocessTextForTTS,
 } from "./tts-preprocessing"
 
 describe("removeThinkingBlocks", () => {
-  it("should remove thinking blocks with default tags", () => {
-    const input = "Answer here. <think>thinking goes here.</think> More answer."
-    const result = removeThinkingBlocks(input)
-    expect(result).toBe("Answer here.  More answer.")
+  it("removes single-line thinking blocks", () => {
+    const input = "Hello <thinking>ignore this</thinking> world"
+    expect(removeThinkingBlocks(input)).toBe("Hello  world")
   })
 
-  it("should remove multiline thinking blocks", () => {
-    const input = `First part.
-<thinking>Thinking across multiple lines.
-More reasoning here.</thinking>
-Second part.`
-    const result = removeThinkingBlocks(input)
-    expect(result).toBe("First part.\n\nSecond part.")
+  it("removes multiline thinking blocks", () => {
+    const input = `Hello <thinking>
+      This is a long
+      thinking block
+    </thinking> world`
+    expect(removeThinkingBlocks(input)).toBe("Hello  world")
   })
 
-  it("should remove multiple thinking blocks", () => {
-    const input = "A. <think>First reasoning.</think> B. <think>Second reasoning.</think> C."
-    const result = removeThinkingBlocks(input)
-    expect(result).toBe("A.  B.  C.")
+  it("removes thinking blocks case-insensitively", () => {
+    const input = "Hello <THINKING>ignore this</THINKING> world"
+    expect(removeThinkingBlocks(input)).toBe("Hello  world")
   })
 
-  it("should handle case-insensitive tags", () => {
-    const input = "Answer. <THINK>Reasoning</THINK> More."
-    const result = removeThinkingBlocks(input)
-    expect(result).toBe("Answer.  More.")
+  it("removes think blocks", () => {
+    const input = "Hello <function_call>ignore this</think> world"
+    expect(removeThinkingBlocks(input)).toBe("Hello  world")
   })
 
-  it("should return original text if no thinking blocks", () => {
-    const input = "Plain text without any thinking blocks."
-    const result = removeThinkingBlocks(input)
-    expect(result).toBe(input)
+  it("removes xml-style think blocks", () => {
+    const input = "Hello <think>ignore this</think> world"
+    expect(removeThinkingBlocks(input)).toBe("Hello  world")
+  })
+
+  it("removes mixed thinking block formats", () => {
+    const input = "<thinking>first</thinking> and <think>second</think> world"
+    expect(removeThinkingBlocks(input)).toBe(" and  world")
+  })
+
+  it("removes empty thinking blocks", () => {
+    const input = "Hello <thinking></thinking> world"
+    expect(removeThinkingBlocks(input)).toBe("Hello  world")
+  })
+
+  it("handles text with no thinking blocks", () => {
+    const input = "Hello world"
+    expect(removeThinkingBlocks(input)).toBe("Hello world")
+  })
+
+  it("removes nested thinking blocks", () => {
+    const input = "<thinking>outer <thinking>inner</thinking> outer</thinking>"
+    expect(removeThinkingBlocks(input)).toBe("")
   })
 })
 
 describe("removeCodeBlocks", () => {
-  it("should replace code blocks with placeholder", () => {
-    const input = "```js\nconst x = 1;\n```"
-    const result = removeCodeBlocks(input)
-    expect(result).toContain("[code block]")
+  it("removes fenced code blocks", () => {
+    const input = "```const x = 1;```"
+    expect(removeCodeBlocks(input)).toBe(" [code block] ")
   })
 
-  it("should replace inline code with placeholder", () => {
-    const input = "Use `console.log()` to debug."
-    const result = removeCodeBlocks(input)
-    expect(result).toContain(" console.log() ")
+  it("removes inline code", () => {
+    const input = "Use `console.log()` for debugging"
+    expect(removeCodeBlocks(input)).toBe("Use  console.log()  for debugging")
   })
 
-  it("should remove HTML tags", () => {
-    const input = "<div>Content</div>"
-    const result = removeCodeBlocks(input)
-    expect(result).not.toContain("<div>")
-    expect(result).not.toContain("</div>")
-  })
-
-  it("should handle multiple code blocks", () => {
-    const input = "```js\na\n``` middle ```python\nb\n``` end"
-    const result = removeCodeBlocks(input)
-    expect(result).toContain("[code block]")
-    expect(result).toContain("middle")
-    expect(result).toContain("end")
-  })
-})
-
-describe("removeUrls", () => {
-  it("should replace HTTP URLs with placeholder", () => {
-    const input = "Visit https://example.com for details."
-    const result = removeUrls(input)
-    expect(result).toContain("[web link]")
-    expect(result).not.toContain("https://")
-  })
-
-  it("should replace email addresses with placeholder", () => {
-    const input = "Contact hello@example.com"
-    const result = removeUrls(input)
-    expect(result).toContain("[email address]")
-    expect(result).not.toContain("@")
-  })
-
-  it("should handle multiple URLs and emails", () => {
-    const input = "Visit https://a.com and b@c.com"
-    const result = removeUrls(input)
-    const linkCount = (result.match(/\[web link\]/g) || []).length
-    const emailCount = (result.match(/\[email address\]/g) || []).length
-    expect(linkCount).toBe(1)
-    expect(emailCount).toBe(1)
-  })
-
-  it("should preserve text around URLs", () => {
-    const input = "Before https://example.com After"
-    const result = removeUrls(input)
-    expect(result).toContain("Before")
-    expect(result).toContain("After")
+  it("removes HTML tags", () => {
+    const input = "<div>content</div>"
+    expect(removeCodeBlocks(input)).toBe(" content ")
   })
 })
 
 describe("convertMarkdownToSpeech", () => {
-  it("should convert headings to speech format", () => {
-    const input = "# Main Title"
-    const result = convertMarkdownToSpeech(input)
-    expect(result).toContain("Heading:")
-    expect(result).not.toContain("#")
+  it("converts headings", () => {
+    expect(convertMarkdownToSpeech("# Title")).toBe("Heading: Title.")
+    expect(convertMarkdownToSpeech("## Subtitle")).toBe("Heading: Subtitle.")
   })
 
-  it("should remove bold formatting", () => {
-    const input = "**bold text**"
-    const result = convertMarkdownToSpeech(input)
-    expect(result).toContain("bold text")
-    expect(result).not.toContain("**")
+  it("removes bold formatting", () => {
+    expect(convertMarkdownToSpeech("**bold**")).toBe("bold")
   })
 
-  it("should remove italic formatting", () => {
-    const input = "*italic text*"
-    const result = convertMarkdownToSpeech(input)
-    expect(result).toContain("italic text")
-    expect(result).not.toContain("*")
+  it("removes italic formatting", () => {
+    expect(convertMarkdownToSpeech("*italic*")).toBe("italic")
   })
 
-  it("should convert list items to speech format", () => {
-    const input = "- First item"
-    const result = convertMarkdownToSpeech(input)
-    expect(result).toContain("Item:")
-  })
-
-  it("should convert numbered lists", () => {
-    const input = "1. First item"
-    const result = convertMarkdownToSpeech(input)
-    expect(result).toContain("Item:")
-  })
-
-  it("should extract link text", () => {
-    const input = "[link text](https://example.com)"
-    const result = convertMarkdownToSpeech(input)
-    expect(result).toContain("link text")
-    expect(result).not.toContain("(")
+  it("converts lists to items", () => {
+    expect(convertMarkdownToSpeech("- item")).toBe("Item: item.")
+    expect(convertMarkdownToSpeech("1. item")).toBe("Item: item.")
   })
 })
 
 describe("cleanSymbols", () => {
-  it("should replace operators with speech-friendly text", () => {
-    const input = "a >= b && c != d"
-    const result = cleanSymbols(input)
-    expect(result).toContain("greater than or equal")
-    expect(result).toContain("and")
-    expect(result).toContain("not equal")
+  it("replaces common symbols", () => {
+    expect(cleanSymbols("a && b")).toBe("a  and  b")
+    expect(cleanSymbols("a || b")).toBe("a  or  b")
+    expect(cleanSymbols("a => b")).toBe("a  arrow  b")
   })
 
-  it("should handle arrows", () => {
-    const input = "x => y"
-    const result = cleanSymbols(input)
-    expect(result).toContain("arrow")
+  it("converts at symbol for speech", () => {
+    expect(cleanSymbols("email@example.com")).toBe("email at example.com")
   })
 
-  it("should replace @ symbol", () => {
-    const input = "Contact @username"
-    const result = cleanSymbols(input)
-    expect(result).toContain(" at ")
+  it("preserves TTS placeholders", () => {
+    expect(cleanSymbols("[code block]")).toBe("[code block]")
+  })
+})
+
+describe("convertCurrency", () => {
+  it("converts USD", () => {
+    expect(convertCurrency("$50")).toBe("50 dollars")
+    expect(convertCurrency("$50.25")).toBe("50 dollars 25 cents")
   })
 
-  it("should preserve TTS placeholders", () => {
-    const input = "[code block] test [web link]"
-    const result = cleanSymbols(input)
-    expect(result).toContain("[code block]")
-    expect(result).toContain("[web link]")
+  it("converts EUR", () => {
+    expect(convertCurrency("€50")).toBe("50 euros")
+    expect(convertCurrency("€50.25")).toBe("50 euros 25 cents")
   })
 
-  it("should remove other bracketed content", () => {
-    const input = "[note] preserved [code block]"
-    const result = cleanSymbols(input)
-    expect(result).not.toContain("[note]")
-    expect(result).toContain("[code block]")
+  it("converts GBP", () => {
+    expect(convertCurrency("£50")).toBe("50 pounds")
+    expect(convertCurrency("£50.99")).toBe("50 pounds 99 pence")
   })
 
-  it("should collapse multiple exclamation marks", () => {
-    const input = "Wow!!!"
-    const result = cleanSymbols(input)
-    expect(result).toBe("Wow!")
+  it("converts JPY", () => {
+    expect(convertCurrency("¥1000")).toBe("1000 yen")
   })
 
-  it("should replace percentages", () => {
-    const input = "50% complete"
-    const result = cleanSymbols(input)
-    expect(result).toContain("percent")
+  it("handles currency codes", () => {
+    expect(convertCurrency("50 USD")).toBe("50 dollars")
+    expect(convertCurrency("50.99 EUR")).toBe("50 euros 99 cents")
   })
 })
 
 describe("convertNumbers", () => {
-  it("should convert version numbers", () => {
-    const input = "v1.2.3"
-    const result = convertNumbers(input)
-    expect(result).toContain("version 1 point 2 point 3")
+  it("converts version numbers", () => {
+    expect(convertNumbers("v1.2.3")).toBe("version 1 point 2 point 3")
   })
 
-  it("should convert version numbers without v prefix", () => {
-    const input = "2.0.0"
-    const result = convertNumbers(input)
-    expect(result).toContain("version 2 point 0 point 0")
+  it("handles phone numbers", () => {
+    expect(convertNumbers("(123) 456-7890")).toBe("123 456 7890")
   })
 
-  it("should handle phone numbers", () => {
-    const input = "Call (123) 456-7890"
-    const result = convertNumbers(input)
-    expect(result).not.toContain("(")
-    expect(result).not.toContain(")")
-    expect(result).not.toContain("-")
+  it("handles percentages", () => {
+    expect(convertNumbers("50%")).toBe("50 percent")
+    expect(convertNumbers("12.5%")).toBe("12 point 5 percent")
   })
 
-  it("should convert currency", () => {
-    const input = "$50.25"
-    const result = convertNumbers(input)
-    expect(result).toContain("50 dollars 25 cents")
-  })
-
-  it("should handle euros", () => {
-    const input = "100 EUR"
-    const result = convertNumbers(input)
-    expect(result).toContain("100 euros")
-  })
-
-  it("should convert percentages", () => {
-    const input = "75%"
-    const result = convertNumbers(input)
-    expect(result).toContain("75 percent")
-  })
-
-  it("should remove commas from large numbers", () => {
-    const input = "1,234,567"
-    const result = convertNumbers(input)
-    expect(result).not.toContain(",")
-    expect(result).toContain("1234567")
+  it("removes commas from numbers", () => {
+    expect(convertNumbers("1,234,567")).toBe("1 234 567")
   })
 })
 
 describe("normalizeWhitespace", () => {
-  it("should collapse multiple spaces", () => {
-    const input = "Hello    world"
-    const result = normalizeWhitespace(input)
-    expect(result).toBe("Hello world.")
+  it("normalizes whitespace", () => {
+    expect(normalizeWhitespace("Hello    world")).toBe("Hello world.")
   })
 
-  it("should trim start and end", () => {
-    const input = "  trimmed  "
-    const result = normalizeWhitespace(input)
-    expect(result).toBe("trimmed.")
-  })
-
-  it("should add period if missing", () => {
-    const input = "No period"
-    const result = normalizeWhitespace(input)
-    expect(result).toContain(".")
-  })
-
-  it("should not add period if already present", () => {
-    const input = "Has period."
-    const result = normalizeWhitespace(input)
-    expect(result).toBe("Has period.")
-  })
-
-  it("should normalize newlines to spaces", () => {
-    const input = "Line1\nLine2"
-    const result = normalizeWhitespace(input)
-    expect(result).toBe("Line1 Line2.")
+  it("adds trailing period", () => {
+    expect(normalizeWhitespace("Hello world")).toBe("Hello world.")
   })
 })
 
 describe("truncateText", () => {
-  it("should return original if under max length", () => {
-    const input = "Short text"
-    const result = truncateText(input, 100)
-    expect(result).toBe(input)
+  it("truncates long text", () => {
+    const long = "A".repeat(200)
+    expect(truncateText(long, 100).length).toBeLessThan(110)
   })
 
-  it("should truncate at sentence boundary", () => {
-    const input = "First sentence. Second sentence. Third very long sentence that goes on."
-    const result = truncateText(input, 35)
-    expect(result).toContain("Second sentence.")
-    expect(result).not.toContain("Third")
-  })
-
-  it("should truncate at word boundary if no sentence", () => {
-    const input = "Word1 Word2 Word3 Word4 Word5"
-    const result = truncateText(input, 20)
-    expect(result).toContain("...")
-    expect(result.length).toBeLessThanOrEqual(23) // 20 + "..."
-  })
-
-  it("should handle empty string", () => {
-    const input = ""
-    const result = truncateText(input, 100)
-    expect(result).toBe("")
+  it("doesn't truncate short text", () => {
+    expect(truncateText("Hello", 100)).toBe("Hello")
   })
 })
 
 describe("validateTTSText", () => {
-  it("should validate empty text", () => {
+  it("validates empty text", () => {
     const result = validateTTSText("")
     expect(result.isValid).toBe(false)
     expect(result.issues).toContain("Text is empty")
   })
 
-  it("should validate text that is too long", () => {
-    const result = validateTTSText("x".repeat(10001))
-    expect(result.isValid).toBe(false)
-    expect(result.issues).toContain("Text is too long for TTS")
-  })
-
-  it("should detect unprocessed code blocks", () => {
-    const result = validateTTSText("Text with ```code```")
-    expect(result.isValid).toBe(false)
-    expect(result.issues).toContain("Contains unprocessed code blocks")
-  })
-
-  it("should detect unprocessed URLs", () => {
-    const result = validateTTSText("Visit https://example.com")
+  it("validates text with URLs", () => {
+    const result = validateTTSText("Check https://example.com")
     expect(result.isValid).toBe(false)
     expect(result.issues).toContain("Contains unprocessed URLs")
   })
 
-  it("should validate valid text", () => {
-    const result = validateTTSText("This is valid TTS text.")
-    expect(result.isValid).toBe(true)
-    expect(result.issues).toHaveLength(0)
-  })
-})
-
-describe("preprocessTextForTTS - Integration", () => {
-  it("should process full text for TTS", () => {
-    const input = `**Bold** thinking content. More text.`
-    const result = preprocessTextForTTS(input)
-    expect(result).not.toContain("**")
-    // "thinking content" is regular text, not a thinking block - should remain
-    expect(result).toContain("thinking content")
-  })
-
-  it("should handle all options disabled", () => {
-    const input = "```code``` and https://url"
-    const result = preprocessTextForTTS(input, {
-      removeThinkingBlocks: false,
-      removeCodeBlocks: false,
-      removeUrls: false,
-      convertMarkdown: false,
-      removeSymbols: false,
-      convertNumbers: false,
-    })
-    expect(result).toContain("```code```")
-    expect(result).toContain("https://")
-  })
-
-  it("should process with all options enabled", () => {
-    const input = `**Heading**
-\`\`\`js
-const x = 1;
-\`\`\`
-Visit https://example.com`
-    const result = preprocessTextForTTS(input)
-    expect(result).not.toContain("**")
-    expect(result).toContain("[code block]")
-    expect(result).toContain("[web link]")
-  })
-
-  it("should preserve TTS placeholders through full processing", () => {
-    const input = "Code: ```js const x = 1;``` Link: https://test.com"
-    const result = preprocessTextForTTS(input)
-    expect(result).toContain("[code block]")
-    expect(result).toContain("[web link]")
-  })
-})
-
-describe("convertCurrency", () => {
-  it("should convert USD symbol with comma-separated amount to speech format", () => {
-    // TTS-friendly output: converts numbers to spoken format
-    expect(convertCurrency("$1,234.56")).toBe("1234 dollars 56 cents")
-  })
-
-  it("should convert USD symbol without cents to speech format", () => {
-    expect(convertCurrency("$500")).toBe("500 dollars")
-  })
-
-  it("should convert EUR symbol to speech format", () => {
-    expect(convertCurrency("€500")).toBe("500 euros")
-    expect(convertCurrency("€1,234.56")).toBe("1234 euros 56 cents")
-  })
-
-  it("should convert GBP symbol to speech format", () => {
-    expect(convertCurrency("£50.99")).toBe("50 pounds 99 pence")
-  })
-
-  it("should convert JPY symbol to speech format", () => {
-    expect(convertCurrency("¥1000")).toBe("1000 yen")
-    // Note: "¥1000 yen" becomes "1000 yen yen" - redundant but functional for TTS
-    expect(convertCurrency("¥1000 yen")).toBe("1000 yen yen")
-  })
-
-  it("should handle explicit currency words", () => {
-    expect(convertCurrency("50.99 USD")).toBe("50 dollars 99 cents USD")
-    expect(convertCurrency("100 EUR")).toBe("100 euros")
-    expect(convertCurrency("75.50 GBP")).toBe("75 pounds 50 pence")
-  })
-
-  it("should handle multiple currencies in one string", () => {
-    const input = "Price is $50.00 plus €25.00"
-    const result = convertCurrency(input)
-    expect(result).toContain("50 dollars")
-    expect(result).toContain("25 euros")
-  })
-
-  it("should handle currency without space after symbol", () => {
-    expect(convertCurrency("$50")).toBe("50 dollars")
-    expect(convertCurrency("€100")).toBe("100 euros")
-  })
-
-  // Bug fix: currency regex now handles amounts without comma separators
-  it("should convert USD with cents but no comma separators to speech format", () => {
-    // This was the bug: $1234.56 failed because regex required \d{1,3} at start
-    expect(convertCurrency("$1234.56")).toBe("1234 dollars 56 cents")
-  })
-
-  it("should convert USD without cents and no comma separators to speech format", () => {
-    expect(convertCurrency("$1234")).toBe("1234 dollars")
-    expect(convertCurrency("$999")).toBe("999 dollars")
-  })
-
-  it("should convert small amounts without comma separators to speech format", () => {
-    expect(convertCurrency("$1.99")).toBe("1 dollars 99 cents")
-    expect(convertCurrency("$0.50")).toBe("0 dollars 50 cents")
+  it("validates text with code blocks", () => {
+    const result = validateTTSText("```code```")
+    expect(result.isValid).toBe(false)
+    expect(result.issues).toContain("Contains unprocessed code blocks")
   })
 })

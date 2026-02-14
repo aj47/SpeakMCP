@@ -18,72 +18,66 @@ export interface TTSPreprocessingOptions {
   removeThinkingBlocks?: boolean
 }
 
-const DEFAULT_OPTIONS: TTSPreprocessingOptions = {
+// Default options for TTS preprocessing
+const defaultOptions: TTSPreprocessingOptions = {
   removeCodeBlocks: true,
   removeUrls: true,
   convertMarkdown: true,
   removeSymbols: true,
   convertNumbers: true,
-  maxLength: 4000, // Reasonable limit for TTS
+  maxLength: 10000,
   removeThinkingBlocks: true,
 }
 
 /**
- * Preprocesses text to make it more suitable for text-to-speech conversion
+ * Main preprocessing function that applies all TTS transformations
  */
-export function preprocessTextForTTS(
+export function preprocessForTTS(
   text: string,
-  options: TTSPreprocessingOptions = {}
+  opts: TTSPreprocessingOptions = {}
 ): string {
-  const opts = { ...DEFAULT_OPTIONS, ...options }
+  const options = { ...defaultOptions, ...opts }
   let processedText = text
 
-  // Remove thinking blocks first (before other processing)
-  if (opts.removeThinkingBlocks) {
-    processedText = removeThinkingBlocks(processedText)
-  }
-
-  // Remove or replace code blocks
-  if (opts.removeCodeBlocks) {
-    processedText = removeCodeBlocks(processedText)
-  }
-
-  // Remove or replace URLs
-  if (opts.removeUrls) {
+  if (options.removeUrls) {
     processedText = removeUrls(processedText)
   }
 
-  // Convert markdown formatting to speech-friendly text
-  if (opts.convertMarkdown) {
+  if (options.removeThinkingBlocks) {
+    processedText = removeThinkingBlocks(processedText)
+  }
+
+  if (options.removeCodeBlocks) {
+    processedText = removeCodeBlocks(processedText)
+  }
+
+  if (options.convertMarkdown) {
     processedText = convertMarkdownToSpeech(processedText)
   }
 
-  // Remove or replace problematic symbols
-  if (opts.removeSymbols) {
-    processedText = cleanSymbols(processedText)
-  }
-
-  // Convert numbers to spoken form
-  if (opts.convertNumbers) {
+  if (options.convertNumbers) {
     processedText = convertNumbers(processedText)
   }
 
-  // Clean up whitespace and normalize
+  if (options.removeSymbols) {
+    processedText = cleanSymbols(processedText)
+  }
+
   processedText = normalizeWhitespace(processedText)
 
-  // Truncate if too long
-  if (opts.maxLength && processedText.length > opts.maxLength) {
-    processedText = truncateText(processedText, opts.maxLength)
+  if (options.maxLength && processedText.length > options.maxLength) {
+    processedText = truncateText(processedText, options.maxLength)
   }
 
   return processedText
 }
 
-/** Removes thinking blocks (<think>...</think>/** Removes thinking blocks (<think>…</think>, <thinking>…</thinking>) from text */
+/** Removes thinking blocks (</minimax:tool_call>…</minimax:tool_call>, <thinking>…</thinking>) from text */
 export function removeThinkingBlocks(text: string): string {
-  // Remove XML-style thinking/think blocks and their content (case-insensitive)
+  // Remove XML-style thinking/thought blocks and their content (case-insensitive)
+  // Match <thinking>...</thinking> and <function_call>...</think> formats
   let result = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
-  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "")
+  result = result.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, "")
   return result
 }
 
@@ -116,12 +110,14 @@ export function convertMarkdownToSpeech(text: string): string {
 
 /** Cleans up symbols that don't read well in speech */
 export function cleanSymbols(text: string): string {
+  // Order matters: longer patterns must come first to avoid partial replacements
+  // e.g., "&&" should be replaced before "&" to avoid "and and"
   const symbolReplacements: Record<string, string> = {
-    "&": " and ", "@": " at ", "#": " hash ", "%": " percent ",
     "++": " plus plus ", "--": " minus minus ", "=>": " arrow ", "->": " arrow ",
     "===": " equals ", "!==": " not equals ", ">=": " greater than or equal ",
     "<=": " less than or equal ", "&&": " and ", "||": " or ",
     "!=": " not equal ", "==": " equals ",
+    "&": " and ", "@": " at ", "#": " hash ", "%": " percent ",
   }
   for (const [symbol, replacement] of Object.entries(symbolReplacements)) {
     text = text.replace(new RegExp(escapeRegExp(symbol), "g"), replacement)
@@ -212,7 +208,10 @@ export function convertNumbers(text: string): string {
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
 
   // Phone numbers: (123) 456-7890 → "123 456 7890", 123-456-7890 → "123 456 7890"
-  text = text.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, (match) => match.replace(/[-.\s()]/g, " "))
+  text = text.replace(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, (match) => {
+    // Normalize spaces and trim
+    return match.replace(/[-.\s()]/g, " ").replace(/\s+/g, " ").trim()
+  })
 
   // Percentages: 50% → "50 percent", 12.5% → "12 point 5 percent"
   text = text.replace(/(\d+(\.\d+)?)\s*%/g, "$1 percent")
@@ -220,8 +219,8 @@ export function convertNumbers(text: string): string {
   // Ordinal numbers: 1st, 2nd, 3rd, 4th → "1st", "2nd", etc. (keep as-is for TTS to handle)
 
   // Remove commas from numbers - TTS engines pronounce large numbers naturally
-  // Use lookahead to match any comma between digits (handles 1,234,567,890 etc.)
-  text = text.replace(/(\d),(?=\d)/g, "$1")
+  // Add spaces between number groups for readability: 1,234,567 → "1 234 567"
+  text = text.replace(/(\d),(?=\d)/g, "$1 ")
 
   return text
 }
@@ -287,4 +286,3 @@ export function validateTTSText(text: string): {
     processedLength: text.length,
   }
 }
-

@@ -22,6 +22,11 @@ export interface ToolResult {
 }
 
 /**
+ * Source of the message/session - indicates where the content originated from.
+ */
+export type MessageSource = 'native' | 'augment' | 'claude-code' | 'mobile' | 'api';
+
+/**
  * Base chat message interface shared between desktop and mobile.
  * This is the minimal structure needed for displaying messages with tool data.
  */
@@ -30,6 +35,8 @@ export interface BaseChatMessage {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  /** Source of this message - indicates where the content originated from */
+  source?: MessageSource;
 }
 
 /**

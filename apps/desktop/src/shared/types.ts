@@ -241,6 +241,8 @@ export interface AgentProgressUpdate {
   }
   /** Profile name associated with this session (from profile snapshot) */
   profileName?: string
+  /** Session source - indicates where this session originated from */
+  sessionSource?: 'native' | 'augment' | 'claude-code' | 'mobile' | 'api'
   acpSessionInfo?: {
     agentName?: string
     agentTitle?: string

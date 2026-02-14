@@ -79,9 +79,12 @@ export function preprocessTextForTTS(
   return processedText
 }
 
-/** Removes thinking blocks (<think>...</think>) from text */
+/** Removes thinking blocks (<think>...</think>/** Removes thinking blocks (<think>…</think>, <thinking>…</thinking>) from text */
 export function removeThinkingBlocks(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, "")
+  // Remove XML-style thinking/think blocks and their content (case-insensitive)
+  let result = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+  result = result.replace(/<think>[\s\S]*?<\/think>/gi, "")
+  return result
 }
 
 /** Removes code blocks and replaces them with descriptive text */

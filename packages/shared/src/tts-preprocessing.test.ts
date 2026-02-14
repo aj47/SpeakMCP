@@ -22,24 +22,24 @@ import {
 
 describe("removeThinkingBlocks", () => {
   it("should remove thinking blocks with default tags", () => {
-    const input = "Answer here. thinking goes here. More answer."
+    const input = "Answer here. <think>thinking goes here.</think> More answer."
     const result = removeThinkingBlocks(input)
     expect(result).toBe("Answer here.  More answer.")
   })
 
   it("should remove multiline thinking blocks", () => {
     const input = `First part.
-Thinking across multiple lines.
-</think>
+<thinking>Thinking across multiple lines.
+More reasoning here.</thinking>
 Second part.`
     const result = removeThinkingBlocks(input)
-    expect(result).toBe("First part.\nSecond part.")
+    expect(result).toBe("First part.\n\nSecond part.")
   })
 
   it("should remove multiple thinking blocks", () => {
-    const input = "A. First reasoning. B. Second reasoning. C."
+    const input = "A. <think>First reasoning.</think> B. <think>Second reasoning.</think> C."
     const result = removeThinkingBlocks(input)
-    expect(result).toBe("A. B. C.")
+    expect(result).toBe("A.  B.  C.")
   })
 
   it("should handle case-insensitive tags", () => {

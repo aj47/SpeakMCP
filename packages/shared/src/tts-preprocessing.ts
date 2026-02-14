@@ -141,8 +141,9 @@ function cleanSymbols(text: string): string {
 function convertCurrency(text: string): string {
   // Match currency symbols followed by numbers with optional commas and decimals
   // Currency symbols: $, £, €, ¥, ₹, ₩, ₽, ฿, ¢
+  // Use \d+ (not \d{1,3}) to match 4+ digit numbers like ¥1000 correctly
   const currencySymbols = "[$£€¥₹₩₽฿¢]"
-  const numberPattern = "\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?"
+  const numberPattern = "\\d+(?:,\\d{3})*(?:\\.\\d+)?"
   const regex = new RegExp(currencySymbols + "\\s*(" + numberPattern + ")", "g")
   
   return text.replace(regex, (match, numberPart) => {

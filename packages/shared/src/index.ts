@@ -13,4 +13,5 @@ export * from './session-continuation';
 export * from './external-session-loader';
 export * from './chat-history-merger';
 export * from './sources';
+export * from './skills';
 

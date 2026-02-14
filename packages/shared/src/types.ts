@@ -132,3 +132,51 @@ export interface MessageQueue {
   messages: QueuedMessage[];
 }
 
+/**
+ * Skill source type - identifies where a skill originated from
+ */
+export type SkillSource = 'local' | 'imported' | 'external' | 'bundled';
+
+/**
+ * Agent skill - represents a specialized instruction set for the AI agent.
+ * Skills enhance agent capabilities on specific tasks using a simple SKILL.md format.
+ * 
+ * Format:
+ * ---
+ * name: skill-name
+ * description: What this skill does
+ * ---
+ * 
+ * # Instructions
+ * [Markdown content]
+ */
+export interface AgentSkill {
+  /** Unique identifier for the skill */
+  id: string;
+  /** Display name for the skill */
+  name: string;
+  /** Brief description of what the skill does */
+  description: string;
+  /** The actual instructions/content of the skill in markdown format */
+  instructions: string;
+  /** Whether the skill is currently enabled */
+  enabled: boolean;
+  /** When the skill was created (Unix timestamp in milliseconds) */
+  createdAt: number;
+  /** When the skill was last updated (Unix timestamp in milliseconds) */
+  updatedAt: number;
+  /** Source of the skill (local, imported, external, bundled) */
+  source?: SkillSource;
+  /** Optional path to the SKILL.md file if imported from disk */
+  filePath?: string;
+  /** Optional source directory name for external skills (e.g., "~/.claude/skills") */
+  sourceDirectory?: string;
+}
+
+/**
+ * Collection of agent skills stored in the app data folder
+ */
+export interface AgentSkillsData {
+  skills: AgentSkill[];
+}
+

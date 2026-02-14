@@ -28,3 +28,4 @@ export {
 } from './acp-router-tools'
 export { acpSmartRouter, ACPSmartRouter } from './acp-smart-router'
 export { acpBackgroundNotifier, ACPBackgroundNotifier } from './acp-background-notifier'
+export { acpParallelOrchestrator, ACPParallelOrchestrator, ParallelTaskGroup, ParallelExecutionResult } from './acp-parallel-orchestrator'

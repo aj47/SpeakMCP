@@ -5,6 +5,7 @@
 
 import type { MessageSource } from './types';
 import type { SessionData, SessionMessage } from './session-store';
+import type { ExternalSession, ExternalSessionMessage } from './external-session-types';
 import { createSession, createSessionMessage } from './session-store';
 
 export interface ExternalSessionConfig {
@@ -12,16 +13,6 @@ export interface ExternalSessionConfig {
   augmentPath?: string;
   /** Base directory for Claude Code projects */
   claudeCodePath?: string;
-}
-
-export interface ExternalSession {
-  id: string;
-  source: MessageSource;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  messages: ExternalMessage[];
-  metadata: Record<string, unknown>;
 }
 
 export interface ExternalMessage {

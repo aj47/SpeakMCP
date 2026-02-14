@@ -5,7 +5,7 @@
  * and provides unified access for session continuation.
  */
 
-import { log } from '../debug';
+import { log } from './debug';
 import { AugmentSessionProvider, augmentSessionProvider } from './augment-provider';
 import { ClaudeCodeSessionProvider, claudeCodeSessionProvider } from './claude-code-provider';
 import type {

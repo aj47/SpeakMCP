@@ -44,6 +44,10 @@ export enum SessionSourceType {
 
 /**
  * Session source badge - visual indicator for session source in UI
+/**
+ * Alias for SessionSourceType - used for message/source tracking
+ */
+export type MessageSource = SessionSourceType;
  */
 export interface SessionSourceBadge {
   type: SessionSourceType;

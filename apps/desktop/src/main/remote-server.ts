@@ -14,6 +14,9 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
+import { loadExternalSession, getExternalProviders, listExternalSessions } from "../../../shared/src/external-session-service"
+import { emitAgentProgress } from "./emit-agent-progress"
+import type { MessageSource } from "../../../shared/src/types"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -1289,146 +1292,101 @@ export async function startRemoteServer() {
     }
   })
 
-  // External Sessions Endpoints - Session continuation from Augment and Claude Code
+  // External Session Endpoints - For continuing Augment and Claude Code sessions
 
   // GET /v1/external-sessions/providers - List available external session providers
   fastify.get("/v1/external-sessions/providers", async (_req, reply) => {
     try {
-      const { externalSessionService } = await import("@speakmcp/shared/external-session-service")
-      const providers = await externalSessionService.getProviderInfo()
-
-      return reply.send({
-        providers: providers.map(p => ({
-          source: p.source,
-          displayName: p.displayName,
-          available: p.available,
-        })),
-      })
+      const providers = await getExternalProviders()
+      return reply.send({ providers })
     } catch (error: any) {
-      diagnosticsService.logError("remote-server", "Failed to get external session providers", error)
+      diagnosticsService.logError("remote-server", "Failed to get external providers", error)
       return reply.code(500).send({ error: error?.message || "Failed to get providers" })
     }
   })
 
   // GET /v1/external-sessions - List external sessions from all providers
-  fastify.get("/v1/external-sessions", async (req, reply) => {
+  fastify.get("/v1/external-sessions", async (_req, reply) => {
     try {
-      const limit = Number(req.query.limit) || 100
-      const { externalSessionService } = await import("@speakmcp/shared/external-session-service")
-      const sessions = await externalSessionService.getSessionMetadata(limit)
-
-      return reply.send({
-        sessions: sessions.map(s => ({
-          id: s.id,
-          title: s.title,
-          source: s.source,
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt,
-          workspacePath: s.workspacePath,
-          messageCount: s.messageCount,
-          preview: s.preview,
-        })),
-      })
+      const limit = parseInt(String(_req.query.limit || "100"))
+      const sessions = await listExternalSessions(limit)
+      return reply.send({ sessions })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to list external sessions", error)
       return reply.code(500).send({ error: error?.message || "Failed to list sessions" })
     }
   })
 
-  // GET /v1/external-sessions/:source - List sessions from a specific provider
-  fastify.get("/v1/external-sessions/:source", async (req, reply) => {
+  // POST /v1/external-sessions/continue - Continue an external session (Augment or Claude Code)
+  fastify.post("/v1/external-sessions/continue", async (req, reply) => {
     try {
-      const { source } = req.params as { source: string }
-      const limit = Number(req.query.limit) || 100
-
-      // Validate source
-      if (!['augment', 'claude-code'].includes(source)) {
-        return reply.code(400).send({ error: "Invalid source. Must be 'augment' or 'claude-code'" })
+      const body = req.body as {
+        sessionId: string
+        source: MessageSource
+        workspacePath?: string
       }
 
-      const { externalSessionService, getProviderForSource } = await import("@speakmcp/shared/external-session-service")
-      const provider = getProviderForSource(source as any)
-
-      if (!provider) {
-        return reply.code(404).send({ error: `Provider not found: ${source}` })
+      if (!body.sessionId || !body.source) {
+        return reply.code(400).send({ error: "sessionId and source are required" })
       }
 
-      const sessions = await provider.getSessionMetadata(limit)
+      if (body.source !== 'augment' && body.source !== 'claude-code') {
+        return reply.code(400).send({ error: "source must be 'augment' or 'claude-code'" })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Continuing external session: ${body.source}/${body.sessionId}`)
+
+      // Load the full session to get conversation history for the UI
+      const fullSession = await loadExternalSession(body.sessionId, body.source)
+
+      if (!fullSession) {
+        return reply.code(404).send({ error: `External session not found: ${body.sessionId}` })
+      }
+
+      // Create a tracked agent session so it shows in the UI
+      const sessionTitle = fullSession.metadata?.title || `${body.source} Session`
+      const conversationId = `ext-${body.source}-${body.sessionId.slice(0, 8)}`
+
+      // Start unsnoozed (false) so the session is visible immediately
+      const trackedSessionId = agentSessionTracker.startSession(
+        conversationId,
+        sessionTitle,
+        false // startSnoozed = false
+      )
+
+      // Create session state for agent processing
+      agentSessionStateManager.createSession(trackedSessionId)
+
+      // Convert external session messages to conversation history format
+      const conversationHistory = fullSession.messages?.map((msg, index) => ({
+        role: msg.role as 'user' | 'assistant' | 'tool',
+        content: msg.content,
+        timestamp: msg.timestamp || Date.now() - ((fullSession.messages?.length || 1) - index) * 1000,
+      })) || []
+
+      // Emit progress update with conversation history so UI shows session content
+      await emitAgentProgress({
+        sessionId: trackedSessionId,
+        conversationId,
+        conversationTitle: sessionTitle,
+        currentIteration: 1,
+        maxIterations: 1,
+        steps: [],
+        isComplete: true,
+        conversationHistory,
+      })
+
+      diagnosticsService.logInfo("remote-server", `Created tracked session ${trackedSessionId} for external session with ${conversationHistory.length} messages`)
 
       return reply.send({
-        source,
-        sessions: sessions.map(s => ({
-          id: s.id,
-          title: s.title,
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt,
-          workspacePath: s.workspacePath,
-          messageCount: s.messageCount,
-          preview: s.preview,
-        })),
+        success: true,
+        trackedSessionId,
+        sessionId: trackedSessionId,
+        conversationId,
+        sessionTitle,
+        message: `${body.source === 'augment' ? 'Augment' : 'Claude Code'} session continued successfully`,
+        conversationHistory,
       })
-    } catch (error: any) {
-      diagnosticsService.logError("remote-server", "Failed to list sessions for source", error)
-      return reply.code(500).send({ error: error?.message || "Failed to list sessions" })
-    }
-  })
-
-  // GET /v1/external-sessions/:source/:id - Get full session data
-  fastify.get("/v1/external-sessions/:source/:id", async (req, reply) => {
-    try {
-      const { source, id } = req.params as { source: string; id: string }
-
-      // Validate source
-      if (!['augment', 'claude-code'].includes(source)) {
-        return reply.code(400).send({ error: "Invalid source. Must be 'augment' or 'claude-code'" })
-      }
-
-      const { externalSessionService, toExternalSessionSource } = await import("@speakmcp/shared/external-session-service")
-      const externalSource = toExternalSessionSource(source as any)
-      const session = await externalSessionService.loadSession(id, externalSource)
-
-      if (!session) {
-        return reply.code(404).send({ error: "Session not found" })
-      }
-
-      return reply.send({
-        id: session.id,
-        title: session.title,
-        source: session.source,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
-        workspacePath: session.workspacePath,
-        messageCount: session.messageCount,
-        preview: session.preview,
-        messages: session.messages.map(m => ({
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp,
-          toolName: m.toolName,
-        })),
-      })
-    } catch (error: any) {
-      diagnosticsService.logError("remote-server", "Failed to load external session", error)
-      return reply.code(500).send({ error: error?.message || "Failed to load session" })
-    }
-  })
-
-  // POST /v1/external-sessions/:source/:id/continue - Continue an external session
-  fastify.post("/v1/external-sessions/:source/:id/continue", async (req, reply) => {
-    try {
-      const { source, id } = req.params as { source: string; id: string }
-      const { workspacePath, initialMessage } = req.body as { workspacePath?: string; initialMessage?: string }
-
-      // Validate source
-      if (!['augment', 'claude-code'].includes(source)) {
-        return reply.code(400).send({ error: "Invalid source. Must be 'augment' or 'claude-code'" })
-      }
-
-      const { externalSessionService, toExternalSessionSource } = await import("@speakmcp/shared/external-session-service")
-      const externalSource = toExternalSessionSource(source as any)
-      const result = await externalSessionService.continueSession(id, externalSource, workspacePath)
-
-      return reply.send(result)
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to continue external session", error)
       return reply.code(500).send({ error: error?.message || "Failed to continue session" })

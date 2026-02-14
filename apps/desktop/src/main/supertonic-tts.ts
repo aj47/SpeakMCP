@@ -412,17 +412,18 @@ class UnicodeProcessor {
     const processedTexts = textList.map((t, i) =>
       this.preprocessText(t, langList[i]),
     )
-    const textIdsLengths = processedTexts.map((t) => t.length)
+    // Use Array.from() for lengths to handle surrogate pairs consistently
+    const unicodeArrays = processedTexts.map((t) =>
+      Array.from(t).map((char) => char.charCodeAt(0)),
+    )
+    const textIdsLengths = unicodeArrays.map((a) => a.length)
     const maxLen = Math.max(...textIdsLengths)
 
     const textIds: number[][] = []
-    for (let i = 0; i < processedTexts.length; i++) {
+    for (let i = 0; i < unicodeArrays.length; i++) {
       const row = new Array(maxLen).fill(0)
-      const unicodeVals = Array.from(processedTexts[i]).map((char) =>
-        char.charCodeAt(0),
-      )
-      for (let j = 0; j < unicodeVals.length; j++) {
-        row[j] = this.indexer[unicodeVals[j]] ?? 0
+      for (let j = 0; j < unicodeArrays[i].length; j++) {
+        row[j] = this.indexer[unicodeArrays[i][j]] ?? 0
       }
       textIds.push(row)
     }
@@ -762,6 +763,18 @@ export async function synthesize(
   speed = 1.05,
   steps = 5,
 ): Promise<SupertonicSynthesisResult> {
+  // Validate speed: must be finite and positive to avoid Infinity/NaN in duration calc
+  if (!Number.isFinite(speed) || speed <= 0) {
+    speed = 1.05
+  }
+  speed = Math.max(0.25, Math.min(4.0, speed))
+
+  // Validate steps: clamp to safe range (2-10) to prevent excessive compute
+  if (!Number.isFinite(steps) || steps < 1) {
+    steps = 5
+  }
+  steps = Math.max(2, Math.min(10, Math.round(steps)))
+
   const engine = await initializeEngine()
   const ort = await loadOrt()
 

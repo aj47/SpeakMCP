@@ -132,11 +132,60 @@ function cleanSymbols(text: string): string {
   return text
 }
 
+/** Converts currency values to speech-friendly format
+ * Handles: $1,234.56 -> "1234 dollars and 56 cents"
+ *         £500 -> "500 pounds"
+ *         €100.00 -> "100 euros"
+ *         ¥1000 -> "1000 yen"
+ */
+function convertCurrency(text: string): string {
+  // Match currency symbols followed by numbers with optional commas and decimals
+  // Currency symbols: $, £, €, ¥, ₹, ₩, ₽, ฿, etc.
+  // Pattern: symbol + digits (with optional commas) + optional decimal part
+  return text.replace(/[$£€¥₹₩₽฿¢]\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/g, (match, numberPart) => {
+    // Remove commas from integer part
+    const integerPart = numberPart.replace(/,/g, "")
+    
+    // Check if there's a decimal part
+    const decimalMatch = numberPart.match /\.(\d+)/
+    
+    if (decimalMatch) {
+      const cents = decimalMatch[1]
+      // Remove leading zeros from cents for natural speech
+      const centsValue = parseInt(cents, 10)
+      const centsDisplay = centsValue === 0 ? "" : ` and ${centsValue} cents`
+      return `${integerPart} dollars${centsDisplay}`
+    } else {
+      // No decimal part - just the amount
+      // Detect currency type and use appropriate unit
+      if (match.startsWith("£")) {
+        return `${integerPart} pounds`
+      } else if (match.startsWith("€")) {
+        return `${integerPart} euros`
+      } else if (match.startsWith("¥") || match.startsWith("₹") || match.startsWith("₩")) {
+        return `${integerPart}` // Asian currencies typically don't use cents
+      } else if (match.startsWith("₽")) {
+        return `${integerPart} rubles`
+      } else if (match.startsWith("฿")) {
+        return `${integerPart} baht`
+      } else if (match.startsWith("¢")) {
+        return `${integerPart} cents`
+      } else {
+        // Default to dollars for $ and unspecified
+        return `${integerPart} dollars`
+      }
+    }
+  })
+}
+
 /** Converts numbers to more speech-friendly formats */
 function convertNumbers(text: string): string {
+  // First convert currency values to speech-friendly format
+  text = convertCurrency(text)
+  
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
-  // Remove commas from numbers - TTS engines pronounce large numbers naturally
+  // Remove commas from remaining numbers - TTS engines pronounce large numbers naturally
   // Use lookahead to match any comma between digits (handles 1,234,567,890 etc.)
   text = text.replace(/(\d),(?=\d)/g, "$1")
   return text

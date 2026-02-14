@@ -56,7 +56,6 @@ export interface SessionSourceBadge {
  * Alias for SessionSourceType - used for message/source tracking
  */
 export type MessageSource = SessionSourceType;
-  icon?: string;
 }
 
 /**

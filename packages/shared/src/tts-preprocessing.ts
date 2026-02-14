@@ -132,8 +132,64 @@ function cleanSymbols(text: string): string {
   return text
 }
 
+/** Converts currency amounts to speech-friendly text */
+export function convertCurrency(text: string): string {
+  // Match $X,XXX.XX or $X.XX or $X,XXX or $X patterns (with optional commas)
+  text = text.replace(
+    /\$\s*([\d,]+)\.(\d{1,2})\b/g,
+    (_match, dollars: string, cents: string) => {
+      const d = dollars.replace(/,/g, "")
+      const c = parseInt(cents, 10)
+      if (c === 0) return `${d} dollars`
+      return `${d} dollars and ${c} cents`
+    }
+  )
+  // Match whole-dollar amounts: $X,XXX or $X (no decimal)
+  text = text.replace(
+    /\$\s*([\d,]+)\b/g,
+    (_match, dollars: string) => {
+      const d = dollars.replace(/,/g, "")
+      return `${d} dollars`
+    }
+  )
+
+  // Euro: €X,XXX.XX or €X
+  text = text.replace(
+    /€\s*([\d,]+)\.(\d{1,2})\b/g,
+    (_match, euros: string, cents: string) => {
+      const e = euros.replace(/,/g, "")
+      const c = parseInt(cents, 10)
+      if (c === 0) return `${e} euros`
+      return `${e} euros and ${c} cents`
+    }
+  )
+  text = text.replace(
+    /€\s*([\d,]+)\b/g,
+    (_match, euros: string) => `${euros.replace(/,/g, "")} euros`
+  )
+
+  // British pound: £X,XXX.XX or £X
+  text = text.replace(
+    /£\s*([\d,]+)\.(\d{1,2})\b/g,
+    (_match, pounds: string, pence: string) => {
+      const p = pounds.replace(/,/g, "")
+      const pe = parseInt(pence, 10)
+      if (pe === 0) return `${p} pounds`
+      return `${p} pounds and ${pe} pence`
+    }
+  )
+  text = text.replace(
+    /£\s*([\d,]+)\b/g,
+    (_match, pounds: string) => `${pounds.replace(/,/g, "")} pounds`
+  )
+
+  return text
+}
+
 /** Converts numbers to more speech-friendly formats */
 function convertNumbers(text: string): string {
+  // Convert currency BEFORE general number processing
+  text = convertCurrency(text)
   text = text.replace(/v?(\d+)\.(\d+)\.(\d+)/g, "version $1 point $2 point $3")
   text = text.replace(/(\d+)\.(\d+)/g, "$1 point $2")
   // Remove commas from numbers - TTS engines pronounce large numbers naturally

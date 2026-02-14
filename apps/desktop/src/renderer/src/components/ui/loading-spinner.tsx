@@ -1,7 +1,4 @@
 import { cn } from "@renderer/lib/utils"
-import loadingSpinnerGif from "@renderer/assets/loading-spinner.gif"
-import lightSpinnerGif from "@renderer/assets/light-spinner.gif"
-import { useTheme } from "@renderer/contexts/theme-context"
 
 interface LoadingSpinnerProps {
   className?: string
@@ -16,22 +13,17 @@ const sizeClasses = {
   lg: "w-12 h-12",
 }
 
-
-
 export function LoadingSpinner({
   className,
   size = "md",
   showText = false,
   text = "Loading...",
 }: LoadingSpinnerProps) {
-  const { isDark } = useTheme()
-  const spinnerSrc = isDark ? loadingSpinnerGif : lightSpinnerGif
-
   return (
     <div className={cn("flex items-center justify-center", className)}>
       <div className="flex items-center gap-2">
         <img
-          src={spinnerSrc}
+          src="../../build/icon.png"
           alt="Loading..."
           className={cn(sizeClasses[size], "object-contain")}
         />

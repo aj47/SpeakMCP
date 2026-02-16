@@ -19,6 +19,7 @@ import { toolApprovalManager } from "./state"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { logACP } from "./debug"
 import { getSpeakMcpSessionForAcpSession } from "./acp-session-state"
+import { agentProfileService } from "./agent-profile-service"
 
 // JSON-RPC types
 interface JsonRpcRequest {
@@ -1642,6 +1643,94 @@ class ACPService extends EventEmitter {
 
     // Create or reuse session
     return await this.createSession(agentName)
+  }
+
+  /**
+   * Load an existing session by ID (for resuming external sessions).
+   * Returns the session ID on success, or an error object.
+   */
+  async loadSession(
+    agentName: string,
+    sessionId: string,
+    cwd?: string
+  ): Promise<{
+    success: boolean
+    sessionId?: string
+    error?: string
+  }> {
+    // Ensure agent is spawned and ready
+    let instance = this.agents.get(agentName)
+    if (!instance || instance.status !== "ready") {
+      try {
+        await this.spawnAgent(agentName)
+        instance = this.agents.get(agentName)
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to spawn agent: ${error}`,
+        }
+      }
+    }
+
+    if (!instance || instance.status !== "ready") {
+      return {
+        success: false,
+        error: `Agent ${agentName} is not ready`,
+      }
+    }
+
+    // Initialize if not already done
+    if (!instance.initialized) {
+      await this.initializeAgent(agentName)
+    }
+
+    try {
+      // Check if agent supports session loading
+      const capabilities = this.getAgentCapabilities(agentName)
+      if (!capabilities?.loadSession) {
+        return {
+          success: false,
+          error: `Agent ${agentName} does not support session loading`,
+        }
+      }
+
+      // Call session/load via ACP
+      const result = await this.sendRequest(agentName, "session/load", {
+        sessionId,
+        cwd: cwd || process.cwd(),
+      }) as {
+        sessionId?: string
+        error?: { message?: string }
+      }
+
+      if (result?.error) {
+        return {
+          success: false,
+          error: result.error.message || JSON.stringify(result.error),
+        }
+      }
+
+      if (!result?.sessionId) {
+        return {
+          success: false,
+          error: "No session ID returned from session/load",
+        }
+      }
+
+      // Store the session ID on the instance
+      instance.sessionId = result.sessionId
+
+      return {
+        success: true,
+        sessionId: result.sessionId,
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return {
+        success: false,
+        error: errorMessage,
+      }
+    }
   }
 
   /**

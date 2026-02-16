@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ACP Remote CLI
+ * SpeakMCP CLI
  * 
  * Terminal-based configuration and server management for SSH/VM environments.
  */
@@ -25,8 +25,8 @@ import { runSetup } from "./setup.js"
 const program = new Command()
 
 program
-  .name("acp-remote")
-  .description("ACP Remote CLI - Configure and manage ACP Remote from the terminal")
+  .name("speakmcp")
+  .description("SpeakMCP CLI - Configure and manage SpeakMCP from the terminal")
   .version("1.0.0")
 
 // Setup command
@@ -113,7 +113,7 @@ agentCmd
     
     if (profiles.length === 0) {
       console.log(chalk.yellow("No agent profiles configured"))
-      console.log(chalk.gray("Run 'acp-remote setup' to configure an agent"))
+      console.log(chalk.gray("Run 'speakmcp setup' to configure an agent"))
       return
     }
     
@@ -174,7 +174,7 @@ program
     
     if (!config.remoteServerEnabled) {
       console.log(chalk.yellow("Remote server is not enabled"))
-      console.log(chalk.gray("Run: acp-remote config set remoteServerEnabled true"))
+      console.log(chalk.gray("Run: speakmcp config set remoteServerEnabled true"))
       return
     }
     
@@ -189,7 +189,7 @@ program
     // Build deep link URL (localhost - user needs to set up tunnel or use IP)
     const port = config.remoteServerPort || 3210
     const baseUrl = `http://localhost:${port}/v1`
-    const deepLink = `acpremote://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(config.remoteServerApiKey)}`
+    const deepLink = `speakmcp://config?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(config.remoteServerApiKey)}`
     
     const qr = await QRCode.toString(deepLink, { type: "terminal", small: true })
     console.log()
@@ -209,7 +209,7 @@ program
     const config = loadConfig()
     const profiles = listAgentProfiles()
     
-    console.log(chalk.bold("\n📊 ACP Remote Status\n"))
+    console.log(chalk.bold("\n📊 SpeakMCP Status\n"))
     
     console.log(chalk.gray("Onboarding:"), config.onboardingCompleted ? chalk.green("Complete") : chalk.yellow("Not complete"))
     console.log(chalk.gray("Main Agent:"), chalk.cyan(config.mainAgentName || "Not set"))

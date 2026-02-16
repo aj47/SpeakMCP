@@ -49,7 +49,7 @@ const PREDEFINED_AGENTS = [
     id: "internal",
     name: "general-assistant",
     displayName: "Built-in Assistant",
-    description: "Use ACP Remote's built-in AI assistant (requires API key)",
+    description: "Use SpeakMCP's built-in AI assistant (requires API key)",
     command: "",
     args: [],
     isInternal: true,
@@ -58,7 +58,7 @@ const PREDEFINED_AGENTS = [
 
 export async function runSetup(): Promise<void> {
   console.log()
-  console.log(chalk.bold.cyan("🚀 ACP Remote Setup"))
+  console.log(chalk.bold.cyan("🚀 SpeakMCP Setup"))
   console.log(chalk.gray("━".repeat(40)))
   console.log()
 
@@ -163,10 +163,10 @@ export async function runSetup(): Promise<void> {
   console.log(chalk.bold.green("✅ Setup complete!"))
   console.log()
   console.log(chalk.gray("To start the app:"))
-  console.log(chalk.cyan("  acp-remote serve"))
+  console.log(chalk.cyan("  speakmcp serve"))
   console.log()
   console.log(chalk.gray("To show connection QR code:"))
-  console.log(chalk.cyan("  acp-remote qr"))
+  console.log(chalk.cyan("  speakmcp qr"))
   console.log()
   console.log(chalk.gray(`Config saved to: ${configPath}`))
   console.log()

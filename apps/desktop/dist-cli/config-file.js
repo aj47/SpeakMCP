@@ -23,7 +23,7 @@ function getAppDataPath() {
     }
 }
 // App ID from environment or default
-const APP_ID = process.env.APP_ID || "acpremote";
+const APP_ID = process.env.APP_ID || "speakmcp";
 export const dataFolder = path.join(getAppDataPath(), APP_ID);
 export const configPath = path.join(dataFolder, "config.json");
 export const agentProfilesPath = path.join(dataFolder, "agent-profiles.json");

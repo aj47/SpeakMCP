@@ -1,0 +1,265 @@
+{
+  "summary": {
+    "mode": "smoke",
+    "generatedAt": "2026-02-09T22:01:08.460Z",
+    "runsPerScenario": 3,
+    "targets": {
+      "desktop": "http://127.0.0.1:3210",
+      "cli": "http://127.0.0.1:3210"
+    },
+    "totalScenarios": 4,
+    "totalRuns": 12,
+    "passedRuns": 12,
+    "passRate": 1,
+    "scenarioFailureCount": 0,
+    "totalRecoverableErrors": 6
+  },
+  "scenarios": [
+    {
+      "id": "settings-roundtrip",
+      "name": "Settings roundtrip parity",
+      "estimatedKeystrokes": 22,
+      "runs": [
+        {
+          "passed": true,
+          "durationMs": 15,
+          "estimatedKeystrokes": 22,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "ttsEnabled": false,
+            "hasMemoriesToggle": true,
+            "hasQueueToggle": true
+          },
+          "cliSignature": {
+            "ttsEnabled": false,
+            "hasMemoriesToggle": true,
+            "hasQueueToggle": true
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 9,
+          "estimatedKeystrokes": 22,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "ttsEnabled": false,
+            "hasMemoriesToggle": true,
+            "hasQueueToggle": true
+          },
+          "cliSignature": {
+            "ttsEnabled": false,
+            "hasMemoriesToggle": true,
+            "hasQueueToggle": true
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 8,
+          "estimatedKeystrokes": 22,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "ttsEnabled": false,
+            "hasMemoriesToggle": true,
+            "hasQueueToggle": true
+          },
+          "cliSignature": {
+            "ttsEnabled": false,
+            "hasMemoriesToggle": true,
+            "hasQueueToggle": true
+          }
+        }
+      ],
+      "passRate": 1,
+      "duration": {
+        "minMs": 8,
+        "maxMs": 15,
+        "avgMs": 11,
+        "stdDevMs": 3
+      },
+      "recoverableErrorCount": 0
+    },
+    {
+      "id": "memories-crud",
+      "name": "Memories CRUD parity",
+      "estimatedKeystrokes": 28,
+      "runs": [
+        {
+          "passed": true,
+          "durationMs": 6,
+          "estimatedKeystrokes": 28,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "created": true,
+            "updated": true,
+            "deleted": true
+          },
+          "cliSignature": {
+            "created": true,
+            "updated": true,
+            "deleted": true
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 5,
+          "estimatedKeystrokes": 28,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "created": true,
+            "updated": true,
+            "deleted": true
+          },
+          "cliSignature": {
+            "created": true,
+            "updated": true,
+            "deleted": true
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 6,
+          "estimatedKeystrokes": 28,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "created": true,
+            "updated": true,
+            "deleted": true
+          },
+          "cliSignature": {
+            "created": true,
+            "updated": true,
+            "deleted": true
+          }
+        }
+      ],
+      "passRate": 1,
+      "duration": {
+        "minMs": 5,
+        "maxMs": 6,
+        "avgMs": 6,
+        "stdDevMs": 0
+      },
+      "recoverableErrorCount": 0
+    },
+    {
+      "id": "queue-controls",
+      "name": "Queue pause/retry/edit parity",
+      "estimatedKeystrokes": 32,
+      "runs": [
+        {
+          "passed": true,
+          "durationMs": 10,
+          "estimatedKeystrokes": 32,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "paused": true,
+            "resumed": true,
+            "retryCount": 1
+          },
+          "cliSignature": {
+            "paused": true,
+            "resumed": true,
+            "retryCount": 1
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 6,
+          "estimatedKeystrokes": 32,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "paused": true,
+            "resumed": true,
+            "retryCount": 1
+          },
+          "cliSignature": {
+            "paused": true,
+            "resumed": true,
+            "retryCount": 1
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 6,
+          "estimatedKeystrokes": 32,
+          "recoverableErrors": 0,
+          "desktopSignature": {
+            "paused": true,
+            "resumed": true,
+            "retryCount": 1
+          },
+          "cliSignature": {
+            "paused": true,
+            "resumed": true,
+            "retryCount": 1
+          }
+        }
+      ],
+      "passRate": 1,
+      "duration": {
+        "minMs": 6,
+        "maxMs": 10,
+        "avgMs": 7,
+        "stdDevMs": 2
+      },
+      "recoverableErrorCount": 0
+    },
+    {
+      "id": "agent-session-controls",
+      "name": "Agent sessions/snooze parity",
+      "estimatedKeystrokes": 18,
+      "runs": [
+        {
+          "passed": true,
+          "durationMs": 1,
+          "estimatedKeystrokes": 18,
+          "recoverableErrors": 2,
+          "desktopSignature": {
+            "activeCount": 0,
+            "hasSnoozeField": true
+          },
+          "cliSignature": {
+            "activeCount": 0,
+            "hasSnoozeField": true
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 1,
+          "estimatedKeystrokes": 18,
+          "recoverableErrors": 2,
+          "desktopSignature": {
+            "activeCount": 0,
+            "hasSnoozeField": true
+          },
+          "cliSignature": {
+            "activeCount": 0,
+            "hasSnoozeField": true
+          }
+        },
+        {
+          "passed": true,
+          "durationMs": 1,
+          "estimatedKeystrokes": 18,
+          "recoverableErrors": 2,
+          "desktopSignature": {
+            "activeCount": 0,
+            "hasSnoozeField": true
+          },
+          "cliSignature": {
+            "activeCount": 0,
+            "hasSnoozeField": true
+          }
+        }
+      ],
+      "passRate": 1,
+      "duration": {
+        "minMs": 1,
+        "maxMs": 1,
+        "avgMs": 1,
+        "stdDevMs": 0
+      },
+      "recoverableErrorCount": 6
+    }
+  ]
+}

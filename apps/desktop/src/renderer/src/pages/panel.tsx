@@ -41,6 +41,8 @@ export function Component() {
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
   const fromTileRef = useRef<boolean>(false)
   const [fromButtonClick, setFromButtonClick] = useState(false)
+  const [previewText, setPreviewText] = useState("")
+  const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
 
@@ -398,6 +400,55 @@ export function Component() {
       setFromButtonClick(false)
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
+
+  // Transcription preview: periodically send audio chunks for live transcription
+  const isPreviewEnabled = configQuery.data?.transcriptionPreviewEnabled ?? false
+  useEffect(() => {
+    if (!recording || !isPreviewEnabled) {
+      // Clear preview state when not recording
+      if (previewTimerRef.current) {
+        clearInterval(previewTimerRef.current)
+        previewTimerRef.current = null
+      }
+      if (!recording) {
+        setPreviewText("")
+      }
+      return
+    }
+
+    // Send the full recording blob so far every 10 seconds
+    const CHUNK_INTERVAL_MS = 10_000
+    let inflight = false
+
+    previewTimerRef.current = setInterval(async () => {
+      if (inflight) return
+      const recorder = recorderRef.current
+      if (!recorder) return
+      const blob = recorder.getRecordingBlob()
+      if (!blob || blob.size === 0) return
+
+      inflight = true
+      try {
+        const result = await tipcClient.transcribeChunk({
+          recording: await blob.arrayBuffer(),
+        })
+        if (result?.text) {
+          setPreviewText(result.text)
+        }
+      } catch {
+        // Silently ignore preview errors - don't disrupt recording
+      } finally {
+        inflight = false
+      }
+    }, CHUNK_INTERVAL_MS)
+
+    return () => {
+      if (previewTimerRef.current) {
+        clearInterval(previewTimerRef.current)
+        previewTimerRef.current = null
+      }
+    }
+  }, [recording, isPreviewEnabled])
 
   useEffect(() => {
     const unlisten = rendererHandlers.startRecording.listen((data) => {
@@ -862,6 +913,15 @@ export function Component() {
                         })}
                     </div>
                   </div>
+
+                  {/* Transcription preview */}
+                  {isPreviewEnabled && previewText && (
+                    <div className="w-full px-4 mt-1 max-h-12 overflow-y-auto">
+                      <p className="text-xs text-muted-foreground italic text-center line-clamp-2">
+                        {previewText}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Submit button and keyboard hint */}
                   <div className="flex items-center gap-3 mt-2">

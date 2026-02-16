@@ -1161,6 +1161,9 @@ export type Config = {
   openaiSttLanguage?: string
   groqSttLanguage?: string
 
+  // Transcription Preview - show live transcription while recording
+  transcriptionPreviewEnabled?: boolean
+
   // Parakeet (Local) STT Configuration
   parakeetModelPath?: string // Optional custom model path
   parakeetNumThreads?: number // Number of threads (default: 2)

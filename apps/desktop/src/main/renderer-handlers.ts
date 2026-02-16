@@ -30,6 +30,9 @@ export type RendererHandlers = {
   // Message Queue handlers
   onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[]; isPaused: boolean }) => void
 
+  // Transcription preview - live partial transcript during recording
+  transcriptionPreviewUpdate: (data: { text: string }) => void
+
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void
 

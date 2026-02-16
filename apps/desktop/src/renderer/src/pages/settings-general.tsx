@@ -554,6 +554,17 @@ export function Component() {
             </Control>
           )}
 
+          <Control label={<ControlLabel label="Transcription Preview" tooltip="Show a live transcription preview while recording. Audio is sent to your STT provider every ~10 seconds to display partial results. Note: this increases API usage — each chunk is billed separately (Groq has a 10-second minimum billing per request)." />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.transcriptionPreviewEnabled}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  transcriptionPreviewEnabled: value,
+                })
+              }}
+            />
+          </Control>
+
           <Control label={<ControlLabel label="Post-Processing" tooltip="Enable AI-powered post-processing to clean up and improve transcripts" />} className="px-3">
             <Switch
               defaultChecked={configQuery.data.transcriptPostProcessingEnabled}

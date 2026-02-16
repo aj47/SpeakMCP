@@ -6,6 +6,7 @@
 import { Session, ChatMessage } from '../types/session';
 import {
   SettingsApiClient,
+  ServerConversation,
   ServerConversationFull,
   ServerConversationMessage
 } from './settingsApi';
@@ -58,7 +59,7 @@ function fromServerMessage(msg: ServerConversationMessage, index: number): ChatM
 }
 
 /**
- * Convert a server conversation to a mobile Session
+ * Convert a full server conversation to a mobile Session (with messages)
  */
 function serverConversationToSession(conv: ServerConversationFull): Session {
   return {
@@ -73,15 +74,34 @@ function serverConversationToSession(conv: ServerConversationFull): Session {
 }
 
 /**
+ * Convert a server conversation list item to a lazy stub Session (no messages, just metadata)
+ */
+function serverConversationToStubSession(item: ServerConversation): Session {
+  return {
+    id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    title: item.title,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    messages: [],
+    serverConversationId: item.id,
+    serverMetadata: {
+      messageCount: item.messageCount,
+      lastMessage: (item.lastMessage || '').substring(0, 100),
+      preview: (item.preview || '').substring(0, 200),
+    },
+  };
+}
+
+/**
  * Sync conversations between mobile and server.
- * 
+ *
  * Strategy:
  * 1. Fetch list of all server conversations
  * 2. For each local session:
  *    - If it has a serverConversationId: compare updatedAt, sync if needed
  *    - If no serverConversationId and has messages: push to server
  * 3. For each server conversation not in local sessions: pull and create local session
- * 
+ *
  * @param client - The settings API client with valid credentials
  * @param localSessions - Current local sessions
  * @returns SyncResult with pulled/pushed counts and updated sessions
@@ -102,7 +122,7 @@ export async function syncConversations(
   try {
     // Step 1: Fetch server conversation list
     const { conversations: serverList } = await client.getConversations();
-    
+
     // Create a map of serverConversationId -> local session
     const localByServerId = new Map<string, { session: Session; index: number }>();
     localSessions.forEach((session, index) => {
@@ -114,11 +134,11 @@ export async function syncConversations(
     // Step 2: Process local sessions
     for (let i = 0; i < updatedSessions.length; i++) {
       const session = updatedSessions[i];
-      
+
       if (session.serverConversationId) {
         // Session is linked to server - check if we need to sync
         const serverItem = serverList.find(c => c.id === session.serverConversationId);
-        
+
         if (serverItem) {
           // Both exist - compare timestamps to see who's newer
           if (serverItem.updatedAt > session.updatedAt) {
@@ -167,7 +187,7 @@ export async function syncConversations(
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
           });
-          
+
           // Update local session with server ID and updatedAt
           updatedSessions[i] = {
             ...session,
@@ -182,19 +202,14 @@ export async function syncConversations(
       // Empty sessions without serverConversationId are ignored
     }
 
-    // Step 3: Pull new server conversations not in local
+    // Step 3: Pull new server conversations not in local (lazy - stubs only)
     const newSessions: Session[] = [];
     for (const serverItem of serverList) {
       if (!localByServerId.has(serverItem.id)) {
-        // Server conversation not in local - pull it
-        try {
-          const fullConv = await client.getConversation(serverItem.id);
-          const newSession = serverConversationToSession(fullConv);
-          newSessions.push(newSession);
-          result.pulled++;
-        } catch (err: any) {
-          result.errors.push(`Failed to pull new ${serverItem.id}: ${err.message}`);
-        }
+        // Server conversation not in local - create a lazy stub (no message fetch)
+        const stubSession = serverConversationToStubSession(serverItem);
+        newSessions.push(stubSession);
+        result.pulled++;
       }
     }
     // Add all new sessions to the beginning, preserving server order
@@ -207,3 +222,29 @@ export async function syncConversations(
   return { result, sessions: updatedSessions };
 }
 
+
+
+/**
+ * Fetch full conversation messages from server for a lazy-loaded session.
+ * Used when user opens a stub session that only has metadata.
+ *
+ * @param client - The settings API client
+ * @param serverConversationId - The server-side conversation ID
+ * @returns The messages and updated metadata, or null on failure
+ */
+export async function fetchFullConversation(
+  client: SettingsApiClient,
+  serverConversationId: string
+): Promise<{ messages: ChatMessage[]; title: string; updatedAt: number } | null> {
+  try {
+    const fullConv = await client.getConversation(serverConversationId);
+    return {
+      messages: fullConv.messages.map(fromServerMessage),
+      title: fullConv.title,
+      updatedAt: fullConv.updatedAt,
+    };
+  } catch (err: any) {
+    console.error(`[syncService] Failed to fetch conversation ${serverConversationId}:`, err.message);
+    return null;
+  }
+}

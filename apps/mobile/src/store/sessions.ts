@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, SessionListItem, generateSessionId, generateMessageId, generateSessionTitle, sessionToListItem } from '../types/session';
+import type { ChatGroup } from '@speakmcp/shared';
 import { ChatMessage } from '../lib/openaiClient';
 import { SettingsApiClient } from '../lib/settingsApi';
 import { syncConversations, SyncResult } from '../lib/syncService';
 
 const SESSIONS_KEY = 'chat_sessions_v1';
 const CURRENT_SESSION_KEY = 'current_session_id_v1';
+const GROUPS_KEY = 'chat_groups_v1';
 
 export interface SessionStore {
   sessions: Session[];
@@ -38,6 +40,30 @@ export interface SessionStore {
   syncWithServer: (client: SettingsApiClient) => Promise<SyncResult>;
   isSyncing: boolean;
   lastSyncResult: SyncResult | null;
+
+  // Group / channel management
+  groups: ChatGroup[];
+  createGroup: (name: string, color?: string) => Promise<ChatGroup>;
+  updateGroup: (groupId: string, updates: { name?: string; color?: string }) => Promise<void>;
+  deleteGroup: (groupId: string) => Promise<void>;
+  setSessionGroup: (sessionId: string, groupId: string | undefined) => Promise<void>;
+}
+
+async function loadGroups(): Promise<ChatGroup[]> {
+  try {
+    const raw = await AsyncStorage.getItem(GROUPS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+async function saveGroups(groups: ChatGroup[]): Promise<void> {
+  await AsyncStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+}
+
+function generateGroupId(): string {
+  return `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -482,6 +508,86 @@ export function useSessions(): SessionStore {
     return sessions.find(s => s.serverConversationId === serverConversationId) || null;
   }, []);
 
+  // Group state
+  const [groups, setGroups] = useState<ChatGroup[]>([]);
+  const groupsRef = useRef<ChatGroup[]>(groups);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+
+  // Load groups on mount
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadGroups();
+      groupsRef.current = loaded;
+      setGroups(loaded);
+    })();
+  }, []);
+
+  const createGroup = useCallback(async (name: string, color?: string): Promise<ChatGroup> => {
+    const now = Date.now();
+    const group: ChatGroup = {
+      id: generateGroupId(),
+      name,
+      createdAt: now,
+      updatedAt: now,
+      color,
+    };
+    const updated = [...groupsRef.current, group];
+    groupsRef.current = updated;
+    setGroups(updated);
+    await saveGroups(updated);
+    return group;
+  }, []);
+
+  const updateGroup = useCallback(async (groupId: string, updates: { name?: string; color?: string }) => {
+    const updated = groupsRef.current.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(updates.color !== undefined ? { color: updates.color } : {}),
+        updatedAt: Date.now(),
+      };
+    });
+    groupsRef.current = updated;
+    setGroups(updated);
+    await saveGroups(updated);
+  }, []);
+
+  const deleteGroup = useCallback(async (groupId: string) => {
+    // Remove group
+    const updatedGroups = groupsRef.current.filter(g => g.id !== groupId);
+    groupsRef.current = updatedGroups;
+    setGroups(updatedGroups);
+    await saveGroups(updatedGroups);
+
+    // Unassign all sessions from this group
+    const currentSessions = sessionsRef.current;
+    const needsUpdate = currentSessions.some(s => s.groupId === groupId);
+    if (needsUpdate) {
+      const updatedSessions = currentSessions.map(s =>
+        s.groupId === groupId ? { ...s, groupId: undefined, updatedAt: Date.now() } : s
+      );
+      sessionsRef.current = updatedSessions;
+      setSessions(updatedSessions);
+      queueSave(async () => {
+        await saveSessions(updatedSessions);
+      });
+    }
+  }, [queueSave]);
+
+  const setSessionGroup = useCallback(async (sessionId: string, groupId: string | undefined) => {
+    const currentSessions = sessionsRef.current;
+    const now = Date.now();
+    const updatedSessions = currentSessions.map(s =>
+      s.id === sessionId ? { ...s, groupId, updatedAt: now } : s
+    );
+    sessionsRef.current = updatedSessions;
+    setSessions(updatedSessions);
+    queueSave(async () => {
+      await saveSessions(updatedSessions);
+    });
+  }, [queueSave]);
+
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false); // Non-state lock to guarantee mutual exclusion
@@ -588,6 +694,11 @@ export function useSessions(): SessionStore {
     syncWithServer,
     isSyncing,
     lastSyncResult,
+    groups,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    setSessionGroup,
   };
 }
 

@@ -376,6 +376,8 @@ export interface Conversation {
   createdAt: number
   updatedAt: number
   messages: ConversationMessage[]
+  /** ID of the group/channel this conversation belongs to */
+  groupId?: string
   metadata?: {
     totalTokens?: number
     model?: string
@@ -392,6 +394,8 @@ export interface ConversationHistoryItem {
   messageCount: number
   lastMessage: string
   preview: string
+  /** ID of the group/channel this conversation belongs to */
+  groupId?: string
 }
 
 export type ProfileMcpServerConfig = {

@@ -209,6 +209,73 @@ export const useSaveMcpConfigFile = () =>
   })
 
 // ============================================================================
+// Chat Group / Channel Hooks
+// ============================================================================
+
+export const useChatGroupsQuery = () =>
+  useQuery({
+    queryKey: ["chat-groups"],
+    queryFn: async () => {
+      return tipcClient.getChatGroups()
+    },
+  })
+
+export const useCreateChatGroupMutation = () =>
+  useMutation({
+    mutationFn: async ({ name, color }: { name: string; color?: string }) => {
+      return tipcClient.createChatGroup({ name, color })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-groups"] })
+    },
+  })
+
+export const useUpdateChatGroupMutation = () =>
+  useMutation({
+    mutationFn: async ({
+      groupId,
+      name,
+      color,
+    }: {
+      groupId: string
+      name?: string
+      color?: string
+    }) => {
+      return tipcClient.updateChatGroup({ groupId, name, color })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-groups"] })
+    },
+  })
+
+export const useDeleteChatGroupMutation = () =>
+  useMutation({
+    mutationFn: async (groupId: string) => {
+      return tipcClient.deleteChatGroup({ groupId })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-groups"] })
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+    },
+  })
+
+export const useSetConversationGroupMutation = () =>
+  useMutation({
+    mutationFn: async ({
+      conversationId,
+      groupId,
+    }: {
+      conversationId: string
+      groupId: string | undefined
+    }) => {
+      return tipcClient.setConversationGroup({ conversationId, groupId })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+    },
+  })
+
+// ============================================================================
 // History-themed aliases for better semantic naming
 // ============================================================================
 

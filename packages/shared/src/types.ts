@@ -77,3 +77,16 @@ export interface MessageQueue {
   messages: QueuedMessage[];
 }
 
+/**
+ * Chat group / channel - used to organize conversations into logical groups.
+ * Shared between desktop and mobile apps.
+ */
+export interface ChatGroup {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Optional color for visual distinction (hex string, e.g. "#3b82f6") */
+  color?: string;
+}
+

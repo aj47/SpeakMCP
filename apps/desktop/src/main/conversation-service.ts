@@ -7,6 +7,7 @@ import {
   ConversationMessage,
   ConversationHistoryItem,
 } from "../shared/types"
+import type { ChatGroup } from "@speakmcp/shared"
 import { summarizeContent } from "./context-budget"
 
 // Threshold for compacting conversations on load
@@ -89,6 +90,7 @@ export class ConversationService {
         messageCount: conversation.messages.length,
         lastMessage: lastMessage?.content || "",
         preview: this.generatePreview(conversation.messages),
+        groupId: conversation.groupId,
       }
 
       // Add to beginning of array (most recent first)
@@ -432,6 +434,110 @@ export class ConversationService {
       fs.rmSync(conversationsFolder, { recursive: true, force: true })
     }
     this.ensureConversationsFolder()
+  }
+
+  // ============================================================================
+  // Chat Group / Channel Management
+  // ============================================================================
+
+  private getGroupsPath(): string {
+    return path.join(conversationsFolder, "groups.json")
+  }
+
+  private generateGroupId(): string {
+    return `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  async getGroups(): Promise<ChatGroup[]> {
+    try {
+      const groupsPath = this.getGroupsPath()
+      if (!fs.existsSync(groupsPath)) {
+        return []
+      }
+      const data = fs.readFileSync(groupsPath, "utf8")
+      return JSON.parse(data)
+    } catch (error) {
+      logApp("[ConversationService] Error loading groups:", error)
+      return []
+    }
+  }
+
+  private async saveGroups(groups: ChatGroup[]): Promise<void> {
+    this.ensureConversationsFolder()
+    fs.writeFileSync(this.getGroupsPath(), JSON.stringify(groups, null, 2))
+  }
+
+  async createGroup(name: string, color?: string): Promise<ChatGroup> {
+    const groups = await this.getGroups()
+    const now = Date.now()
+    const group: ChatGroup = {
+      id: this.generateGroupId(),
+      name,
+      createdAt: now,
+      updatedAt: now,
+      color,
+    }
+    groups.push(group)
+    await this.saveGroups(groups)
+    return group
+  }
+
+  async updateGroup(groupId: string, updates: { name?: string; color?: string }): Promise<ChatGroup | null> {
+    const groups = await this.getGroups()
+    const idx = groups.findIndex((g) => g.id === groupId)
+    if (idx === -1) return null
+
+    if (updates.name !== undefined) groups[idx].name = updates.name
+    if (updates.color !== undefined) groups[idx].color = updates.color
+    groups[idx].updatedAt = Date.now()
+
+    await this.saveGroups(groups)
+    return groups[idx]
+  }
+
+  async deleteGroup(groupId: string): Promise<void> {
+    // Remove group
+    const groups = await this.getGroups()
+    const filtered = groups.filter((g) => g.id !== groupId)
+    await this.saveGroups(filtered)
+
+    // Unassign all conversations from this group
+    const indexPath = this.getConversationIndexPath()
+    if (fs.existsSync(indexPath)) {
+      const indexData = fs.readFileSync(indexPath, "utf8")
+      const index: ConversationHistoryItem[] = JSON.parse(indexData)
+      let changed = false
+      for (const item of index) {
+        if (item.groupId === groupId) {
+          item.groupId = undefined
+          changed = true
+        }
+      }
+      if (changed) {
+        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
+      }
+    }
+  }
+
+  async setConversationGroup(conversationId: string, groupId: string | undefined): Promise<void> {
+    // Update the conversation file
+    const conversation = await this.loadConversation(conversationId)
+    if (conversation) {
+      conversation.groupId = groupId
+      await this.saveConversation(conversation, true)
+    }
+
+    // Also update the index directly for the groupId field
+    const indexPath = this.getConversationIndexPath()
+    if (fs.existsSync(indexPath)) {
+      const indexData = fs.readFileSync(indexPath, "utf8")
+      const index: ConversationHistoryItem[] = JSON.parse(indexData)
+      const item = index.find((i) => i.id === conversationId)
+      if (item) {
+        item.groupId = groupId
+        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
+      }
+    }
   }
 }
 

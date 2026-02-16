@@ -2735,6 +2735,41 @@ export const router = {
     await shell.openPath(conversationsFolder)
   }),
 
+  // Chat Group / Channel Management
+  getChatGroups: t.procedure.action(async () => {
+    return conversationService.getGroups()
+  }),
+
+  createChatGroup: t.procedure
+    .input<{ name: string; color?: string }>()
+    .action(async ({ input }) => {
+      return conversationService.createGroup(input.name, input.color)
+    }),
+
+  updateChatGroup: t.procedure
+    .input<{ groupId: string; name?: string; color?: string }>()
+    .action(async ({ input }) => {
+      return conversationService.updateGroup(input.groupId, {
+        name: input.name,
+        color: input.color,
+      })
+    }),
+
+  deleteChatGroup: t.procedure
+    .input<{ groupId: string }>()
+    .action(async ({ input }) => {
+      await conversationService.deleteGroup(input.groupId)
+    }),
+
+  setConversationGroup: t.procedure
+    .input<{ conversationId: string; groupId: string | undefined }>()
+    .action(async ({ input }) => {
+      await conversationService.setConversationGroup(
+        input.conversationId,
+        input.groupId,
+      )
+    }),
+
   // Panel resize endpoints
   getPanelSize: t.procedure.action(async () => {
     const win = WINDOWS.get("panel")

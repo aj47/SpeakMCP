@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
-import { ChevronDown, ChevronRight, X, Minimize2, Maximize2, CheckCircle2, Trash2, Clock, Loader2, Search, FolderOpen, AlertTriangle } from "lucide-react"
+import { ChevronDown, ChevronRight, X, Minimize2, Maximize2, CheckCircle2, Trash2, Clock, Loader2, Search, FolderOpen, AlertTriangle, Plus, Hash, MoreHorizontal, Pencil, FolderInput } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { useAgentStore } from "@renderer/stores"
 import { logUI, logStateChange, logExpand } from "@renderer/lib/debug"
 import { useNavigate } from "react-router-dom"
-import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
+import {
+  useConversationHistoryQuery,
+  useDeleteConversationMutation,
+  useDeleteAllConversationsMutation,
+  useChatGroupsQuery,
+  useCreateChatGroupMutation,
+  useUpdateChatGroupMutation,
+  useDeleteChatGroupMutation,
+  useSetConversationGroupMutation,
+} from "@renderer/lib/queries"
 import { Input } from "@renderer/components/ui/input"
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -17,8 +26,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@renderer/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { ConversationHistoryItem } from "@shared/types"
+import type { ChatGroup } from "@speakmcp/shared"
 import dayjs from "dayjs"
 import relativeTime from "dayjs/plugin/relativeTime"
 
@@ -48,6 +66,17 @@ const STORAGE_KEY = 'active-agents-sidebar-expanded'
 const PAST_SESSIONS_STORAGE_KEY = 'past-sessions-sidebar-expanded'
 const INITIAL_PAST_SESSIONS = 10
 
+const GROUP_COLORS = [
+  "#3b82f6", // blue
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#ef4444", // red
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#06b6d4", // cyan
+  "#f97316", // orange
+]
+
 export function ActiveAgentsSidebar() {
   const [isExpanded, setIsExpanded] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -64,6 +93,20 @@ export function ActiveAgentsSidebar() {
   const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
   const [searchQuery, setSearchQuery] = useState("")
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
+
+  // Group management state
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false)
+  const [newGroupName, setNewGroupName] = useState("")
+  const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0])
+  const [editingGroup, setEditingGroup] = useState<ChatGroup | null>(null)
+  const [editGroupName, setEditGroupName] = useState("")
+  const [editGroupColor, setEditGroupColor] = useState("")
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('sidebar-collapsed-groups')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
 
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
@@ -84,6 +127,13 @@ export function ActiveAgentsSidebar() {
   const deleteConversationMutation = useDeleteConversationMutation()
   const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
 
+  // Group queries
+  const chatGroupsQuery = useChatGroupsQuery()
+  const createGroupMutation = useCreateChatGroupMutation()
+  const updateGroupMutation = useUpdateChatGroupMutation()
+  const deleteGroupMutation = useDeleteChatGroupMutation()
+  const setConversationGroupMutation = useSetConversationGroupMutation()
+
   // Get filtered past sessions (for total count)
   const filteredPastSessions = useMemo(() => {
     if (!conversationHistoryQuery.data) return []
@@ -96,12 +146,34 @@ export function ActiveAgentsSidebar() {
       : conversationHistoryQuery.data
   }, [conversationHistoryQuery.data, searchQuery])
 
-  // Get visible past sessions with lazy loading
-  const visiblePastSessions = useMemo(() => {
-    return filteredPastSessions.slice(0, pastSessionsCount)
-  }, [filteredPastSessions, pastSessionsCount])
+  // Group past sessions by groupId
+  const groupedSessions = useMemo(() => {
+    const groups = chatGroupsQuery.data || []
+    const ungrouped: ConversationHistoryItem[] = []
+    const byGroup = new Map<string, ConversationHistoryItem[]>()
 
-  const hasMorePastSessions = filteredPastSessions.length > pastSessionsCount
+    // Initialize all groups with empty arrays
+    for (const group of groups) {
+      byGroup.set(group.id, [])
+    }
+
+    for (const session of filteredPastSessions) {
+      if (session.groupId && byGroup.has(session.groupId)) {
+        byGroup.get(session.groupId)!.push(session)
+      } else {
+        ungrouped.push(session)
+      }
+    }
+
+    return { groups, ungrouped, byGroup }
+  }, [filteredPastSessions, chatGroupsQuery.data])
+
+  // Get visible ungrouped sessions with lazy loading
+  const visibleUngroupedSessions = useMemo(() => {
+    return groupedSessions.ungrouped.slice(0, pastSessionsCount)
+  }, [groupedSessions.ungrouped, pastSessionsCount])
+
+  const hasMoreUngroupedSessions = groupedSessions.ungrouped.length > pastSessionsCount
 
   useEffect(() => {
     const unlisten = rendererHandlers.agentSessionsUpdated.listen((updatedData) => {
@@ -114,7 +186,6 @@ export function ActiveAgentsSidebar() {
   const recentSessions = data?.recentSessions || []
   const hasActiveSessions = activeSessions.length > 0
   const hasRecentSessions = recentSessions.length > 0
-  const hasAnySessions = hasActiveSessions || hasRecentSessions
 
   useEffect(() => {
     logStateChange('ActiveAgentsSidebar', 'isExpanded', !isExpanded, isExpanded)
@@ -138,6 +209,15 @@ export function ActiveAgentsSidebar() {
     }
   }, [isPastSessionsExpanded])
 
+  // Persist collapsed groups
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebar-collapsed-groups', JSON.stringify([...collapsedGroups]))
+    } catch (e) {
+      console.error("Failed to save collapsed groups:", e)
+    }
+  }, [collapsedGroups])
+
   // Log when sessions change
   useEffect(() => {
     logUI('[ActiveAgentsSidebar] Sessions updated:', {
@@ -148,19 +228,16 @@ export function ActiveAgentsSidebar() {
 
   const handleSessionClick = (sessionId: string) => {
     logUI('[ActiveAgentsSidebar] Session clicked:', sessionId)
-    // Navigate to sessions page and focus this session
     navigate('/')
     setFocusedSessionId(sessionId)
-    // Trigger scroll to the session tile
     setScrollToSessionId(sessionId)
   }
 
   const handleStopSession = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent session focus when clicking stop
+    e.stopPropagation()
     logUI('[ActiveAgentsSidebar] Stopping session:', sessionId)
     try {
       await tipcClient.stopAgentSession({ sessionId })
-      // If we just stopped the focused session, just unfocus; do not clear all progress
       if (focusedSessionId === sessionId) {
         setFocusedSessionId(null)
       }
@@ -170,8 +247,8 @@ export function ActiveAgentsSidebar() {
   }
 
   const handleToggleSnooze = async (sessionId: string, isSnoozed: boolean, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent session focus when clicking snooze
-    logUI('🟢 [ActiveAgentsSidebar SIDEBAR] Minimize button clicked in SIDEBAR (not overlay):', {
+    e.stopPropagation()
+    logUI('[ActiveAgentsSidebar SIDEBAR] Minimize button clicked in SIDEBAR (not overlay):', {
       sessionId,
       sidebarSaysIsSnoozed: isSnoozed,
       action: isSnoozed ? 'unsnooze' : 'snooze',
@@ -180,68 +257,46 @@ export function ActiveAgentsSidebar() {
     })
 
     if (isSnoozed) {
-      // Unsnoozing: restore the session to foreground
       logUI('[ActiveAgentsSidebar] Unsnoozing session')
-
-      // Update local store first so panel shows content immediately
       setSessionSnoozed(sessionId, false)
-
-      // Focus the session
       setFocusedSessionId(sessionId)
 
       try {
-        // Unsnooze the session in backend
         await tipcClient.unsnoozeAgentSession({ sessionId })
       } catch (error) {
-        // Rollback local state only when the API call fails to keep UI and backend in sync
         setSessionSnoozed(sessionId, true)
         setFocusedSessionId(null)
         console.error("Failed to unsnooze session:", error)
         return
       }
 
-      // UI updates after successful API call - don't rollback if these fail
       try {
-        // Ensure the panel's own ConversationContext focuses the same session
         await tipcClient.focusAgentSession({ sessionId })
-
-        // Resize to agent mode BEFORE showing the panel to avoid flashing to small size
         await tipcClient.setPanelMode({ mode: "agent" })
-
-        // Show the panel (it's already sized correctly)
         await tipcClient.showPanelWindow({})
-
         logUI('[ActiveAgentsSidebar] Session unsnoozed, focused, panel shown and resized')
       } catch (error) {
-        // Log UI errors but don't rollback - the backend state is already updated
         console.error("Failed to update UI after unsnooze:", error)
       }
     } else {
-      // Snoozing: move session to background
       logUI('[ActiveAgentsSidebar] Snoozing session')
-      // Update local store first
       setSessionSnoozed(sessionId, true)
 
       try {
         await tipcClient.snoozeAgentSession({ sessionId })
       } catch (error) {
-        // Rollback local state only when the API call fails to keep UI and backend in sync
         setSessionSnoozed(sessionId, false)
         console.error("Failed to snooze session:", error)
         return
       }
 
-      // UI updates after successful API call - don't rollback if these fail
       try {
-        // Unfocus if this was the focused session
         if (focusedSessionId === sessionId) {
           setFocusedSessionId(null)
         }
-        // Hide the panel window
         await tipcClient.hidePanelWindow({})
         logUI('[ActiveAgentsSidebar] Session snoozed, unfocused, and panel hidden')
       } catch (error) {
-        // Log UI errors but don't rollback - the backend state is already updated
         console.error("Failed to update UI after snooze:", error)
       }
     }
@@ -254,19 +309,15 @@ export function ActiveAgentsSidebar() {
   }
 
   const handleHeaderClick = () => {
-    // Navigate to sessions view
     logUI('[ActiveAgentsSidebar] Header clicked, navigating to sessions')
     navigate('/')
-    // Expand the list if not already expanded
     if (!isExpanded) {
       setIsExpanded(true)
     }
   }
 
-  // Past sessions handlers
   const handlePastSessionClick = (conversationId: string) => {
     logUI('[ActiveAgentsSidebar] Past session clicked:', conversationId)
-    // Navigate to sessions page with the conversation ID
     navigate(`/${conversationId}`)
   }
 
@@ -303,17 +354,73 @@ export function ActiveAgentsSidebar() {
     }
   }
 
-  // Format timestamp for display - use abbreviated relative time for recent, absolute for older
+  // Group handlers
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) return
+    try {
+      await createGroupMutation.mutateAsync({ name: newGroupName.trim(), color: newGroupColor })
+      setNewGroupName("")
+      setNewGroupColor(GROUP_COLORS[0])
+      setShowCreateGroupDialog(false)
+      toast.success("Group created")
+    } catch (error) {
+      toast.error("Failed to create group")
+    }
+  }
+
+  const handleUpdateGroup = async () => {
+    if (!editingGroup || !editGroupName.trim()) return
+    try {
+      await updateGroupMutation.mutateAsync({
+        groupId: editingGroup.id,
+        name: editGroupName.trim(),
+        color: editGroupColor,
+      })
+      setEditingGroup(null)
+      toast.success("Group updated")
+    } catch (error) {
+      toast.error("Failed to update group")
+    }
+  }
+
+  const handleDeleteGroup = async (groupId: string) => {
+    try {
+      await deleteGroupMutation.mutateAsync(groupId)
+      toast.success("Group deleted")
+    } catch (error) {
+      toast.error("Failed to delete group")
+    }
+  }
+
+  const handleMoveToGroup = async (conversationId: string, groupId: string | undefined) => {
+    try {
+      await setConversationGroupMutation.mutateAsync({ conversationId, groupId })
+    } catch (error) {
+      toast.error("Failed to move session")
+    }
+  }
+
+  const toggleGroupCollapsed = (groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(groupId)) {
+        next.delete(groupId)
+      } else {
+        next.add(groupId)
+      }
+      return next
+    })
+  }
+
+  // Format timestamp for display
   const formatTimestamp = (timestamp: number): string => {
     const now = dayjs()
     const date = dayjs(timestamp)
-    // Clamp to 0 to handle clock skew (when timestamp is slightly in the future)
     const diffSeconds = Math.max(0, now.diff(date, 'second'))
     const diffMinutes = Math.max(0, now.diff(date, 'minute'))
     const diffHours = Math.max(0, now.diff(date, 'hour'))
 
     if (diffHours < 24) {
-      // Within 24 hours - show abbreviated relative time
       if (diffSeconds < 60) {
         return `${diffSeconds}s`
       } else if (diffMinutes < 60) {
@@ -322,12 +429,87 @@ export function ActiveAgentsSidebar() {
         return `${diffHours}h`
       }
     } else if (diffHours < 168) {
-      // Within a week - show day and time
       return date.format("ddd h:mm A")
     } else {
-      // Older - show date
       return date.format("MMM D")
     }
+  }
+
+  // Reusable past session row
+  const PastSessionRow = ({ session }: { session: ConversationHistoryItem }) => {
+    const groups = chatGroupsQuery.data || []
+    return (
+      <div
+        onClick={() => handlePastSessionClick(session.id)}
+        className={cn(
+          "group/item relative cursor-pointer rounded-md px-2 py-1.5 text-xs transition-all",
+          "hover:bg-accent/50"
+        )}
+        title={`${session.preview}\n${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
+      >
+        <div className="flex items-center gap-1.5">
+          <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <p className="flex-1 truncate text-foreground">{session.title}</p>
+          {/* Time ago shown by default, replaced by actions on hover */}
+          <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums group-hover/item:hidden">
+            {formatTimestamp(session.updatedAt)}
+          </span>
+          <div className="hidden items-center gap-0.5 group-hover/item:flex">
+            {groups.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 rounded p-0.5 transition-all hover:bg-accent hover:text-foreground"
+                    title="Move to group"
+                  >
+                    <FolderInput className="h-3 w-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[140px]">
+                  <DropdownMenuLabel className="text-xs">Move to</DropdownMenuLabel>
+                  {session.groupId && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleMoveToGroup(session.id, undefined)
+                      }}
+                      className="text-xs"
+                    >
+                      Ungrouped
+                    </DropdownMenuItem>
+                  )}
+                  {groups.filter(g => g.id !== session.groupId).map((group) => (
+                    <DropdownMenuItem
+                      key={group.id}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleMoveToGroup(session.id, group.id)
+                      }}
+                      className="text-xs"
+                    >
+                      <span
+                        className="inline-block h-2 w-2 rounded-full mr-1.5 shrink-0"
+                        style={{ backgroundColor: group.color || "#6b7280" }}
+                      />
+                      {group.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <button
+              onClick={(e) => handleDeletePastSession(session.id, e)}
+              disabled={deleteConversationMutation.isPending}
+              className="shrink-0 rounded p-0.5 transition-all hover:bg-destructive/20 hover:text-destructive"
+              title="Delete session"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -370,7 +552,6 @@ export function ActiveAgentsSidebar() {
             const isFocused = focusedSessionId === session.id
             const sessionProgress = agentProgressById.get(session.id)
             const hasPendingApproval = !!sessionProgress?.pendingToolApproval
-            // Status colors: amber for pending approval, blue for active, gray for snoozed
             const statusDotColor = hasPendingApproval
               ? "bg-amber-500"
               : session.isSnoozed
@@ -389,7 +570,6 @@ export function ActiveAgentsSidebar() {
                     : "hover:bg-accent/50"
                 )}
               >
-                {/* Status dot */}
                 <span className={cn(
                   "shrink-0 h-1.5 w-1.5 rounded-full",
                   statusDotColor,
@@ -435,7 +615,6 @@ export function ActiveAgentsSidebar() {
       {isExpanded && hasRecentSessions && (
         <div className="mt-1 space-y-0.5 pl-2">
           {recentSessions.map((session) => {
-            // Status colors: red for error/stopped, gray for completed
             const statusDotColor = session.status === "error" || session.status === "stopped"
               ? "bg-red-500"
               : "bg-muted-foreground"
@@ -445,7 +624,6 @@ export function ActiveAgentsSidebar() {
                 onClick={() => {
                   if (session.conversationId) {
                     logUI('[ActiveAgentsSidebar] Navigating to sessions view for completed session:', session.conversationId)
-                    // Navigate to sessions page with the conversation ID - will show in Past Sessions
                     navigate(`/${session.conversationId}`)
                   }
                 }}
@@ -454,7 +632,6 @@ export function ActiveAgentsSidebar() {
                   session.conversationId && "cursor-pointer hover:bg-accent/50"
                 )}
               >
-                {/* Status dot */}
                 <span className={cn("shrink-0 h-1.5 w-1.5 rounded-full", statusDotColor)} />
                 <p className="flex-1 truncate">{session.conversationTitle}</p>
               </div>
@@ -502,6 +679,13 @@ export function ActiveAgentsSidebar() {
           {isPastSessionsExpanded && (
             <div className="flex items-center gap-1 ml-auto">
               <button
+                onClick={() => setShowCreateGroupDialog(true)}
+                className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                title="Create new group"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+              <button
                 onClick={handleOpenHistoryFolder}
                 className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground"
                 title="Open history folder"
@@ -540,46 +724,94 @@ export function ActiveAgentsSidebar() {
               </div>
             ) : conversationHistoryQuery.isError ? (
               <p className="px-2 py-2 text-xs text-destructive">Failed to load sessions</p>
-            ) : visiblePastSessions.length === 0 ? (
+            ) : filteredPastSessions.length === 0 ? (
               <p className="px-2 py-2 text-xs text-muted-foreground">No past sessions</p>
             ) : (
               <>
-                {visiblePastSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    onClick={() => handlePastSessionClick(session.id)}
-                    className={cn(
-                      "group relative cursor-pointer rounded-md px-2 py-1.5 text-xs transition-all",
-                      "hover:bg-accent/50"
-                    )}
-                    title={`${session.preview}\n${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      <p className="flex-1 truncate text-foreground">{session.title}</p>
-                      {/* Time ago shown by default, replaced by delete button on hover */}
-                      <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums group-hover:hidden">
-                        {formatTimestamp(session.updatedAt)}
-                      </span>
-                      <button
-                        onClick={(e) => handleDeletePastSession(session.id, e)}
-                        disabled={deleteConversationMutation.isPending}
-                        className={cn(
-                          "shrink-0 rounded p-0.5 hidden transition-all hover:bg-destructive/20 hover:text-destructive group-hover:block"
-                        )}
-                        title="Delete session"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
+                {/* Group sections */}
+                {groupedSessions.groups.map((group) => {
+                  const sessions = groupedSessions.byGroup.get(group.id) || []
+                  const isCollapsed = collapsedGroups.has(group.id)
+                  return (
+                    <div key={group.id} className="mb-1">
+                      {/* Group header */}
+                      <div className="group/header flex items-center gap-1 px-1 py-1 rounded-md hover:bg-accent/30 transition-colors">
+                        <button
+                          onClick={() => toggleGroupCollapsed(group.id)}
+                          className="shrink-0 flex items-center gap-1.5 flex-1 min-w-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-3 w-3 shrink-0" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3 shrink-0" />
+                          )}
+                          <Hash
+                            className="h-3 w-3 shrink-0"
+                            style={{ color: group.color || "#6b7280" }}
+                          />
+                          <span className="truncate">{group.name}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            {sessions.length}
+                          </span>
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="shrink-0 rounded p-0.5 opacity-0 transition-all hover:bg-accent hover:text-foreground group-hover/header:opacity-100"
+                              title="Group options"
+                            >
+                              <MoreHorizontal className="h-3 w-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[120px]">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingGroup(group)
+                                setEditGroupName(group.name)
+                                setEditGroupColor(group.color || GROUP_COLORS[0])
+                              }}
+                              className="text-xs"
+                            >
+                              <Pencil className="h-3 w-3 mr-1.5" />
+                              Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteGroup(group.id)}
+                              className="text-xs text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1.5" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      {/* Group sessions */}
+                      {!isCollapsed && (
+                        <div className="pl-2">
+                          {sessions.length === 0 ? (
+                            <p className="px-2 py-1 text-[10px] text-muted-foreground italic">No sessions</p>
+                          ) : (
+                            sessions.map((session) => (
+                              <PastSessionRow key={session.id} session={session} />
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )
+                })}
+
+                {/* Ungrouped sessions */}
+                {visibleUngroupedSessions.map((session) => (
+                  <PastSessionRow key={session.id} session={session} />
                 ))}
-                {hasMorePastSessions && (
+                {hasMoreUngroupedSessions && (
                   <button
                     onClick={handleLoadMorePastSessions}
                     className="w-full px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
                   >
-                    Load more ({filteredPastSessions.length - pastSessionsCount} remaining)
+                    Load more ({groupedSessions.ungrouped.length - pastSessionsCount} remaining)
                   </button>
                 )}
               </>
@@ -614,7 +846,106 @@ export function ActiveAgentsSidebar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Create Group Dialog */}
+      <Dialog open={showCreateGroupDialog} onOpenChange={setShowCreateGroupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Group</DialogTitle>
+            <DialogDescription>
+              Create a new group to organize your conversations.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium">Name</label>
+              <Input
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="e.g. Work, Personal, Research..."
+                className="mt-1"
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreateGroup() }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Color</label>
+              <div className="flex gap-2 mt-1">
+                {GROUP_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setNewGroupColor(color)}
+                    className={cn(
+                      "h-6 w-6 rounded-full transition-all",
+                      newGroupColor === color && "ring-2 ring-offset-2 ring-offset-background ring-foreground"
+                    )}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateGroupDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateGroup}
+              disabled={!newGroupName.trim() || createGroupMutation.isPending}
+            >
+              {createGroupMutation.isPending ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Group Dialog */}
+      <Dialog open={!!editingGroup} onOpenChange={(open) => { if (!open) setEditingGroup(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Group</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium">Name</label>
+              <Input
+                value={editGroupName}
+                onChange={(e) => setEditGroupName(e.target.value)}
+                className="mt-1"
+                onKeyDown={(e) => { if (e.key === "Enter") handleUpdateGroup() }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Color</label>
+              <div className="flex gap-2 mt-1">
+                {GROUP_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setEditGroupColor(color)}
+                    className={cn(
+                      "h-6 w-6 rounded-full transition-all",
+                      editGroupColor === color && "ring-2 ring-offset-2 ring-offset-background ring-foreground"
+                    )}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingGroup(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateGroup}
+              disabled={!editGroupName.trim() || updateGroupMutation.isPending}
+            >
+              {updateGroupMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
-

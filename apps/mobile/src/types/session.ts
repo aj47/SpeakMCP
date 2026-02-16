@@ -20,6 +20,8 @@ export interface Session {
   messages: ChatMessage[];
   /** Server-side conversation ID for continuing conversations on the SpeakMCP server */
   serverConversationId?: string;
+  /** ID of the group/channel this session belongs to */
+  groupId?: string;
   /** Optional metadata about the session */
   metadata?: {
     model?: string;
@@ -35,6 +37,8 @@ export interface SessionListItem {
   messageCount: number;
   lastMessage: string;
   preview: string;
+  /** ID of the group/channel this session belongs to */
+  groupId?: string;
 }
 
 /**
@@ -103,6 +107,7 @@ export function sessionToListItem(session: Session): SessionListItem {
     messageCount: session.messages.length,
     lastMessage: preview.substring(0, 100),
     preview: preview.substring(0, 200),
+    groupId: session.groupId,
   };
 }
 

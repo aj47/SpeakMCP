@@ -24,9 +24,52 @@ config.resolver.unstable_enableSymlinks = true;
 // 4. Enable package exports for pnpm
 config.resolver.unstable_enablePackageExports = true;
 
-// 5. Resolve symlinks to real paths for pnpm compatibility
+// 4b. Set condition names for proper CJS/ESM resolution through exports fields.
+config.resolver.unstable_conditionNames = ['require', 'react-native'];
+
+// 5. Packages whose "exports" field breaks Metro's CJS interop.
+// call-bind@1.0.8 added an exports field that causes Metro to wrap the CJS
+// module.exports function as an Object, leading to
+// "callBind is not a function (it is Object)" at runtime.
+const FORCE_NO_EXPORTS = new Set([
+  'call-bind',
+  'call-bind-apply-helpers',
+  'get-intrinsic',
+  'es-define-property',
+  'set-function-length',
+  'assert',
+]);
+
+// 6. Custom resolver for pnpm compatibility + exports bypass
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Bypass package exports for problematic CJS packages
+  const pkgName = moduleName.startsWith('@')
+    ? moduleName.split('/').slice(0, 2).join('/')
+    : moduleName.split('/')[0];
+
+  if (FORCE_NO_EXPORTS.has(pkgName)) {
+    // Resolve without package exports enabled for this module
+    const contextWithoutExports = {
+      ...context,
+      unstable_enablePackageExports: false,
+    };
+    return context.resolveRequest(contextWithoutExports, moduleName, platform);
+  }
+
+  // Also check if originating module is inside one of these packages (self-referencing)
+  if (context.originModulePath) {
+    for (const pkg of FORCE_NO_EXPORTS) {
+      if (context.originModulePath.includes(`/${pkg}/`)) {
+        const contextWithoutExports = {
+          ...context,
+          unstable_enablePackageExports: false,
+        };
+        return context.resolveRequest(contextWithoutExports, moduleName, platform);
+      }
+    }
+  }
+
   // Try default resolution first
   if (originalResolveRequest) {
     try {

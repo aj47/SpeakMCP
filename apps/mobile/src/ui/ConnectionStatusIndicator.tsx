@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { TunnelConnectionState } from '../lib/tunnelConnectionManager';
 
@@ -19,6 +19,32 @@ export function ConnectionStatusIndicator({
   compact = false,
 }: ConnectionStatusIndicatorProps) {
   const { theme } = useTheme();
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  const isPulsing = state === 'connecting' || state === 'reconnecting';
+
+  useEffect(() => {
+    if (isPulsing) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.8,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    } else {
+      pulseAnim.setValue(0.3);
+    }
+  }, [isPulsing, pulseAnim]);
 
   const getStatusColor = (): string => {
     switch (state) {
@@ -55,12 +81,23 @@ export function ConnectionStatusIndicator({
 
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
-      <View
-        style={[
-          styles.dot,
-          { backgroundColor: getStatusColor() },
-        ]}
-      />
+      <View style={styles.dotContainer}>
+        <View
+          style={[
+            styles.dot,
+            { backgroundColor: getStatusColor() },
+            isPulsing && styles.dotPulsing,
+          ]}
+        />
+        {isPulsing && (
+          <Animated.View
+            style={[
+              styles.dotPulse,
+              { backgroundColor: getStatusColor(), opacity: pulseAnim },
+            ]}
+          />
+        )}
+      </View>
       {!compact && (
         <Text style={[styles.text, { color: theme.colors.mutedForeground }]}>
           {getStatusText()}
@@ -81,11 +118,31 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
+  dotContainer: {
+    position: 'relative',
+    width: 10,
+    height: 10,
+    marginRight: 6,
+  },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
+    position: 'absolute',
+    top: 1,
+    left: 1,
+  },
+  dotPulsing: {
+    opacity: 1,
+  },
+  dotPulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    opacity: 0.3,
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   text: {
     fontSize: 12,

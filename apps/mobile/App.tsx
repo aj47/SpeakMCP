@@ -20,6 +20,8 @@ import { useEffect, useMemo, useCallback, useRef } from 'react';
 
 
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
+const darkSpinner = require('./assets/loading-spinner.gif');
+const lightSpinner = require('./assets/light-spinner.gif');
 
 const Stack = createNativeStackNavigator();
 
@@ -198,7 +200,7 @@ function Navigation() {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
         <Image
-          source={speakMCPIcon}
+          source={isDark ? darkSpinner : lightSpinner}
           style={styles.spinner}
           resizeMode="contain"
         />

@@ -12,7 +12,8 @@ import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { SessionListItem, ExternalSessionSource, UnifiedSessionListItem } from '../types/session';
 import { createExtendedSettingsApiClient, UnifiedConversation } from '../lib/settingsApi';
 
-const staticIcon = require('../../assets/speakmcp-icon.png');
+const darkSpinner = require('../../assets/loading-spinner.gif');
+const lightSpinner = require('../../assets/light-spinner.gif');
 
 interface Props {
   navigation: any;
@@ -134,7 +135,7 @@ export default function SessionListScreen({ navigation }: Props) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <Image
-          source={staticIcon}
+          source={isDark ? darkSpinner : lightSpinner}
           style={styles.spinner}
           resizeMode="contain"
         />

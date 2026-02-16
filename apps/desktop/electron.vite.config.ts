@@ -13,9 +13,14 @@ const define = {
   "process.env.IS_MAC": JSON.stringify(process.platform === "darwin"),
 }
 
+// externalizeDepsPlugin only reads pkg.dependencies, not optionalDependencies.
+// Native modules like onnxruntime-node must be externalized (not bundled) so their
+// internal require() for .node bindings works at runtime.
+const optionalDeps = Object.keys(pkg.optionalDependencies || {})
+
 export default defineConfig({
   main: {
-    plugins: [tsconfigPaths(), externalizeDepsPlugin({})],
+    plugins: [tsconfigPaths(), externalizeDepsPlugin({ include: optionalDeps })],
     define,
   },
   preload: {

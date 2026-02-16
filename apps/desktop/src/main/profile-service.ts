@@ -13,8 +13,8 @@ const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
 const VALID_PROVIDER_IDS = ["openai", "groq", "gemini"]
 // STT supports openai, groq, and parakeet (local)
 const VALID_STT_PROVIDER_IDS = ["openai", "groq", "parakeet"]
-// TTS supports openai, groq, gemini, and kitten (local)
-const VALID_TTS_PROVIDER_IDS = ["openai", "groq", "gemini", "kitten"]
+// TTS supports openai, groq, gemini, kitten (local), and supertonic (local)
+const VALID_TTS_PROVIDER_IDS = ["openai", "groq", "gemini", "kitten", "supertonic"]
 
 /**
  * Validates the shape of an imported MCP server config

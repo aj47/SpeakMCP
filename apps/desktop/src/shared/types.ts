@@ -423,7 +423,7 @@ export type ProfileModelConfig = {
   transcriptPostProcessingGroqModel?: string
   transcriptPostProcessingGeminiModel?: string
   // TTS Provider settings
-  ttsProviderId?: "openai" | "groq" | "gemini" | "kitten"
+  ttsProviderId?: "openai" | "groq" | "gemini" | "kitten" | "supertonic"
 }
 
 // Per-profile skills configuration
@@ -1190,6 +1190,13 @@ export type Config = {
   kittenModelDownloaded?: boolean // Whether model has been downloaded
   kittenVoiceId?: number // Voice ID 0-7 (default: 0 for Voice 2 - Male)
 
+  // Supertonic (Local) TTS Configuration
+  supertonicModelDownloaded?: boolean // Whether model has been downloaded
+  supertonicVoice?: string // Voice style ID (e.g., "M1", "F1") - default "M1"
+  supertonicLanguage?: string // Language code (en, ko, es, pt, fr) - default "en"
+  supertonicSpeed?: number // Speech speed (default: 1.05)
+  supertonicSteps?: number // Denoising steps (default: 5, higher = better quality)
+
   // TTS Text Preprocessing Configuration
   ttsPreprocessingEnabled?: boolean
   ttsRemoveCodeBlocks?: boolean
@@ -1267,6 +1274,7 @@ export type Config = {
   providerSectionCollapsedGemini?: boolean
   providerSectionCollapsedParakeet?: boolean
   providerSectionCollapsedKitten?: boolean
+  providerSectionCollapsedSupertonic?: boolean
 
   // Panel Position Configuration
   panelPosition?:

@@ -37,6 +37,8 @@ import {
   GEMINI_TTS_MODELS,
   GEMINI_TTS_VOICES,
   KITTEN_TTS_VOICES,
+  SUPERTONIC_TTS_VOICES,
+  SUPERTONIC_TTS_LANGUAGES,
   getBuiltInModelPresets,
   DEFAULT_MODEL_PRESET_ID,
 } from "@shared/index"
@@ -515,6 +517,324 @@ function KittenProviderSection({
   )
 }
 
+// Supertonic Model Download Component
+function SupertonicModelDownload() {
+  const queryClient = useQueryClient()
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
+
+  const modelStatusQuery = useQuery({
+    queryKey: ["supertonicModelStatus"],
+    queryFn: () => window.electron.ipcRenderer.invoke("getSupertonicModelStatus"),
+    refetchInterval: (query) => {
+      const status = query.state.data as { downloading?: boolean } | undefined
+      return (isDownloading || status?.downloading) ? 500 : false
+    },
+  })
+
+  const handleDownload = async () => {
+    setIsDownloading(true)
+    setDownloadProgress(0)
+    try {
+      await window.electron.ipcRenderer.invoke("downloadSupertonicModel")
+    } catch (error) {
+      console.error("Failed to download Supertonic model:", error)
+    } finally {
+      setIsDownloading(false)
+      queryClient.invalidateQueries({ queryKey: ["supertonicModelStatus"] })
+    }
+  }
+
+  const status = modelStatusQuery.data as { downloaded: boolean; downloading: boolean; progress: number; error?: string } | undefined
+
+  if (modelStatusQuery.isLoading) {
+    return <span className="text-xs text-muted-foreground">Checking...</span>
+  }
+
+  if (status?.downloaded) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-green-600">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Model Ready
+      </span>
+    )
+  }
+
+  if (status?.downloading || isDownloading) {
+    const progress = status?.progress ?? downloadProgress
+    return (
+      <div className="flex flex-col gap-1.5 w-full">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          <span className="text-xs text-muted-foreground">
+            Downloading... {Math.round(progress * 100)}%
+          </span>
+        </div>
+        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-200"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (status?.error) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-destructive">{status.error}</span>
+        <Button size="sm" variant="outline" onClick={handleDownload}>
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Retry Download
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <Button size="sm" variant="outline" onClick={handleDownload}>
+      <Download className="h-3.5 w-3.5 mr-1.5" />
+      Download Model (~263MB)
+    </Button>
+  )
+}
+
+// Supertonic Provider Section Component
+function SupertonicProviderSection({
+  isActive,
+  isCollapsed,
+  onToggleCollapse,
+  usageBadges,
+  voice,
+  onVoiceChange,
+  language,
+  onLanguageChange,
+  speed,
+  onSpeedChange,
+  steps,
+  onStepsChange,
+}: {
+  isActive: boolean
+  isCollapsed: boolean
+  onToggleCollapse: () => void
+  usageBadges: { label: string; icon: React.ElementType }[]
+  voice: string
+  onVoiceChange: (value: string) => void
+  language: string
+  onLanguageChange: (value: string) => void
+  speed: number
+  onSpeedChange: (value: number) => void
+  steps: number
+  onStepsChange: (value: number) => void
+}) {
+  const modelStatusQuery = useQuery({
+    queryKey: ["supertonicModelStatus"],
+    queryFn: () => window.electron.ipcRenderer.invoke("getSupertonicModelStatus"),
+  })
+  const modelDownloaded = (modelStatusQuery.data as { downloaded: boolean } | undefined)?.downloaded ?? false
+
+  const handleTestVoice = async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke("synthesizeWithSupertonic", {
+        text: "Hello! This is a test of the Supertonic text to speech voice.",
+        voice,
+        lang: language,
+        speed,
+        steps,
+      }) as { audio: string; sampleRate: number }
+      const audioData = Uint8Array.from(atob(result.audio), c => c.charCodeAt(0))
+      const blob = new Blob([audioData], { type: "audio/wav" })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      audio.onerror = () => URL.revokeObjectURL(url)
+      await audio.play()
+    } catch (error) {
+      console.error("Failed to test Supertonic voice:", error)
+    }
+  }
+
+  return (
+    <div className={`rounded-lg border ${isActive ? 'border-primary/30 bg-primary/5' : ''}`}>
+      <button
+        type="button"
+        className="px-3 py-2 flex items-center justify-between w-full hover:bg-muted/30 transition-colors cursor-pointer"
+        onClick={onToggleCollapse}
+        aria-expanded={!isCollapsed}
+        aria-controls="supertonic-provider-content"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+          <Volume2 className="h-4 w-4" />
+          Supertonic (Local)
+          {isActive && (
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+          )}
+        </span>
+        {isActive && usageBadges.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            {usageBadges.map((badge) => (
+              <ActiveProviderBadge key={badge.label} label={badge.label} icon={badge.icon} />
+            ))}
+          </div>
+        )}
+      </button>
+      {!isCollapsed && (
+        <div id="supertonic-provider-content" className="divide-y border-t">
+          <div className="px-3 py-2 bg-muted/30 border-b">
+            <p className="text-xs text-muted-foreground">
+              {isActive
+                ? "Local text-to-speech using Supertonic. No API key required - runs entirely on your device. Supports English, Korean, Spanish, Portuguese, and French."
+                : "This provider is not currently selected for any feature. Select it above to use it."}
+            </p>
+          </div>
+
+          {/* Model Download Section */}
+          <Control
+            label={
+              <ControlLabel
+                label="Model Status"
+                tooltip="Download the Supertonic TTS model (~263MB) for local speech synthesis"
+              />
+            }
+            className="px-3"
+          >
+            <SupertonicModelDownload />
+          </Control>
+
+          {/* Settings - only shown when model is downloaded */}
+          {modelDownloaded && (
+            <>
+              <Control
+                label={
+                  <ControlLabel
+                    label="Voice"
+                    tooltip="Select the voice style to use for speech synthesis"
+                  />
+                }
+                className="px-3"
+              >
+                <Select
+                  value={voice}
+                  onValueChange={onVoiceChange}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUPERTONIC_TTS_VOICES.map((v) => (
+                      <SelectItem key={v.value} value={v.value}>
+                        {v.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Language"
+                    tooltip="Select the language for speech synthesis"
+                  />
+                }
+                className="px-3"
+              >
+                <Select
+                  value={language}
+                  onValueChange={onLanguageChange}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUPERTONIC_TTS_LANGUAGES.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Speed"
+                    tooltip="Speech speed multiplier (default: 1.05)"
+                  />
+                }
+                className="px-3"
+              >
+                <Input
+                  type="number"
+                  min={0.5}
+                  max={2.0}
+                  step={0.05}
+                  className="w-[100px]"
+                  value={speed}
+                  onChange={(e) => {
+                    const val = parseFloat(e.currentTarget.value)
+                    if (!isNaN(val) && val >= 0.5 && val <= 2.0) {
+                      onSpeedChange(val)
+                    }
+                  }}
+                />
+              </Control>
+
+              <Control
+                label={
+                  <ControlLabel
+                    label="Quality Steps"
+                    tooltip="Number of denoising steps (2-10). Higher = better quality but slower."
+                  />
+                }
+                className="px-3"
+              >
+                <Input
+                  type="number"
+                  min={2}
+                  max={10}
+                  step={1}
+                  className="w-[100px]"
+                  value={steps}
+                  onChange={(e) => {
+                    const val = parseInt(e.currentTarget.value)
+                    if (!isNaN(val) && val >= 2 && val <= 10) {
+                      onStepsChange(val)
+                    }
+                  }}
+                />
+              </Control>
+
+              {/* Test Voice Button */}
+              <Control
+                label={
+                  <ControlLabel
+                    label="Test Voice"
+                    tooltip="Play a sample phrase using the selected voice and settings"
+                  />
+                }
+                className="px-3"
+              >
+                <Button size="sm" variant="outline" onClick={handleTestVoice}>
+                  <Volume2 className="h-3.5 w-3.5 mr-1.5" />
+                  Test Voice
+                </Button>
+              </Control>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Component() {
   const configQuery = useConfigQuery()
 
@@ -534,7 +854,7 @@ export function Component() {
 
   // Compute which providers are actively being used for each function
   const activeProviders = useMemo(() => {
-    if (!configQuery.data) return { openai: [], groq: [], gemini: [], parakeet: [], kitten: [] }
+    if (!configQuery.data) return { openai: [], groq: [], gemini: [], parakeet: [], kitten: [], supertonic: [] }
 
     const stt = configQuery.data.sttProviderId || "openai"
     const transcript = configQuery.data.transcriptPostProcessingProviderId || "openai"
@@ -565,6 +885,9 @@ export function Component() {
       kitten: [
         ...(tts === "kitten" ? [{ label: "TTS", icon: Volume2 }] : []),
       ],
+      supertonic: [
+        ...(tts === "supertonic" ? [{ label: "TTS", icon: Volume2 }] : []),
+      ],
     }
   }, [configQuery.data])
 
@@ -573,6 +896,7 @@ export function Component() {
   const isGeminiActive = activeProviders.gemini.length > 0
   const isParakeetActive = activeProviders.parakeet.length > 0
   const isKittenActive = activeProviders.kitten.length > 0
+  const isSupertonicActive = activeProviders.supertonic.length > 0
 
   // Get all available presets for dual-model selection
   const allPresets = useMemo(() => {
@@ -1097,6 +1421,24 @@ export function Component() {
           />
         )}
 
+        {/* Supertonic (Local) TTS Provider Section */}
+        {isSupertonicActive && (
+          <SupertonicProviderSection
+            isActive={true}
+            isCollapsed={configQuery.data.providerSectionCollapsedSupertonic ?? true}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedSupertonic: !(configQuery.data.providerSectionCollapsedSupertonic ?? true) } as Partial<Config>)}
+            usageBadges={activeProviders.supertonic}
+            voice={configQuery.data.supertonicVoice ?? "M1"}
+            onVoiceChange={(value) => saveConfig({ supertonicVoice: value })}
+            language={configQuery.data.supertonicLanguage ?? "en"}
+            onLanguageChange={(value) => saveConfig({ supertonicLanguage: value })}
+            speed={configQuery.data.supertonicSpeed ?? 1.05}
+            onSpeedChange={(value) => saveConfig({ supertonicSpeed: value })}
+            steps={configQuery.data.supertonicSteps ?? 5}
+            onStepsChange={(value) => saveConfig({ supertonicSteps: value })}
+          />
+        )}
+
         {/* Inactive Groq Provider Section - shown at bottom when not selected */}
         {!isGroqActive && (
           <div className="rounded-lg border">
@@ -1345,6 +1687,24 @@ export function Component() {
             usageBadges={activeProviders.kitten}
             voiceId={configQuery.data.kittenVoiceId ?? 0}
             onVoiceIdChange={(value) => saveConfig({ kittenVoiceId: value })}
+          />
+        )}
+
+        {/* Inactive Supertonic Provider Section - shown at bottom when not selected */}
+        {!isSupertonicActive && (
+          <SupertonicProviderSection
+            isActive={false}
+            isCollapsed={configQuery.data.providerSectionCollapsedSupertonic ?? true}
+            onToggleCollapse={() => saveConfig({ providerSectionCollapsedSupertonic: !(configQuery.data.providerSectionCollapsedSupertonic ?? true) } as Partial<Config>)}
+            usageBadges={activeProviders.supertonic}
+            voice={configQuery.data.supertonicVoice ?? "M1"}
+            onVoiceChange={(value) => saveConfig({ supertonicVoice: value })}
+            language={configQuery.data.supertonicLanguage ?? "en"}
+            onLanguageChange={(value) => saveConfig({ supertonicLanguage: value })}
+            speed={configQuery.data.supertonicSpeed ?? 1.05}
+            onSpeedChange={(value) => saveConfig({ supertonicSpeed: value })}
+            steps={configQuery.data.supertonicSteps ?? 5}
+            onStepsChange={(value) => saveConfig({ supertonicSteps: value })}
           />
         )}
 

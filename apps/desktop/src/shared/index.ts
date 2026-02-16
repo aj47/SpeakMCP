@@ -51,6 +51,10 @@ export const TTS_PROVIDERS = [
     label: "Kitten (Local)",
     value: "kitten",
   },
+  {
+    label: "Supertonic (Local)",
+    value: "supertonic",
+  },
 ] as const
 
 export type TTS_PROVIDER_ID = (typeof TTS_PROVIDERS)[number]["value"]
@@ -144,6 +148,29 @@ export const KITTEN_TTS_VOICES = [
   { label: "Voice 4 - Female", value: 5 },
   { label: "Voice 5 - Male", value: 6 },
   { label: "Voice 5 - Female", value: 7 },
+] as const
+
+// Supertonic TTS Voice Options (10 voices: 5 male + 5 female)
+export const SUPERTONIC_TTS_VOICES = [
+  { label: "Male 1 (M1)", value: "M1" },
+  { label: "Male 2 (M2)", value: "M2" },
+  { label: "Male 3 (M3)", value: "M3" },
+  { label: "Male 4 (M4)", value: "M4" },
+  { label: "Male 5 (M5)", value: "M5" },
+  { label: "Female 1 (F1)", value: "F1" },
+  { label: "Female 2 (F2)", value: "F2" },
+  { label: "Female 3 (F3)", value: "F3" },
+  { label: "Female 4 (F4)", value: "F4" },
+  { label: "Female 5 (F5)", value: "F5" },
+] as const
+
+// Supertonic TTS Language Options
+export const SUPERTONIC_TTS_LANGUAGES = [
+  { label: "English", value: "en" },
+  { label: "Korean", value: "ko" },
+  { label: "Spanish", value: "es" },
+  { label: "Portuguese", value: "pt" },
+  { label: "French", value: "fr" },
 ] as const
 
 // OpenAI Compatible Provider Presets
@@ -250,6 +277,8 @@ export const getTtsVoicesForProvider = (providerId: string, ttsModel?: string) =
       return ttsModel === 'canopylabs/orpheus-arabic-saudi' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
     case 'gemini':
       return GEMINI_TTS_VOICES
+    case 'supertonic':
+      return SUPERTONIC_TTS_VOICES
     default:
       return []
   }

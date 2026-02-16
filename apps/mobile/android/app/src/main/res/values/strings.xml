@@ -2,4 +2,9 @@
   <string name="app_name">SpeakMCP</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <!-- Google Assistant App Actions shortcut labels -->
+  <string name="shortcut_ask_short">Ask SpeakMCP</string>
+  <string name="shortcut_ask_long">Ask SpeakMCP a question</string>
+  <string name="shortcut_chat_short">Open Chat</string>
+  <string name="shortcut_chat_long">Open SpeakMCP Chat</string>
 </resources>

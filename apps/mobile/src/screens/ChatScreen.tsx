@@ -1331,6 +1331,32 @@ export default function ChatScreen({ route, navigation }: any) {
 	// We intentionally assign during render (not useEffect) so it is available immediately.
 	sendRef.current = send;
 
+  // Handle Google Assistant / deep link params: auto-send initial message or auto-start voice
+  const initialMessageHandled = useRef(false);
+  useEffect(() => {
+    if (initialMessageHandled.current) return;
+    const params = route?.params;
+    if (!params) return;
+
+    if (params.initialMessage && typeof params.initialMessage === 'string') {
+      initialMessageHandled.current = true;
+      // Small delay to ensure the chat screen is fully mounted
+      const timer = setTimeout(() => {
+        sendRef.current(params.initialMessage);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
+    if (params.autoVoice) {
+      initialMessageHandled.current = true;
+      // Start voice recording after a brief delay for mount
+      const timer = setTimeout(() => {
+        startRecording();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [route?.params]);
+
   // Track modifier keys for keyboard shortcut handling
   const modifierKeysRef = useRef<{ shift: boolean; ctrl: boolean; meta: boolean }>({
     shift: false,

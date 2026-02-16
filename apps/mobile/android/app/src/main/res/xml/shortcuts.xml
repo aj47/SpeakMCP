@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- "Hey Google, ask SpeakMCP about [query]" -->
+    <!-- "Hey Google, search SpeakMCP for [query]" -->
+    <capability android:name="actions.intent.GET_THING">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity">
+            <url-template android:value="speakmcp://assistant{?query}" />
+            <parameter
+                android:name="thing.name"
+                android:key="query"
+                android:required="true" />
+        </intent>
+        <!-- Fallback: open chat with no query -->
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity"
+            android:data="speakmcp://chat" />
+    </capability>
+
+    <!-- "Hey Google, open SpeakMCP chat" -->
+    <!-- "Hey Google, open SpeakMCP settings" -->
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity">
+            <url-template android:value="speakmcp://feature/{feature}" />
+            <parameter
+                android:name="feature"
+                android:key="feature"
+                android:required="true" />
+        </intent>
+        <!-- Fallback: open app normally -->
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity"
+            android:data="speakmcp://chat" />
+    </capability>
+
+    <!-- "Hey Google, send a message with SpeakMCP [text]" -->
+    <capability android:name="actions.intent.CREATE_MESSAGE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity">
+            <url-template android:value="speakmcp://assistant{?query}" />
+            <parameter
+                android:name="message.text"
+                android:key="query"
+                android:required="true" />
+        </intent>
+        <!-- Fallback: open chat -->
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity"
+            android:data="speakmcp://chat" />
+    </capability>
+
+    <!-- Static shortcut: "Ask SpeakMCP" -->
+    <shortcut
+        android:shortcutId="ask_speakmcp"
+        android:shortcutShortLabel="@string/shortcut_ask_short"
+        android:shortcutLongLabel="@string/shortcut_ask_long"
+        android:enabled="true">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity"
+            android:data="speakmcp://voice" />
+        <capability-binding android:key="actions.intent.GET_THING" />
+    </shortcut>
+
+    <!-- Static shortcut: "Open SpeakMCP Chat" -->
+    <shortcut
+        android:shortcutId="open_chat"
+        android:shortcutShortLabel="@string/shortcut_chat_short"
+        android:shortcutLongLabel="@string/shortcut_chat_long"
+        android:enabled="true">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.aj47.speakmcp"
+            android:targetClass="com.aj47.speakmcp.MainActivity"
+            android:data="speakmcp://chat" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE" />
+    </shortcut>
+
+</shortcuts>

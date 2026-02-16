@@ -26,20 +26,81 @@ const lightSpinner = require('./assets/light-spinner.gif');
 
 const Stack = createNativeStackNavigator();
 
-function parseDeepLink(url: string | null) {
+type DeepLinkConfig = {
+  type: 'config';
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+};
+
+type DeepLinkAssistant = {
+  type: 'assistant';
+  query: string;
+};
+
+type DeepLinkChat = {
+  type: 'chat';
+};
+
+type DeepLinkVoice = {
+  type: 'voice';
+};
+
+type DeepLinkFeature = {
+  type: 'feature';
+  feature: string;
+};
+
+type DeepLinkResult = DeepLinkConfig | DeepLinkAssistant | DeepLinkChat | DeepLinkVoice | DeepLinkFeature;
+
+function parseDeepLink(url: string | null): DeepLinkResult | null {
   if (!url) return null;
   try {
     const parsed = Linking.parse(url);
+    const path = parsed.path || parsed.hostname || '';
+    const params = parsed.queryParams || {};
+
     // Handle speakmcp://config?baseUrl=...&apiKey=...&model=...
-    if (parsed.path === 'config' || parsed.hostname === 'config') {
-      const { baseUrl, apiKey, model } = parsed.queryParams || {};
+    if (path === 'config') {
+      const { baseUrl, apiKey, model } = params;
       if (baseUrl || apiKey || model) {
         return {
+          type: 'config',
           baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
           apiKey: typeof apiKey === 'string' ? apiKey : undefined,
           model: typeof model === 'string' ? model : undefined,
         };
       }
+    }
+
+    // Handle speakmcp://assistant?query=... (Google Assistant App Actions)
+    if (path === 'assistant') {
+      const query = typeof params.query === 'string' ? params.query : '';
+      if (query) {
+        return { type: 'assistant', query };
+      }
+      // No query provided, fall through to open chat
+      return { type: 'chat' };
+    }
+
+    // Handle speakmcp://chat (open chat screen)
+    if (path === 'chat') {
+      return { type: 'chat' };
+    }
+
+    // Handle speakmcp://voice (open chat in voice mode)
+    if (path === 'voice') {
+      return { type: 'voice' };
+    }
+
+    // Handle speakmcp://feature/{name} (Google Assistant OPEN_APP_FEATURE)
+    if (path.startsWith('feature/') || path === 'feature') {
+      const feature = path.replace('feature/', '').replace('feature', '') ||
+        (typeof params.feature === 'string' ? params.feature : '');
+      if (feature) {
+        return { type: 'feature', feature };
+      }
+      return { type: 'chat' };
     }
   } catch (e) {
     console.warn('Failed to parse deep link:', e);
@@ -93,21 +154,75 @@ function Navigation() {
     },
   };
 
-  // Handle deep links
+  // Handle deep links (including Google Assistant App Actions)
   useEffect(() => {
     if (!cfg.ready) return;
 
     const handleUrl = async (url: string | null) => {
-      const params = parseDeepLink(url);
-      if (params) {
-        const newConfig = {
-          ...cfg.config,
-          ...(params.baseUrl && { baseUrl: params.baseUrl }),
-          ...(params.apiKey && { apiKey: params.apiKey }),
-          ...(params.model && { model: params.model }),
-        };
-        cfg.setConfig(newConfig);
-        await saveConfig(newConfig);
+      const result = parseDeepLink(url);
+      if (!result) return;
+
+      switch (result.type) {
+        case 'config': {
+          const newConfig = {
+            ...cfg.config,
+            ...(result.baseUrl && { baseUrl: result.baseUrl }),
+            ...(result.apiKey && { apiKey: result.apiKey }),
+            ...(result.model && { model: result.model }),
+          };
+          cfg.setConfig(newConfig);
+          await saveConfig(newConfig);
+          break;
+        }
+        case 'assistant': {
+          // Google Assistant sent a query - navigate to chat and auto-send
+          console.log('[App] Google Assistant query:', result.query);
+          if (isNavigationReady.current) {
+            // Create a new session for the assistant query
+            const session = sessionStore.createNewSession();
+            sessionStore.setCurrentSession(session.id);
+            navigationRef.navigate('Chat' as never, { initialMessage: result.query } as never);
+          }
+          break;
+        }
+        case 'chat': {
+          // Open the chat screen
+          if (isNavigationReady.current) {
+            navigationRef.navigate('Chat' as never);
+          }
+          break;
+        }
+        case 'voice': {
+          // Open chat in voice/listening mode
+          console.log('[App] Opening voice mode via deep link');
+          if (isNavigationReady.current) {
+            const session = sessionStore.createNewSession();
+            sessionStore.setCurrentSession(session.id);
+            navigationRef.navigate('Chat' as never, { autoVoice: true } as never);
+          }
+          break;
+        }
+        case 'feature': {
+          // Google Assistant OPEN_APP_FEATURE - route to the named feature
+          const featureLower = result.feature.toLowerCase();
+          if (isNavigationReady.current) {
+            if (featureLower.includes('chat') || featureLower.includes('message') || featureLower.includes('talk')) {
+              navigationRef.navigate('Chat' as never);
+            } else if (featureLower.includes('session') || featureLower.includes('history')) {
+              navigationRef.navigate('Sessions' as never);
+            } else if (featureLower.includes('setting') || featureLower.includes('config')) {
+              navigationRef.navigate('Settings' as never);
+            } else if (featureLower.includes('voice') || featureLower.includes('speak') || featureLower.includes('listen')) {
+              const session = sessionStore.createNewSession();
+              sessionStore.setCurrentSession(session.id);
+              navigationRef.navigate('Chat' as never, { autoVoice: true } as never);
+            } else {
+              // Default: open chat
+              navigationRef.navigate('Chat' as never);
+            }
+          }
+          break;
+        }
       }
     };
 

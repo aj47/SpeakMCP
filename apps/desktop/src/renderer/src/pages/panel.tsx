@@ -20,6 +20,7 @@ import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
 const WAVEFORM_MIN_HEIGHT = 110
+const WAVEFORM_WITH_PREVIEW_HEIGHT = 150
 const TEXT_INPUT_MIN_HEIGHT = 160
 const PROGRESS_MIN_HEIGHT = 200
 
@@ -416,11 +417,14 @@ export function Component() {
       return
     }
 
-    // Send the full recording blob so far every 10 seconds
+    // Groq bills a minimum of 10 seconds per request, so use 10s intervals
+    // after the initial call. First call fires after a short delay to
+    // accumulate enough audio for a useful transcription.
+    const INITIAL_DELAY_MS = 3_000
     const CHUNK_INTERVAL_MS = 10_000
     let inflight = false
 
-    previewTimerRef.current = setInterval(async () => {
+    const sendChunk = async () => {
       if (inflight) return
       const recorder = recorderRef.current
       if (!recorder) return
@@ -435,20 +439,34 @@ export function Component() {
         if (result?.text) {
           setPreviewText(result.text)
         }
-      } catch {
-        // Silently ignore preview errors - don't disrupt recording
+      } catch (err) {
+        console.error("[Preview] Transcription error:", err)
       } finally {
         inflight = false
       }
-    }, CHUNK_INTERVAL_MS)
+    }
+
+    // Fire the first transcription after a short delay, then repeat
+    const initialTimer = setTimeout(() => {
+      sendChunk()
+      previewTimerRef.current = setInterval(sendChunk, CHUNK_INTERVAL_MS)
+    }, INITIAL_DELAY_MS)
 
     return () => {
+      clearTimeout(initialTimer)
       if (previewTimerRef.current) {
         clearInterval(previewTimerRef.current)
         previewTimerRef.current = null
       }
     }
   }, [recording, isPreviewEnabled])
+
+  // Resize the panel window when transcription preview text appears/disappears
+  useEffect(() => {
+    if (!recording) return
+    const hasPreview = isPreviewEnabled && previewText.length > 0
+    tipcClient.resizePanelForWaveformPreview({ showPreview: hasPreview })
+  }, [recording, isPreviewEnabled, previewText])
 
   useEffect(() => {
     const unlisten = rendererHandlers.startRecording.listen((data) => {
@@ -824,7 +842,9 @@ export function Component() {
 	  }, [anyVisibleSessions, showTextInput, recording, textInputMutation.isPending, mcpTextInputMutation.isPending])
 
   // Use appropriate minimum height based on current mode
-  const minHeight = showTextInput ? TEXT_INPUT_MIN_HEIGHT : (anyVisibleSessions && !recording ? PROGRESS_MIN_HEIGHT : WAVEFORM_MIN_HEIGHT)
+  const hasPreviewVisible = recording && isPreviewEnabled && previewText.length > 0
+  const waveformHeight = hasPreviewVisible ? WAVEFORM_WITH_PREVIEW_HEIGHT : WAVEFORM_MIN_HEIGHT
+  const minHeight = showTextInput ? TEXT_INPUT_MIN_HEIGHT : (anyVisibleSessions && !recording ? PROGRESS_MIN_HEIGHT : waveformHeight)
 
   return (
     <PanelResizeWrapper
@@ -863,7 +883,7 @@ export function Component() {
             isDark ? "dark" : ""
           )}>
 
-            <div className="relative flex grow items-center overflow-hidden">
+            <div className={cn("relative flex grow items-center", !recording && "overflow-hidden")}>
               {/* Agent progress overlay - left-aligned and full coverage */}
               {/* Hide overlay when recording to show waveform instead */}
               {anyVisibleSessions && !recording && (
@@ -886,14 +906,18 @@ export function Component() {
               {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
-                  {/* Waveform */}
+                  {/* Waveform - shrinks when preview text is showing */}
                   <div
                     className={cn(
-                      "flex h-6 items-center justify-center transition-opacity duration-300 px-4 pointer-events-none",
+                      "flex items-center justify-center transition-all duration-300 px-4 pointer-events-none",
+                      isPreviewEnabled && previewText ? "h-3" : "h-6",
                       "opacity-100",
                     )}
                   >
-                    <div className="flex h-6 items-center gap-0.5">
+                    <div className={cn(
+                      "flex items-center gap-0.5",
+                      isPreviewEnabled && previewText ? "h-3" : "h-6",
+                    )}>
                       {visualizerData
                         .slice()
                         .map((rms, index) => {
@@ -916,7 +940,7 @@ export function Component() {
 
                   {/* Transcription preview */}
                   {isPreviewEnabled && previewText && (
-                    <div className="w-full px-4 mt-1 max-h-12 overflow-y-auto">
+                    <div className="w-full px-4 mt-1">
                       <p className="text-xs text-muted-foreground italic text-center line-clamp-2">
                         {previewText}
                       </p>
@@ -924,7 +948,7 @@ export function Component() {
                   )}
 
                   {/* Submit button and keyboard hint */}
-                  <div className="flex items-center gap-3 mt-2">
+                  <div className="flex items-center gap-3 mt-1">
                     <button
                       onClick={handleSubmitRecording}
                       className={cn(

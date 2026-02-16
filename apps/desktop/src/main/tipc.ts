@@ -19,6 +19,7 @@ import {
   WAVEFORM_MIN_HEIGHT,
   MIN_WAVEFORM_WIDTH,
   clearPanelOpenedWithMain,
+  resizePanelForWaveformPreview,
 } from "./window"
 import {
   app,
@@ -659,6 +660,12 @@ export const router = {
   resizePanelToNormal: t.procedure.action(async () => {
     resizePanelToNormal()
   }),
+
+  resizePanelForWaveformPreview: t.procedure
+    .input<{ showPreview: boolean }>()
+    .action(async ({ input }) => {
+      resizePanelForWaveformPreview(input.showPreview)
+    }),
 
   setPanelMode: t.procedure
     .input<{ mode: "normal" | "agent" | "textInput" }>()

@@ -67,3 +67,6 @@ release/
 # Test artifacts
 trace-session*.json
 apps/desktop/tmp/
+
+# Node compile cache
+node-compile-cache/

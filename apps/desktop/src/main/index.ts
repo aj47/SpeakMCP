@@ -111,7 +111,7 @@ app.whenReady().then(() => {
   if (headlessMode) {
     logApp("Running in headless mode - skipping window creation")
     // eslint-disable-next-line no-console
-    console.log("[ACP Remote] Headless mode enabled - no GUI windows will be created")
+    console.log("[SpeakMCP] Headless mode enabled - no GUI windows will be created")
   }
 
   if (!headlessMode) {
@@ -212,9 +212,9 @@ app.whenReady().then(() => {
 	          if (headlessMode) {
 	            const port = cfg.remoteServerPort || 3210
 	            // eslint-disable-next-line no-console
-	            console.log(`[ACP Remote] Server listening on http://localhost:${port}`)
+	            console.log(`[SpeakMCP] Server listening on http://localhost:${port}`)
 	            // eslint-disable-next-line no-console
-	            console.log(`[ACP Remote] Use 'acp-remote qr' to get connection QR code`)
+	            console.log(`[SpeakMCP] Use 'speakmcp qr' to get connection QR code`)
 	          }
 
 	          // Auto-start Cloudflare tunnel if enabled
@@ -245,7 +245,7 @@ app.whenReady().then(() => {
 	                      logApp(`Cloudflare named tunnel started: ${result.url}`)
 	                      if (headlessMode) {
 	                        // eslint-disable-next-line no-console
-	                        console.log(`[ACP Remote] Cloudflare tunnel: ${result.url}`)
+	                        console.log(`[SpeakMCP] Cloudflare tunnel: ${result.url}`)
 	                      }
 	                    } else {
 	                      logApp(`Cloudflare named tunnel failed to start: ${result.error}`)
@@ -262,7 +262,7 @@ app.whenReady().then(() => {
 	                      logApp(`Cloudflare quick tunnel started: ${result.url}`)
 	                      if (headlessMode) {
 	                        // eslint-disable-next-line no-console
-	                        console.log(`[ACP Remote] Cloudflare tunnel: ${result.url}`)
+	                        console.log(`[SpeakMCP] Cloudflare tunnel: ${result.url}`)
 	                      }
 	                    } else {
 	                      logApp(`Cloudflare quick tunnel failed to start: ${result.error}`)

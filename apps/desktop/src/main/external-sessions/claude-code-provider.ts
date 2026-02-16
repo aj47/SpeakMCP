@@ -288,13 +288,20 @@ export class ClaudeCodeSessionProvider implements ExternalSessionProvider {
         }
       }
 
-      // Spawn claude with --continue flag
-      // Note: This opens a new terminal window with the session
+      // Spawn claude with --continue flag in a new terminal window
       const { exec } = await import('child_process')
       const command = `cd "${cwd}" && claude --continue "${session.id}"`
 
-      // Open in default terminal
-      exec(`osascript -e 'tell app "Terminal" to do script "${command.replace(/"/g, '\\"')}"'`)
+      // Open in platform-specific terminal
+      const platform = process.platform
+      if (platform === 'darwin') {
+        exec(`osascript -e 'tell app "Terminal" to do script "${command.replace(/"/g, '\\"')}"'`)
+      } else if (platform === 'win32') {
+        exec(`start cmd.exe /k "${command}"`)
+      } else {
+        // Linux - try common terminal emulators
+        exec(`x-terminal-emulator -e bash -c '${command}; exec bash' 2>/dev/null || xterm -e bash -c '${command}; exec bash'`)
+      }
 
       return {
         success: true,

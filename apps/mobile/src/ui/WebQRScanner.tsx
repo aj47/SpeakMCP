@@ -133,7 +133,7 @@ export function WebQRScanner({ onScan, onClose }: WebQRScannerProps) {
       </View>
 
       <Text style={styles.hint}>
-        Point your camera at an ACP Remote QR code
+        Point your camera at a SpeakMCP QR code
       </Text>
     </View>
   );

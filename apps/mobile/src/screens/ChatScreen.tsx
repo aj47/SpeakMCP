@@ -2405,6 +2405,7 @@ export default function ChatScreen({ route, navigation }: any) {
             <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
           </TouchableOpacity>
           <View 
+            ref={micButtonRef}
             style={styles.micWrapper}
           >
             <Pressable

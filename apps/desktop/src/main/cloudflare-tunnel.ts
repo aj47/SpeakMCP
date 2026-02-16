@@ -19,7 +19,8 @@ function debugLog(message: string): void {
 async function printTunnelQR(url: string): Promise<void> {
   if (!isPrintQR()) return
   try {
-    const QRCode = await import("qrcode")
+    const qrcodeModule = await import("qrcode")
+    const QRCode = qrcodeModule.default || qrcodeModule
     const qr = await QRCode.toString(url, { type: "terminal", small: true })
     // eslint-disable-next-line no-console
     console.log("\n📱 Scan QR code to connect:\n")

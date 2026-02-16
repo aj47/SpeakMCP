@@ -268,7 +268,7 @@ export function ActiveAgentsSidebar() {
   const handlePastSessionClick = async (session: UnifiedConversationHistoryItem) => {
     logUI('[ActiveAgentsSidebar] Past session clicked:', session.id, 'source:', session.source)
 
-    if (session.source === 'acp-remote') {
+    if (session.source === 'speakmcp') {
       // Native session - navigate to it
       navigate(`/${session.id}`)
     } else {
@@ -295,7 +295,7 @@ export function ActiveAgentsSidebar() {
   const handleDeletePastSession = async (session: UnifiedConversationHistoryItem, e: React.MouseEvent) => {
     e.stopPropagation()
     // Only allow deleting native sessions
-    if (session.source !== 'acp-remote') {
+    if (session.source !== 'speakmcp') {
       toast.info("External sessions can only be deleted in their source application")
       return
     }
@@ -596,7 +596,7 @@ export function ActiveAgentsSidebar() {
                         {formatTimestamp(session.updatedAt)}
                       </span>
                       {/* Only show delete button for native sessions */}
-                      {session.source === 'acp-remote' && (
+                      {session.source === 'speakmcp' && (
                         <button
                           onClick={(e) => handleDeletePastSession(session, e)}
                           disabled={deleteConversationMutation.isPending}

@@ -41,6 +41,7 @@ export function Component() {
   const mcpConversationIdRef = useRef<string | undefined>(undefined)
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
   const fromTileRef = useRef<boolean>(false)
+  const [continueConversationTitle, setContinueConversationTitle] = useState<string | null>(null)
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const [previewText, setPreviewText] = useState("")
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -399,6 +400,7 @@ export function Component() {
       setMcpMode(false)
       mcpModeRef.current = false
       setFromButtonClick(false)
+      setContinueConversationTitle(null)
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
@@ -553,10 +555,17 @@ export function Component() {
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
-      // Clear any existing conversation ID to ensure a fresh conversation is started
-      // This prevents the bug where previous session messages are included when
-      // submitting a new message via the text input keybind
-      endConversation()
+      // If a conversationId was provided (continue mode), set it as current
+      if (data?.conversationId) {
+        setCurrentConversationId(data.conversationId)
+        setContinueConversationTitle(data.conversationTitle || "conversation")
+      } else {
+        // Clear any existing conversation ID to ensure a fresh conversation is started
+        // This prevents the bug where previous session messages are included when
+        // submitting a new message via the text input keybind
+        endConversation()
+        setContinueConversationTitle(null)
+      }
 
       // Show text input and focus
       setShowTextInput(true)
@@ -572,7 +581,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [endConversation])
+  }, [endConversation, setCurrentConversationId])
 
   useEffect(() => {
     const unlisten = rendererHandlers.hideTextInput.listen(() => {
@@ -621,6 +630,13 @@ export function Component() {
       // Track if recording was triggered via UI button click vs keyboard shortcut
       // When true, we show "Enter" as the submit hint instead of "Release keys"
       setFromButtonClick(data?.fromButtonClick ?? false)
+
+      // Track continue conversation title for visual indicator
+      if (data?.conversationId && data?.conversationTitle) {
+        setContinueConversationTitle(data.conversationTitle)
+      } else {
+        setContinueConversationTitle(null)
+      }
 
       // If recording is NOT from a tile and no explicit conversationId was passed,
       // clear any existing conversation ID to ensure a fresh conversation is started.
@@ -887,6 +903,7 @@ export function Component() {
               textInputMutation.isPending || mcpTextInputMutation.isPending
             }
             agentProgress={agentProgress}
+            continueConversationTitle={continueConversationTitle}
           />
         ) : (
           <div
@@ -918,6 +935,13 @@ export function Component() {
               {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
+                  {/* Continue conversation indicator */}
+                  {continueConversationTitle && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 mb-1 rounded bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-400 text-xs">
+                      <span className="opacity-70">Continuing:</span>
+                      <span className="font-medium truncate max-w-[200px]">{continueConversationTitle}</span>
+                    </div>
+                  )}
                   {/* Waveform - shrinks when preview text is showing */}
                   <div
                     className={cn(

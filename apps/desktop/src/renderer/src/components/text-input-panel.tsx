@@ -12,6 +12,7 @@ interface TextInputPanelProps {
   isProcessing?: boolean
   agentProgress?: AgentProgressUpdate | null
   initialText?: string
+  continueConversationTitle?: string | null
 }
 
 export interface TextInputPanelRef {
@@ -25,6 +26,7 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
   isProcessing = false,
   agentProgress,
   initialText,
+  continueConversationTitle,
 }, ref) => {
   const [text, setText] = useState(initialText || "")
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -123,6 +125,12 @@ export const TextInputPanel = forwardRef<TextInputPanelRef, TextInputPanelProps>
         />
       ) : (
         <div className="flex flex-1 flex-col gap-2">
+          {continueConversationTitle && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-400 text-xs">
+              <span className="opacity-70">Continuing:</span>
+              <span className="font-medium truncate max-w-[200px]">{continueConversationTitle}</span>
+            </div>
+          )}
           <div className="modern-text-muted flex items-center justify-between text-xs">
             <span>Type your message • Enter to send • Shift+Enter for new line • Esc to cancel</span>
             <PredefinedPromptsMenu

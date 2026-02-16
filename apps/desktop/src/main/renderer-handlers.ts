@@ -9,11 +9,11 @@ export type RendererHandlers = {
   startOrFinishRecording: (data?: { fromButtonClick?: boolean }) => void
   refreshRecordingHistory: () => void
 
-  startMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
+  startMcpRecording: (data?: { conversationId?: string; conversationTitle?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
   finishMcpRecording: () => void
   startOrFinishMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
 
-  showTextInput: (data?: { initialText?: string }) => void
+  showTextInput: (data?: { initialText?: string; conversationId?: string; conversationTitle?: string }) => void
   hideTextInput: () => void
 
   agentProgressUpdate: (update: AgentProgressUpdate) => void

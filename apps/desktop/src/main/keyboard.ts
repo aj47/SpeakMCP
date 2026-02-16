@@ -13,6 +13,7 @@ import {
 import { systemPreferences } from "electron"
 import { configStore } from "./config"
 import { state, agentProcessManager } from "./state"
+import { conversationService } from "./conversation-service"
 import { spawn, ChildProcess } from "child_process"
 import path from "path"
 import { matchesKeyCombo, getEffectiveShortcut } from "../shared/key-utils"
@@ -243,6 +244,39 @@ const hasRecentKeyPress = () => {
   })
 }
 
+/**
+ * Start an MCP recording that continues the most recent conversation.
+ * Used by Shift+<recording hotkey> keybinds.
+ */
+const startMcpRecordingWithLastConversation = async () => {
+  const recent = await conversationService.getMostRecentConversation()
+  if (recent) {
+    if (isDebugKeybinds()) {
+      logKeybinds("Continue last conversation:", recent.id, recent.title)
+    }
+    showPanelWindowAndStartMcpRecording(recent.id, undefined, undefined, undefined, recent.title)
+  } else {
+    // No conversations yet — fall back to a fresh MCP recording
+    showPanelWindowAndStartMcpRecording()
+  }
+}
+
+/**
+ * Show text input that continues the most recent conversation.
+ * Used by Shift+<text input hotkey> keybinds.
+ */
+const showTextInputWithLastConversation = async () => {
+  const recent = await conversationService.getMostRecentConversation()
+  if (recent) {
+    if (isDebugKeybinds()) {
+      logKeybinds("Continue last conversation (text input):", recent.id, recent.title)
+    }
+    showPanelWindowAndShowTextInput(undefined, recent.id, recent.title)
+  } else {
+    showPanelWindowAndShowTextInput()
+  }
+}
+
 export function listenToKeyboardEvents() {
   let isHoldingCtrlKey = false
   let startRecordingTimer: ReturnType<typeof setTimeout> | undefined
@@ -322,7 +356,12 @@ export function listenToKeyboardEvents() {
       // Re-check modifiers before firing
       if (!isPressedCtrlKey || !isPressedAltKey) return
       isHoldingCtrlAltKey = true
-      showPanelWindowAndStartMcpRecording()
+      // Shift+Ctrl+Alt = continue last conversation
+      if (isPressedShiftKey) {
+        startMcpRecordingWithLastConversation()
+      } else {
+        showPanelWindowAndStartMcpRecording()
+      }
     }, HOLD_TO_RECORD_DELAY_MS)
   }
 
@@ -353,6 +392,12 @@ export function listenToKeyboardEvents() {
       state.isRecordingMcpMode = true
     }
     // Note: When stopping, the recordEvent handler will set isRecordingMcpMode = false
+
+    // Shift+Ctrl+Alt (toggle) = continue last conversation
+    if (isPressedShiftKey && !state.isRecording) {
+      startMcpRecordingWithLastConversation()
+      return
+    }
 
     // Toggle MCP recording on/off
     getWindowRendererHandlers("panel")?.startOrFinishMcpRecording.send()
@@ -606,14 +651,21 @@ export function listenToKeyboardEvents() {
           config.textInputShortcut === "ctrl-t" &&
           e.data.key === "KeyT" &&
           isPressedCtrlKey &&
-          !isPressedShiftKey &&
           !isPressedAltKey
         ) {
-          if (isDebugKeybinds()) {
-            logKeybinds("Text input triggered: Ctrl+T")
-          }
           cancelVoiceRecordingForTextInput()
-          showPanelWindowAndShowTextInput()
+          // Shift+Ctrl+T = continue last conversation (text input)
+          if (isPressedShiftKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds("Text input triggered: Shift+Ctrl+T (continue conversation)")
+            }
+            showTextInputWithLastConversation()
+          } else {
+            if (isDebugKeybinds()) {
+              logKeybinds("Text input triggered: Ctrl+T")
+            }
+            showPanelWindowAndShowTextInput()
+          }
           return
         }
         if (
@@ -623,10 +675,12 @@ export function listenToKeyboardEvents() {
           isPressedShiftKey &&
           !isPressedAltKey
         ) {
+          cancelVoiceRecordingForTextInput()
+          // When Ctrl+Shift+T is already the shortcut, Alt+Ctrl+Shift+T = continue
+          // But that's too complex; just trigger normally. Users can use voice continue instead.
           if (isDebugKeybinds()) {
             logKeybinds("Text input triggered: Ctrl+Shift+T")
           }
-          cancelVoiceRecordingForTextInput()
           showPanelWindowAndShowTextInput()
           return
         }
@@ -634,14 +688,21 @@ export function listenToKeyboardEvents() {
           config.textInputShortcut === "alt-t" &&
           e.data.key === "KeyT" &&
           !isPressedCtrlKey &&
-          !isPressedShiftKey &&
           isPressedAltKey
         ) {
-          if (isDebugKeybinds()) {
-            logKeybinds("Text input triggered: Alt+T")
-          }
           cancelVoiceRecordingForTextInput()
-          showPanelWindowAndShowTextInput()
+          // Shift+Alt+T = continue last conversation (text input)
+          if (isPressedShiftKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds("Text input triggered: Shift+Alt+T (continue conversation)")
+            }
+            showTextInputWithLastConversation()
+          } else {
+            if (isDebugKeybinds()) {
+              logKeybinds("Text input triggered: Alt+T")
+            }
+            showPanelWindowAndShowTextInput()
+          }
           return
         }
 
@@ -758,6 +819,14 @@ export function listenToKeyboardEvents() {
 
       if (config.mcpToolsShortcut === "ctrl-alt-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey && isPressedAltKey) {
+          // Shift+Ctrl+Alt+/ = continue last conversation
+          if (isPressedShiftKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds("MCP tools triggered: Shift+Ctrl+Alt+/ (continue conversation)")
+            }
+            startMcpRecordingWithLastConversation()
+            return
+          }
           if (isDebugKeybinds()) {
             logKeybinds("MCP tools triggered: Ctrl+Alt+/")
           }
@@ -922,6 +991,14 @@ export function listenToKeyboardEvents() {
 
       if (config.shortcut === "ctrl-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey) {
+          // Shift+Ctrl+/ = continue last conversation in agent mode
+          if (isPressedShiftKey) {
+            if (isDebugKeybinds()) {
+              logKeybinds("Recording triggered: Shift+Ctrl+/ (continue conversation)")
+            }
+            startMcpRecordingWithLastConversation()
+            return
+          }
           if (isDebugKeybinds()) {
             logKeybinds("Recording triggered: Ctrl+/")
           }
@@ -1008,7 +1085,12 @@ export function listenToKeyboardEvents() {
               return
             }
             isHoldingCtrlKey = true
-            showPanelWindowAndStartRecording()
+            // Shift+Ctrl = continue last conversation in agent mode
+            if (isPressedShiftKey) {
+              startMcpRecordingWithLastConversation()
+            } else {
+              showPanelWindowAndStartRecording()
+            }
           }, HOLD_TO_RECORD_DELAY_MS)
         } else if (
           (e.data.key === "Alt" || e.data.key === "AltLeft" || e.data.key === "AltRight") &&
@@ -1034,7 +1116,12 @@ export function listenToKeyboardEvents() {
               return
             }
             isHoldingCtrlAltKey = true
-            showPanelWindowAndStartMcpRecording()
+            // Shift+Ctrl+Alt = continue last conversation
+            if (isPressedShiftKey) {
+              startMcpRecordingWithLastConversation()
+            } else {
+              showPanelWindowAndStartMcpRecording()
+            }
           }, HOLD_TO_RECORD_DELAY_MS)
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)

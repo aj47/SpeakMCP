@@ -427,6 +427,16 @@ export class ConversationService {
     return compactedConversation
   }
 
+  /**
+   * Get the most recently updated conversation's ID and title.
+   * Used by "continue last conversation" keybinds.
+   */
+  async getMostRecentConversation(): Promise<{ id: string; title: string } | null> {
+    const history = await this.getConversationHistory()
+    if (history.length === 0) return null
+    return { id: history[0].id, title: history[0].title }
+  }
+
   async deleteAllConversations(): Promise<void> {
     if (fs.existsSync(conversationsFolder)) {
       fs.rmSync(conversationsFolder, { recursive: true, force: true })

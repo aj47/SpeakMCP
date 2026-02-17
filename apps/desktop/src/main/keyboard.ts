@@ -247,9 +247,19 @@ const hasRecentKeyPress = () => {
 /**
  * Start an MCP recording that continues the most recent conversation.
  * Used by Shift+<recording hotkey> keybinds.
+ * @param isStillHeld - Optional predicate checked after the async history
+ *   lookup resolves. If provided and returns false, recording is aborted to
+ *   avoid starting a new session when the user has already released the key.
  */
-const startMcpRecordingWithLastConversation = async () => {
+const startMcpRecordingWithLastConversation = async (isStillHeld?: () => boolean) => {
   const recent = await conversationService.getMostRecentConversation()
+  // Abort if the key was released while we were awaiting history
+  if (isStillHeld && !isStillHeld()) {
+    if (isDebugKeybinds()) {
+      logKeybinds("Aborting MCP recording: key released during history lookup")
+    }
+    return
+  }
   if (recent) {
     if (isDebugKeybinds()) {
       logKeybinds("Continue last conversation:", recent.id, recent.title)
@@ -358,7 +368,7 @@ export function listenToKeyboardEvents() {
       isHoldingCtrlAltKey = true
       // Shift+Ctrl+Alt = continue last conversation
       if (isPressedShiftKey) {
-        startMcpRecordingWithLastConversation()
+        startMcpRecordingWithLastConversation(() => isPressedCtrlKey && isPressedAltKey)
       } else {
         showPanelWindowAndStartMcpRecording()
       }
@@ -1084,11 +1094,14 @@ export function listenToKeyboardEvents() {
             if (!isPressedCtrlKey || isPressedAltKey) {
               return
             }
-            isHoldingCtrlKey = true
-            // Shift+Ctrl = continue last conversation in agent mode
+            // Shift+Ctrl = continue last conversation in MCP agent mode
             if (isPressedShiftKey) {
-              startMcpRecordingWithLastConversation()
+              // Use isHoldingCtrlAltKey so the Ctrl release handler sends
+              // finishMcpRecording (not finishRecording) for this MCP path.
+              isHoldingCtrlAltKey = true
+              startMcpRecordingWithLastConversation(() => isPressedCtrlKey)
             } else {
+              isHoldingCtrlKey = true
               showPanelWindowAndStartRecording()
             }
           }, HOLD_TO_RECORD_DELAY_MS)
@@ -1118,7 +1131,7 @@ export function listenToKeyboardEvents() {
             isHoldingCtrlAltKey = true
             // Shift+Ctrl+Alt = continue last conversation
             if (isPressedShiftKey) {
-              startMcpRecordingWithLastConversation()
+              startMcpRecordingWithLastConversation(() => isPressedCtrlKey && isPressedAltKey)
             } else {
               showPanelWindowAndStartMcpRecording()
             }

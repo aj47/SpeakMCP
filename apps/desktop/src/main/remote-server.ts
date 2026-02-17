@@ -1495,18 +1495,26 @@ export function getRemoteServerStatus() {
 /**
  * Prints the QR code to the terminal for mobile app pairing
  * Can be called manually when the user wants to see the QR code
+ * @param urlOverride Optional URL to use instead of the local server URL (e.g., Cloudflare tunnel URL)
  * @returns true if QR code was printed, false if server is not running or no API key
  */
-export async function printQRCodeToTerminal(): Promise<boolean> {
+export async function printQRCodeToTerminal(urlOverride?: string): Promise<boolean> {
   const cfg = configStore.get()
   if (!server || !cfg.remoteServerApiKey) {
     console.log("[Remote Server] Cannot print QR code: server not running or no API key configured")
     return false
   }
 
-  const bind = cfg.remoteServerBindAddress || "127.0.0.1"
-  const port = cfg.remoteServerPort || 3210
-  const serverUrl = `http://${bind}:${port}/v1`
+  let serverUrl: string
+  if (urlOverride) {
+    // Use the override URL (e.g., Cloudflare tunnel URL)
+    // Ensure it ends with /v1
+    serverUrl = urlOverride.endsWith("/v1") ? urlOverride : `${urlOverride}/v1`
+  } else {
+    const bind = cfg.remoteServerBindAddress || "127.0.0.1"
+    const port = cfg.remoteServerPort || 3210
+    serverUrl = `http://${bind}:${port}/v1`
+  }
 
   await printTerminalQRCode(serverUrl, cfg.remoteServerApiKey)
   return true

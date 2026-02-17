@@ -59,7 +59,7 @@ app.whenReady().then(async () => {
   initDebugFlags(process.argv)
   logApp("SpeakMCP starting up...")
 
-  // Handle --qr mode: start remote server, print QR code, run headlessly
+  // Handle --qr mode: start remote server, start tunnel, print QR code, run headlessly
   if (isQRMode) {
     logApp("Running in --qr mode (headless with QR code)")
 
@@ -73,8 +73,51 @@ app.whenReady().then(async () => {
       await startRemoteServer()
       logApp("Remote server started in --qr mode")
 
-      // Print QR code to terminal
-      const printed = await printQRCodeToTerminal()
+      // Start Cloudflare tunnel for remote access
+      const cfg = configStore.get()
+      let tunnelUrl: string | undefined
+
+      // Check if cloudflared is installed
+      const cloudflaredInstalled = await checkCloudflaredInstalled()
+      if (!cloudflaredInstalled) {
+        console.log("[QR Mode] cloudflared not installed - QR code will use local address")
+        console.log("[QR Mode] Install cloudflared for remote access: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+      } else {
+        // Prefer named tunnel if configured, otherwise use quick tunnel
+        const tunnelMode = cfg.cloudflareTunnelMode || "quick"
+
+        if (tunnelMode === "named" && cfg.cloudflareTunnelId && cfg.cloudflareTunnelHostname) {
+          console.log("[QR Mode] Starting named Cloudflare tunnel...")
+          const result = await startNamedCloudflareTunnel({
+            tunnelId: cfg.cloudflareTunnelId,
+            hostname: cfg.cloudflareTunnelHostname,
+            credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
+          })
+          if (result.success && result.url) {
+            tunnelUrl = result.url
+            logApp(`Named tunnel started: ${tunnelUrl}`)
+          } else {
+            console.error(`[QR Mode] Named tunnel failed: ${result.error}`)
+            console.log("[QR Mode] Falling back to quick tunnel...")
+          }
+        }
+
+        // If named tunnel wasn't used or failed, try quick tunnel
+        if (!tunnelUrl) {
+          console.log("[QR Mode] Starting Cloudflare quick tunnel...")
+          const result = await startCloudflareTunnel()
+          if (result.success && result.url) {
+            tunnelUrl = result.url
+            logApp(`Quick tunnel started: ${tunnelUrl}`)
+          } else {
+            console.error(`[QR Mode] Quick tunnel failed: ${result.error}`)
+            console.log("[QR Mode] QR code will use local address instead")
+          }
+        }
+      }
+
+      // Print QR code to terminal (with tunnel URL if available)
+      const printed = await printQRCodeToTerminal(tunnelUrl)
       if (!printed) {
         console.error("[QR Mode] Failed to print QR code. Ensure remoteServerApiKey is configured.")
         console.log("[QR Mode] You can set an API key in the config or run the app normally first.")

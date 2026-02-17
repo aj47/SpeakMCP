@@ -20,7 +20,7 @@ import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
-import { startRemoteServer, printQRCodeToTerminal } from "./remote-server"
+import { startRemoteServer, printQRCodeToTerminal, startRemoteServerForced } from "./remote-server"
 import { acpService } from "./acp-service"
 import { agentProfileService } from "./agent-profile-service"
 import { initializeBundledSkills, skillsService, startSkillsFolderWatcher } from "./skills-service"
@@ -69,8 +69,12 @@ app.whenReady().then(async () => {
     }
 
     try {
-      // Start remote server (force enabled for --qr mode)
-      await startRemoteServer()
+      // Start remote server (force enabled for --qr mode, bypassing config check)
+      const serverResult = await startRemoteServerForced()
+      if (!serverResult.running) {
+        console.error("[QR Mode] Failed to start remote server:", serverResult.error || "Unknown error")
+        process.exit(1)
+      }
       logApp("Remote server started in --qr mode")
 
       // Start Cloudflare tunnel for remote access

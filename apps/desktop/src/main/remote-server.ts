@@ -3,6 +3,7 @@ import cors from "@fastify/cors"
 import crypto from "crypto"
 import fs from "fs"
 import path from "path"
+import QRCode from "qrcode"
 import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
 import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
@@ -17,6 +18,57 @@ import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
+
+/**
+ * Detects if we're running in a headless/terminal environment
+ * This helps auto-print QR codes when no GUI is available
+ */
+function isHeadlessEnvironment(): boolean {
+  // Linux without DISPLAY or WAYLAND_DISPLAY is headless
+  if (process.platform === "linux") {
+    const hasDisplay = process.env.DISPLAY || process.env.WAYLAND_DISPLAY
+    if (!hasDisplay) {
+      return true
+    }
+  }
+  // Check for explicit terminal mode flag
+  if (process.env.SPEAKMCP_TERMINAL_MODE === "1") {
+    return true
+  }
+  return false
+}
+
+/**
+ * Prints a QR code to the terminal for mobile app pairing
+ * @param url The server URL (e.g., http://192.168.1.100:3210/v1)
+ * @param apiKey The API key for authentication
+ */
+async function printTerminalQRCode(url: string, apiKey: string): Promise<void> {
+  const qrValue = `speakmcp://config?baseUrl=${encodeURIComponent(url)}&apiKey=${encodeURIComponent(apiKey)}`
+
+  try {
+    // Generate QR code as terminal-friendly ASCII art
+    const qrString = await QRCode.toString(qrValue, {
+      type: "terminal",
+      small: true,
+      errorCorrectionLevel: "M"
+    })
+
+    console.log("\n" + "=".repeat(60))
+    console.log("📱 Mobile App Connection QR Code")
+    console.log("=".repeat(60))
+    console.log("\nScan this QR code with the SpeakMCP mobile app to connect:\n")
+    console.log(qrString)
+    console.log("Server URL:", url)
+    console.log("API Key:", redact(apiKey))
+    console.log("\n" + "=".repeat(60) + "\n")
+
+    diagnosticsService.logInfo("remote-server", "Terminal QR code printed for mobile app pairing")
+  } catch (err) {
+    console.error("[Remote Server] Failed to generate terminal QR code:", err)
+    diagnosticsService.logError("remote-server", "Failed to generate terminal QR code", err)
+  }
+}
 
 function redact(value?: string) {
   if (!value) return ""
@@ -1390,6 +1442,20 @@ export async function startRemoteServer() {
       `Remote server listening at http://${bind}:${port}/v1`,
     )
     server = fastify
+
+    // Print QR code to terminal for mobile app pairing
+    // Auto-print in headless environments, or when explicitly requested
+    const currentCfg = configStore.get()
+    if (currentCfg.remoteServerApiKey) {
+      const serverUrl = `http://${bind}:${port}/v1`
+
+      // In headless environments, always print the QR code
+      // Otherwise, print if terminal QR is explicitly enabled
+      if (isHeadlessEnvironment() || currentCfg.remoteServerTerminalQrEnabled) {
+        await printTerminalQRCode(serverUrl, currentCfg.remoteServerApiKey)
+      }
+    }
+
     return { running: true, bind, port }
   } catch (err: any) {
     lastError = err?.message || String(err)
@@ -1424,5 +1490,25 @@ export function getRemoteServerStatus() {
   const running = !!server
   const url = running ? `http://${bind}:${port}/v1` : undefined
   return { running, url, bind, port, lastError }
+}
+
+/**
+ * Prints the QR code to the terminal for mobile app pairing
+ * Can be called manually when the user wants to see the QR code
+ * @returns true if QR code was printed, false if server is not running or no API key
+ */
+export async function printQRCodeToTerminal(): Promise<boolean> {
+  const cfg = configStore.get()
+  if (!server || !cfg.remoteServerApiKey) {
+    console.log("[Remote Server] Cannot print QR code: server not running or no API key configured")
+    return false
+  }
+
+  const bind = cfg.remoteServerBindAddress || "127.0.0.1"
+  const port = cfg.remoteServerPort || 3210
+  const serverUrl = `http://${bind}:${port}/v1`
+
+  await printTerminalQRCode(serverUrl, cfg.remoteServerApiKey)
+  return true
 }
 

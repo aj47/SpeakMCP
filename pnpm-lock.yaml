@@ -55,6 +55,9 @@ importers:
       openai:
         specifier: ^5.10.2
         version: 5.23.2(ws@8.18.3)(zod@3.25.76)
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@18.3.1)
@@ -135,6 +138,9 @@ importers:
       '@types/node':
         specifier: ^20.14.8
         version: 20.19.27
+      '@types/qrcode':
+        specifier: ^1.5.6
+        version: 1.5.6
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.27

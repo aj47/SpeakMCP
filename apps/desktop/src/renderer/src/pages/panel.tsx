@@ -642,8 +642,9 @@ export function Component() {
       setFromButtonClick(data?.fromButtonClick ?? false)
 
       // Track continue conversation title for visual indicator
-      if (data?.conversationId && data?.conversationTitle) {
-        setContinueConversationTitle(data.conversationTitle)
+      // Use fallback title when conversationId is provided without explicit title
+      if (data?.conversationId) {
+        setContinueConversationTitle(data.conversationTitle || "conversation")
       } else {
         setContinueConversationTitle(null)
       }

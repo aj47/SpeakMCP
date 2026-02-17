@@ -898,7 +898,15 @@ export default function ChatScreen({ route, navigation }: any) {
           console.log('[ChatScreen] Request superseded within same session, skipping onToken update');
           return;
         }
-        streamingText += tok;
+        // Handle both delta tokens and full-text updates.
+        // Progress events with streamingContent.text send the full accumulated text,
+        // while SSE delta events send just the new token.
+        // Detect full-text updates to prevent double-words from compounding tokens.
+        if (tok.startsWith(streamingText) && tok.length >= streamingText.length) {
+          streamingText = tok;
+        } else {
+          streamingText += tok;
+        }
 
         setMessages((m) => {
           const copy = [...m];
@@ -1241,7 +1249,15 @@ export default function ChatScreen({ route, navigation }: any) {
       const onToken = (tok: string) => {
         if (sessionStore.currentSessionId !== requestSessionId) return;
         if (activeRequestIdRef.current !== thisRequestId) return;
-        streamingText += tok;
+        // Handle both delta tokens and full-text updates.
+        // Progress events with streamingContent.text send the full accumulated text,
+        // while SSE delta events send just the new token.
+        // Detect full-text updates to prevent double-words from compounding tokens.
+        if (tok.startsWith(streamingText) && tok.length >= streamingText.length) {
+          streamingText = tok;
+        } else {
+          streamingText += tok;
+        }
         setMessages((m) => {
           const copy = [...m];
           for (let i = copy.length - 1; i >= 0; i--) {

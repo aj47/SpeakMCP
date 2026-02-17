@@ -1292,6 +1292,7 @@ export const router = {
   transcribeChunk: t.procedure
     .input<{
       recording: ArrayBuffer
+      pcmRecording?: ArrayBuffer
     }>()
     .action(async ({ input }) => {
       const config = configStore.get()
@@ -1302,7 +1303,12 @@ export const router = {
           return { text: "" }
         }
         await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
-        transcript = await parakeetStt.transcribe(input.recording, 16000)
+        // Use pcmRecording if provided, otherwise skip preview for Parakeet
+        // (WebM buffer would fail validation)
+        if (!input.pcmRecording) {
+          return { text: "" }
+        }
+        transcript = await parakeetStt.transcribe(input.pcmRecording, 16000)
       } else {
         const form = new FormData()
         form.append(

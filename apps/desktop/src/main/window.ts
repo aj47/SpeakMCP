@@ -294,6 +294,15 @@ export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
 // Total: ~110px
 export const WAVEFORM_MIN_HEIGHT = 110
 
+// Minimum height for waveform panel with transcription preview:
+// - Drag bar: 24px
+// - Waveform (shrunk): 12px
+// - Preview text: ~32px (2 lines)
+// - Submit button + hint: 36px
+// - Padding/margins: ~26px
+// Total: ~150px
+export const WAVEFORM_WITH_PREVIEW_HEIGHT = 150
+
 // Minimum height for text input panel:
 // - Hint text row: ~20px
 // - Textarea: ~80px minimum for usability
@@ -904,6 +913,38 @@ export function resizePanelForWaveform() {
     win.setPosition(position.x, position.y)
   } catch (e) {
     logApp("[resizePanelForWaveform] Failed to resize panel:", e)
+  }
+}
+
+/**
+ * Resize the panel to accommodate transcription preview text during recording.
+ * Grows the panel from WAVEFORM_MIN_HEIGHT to WAVEFORM_WITH_PREVIEW_HEIGHT.
+ * When showPreview is false, shrinks back to WAVEFORM_MIN_HEIGHT.
+ */
+export function resizePanelForWaveformPreview(showPreview: boolean) {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const [currentWidth, currentHeight] = win.getSize()
+    const targetHeight = showPreview ? WAVEFORM_WITH_PREVIEW_HEIGHT : WAVEFORM_MIN_HEIGHT
+
+    // Skip if already at target height
+    if (currentHeight === targetHeight) return
+
+    const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+    const newWidth = Math.max(currentWidth, minWidth)
+
+    logApp(`[resizePanelForWaveformPreview] Resizing panel from ${currentWidth}x${currentHeight} to ${newWidth}x${targetHeight} (preview=${showPreview})`)
+
+    win.setSize(newWidth, targetHeight)
+    notifyPanelSizeChanged(newWidth, targetHeight)
+
+    // Reposition to maintain the panel's anchor point
+    const position = calculatePanelPosition({ width: newWidth, height: targetHeight }, "normal")
+    win.setPosition(position.x, position.y)
+  } catch (e) {
+    logApp("[resizePanelForWaveformPreview] Failed to resize panel:", e)
   }
 }
 

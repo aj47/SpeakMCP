@@ -27,6 +27,7 @@ export class Recorder extends EventEmitter<{
 }> {
   stream: MediaStream | null = null
   mediaRecorder: MediaRecorder | null = null
+  audioChunks: Blob[] = []
 
   constructor() {
     super()
@@ -90,7 +91,7 @@ export class Recorder extends EventEmitter<{
       audioBitsPerSecond: 128e3,
     }))
 
-    let audioChunks: Blob[] = []
+    this.audioChunks = []
     let startTime = Date.now()
 
     mediaRecorder.onstart = () => {
@@ -102,12 +103,12 @@ export class Recorder extends EventEmitter<{
 
     mediaRecorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
-        audioChunks.push(event.data)
+        this.audioChunks.push(event.data)
       }
     }
     mediaRecorder.onstop = async () => {
       const duration = Date.now() - startTime
-      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType })
+      const blob = new Blob(this.audioChunks, { type: mediaRecorder.mimeType })
 
       // Check if blob has actual data
       if (blob.size === 0) {
@@ -116,12 +117,21 @@ export class Recorder extends EventEmitter<{
 
       this.emit("record-end", blob, duration)
 
-      audioChunks = []
+      this.audioChunks = []
     }
 
     // Start recording with timeslice to ensure data is collected periodically
     // This helps prevent empty blobs on short recordings
     mediaRecorder.start(100) // Collect data every 100ms
+  }
+
+  getRecordingBlob(): Blob | null {
+    if (!this.mediaRecorder || this.audioChunks.length === 0) return null
+    return new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType })
+  }
+
+  getAudioChunkCount(): number {
+    return this.audioChunks.length
   }
 
   stopRecording() {

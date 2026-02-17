@@ -49,6 +49,16 @@
 
 /* Custom scrollbar styles for agent progress */
 @layer utilities {
+  /* Hide scrollbar completely */
+  .scrollbar-none {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
   }

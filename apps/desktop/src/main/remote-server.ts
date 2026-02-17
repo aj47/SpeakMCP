@@ -5,13 +5,15 @@ import fs from "fs"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
 import { diagnosticsService } from "./diagnostics"
-import { mcpService, MCPToolResult } from "./mcp-service"
+import { mcpService, MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { processTranscriptWithAgentMode } from "./llm"
-import { state, agentProcessManager } from "./state"
+import { state, agentProcessManager, agentSessionStateManager } from "./state"
 import { conversationService } from "./conversation-service"
-import { AgentProgressUpdate } from "../shared/types"
+import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
+import { profileService } from "./profile-service"
+import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
@@ -188,6 +190,8 @@ async function runAgent(options: RunAgentOptions): Promise<{
         role: msg.role,
         content: msg.content,
         toolCalls: msg.toolCalls,
+        // Preserve timestamp for correct ordering in UI (matching tipc.ts)
+        timestamp: msg.timestamp,
         // Convert toolResults from stored format to MCPToolResult format (matching tipc.ts)
         toolResults: msg.toolResults?.map((tr) => ({
           content: [
@@ -200,15 +204,25 @@ async function runAgent(options: RunAgentOptions): Promise<{
         })),
       }))
     } else {
-      // Conversation not found, start fresh
-      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, starting fresh`)
-      conversationId = undefined
+      // Conversation not found - create it with the provided ID to maintain session continuity
+      diagnosticsService.logInfo("remote-server", `Conversation ${conversationId} not found, creating with provided ID`)
+      const newConversation = await conversationService.createConversationWithId(conversationId, prompt, "user")
+      // Update conversationId to use the actual persisted ID (which may be sanitized)
+      // This ensures session lookup and later operations use the correct ID
+      conversationId = newConversation.id
+      // Mark that we've just created the conversation so we don't try to add another message below
+      previousConversationHistory = []
+      diagnosticsService.logInfo("remote-server", `Created new conversation with ID ${newConversation.id}`)
     }
   }
 
-  // Create a new conversation if none exists
+  // Create a new conversation if none exists (only when no conversationId was provided at all)
   if (!conversationId) {
-    const newConversation = await conversationService.createConversation(prompt, "user")
+    const newConversation = await conversationService.createConversationWithId(
+      conversationService.generateConversationIdPublic(),
+      prompt,
+      "user"
+    )
     conversationId = newConversation.id
     diagnosticsService.logInfo("remote-server", `Created new conversation ${conversationId}`)
   }
@@ -237,17 +251,51 @@ async function runAgent(options: RunAgentOptions): Promise<{
     }
   }
 
+  // Determine profile snapshot for session isolation
+  // If reusing an existing session, use its stored snapshot to maintain isolation
+  // Only capture a new snapshot when creating a new session
+  let profileSnapshot: SessionProfileSnapshot | undefined
+
+  if (existingSessionId) {
+    // Try to get the stored profile snapshot from the existing session
+    profileSnapshot = agentSessionStateManager.getSessionProfileSnapshot(existingSessionId)
+      ?? agentSessionTracker.getSessionProfileSnapshot(existingSessionId)
+  }
+
+  // Only capture a new snapshot if we don't have one from an existing session
+  if (!profileSnapshot) {
+    const currentProfile = profileService.getCurrentProfile()
+    if (currentProfile) {
+      profileSnapshot = {
+        profileId: currentProfile.id,
+        profileName: currentProfile.name,
+        guidelines: currentProfile.guidelines,
+        systemPrompt: currentProfile.systemPrompt,
+        mcpServerConfig: currentProfile.mcpServerConfig,
+        modelConfig: currentProfile.modelConfig,
+        skillsConfig: currentProfile.skillsConfig,
+      }
+    }
+  }
+
   // Start or reuse agent session
   const conversationTitle = prompt.length > 50 ? prompt.substring(0, 50) + "..." : prompt
-  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed)
+  const sessionId = existingSessionId || agentSessionTracker.startSession(conversationId, conversationTitle, startSnoozed, profileSnapshot)
 
   try {
     await mcpService.initialize()
+
     mcpService.registerExistingProcessesWithAgentManager()
 
-    const availableTools = mcpService.getAvailableTools()
+    // Get available tools filtered by profile snapshot if available (for session isolation)
+    // This ensures revived sessions use the same tool list they started with
+    const availableTools = profileSnapshot?.mcpServerConfig
+      ? mcpService.getAvailableToolsForProfile(profileSnapshot.mcpServerConfig)
+      : mcpService.getAvailableTools()
+
     const executeToolCall = async (toolCall: any, onProgress?: (message: string) => void): Promise<MCPToolResult> => {
-      return await mcpService.executeToolCall(toolCall, onProgress)
+      // Pass sessionId for ACP router tools progress, and profileSnapshot.mcpServerConfig for session-aware server availability
+      return await mcpService.executeToolCall(toolCall, onProgress, false, sessionId, profileSnapshot?.mcpServerConfig)
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -259,6 +307,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
       conversationId,
       sessionId, // Pass session ID for progress routing
       onProgress, // Pass progress callback for SSE streaming
+      profileSnapshot, // Pass profile snapshot for session isolation
     )
 
     // Mark session as completed
@@ -272,6 +321,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
+
     throw error
   } finally {
     // Clean up agent state to ensure next session starts fresh
@@ -346,7 +396,7 @@ export async function startRemoteServer() {
     // When origin is ["*"] or includes "*", use true to reflect the request origin
     // This is needed because credentials: true doesn't work with literal "*"
     origin: corsOrigins.includes("*") ? true : corsOrigins,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     maxAge: 86400, // Cache preflight for 24 hours
@@ -427,6 +477,17 @@ export async function startRemoteServer() {
               model,
             },
           })
+
+          // Send push notification by default if tokens are registered
+          // Client can set send_push_notification: false to explicitly disable
+          const shouldSendPush = body.send_push_notification !== false && isPushEnabled()
+          if (shouldSendPush) {
+            const conversationTitle = prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt
+            // Fire and forget - don't block the response
+            sendMessageNotification(result.conversationId, conversationTitle, result.content).catch((err) => {
+              diagnosticsService.logWarning("remote-server", "Failed to send push notification", err)
+            })
+          }
         } catch (error: any) {
           // Send error event
           writeSSE({
@@ -453,6 +514,17 @@ export async function startRemoteServer() {
 
       console.log("[remote-server] Chat response:", { conversationId: result.conversationId, responseLength: result.content.length })
 
+      // Send push notification by default if tokens are registered
+      // Client can set send_push_notification: false to explicitly disable
+      const shouldSendPush = body.send_push_notification !== false && isPushEnabled()
+      if (shouldSendPush) {
+        const conversationTitle = prompt.length > 30 ? prompt.substring(0, 30) + "..." : prompt
+        // Fire and forget - don't block the response
+        sendMessageNotification(result.conversationId, conversationTitle, result.content).catch((err) => {
+          diagnosticsService.logWarning("remote-server", "Failed to send push notification", err)
+        })
+      }
+
       return reply.send({
         ...response,
         conversation_id: result.conversationId, // Include conversation_id for client to use in follow-ups
@@ -470,6 +542,751 @@ export async function startRemoteServer() {
       object: "list",
       data: [{ id: model, object: "model", owned_by: "system" }],
     })
+  })
+
+  // GET /v1/models/:providerId - Fetch available models for a provider
+  fastify.get("/v1/models/:providerId", async (req, reply) => {
+    try {
+      const params = req.params as { providerId: string }
+      const providerId = params.providerId
+
+      const validProviders = ["openai", "groq", "gemini"]
+      if (!validProviders.includes(providerId)) {
+        return reply.code(400).send({ error: `Invalid provider: ${providerId}. Valid providers: ${validProviders.join(", ")}` })
+      }
+
+      const { fetchAvailableModels } = await import("./models-service")
+      const models = await fetchAvailableModels(providerId)
+
+      return reply.send({
+        providerId,
+        models: models.map(m => ({
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          context_length: m.context_length,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to fetch models", error)
+      return reply.code(500).send({ error: error?.message || "Failed to fetch models" })
+    }
+  })
+
+  // ============================================
+  // Settings Management Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/profiles - List all profiles
+  fastify.get("/v1/profiles", async (_req, reply) => {
+    try {
+      const profiles = profileService.getProfiles()
+      const currentProfile = profileService.getCurrentProfile()
+      return reply.send({
+        profiles: profiles.map(p => ({
+          id: p.id,
+          name: p.name,
+          isDefault: p.isDefault,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        })),
+        currentProfileId: currentProfile?.id,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get profiles", error)
+      return reply.code(500).send({ error: "Failed to get profiles" })
+    }
+  })
+
+  // GET /v1/profiles/current - Get current profile details
+  fastify.get("/v1/profiles/current", async (_req, reply) => {
+    try {
+      const profile = profileService.getCurrentProfile()
+      if (!profile) {
+        return reply.code(404).send({ error: "No current profile set" })
+      }
+      return reply.send({
+        id: profile.id,
+        name: profile.name,
+        isDefault: profile.isDefault,
+        guidelines: profile.guidelines,
+        systemPrompt: profile.systemPrompt,
+        createdAt: profile.createdAt,
+        updatedAt: profile.updatedAt,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get current profile", error)
+      return reply.code(500).send({ error: "Failed to get current profile" })
+    }
+  })
+
+  // POST /v1/profiles/current - Set current profile
+  fastify.post("/v1/profiles/current", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const profileId = body?.profileId
+      if (!profileId || typeof profileId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid profileId" })
+      }
+      const profile = profileService.setCurrentProfile(profileId)
+      // Apply the profile's MCP configuration
+      mcpService.applyProfileMcpConfig(
+        profile.mcpServerConfig?.disabledServers,
+        profile.mcpServerConfig?.disabledTools,
+        profile.mcpServerConfig?.allServersDisabledByDefault,
+        profile.mcpServerConfig?.enabledServers
+      )
+      diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.name}`)
+      return reply.send({
+        success: true,
+        profile: {
+          id: profile.id,
+          name: profile.name,
+          isDefault: profile.isDefault,
+        },
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to set current profile", error)
+      // Return 404 if profile was not found, otherwise 500
+      const isNotFound = error?.message?.includes("not found")
+      return reply.code(isNotFound ? 404 : 500).send({ error: error?.message || "Failed to set current profile" })
+    }
+  })
+
+  // GET /v1/profiles/:id/export - Export a profile as JSON
+  fastify.get("/v1/profiles/:id/export", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const profileJson = profileService.exportProfile(params.id)
+      return reply.send({ profileJson })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to export profile", error)
+      const isNotFound = error?.message?.includes("not found")
+      return reply.code(isNotFound ? 404 : 500).send({ error: error?.message || "Failed to export profile" })
+    }
+  })
+
+  // POST /v1/profiles/import - Import a profile from JSON
+  fastify.post("/v1/profiles/import", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const profileJson = body?.profileJson
+      if (!profileJson || typeof profileJson !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid profileJson" })
+      }
+      const profile = profileService.importProfile(profileJson)
+      diagnosticsService.logInfo("remote-server", `Imported profile: ${profile.name}`)
+      return reply.send({
+        success: true,
+        profile: {
+          id: profile.id,
+          name: profile.name,
+          isDefault: profile.isDefault,
+        },
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to import profile", error)
+      // Return 400 for JSON/validation errors, 500 for server errors
+      const errorMessage = (error?.message ?? "").toLowerCase()
+      const isValidationError = error instanceof SyntaxError ||
+        errorMessage.includes("json") ||
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("missing")
+      return reply.code(isValidationError ? 400 : 500).send({ error: error?.message || "Failed to import profile" })
+    }
+  })
+
+  // GET /v1/mcp/servers - List MCP servers with status
+  fastify.get("/v1/mcp/servers", async (_req, reply) => {
+    try {
+      const serverStatus = mcpService.getServerStatus()
+      const servers = Object.entries(serverStatus)
+        // Filter out the built-in speakmcp-settings pseudo-server as it's not user-toggleable
+        .filter(([name]) => name !== "speakmcp-settings")
+        .map(([name, status]) => ({
+          name,
+          connected: status.connected,
+          toolCount: status.toolCount,
+          enabled: status.runtimeEnabled && !status.configDisabled,
+          runtimeEnabled: status.runtimeEnabled,
+          configDisabled: status.configDisabled,
+          error: status.error,
+        }))
+      return reply.send({ servers })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get MCP servers", error)
+      return reply.code(500).send({ error: "Failed to get MCP servers" })
+    }
+  })
+
+  // POST /v1/mcp/servers/:name/toggle - Toggle MCP server enabled/disabled
+  fastify.post("/v1/mcp/servers/:name/toggle", async (req, reply) => {
+    try {
+      const params = req.params as { name: string }
+      const body = req.body as any
+      const serverName = params.name
+      const enabled = body?.enabled
+
+      if (typeof enabled !== "boolean") {
+        return reply.code(400).send({ error: "Missing or invalid 'enabled' boolean" })
+      }
+
+      const success = mcpService.setServerRuntimeEnabled(serverName, enabled)
+      if (!success) {
+        return reply.code(404).send({ error: `Server '${serverName}' not found` })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Toggled MCP server ${serverName} to ${enabled ? "enabled" : "disabled"}`)
+      return reply.send({
+        success: true,
+        server: serverName,
+        enabled,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to toggle MCP server", error)
+      return reply.code(500).send({ error: error?.message || "Failed to toggle MCP server" })
+    }
+  })
+
+  // GET /v1/settings - Get relevant settings for mobile app
+  fastify.get("/v1/settings", async (_req, reply) => {
+    try {
+      const cfg = configStore.get()
+      const { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } = await import("../shared/index")
+      const builtInPresets = getBuiltInModelPresets()
+      const savedPresets = cfg.modelPresets || []
+
+      // Merge built-in presets with any saved overrides (e.g., edited baseUrl/name)
+      // and include custom (non-built-in) presets
+      const builtInIds = new Set(builtInPresets.map(p => p.id))
+      const mergedPresets = builtInPresets.map(builtIn => {
+        const savedOverride = savedPresets.find(p => p.id === builtIn.id)
+        if (savedOverride) {
+          // Apply saved overrides to built-in preset
+          return { ...builtIn, ...savedOverride }
+        }
+        return builtIn
+      })
+      // Filter custom presets by excluding any IDs that match built-in presets
+      // This prevents duplicates from older entries where isBuiltIn was unset
+      const customPresets = savedPresets.filter(p => !builtInIds.has(p.id))
+
+      return reply.send({
+        // Model settings
+        mcpToolsProviderId: cfg.mcpToolsProviderId || "openai",
+        mcpToolsOpenaiModel: cfg.mcpToolsOpenaiModel,
+        mcpToolsGroqModel: cfg.mcpToolsGroqModel,
+        mcpToolsGeminiModel: cfg.mcpToolsGeminiModel,
+        // OpenAI compatible preset settings
+        currentModelPresetId: cfg.currentModelPresetId || DEFAULT_MODEL_PRESET_ID,
+        availablePresets: [...mergedPresets, ...customPresets].map(p => ({
+          id: p.id,
+          name: p.name,
+          baseUrl: p.baseUrl,
+          isBuiltIn: p.isBuiltIn ?? false,
+        })),
+        // Feature toggles
+        transcriptPostProcessingEnabled: cfg.transcriptPostProcessingEnabled ?? true,
+        mcpRequireApprovalBeforeToolCall: cfg.mcpRequireApprovalBeforeToolCall ?? false,
+        ttsEnabled: cfg.ttsEnabled ?? true,
+        whatsappEnabled: cfg.whatsappEnabled ?? false,
+        // Agent settings
+        mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get settings", error)
+      return reply.code(500).send({ error: "Failed to get settings" })
+    }
+  })
+
+  // PATCH /v1/settings - Update settings
+  fastify.patch("/v1/settings", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const cfg = configStore.get()
+      const updates: Partial<typeof cfg> = {}
+
+      // Only allow updating specific settings
+      if (typeof body.transcriptPostProcessingEnabled === "boolean") {
+        updates.transcriptPostProcessingEnabled = body.transcriptPostProcessingEnabled
+      }
+      if (typeof body.mcpRequireApprovalBeforeToolCall === "boolean") {
+        updates.mcpRequireApprovalBeforeToolCall = body.mcpRequireApprovalBeforeToolCall
+      }
+      if (typeof body.ttsEnabled === "boolean") {
+        updates.ttsEnabled = body.ttsEnabled
+      }
+      if (typeof body.whatsappEnabled === "boolean") {
+        updates.whatsappEnabled = body.whatsappEnabled
+      }
+      if (typeof body.mcpMaxIterations === "number" && body.mcpMaxIterations >= 1 && body.mcpMaxIterations <= 100) {
+        // Coerce to integer to avoid surprising iteration counts with floats
+        updates.mcpMaxIterations = Math.floor(body.mcpMaxIterations)
+      }
+      // Model settings
+      const validProviders = ["openai", "groq", "gemini"]
+      if (typeof body.mcpToolsProviderId === "string" && validProviders.includes(body.mcpToolsProviderId)) {
+        updates.mcpToolsProviderId = body.mcpToolsProviderId as "openai" | "groq" | "gemini"
+      }
+      if (typeof body.mcpToolsOpenaiModel === "string") {
+        updates.mcpToolsOpenaiModel = body.mcpToolsOpenaiModel
+      }
+      if (typeof body.mcpToolsGroqModel === "string") {
+        updates.mcpToolsGroqModel = body.mcpToolsGroqModel
+      }
+      if (typeof body.mcpToolsGeminiModel === "string") {
+        updates.mcpToolsGeminiModel = body.mcpToolsGeminiModel
+      }
+      // OpenAI compatible preset - validate against known preset IDs
+      if (typeof body.currentModelPresetId === "string") {
+        const { getBuiltInModelPresets } = await import("../shared/index")
+        const builtInPresets = getBuiltInModelPresets()
+        const savedPresets = cfg.modelPresets || []
+        const builtInIds = new Set(builtInPresets.map(p => p.id))
+        const allValidIds = new Set([...builtInIds, ...savedPresets.filter(p => !builtInIds.has(p.id)).map(p => p.id)])
+
+        if (allValidIds.has(body.currentModelPresetId)) {
+          updates.currentModelPresetId = body.currentModelPresetId
+        }
+        // If preset ID is invalid, silently ignore to avoid breaking client
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return reply.code(400).send({ error: "No valid settings to update" })
+      }
+
+      configStore.save({ ...cfg, ...updates })
+      diagnosticsService.logInfo("remote-server", `Updated settings: ${Object.keys(updates).join(", ")}`)
+
+      // Trigger WhatsApp MCP server lifecycle if whatsappEnabled changed
+      if (updates.whatsappEnabled !== undefined) {
+        try {
+          const prevEnabled = cfg.whatsappEnabled ?? false
+          await handleWhatsAppToggle(prevEnabled, updates.whatsappEnabled)
+        } catch (_e) {
+          // lifecycle is best-effort
+        }
+      }
+
+      return reply.send({
+        success: true,
+        updated: Object.keys(updates),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to update settings", error)
+      return reply.code(500).send({ error: error?.message || "Failed to update settings" })
+    }
+  })
+
+  // ============================================
+  // Conversation Recovery Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/conversations/:id - Fetch conversation state for recovery
+  fastify.get("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      // Validate conversation ID format to prevent path traversal attacks
+      // Valid IDs match pattern: conv_${timestamp}_${random} where random is alphanumeric
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
+      const conversation = await conversationService.loadConversation(conversationId)
+
+      if (!conversation) {
+        return reply.code(404).send({ error: "Conversation not found" })
+      }
+
+      diagnosticsService.logInfo("remote-server", `Fetched conversation ${conversationId} for recovery`)
+
+      return reply.send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+        metadata: conversation.metadata,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to fetch conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to fetch conversation" })
+    }
+  })
+
+  // ============================================
+  // Push Notification Endpoints (for mobile app)
+  // ============================================
+
+  // POST /v1/push/register - Register a push notification token
+  fastify.post("/v1/push/register", async (req, reply) => {
+    try {
+      const body = req.body as { token?: string; type?: string; platform?: string; deviceId?: string }
+
+      if (!body.token || typeof body.token !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid token" })
+      }
+
+      if (!body.platform || !["ios", "android"].includes(body.platform)) {
+        return reply.code(400).send({ error: "Invalid platform. Must be 'ios' or 'android'" })
+      }
+
+      const cfg = configStore.get()
+      const existingTokens = cfg.pushNotificationTokens || []
+
+      // Check if token already exists
+      const existingIndex = existingTokens.findIndex(t => t.token === body.token)
+      const newToken = {
+        token: body.token,
+        type: "expo" as const,
+        platform: body.platform as "ios" | "android",
+        registeredAt: Date.now(),
+        deviceId: body.deviceId,
+      }
+
+      let updatedTokens: typeof existingTokens
+      if (existingIndex >= 0) {
+        // Update existing token
+        updatedTokens = [...existingTokens]
+        updatedTokens[existingIndex] = newToken
+        diagnosticsService.logInfo("remote-server", `Updated push notification token for ${body.platform}`)
+      } else {
+        // Add new token
+        updatedTokens = [...existingTokens, newToken]
+        diagnosticsService.logInfo("remote-server", `Registered new push notification token for ${body.platform}`)
+      }
+
+      configStore.save({ ...cfg, pushNotificationTokens: updatedTokens })
+
+      return reply.send({
+        success: true,
+        message: existingIndex >= 0 ? "Token updated" : "Token registered",
+        tokenCount: updatedTokens.length,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to register push token", error)
+      return reply.code(500).send({ error: error?.message || "Failed to register push token" })
+    }
+  })
+
+  // POST /v1/push/unregister - Unregister a push notification token
+  fastify.post("/v1/push/unregister", async (req, reply) => {
+    try {
+      const body = req.body as { token?: string }
+
+      if (!body.token || typeof body.token !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid token" })
+      }
+
+      const cfg = configStore.get()
+      const existingTokens = cfg.pushNotificationTokens || []
+
+      const filteredTokens = existingTokens.filter(t => t.token !== body.token)
+      const removed = existingTokens.length > filteredTokens.length
+
+      if (removed) {
+        configStore.save({ ...cfg, pushNotificationTokens: filteredTokens })
+        diagnosticsService.logInfo("remote-server", "Unregistered push notification token")
+      }
+
+      return reply.send({
+        success: true,
+        message: removed ? "Token unregistered" : "Token not found",
+        tokenCount: filteredTokens.length,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to unregister push token", error)
+      return reply.code(500).send({ error: error?.message || "Failed to unregister push token" })
+    }
+  })
+
+  // GET /v1/push/status - Get push notification status
+  fastify.get("/v1/push/status", async (_req, reply) => {
+    try {
+      const cfg = configStore.get()
+      const tokens = cfg.pushNotificationTokens || []
+
+      return reply.send({
+        enabled: tokens.length > 0,
+        tokenCount: tokens.length,
+        platforms: [...new Set(tokens.map(t => t.platform))],
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get push status", error)
+      return reply.code(500).send({ error: error?.message || "Failed to get push status" })
+    }
+  })
+
+  // POST /v1/push/clear-badge - Clear badge count for a token (called when mobile app opens)
+  fastify.post("/v1/push/clear-badge", async (req, reply) => {
+    try {
+      const body = req.body as { token?: string }
+
+      if (!body.token || typeof body.token !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid token" })
+      }
+
+      clearBadgeCount(body.token)
+
+      return reply.send({ success: true })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to clear badge count", error)
+      return reply.code(500).send({ error: error?.message || "Failed to clear badge count" })
+    }
+  })
+
+  // Helper function to validate message objects
+  const validateMessages = (messages: Array<{ role: string; content: unknown }>): string | null => {
+    const validRoles = ["user", "assistant", "tool"]
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      if (msg === null || msg === undefined || typeof msg !== "object") {
+        return `Invalid message ${i}: expected an object`
+      }
+      if (!msg.role || !validRoles.includes(msg.role)) {
+        return `Invalid role in message ${i}: expected one of ${validRoles.join(", ")}`
+      }
+      if (typeof msg.content !== "string") {
+        return `Invalid content in message ${i}: expected string`
+      }
+    }
+    return null
+  }
+
+  // GET /v1/conversations - List all conversations
+  fastify.get("/v1/conversations", async (_req, reply) => {
+    try {
+      const conversations = await conversationService.getConversationHistory()
+      diagnosticsService.logInfo("remote-server", `Listed ${conversations.length} conversations`)
+      return reply.send({ conversations })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to list conversations", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list conversations" })
+    }
+  })
+
+  // POST /v1/conversations - Create a new conversation from mobile data
+  fastify.post("/v1/conversations", async (req, reply) => {
+    try {
+      // Validate request body is a valid object
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return reply.code(400).send({ error: "Request body must be a JSON object" })
+      }
+
+      const body = req.body as {
+        title?: string
+        messages: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          timestamp?: number
+          toolCalls?: Array<{ name: string; arguments: any }>
+          toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        }>
+        createdAt?: number
+        updatedAt?: number
+      }
+
+      if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+        return reply.code(400).send({ error: "Missing or invalid messages array" })
+      }
+
+      // Validate each message object
+      const validationError = validateMessages(body.messages)
+      if (validationError) {
+        return reply.code(400).send({ error: validationError })
+      }
+
+      const conversationId = conversationService.generateConversationIdPublic()
+      const now = Date.now()
+
+      // Generate title from first message if not provided
+      const firstMessageContent = body.messages[0]?.content || ""
+      const title = body.title || (firstMessageContent.length > 50
+        ? `${firstMessageContent.slice(0, 50)}...`
+        : firstMessageContent || "New Conversation")
+
+      // Convert input messages to ConversationMessage format with IDs
+      const messages = body.messages.map((msg, index) => ({
+        id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp ?? now,
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+      }))
+
+      const conversation = {
+        id: conversationId,
+        title,
+        createdAt: body.createdAt ?? now,
+        updatedAt: body.updatedAt ?? now,
+        messages,
+      }
+
+      await conversationService.saveConversation(conversation, true)
+      diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} with ${messages.length} messages`)
+
+      return reply.code(201).send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to create conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to create conversation" })
+    }
+  })
+
+  // PUT /v1/conversations/:id - Update an existing conversation
+  fastify.put("/v1/conversations/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      // Validate conversation ID format to prevent path traversal attacks
+      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
+      }
+      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      }
+
+      // Validate request body is a valid object
+      if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+        return reply.code(400).send({ error: "Request body must be a JSON object" })
+      }
+
+      const body = req.body as {
+        title?: string
+        messages?: Array<{
+          role: "user" | "assistant" | "tool"
+          content: string
+          timestamp?: number
+          toolCalls?: Array<{ name: string; arguments: any }>
+          toolResults?: Array<{ success: boolean; content: string; error?: string }>
+        }>
+        updatedAt?: number
+      }
+
+      const now = Date.now()
+      let conversation = await conversationService.loadConversation(conversationId)
+
+      if (!conversation) {
+        // Create new conversation with the provided ID
+        if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+          return reply.code(400).send({ error: "Conversation not found and no messages provided to create it" })
+        }
+
+        // Validate each message object
+        const validationError = validateMessages(body.messages)
+        if (validationError) {
+          return reply.code(400).send({ error: validationError })
+        }
+
+        const firstMessageContent = body.messages[0]?.content || ""
+        const title = body.title || (firstMessageContent.length > 50
+          ? `${firstMessageContent.slice(0, 50)}...`
+          : firstMessageContent || "New Conversation")
+
+        const messages = body.messages.map((msg, index) => ({
+          id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp ?? now,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        }))
+
+        conversation = {
+          id: conversationId,
+          title,
+          createdAt: now,
+          updatedAt: body.updatedAt ?? now,
+          messages,
+        }
+
+        await conversationService.saveConversation(conversation, true)
+        diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} via PUT with ${messages.length} messages`)
+      } else {
+        // Update existing conversation
+        if (body.title !== undefined) {
+          conversation.title = body.title
+        }
+
+        if (body.messages !== undefined && !Array.isArray(body.messages)) {
+          return reply.code(400).send({ error: "messages field must be an array" })
+        }
+
+        if (body.messages && Array.isArray(body.messages)) {
+          // Validate each message object
+          const validationError = validateMessages(body.messages)
+          if (validationError) {
+            return reply.code(400).send({ error: validationError })
+          }
+
+          conversation.messages = body.messages.map((msg, index) => ({
+            id: `msg_${now}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp ?? now,
+            toolCalls: msg.toolCalls,
+            toolResults: msg.toolResults,
+          }))
+        }
+
+        conversation.updatedAt = body.updatedAt ?? now
+
+        await conversationService.saveConversation(conversation, true)
+        diagnosticsService.logInfo("remote-server", `Updated conversation ${conversationId}`)
+      }
+
+      return reply.send({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        messages: conversation.messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          toolCalls: msg.toolCalls,
+          toolResults: msg.toolResults,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to update conversation", error)
+      return reply.code(500).send({ error: error?.message || "Failed to update conversation" })
+    }
   })
 
   // Kill switch endpoint - emergency stop all agent sessions
@@ -500,6 +1317,68 @@ export async function startRemoteServer() {
       return reply.code(500).send({
         success: false,
         error: error?.message || "Emergency stop failed",
+      })
+    }
+  })
+
+  // MCP Protocol Endpoints - Expose SpeakMCP builtin tools to external agents
+  // These endpoints implement a simplified MCP-over-HTTP protocol
+
+  // POST /mcp/tools/list - List all available builtin tools
+  fastify.post("/mcp/tools/list", async (_req, reply) => {
+    try {
+      const { builtinTools } = await import("./builtin-tools")
+
+      // Convert to MCP format
+      const tools = builtinTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      }))
+
+      return reply.send({
+        tools,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "MCP tools/list error", error)
+      return reply.code(500).send({ error: error?.message || "Failed to list tools" })
+    }
+  })
+
+  // POST /mcp/tools/call - Execute a builtin tool
+  fastify.post("/mcp/tools/call", async (req, reply) => {
+    try {
+      const body = req.body as any
+      const { name, arguments: args } = body
+
+      if (!name || typeof name !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid 'name' parameter" })
+      }
+
+      const { executeBuiltinTool, isBuiltinTool } = await import("./builtin-tools")
+
+      // Validate that this is a builtin tool
+      if (!isBuiltinTool(name)) {
+        return reply.code(400).send({ error: `Unknown builtin tool: ${name}` })
+      }
+
+      // Execute the tool
+      const result = await executeBuiltinTool(name, args || {})
+
+      if (!result) {
+        return reply.code(500).send({ error: "Tool execution returned null" })
+      }
+
+      // Return in MCP format
+      return reply.send({
+        content: result.content,
+        isError: result.isError,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "MCP tools/call error", error)
+      return reply.code(500).send({
+        content: [{ type: "text", text: error?.message || "Tool execution failed" }],
+        isError: true,
       })
     }
   })

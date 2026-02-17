@@ -23,7 +23,6 @@ import { toast } from "sonner"
 import { Plus, Pencil, Trash2, Key, Globe, Bot, FileText, Settings2 } from "lucide-react"
 import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 import { PresetModelSelector } from "./preset-model-selector"
-import { ModelSelector } from "./model-selector"
 
 export function ModelPresetManager() {
   const configQuery = useConfigQuery()
@@ -37,6 +36,7 @@ export function ModelPresetManager() {
     apiKey: "",
     mcpToolsModel: "",
     transcriptProcessingModel: "",
+    summarizationModel: "",
   })
 
   const config = configQuery.data
@@ -51,7 +51,13 @@ export function ModelPresetManager() {
       const saved = custom.find(c => c.id === preset.id)
       if (saved) {
         // Merge all saved properties (apiKey, mcpToolsModel, transcriptProcessingModel, etc.)
-        return { ...preset, ...saved }
+        const merged = { ...preset, ...saved }
+        // For builtin-openai, fallback to legacy openaiApiKey if saved preset has empty apiKey
+        // This handles the case where saveModelWithPreset persisted a preset with apiKey: ''
+        if (preset.id === DEFAULT_MODEL_PRESET_ID && !merged.apiKey && config?.openaiApiKey) {
+          merged.apiKey = config.openaiApiKey
+        }
+        return merged
       }
       // For builtin-openai, seed with legacy openaiApiKey if no saved preset exists
       if (preset.id === DEFAULT_MODEL_PRESET_ID && config?.openaiApiKey) {
@@ -77,8 +83,8 @@ export function ModelPresetManager() {
   // Save model selection to the current preset (called when user changes model)
   // Save model selection to both global config AND the current preset in a single save
   const saveModelWithPreset = useCallback((
-    modelType: 'mcpToolsModel' | 'transcriptProcessingModel',
-    globalConfigKey: 'mcpToolsOpenaiModel' | 'transcriptPostProcessingOpenaiModel',
+    modelType: 'mcpToolsModel' | 'transcriptProcessingModel' | 'summarizationModel',
+    globalConfigKey: 'mcpToolsOpenaiModel' | 'transcriptPostProcessingOpenaiModel' | 'dualModelWeakModelName',
     modelId: string
   ) => {
     if (!currentPresetId || !config) return
@@ -140,6 +146,10 @@ export function ModelPresetManager() {
       if (preset.transcriptProcessingModel) {
         updates.transcriptPostProcessingOpenaiModel = preset.transcriptProcessingModel
       }
+      // Apply summarization model if set on the preset (dual-model mode)
+      if (preset.summarizationModel) {
+        updates.dualModelWeakModelName = preset.summarizationModel
+      }
       saveConfig(updates)
       toast.success(`Switched to preset: ${preset.name}`)
     }
@@ -166,6 +176,7 @@ export function ModelPresetManager() {
       updatedAt: Date.now(),
       mcpToolsModel: newPreset.mcpToolsModel || "",
       transcriptProcessingModel: newPreset.transcriptProcessingModel || "",
+      summarizationModel: newPreset.summarizationModel || "",
     }
 
     const existingPresets = config?.modelPresets || []
@@ -174,7 +185,7 @@ export function ModelPresetManager() {
     })
 
     setIsCreateDialogOpen(false)
-    setNewPreset({ name: "", baseUrl: "", apiKey: "", mcpToolsModel: "", transcriptProcessingModel: "" })
+    setNewPreset({ name: "", baseUrl: "", apiKey: "", mcpToolsModel: "", transcriptProcessingModel: "", summarizationModel: "" })
     toast.success("Preset created successfully")
   }
 
@@ -294,8 +305,10 @@ export function ModelPresetManager() {
 
           {/* Inline model selectors - changes are auto-saved to preset */}
           <div className="space-y-3">
-            <ModelSelector
-              providerId="openai"
+            <PresetModelSelector
+              presetId={currentPreset.id}
+              baseUrl={currentPreset.baseUrl}
+              apiKey={currentPreset.apiKey}
               value={config?.mcpToolsOpenaiModel || ""}
               onValueChange={(value) => {
                 saveModelWithPreset('mcpToolsModel', 'mcpToolsOpenaiModel', value)
@@ -303,8 +316,10 @@ export function ModelPresetManager() {
               label="Agent/MCP Tools Model"
               placeholder="Select model"
             />
-            <ModelSelector
-              providerId="openai"
+            <PresetModelSelector
+              presetId={currentPreset.id}
+              baseUrl={currentPreset.baseUrl}
+              apiKey={currentPreset.apiKey}
               value={config?.transcriptPostProcessingOpenaiModel || ""}
               onValueChange={(value) => {
                 saveModelWithPreset('transcriptProcessingModel', 'transcriptPostProcessingOpenaiModel', value)
@@ -401,6 +416,18 @@ export function ModelPresetManager() {
                     }
                     label="Transcript Processing Model"
                     placeholder="Select model for transcripts"
+                  />
+
+                  <PresetModelSelector
+                    presetId="new-preset"
+                    baseUrl={newPreset.baseUrl || ""}
+                    apiKey={newPreset.apiKey || ""}
+                    value={newPreset.summarizationModel || ""}
+                    onValueChange={(value) =>
+                      setNewPreset({ ...newPreset, summarizationModel: value })
+                    }
+                    label="Summarization Model"
+                    placeholder="Select model for dual-model summarization"
                   />
                 </div>
               </div>
@@ -501,6 +528,18 @@ export function ModelPresetManager() {
                     }
                     label="Transcript Processing Model"
                     placeholder="Select model for transcripts"
+                  />
+
+                  <PresetModelSelector
+                    presetId={editingPreset.id}
+                    baseUrl={editingPreset.baseUrl}
+                    apiKey={editingPreset.apiKey}
+                    value={editingPreset.summarizationModel || ""}
+                    onValueChange={(value) =>
+                      setEditingPreset({ ...editingPreset, summarizationModel: value })
+                    }
+                    label="Summarization Model"
+                    placeholder="Select model for dual-model summarization"
                   />
                 </div>
               </div>

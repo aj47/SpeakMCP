@@ -31,7 +31,10 @@ import {
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { ExternalLink, AlertCircle } from "lucide-react"
 import { useState, useCallback, useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { useNavigate } from "react-router-dom"
 import { Config } from "@shared/types"
 import { KeyRecorder } from "@renderer/components/key-recorder"
 import {
@@ -41,8 +44,20 @@ import {
 
 export function Component() {
   const configQuery = useConfigQuery()
+  const navigate = useNavigate()
 
   const saveConfigMutation = useSaveConfigMutation()
+
+  // Check if langfuse package is installed
+  const langfuseInstalledQuery = useQuery({
+    queryKey: ["langfuseInstalled"],
+    queryFn: async () => {
+      return window.electron.ipcRenderer.invoke("isLangfuseInstalled")
+    },
+    staleTime: Infinity, // Only check once per session
+  })
+
+  const isLangfuseInstalled = langfuseInstalledQuery.data ?? true // Default to true while loading
 
   const saveConfig = useCallback(
     (config: Partial<Config>) => {
@@ -134,6 +149,23 @@ export function Component() {
               }}
             />
           </Control>
+
+          <Control label={<ControlLabel label="Streamer Mode" tooltip="Hide sensitive information (phone numbers, QR codes, API keys) when streaming or sharing your screen" />} className="px-3">
+            <Switch
+              defaultChecked={configQuery.data.streamerModeEnabled ?? false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  streamerModeEnabled: value,
+                })
+              }}
+            />
+          </Control>
+          {configQuery.data.streamerModeEnabled && (
+            <div className="px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <span className="i-mingcute-eye-off-line h-4 w-4" />
+              <span>Streamer Mode is active - sensitive information is hidden</span>
+            </div>
+          )}
         </ControlGroup>
 
         <ControlGroup title="Appearance">
@@ -408,7 +440,7 @@ export function Component() {
             <div className="space-y-2">
               <Select
                 value={configQuery.data?.mcpToolsShortcut || "hold-ctrl-alt"}
-                onValueChange={(value: "hold-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
+                onValueChange={(value: "hold-ctrl-alt" | "toggle-ctrl-alt" | "ctrl-alt-slash" | "custom") => {
                   saveConfig({ mcpToolsShortcut: value })
                 }}
               >
@@ -417,6 +449,7 @@ export function Component() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="hold-ctrl-alt">Hold Ctrl+Alt</SelectItem>
+                  <SelectItem value="toggle-ctrl-alt">Toggle Ctrl+Alt</SelectItem>
                   <SelectItem value="ctrl-alt-slash">Ctrl+Alt+/</SelectItem>
                   <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>
@@ -727,10 +760,103 @@ export function Component() {
             />
           </Control>
 
+          <Control label={<ControlLabel label="Hide Panel When Main App Focused" tooltip="When enabled, the floating panel automatically hides when the main SpeakMCP window is focused. The panel reappears when the main window loses focus." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.hidePanelWhenMainFocused !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  hidePanelWhenMainFocused: value,
+                })
+              }}
+            />
+          </Control>
+
+        </ControlGroup>
+
+        {/* WhatsApp Integration */}
+        <ControlGroup
+          title="WhatsApp Integration"
+          endDescription={(
+            <div className="break-words whitespace-normal">
+              Enable WhatsApp messaging through SpeakMCP.{" "}
+              <a href="/settings/whatsapp" className="underline">Configure WhatsApp settings</a>.
+            </div>
+          )}
+        >
+          <Control label={<ControlLabel label="Enable WhatsApp" tooltip="When enabled, allows sending and receiving WhatsApp messages through SpeakMCP" />} className="px-3">
+            <Switch
+              checked={configQuery.data?.whatsappEnabled ?? false}
+              onCheckedChange={(value) => saveConfig({ whatsappEnabled: value })}
+            />
+          </Control>
         </ControlGroup>
 
         {/* Agent Settings */}
         <ControlGroup title="Agent Settings">
+          {/* Main Agent Mode Selection */}
+          <Control label={<ControlLabel label="Main Agent Mode" tooltip="Choose how the main agent processes your requests. API mode uses external LLM APIs (OpenAI, Groq, Gemini). ACP mode routes prompts to a configured ACP agent like Claude Code." />} className="px-3">
+            <Select
+              value={configQuery.data?.mainAgentMode || "api"}
+              onValueChange={(value: "api" | "acp") => {
+                saveConfig({ mainAgentMode: value })
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="api">API (OpenAI, Groq, Gemini)</SelectItem>
+                <SelectItem value="acp">ACP Agent</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
+
+          {configQuery.data?.mainAgentMode === "acp" && (
+            <>
+              <Control label={<ControlLabel label="ACP Agent" tooltip="Select which configured ACP agent to use as the main agent. The agent must be configured in the ACP Agents settings page." />} className="px-3">
+                <Select
+                  value={configQuery.data?.mainAgentName || ""}
+                  onValueChange={(value: string) => {
+                    saveConfig({ mainAgentName: value })
+                  }}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select an agent..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(configQuery.data?.acpAgents || [])
+                      .filter(agent => agent.enabled !== false)
+                      .map(agent => (
+                        <SelectItem key={agent.name} value={agent.name}>
+                          {agent.displayName || agent.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              {configQuery.data?.mainAgentName && (
+                <div className="px-3 py-2 text-sm text-muted-foreground bg-muted/30 rounded-md mx-3 mb-2">
+                  <span className="font-medium">Note:</span> When using ACP mode, the agent will use its own MCP tools and LLM, not SpeakMCP's configured providers and tools.
+                </div>
+              )}
+
+              <Control label={<ControlLabel label="Inject SpeakMCP Tools" tooltip="When enabled, SpeakMCP's builtin tools (delegation, settings management) are injected into ACP agent sessions. This allows the ACP agent to delegate tasks to other agents. Requires Remote Server to be enabled." />} className="px-3">
+                <Switch
+                  checked={configQuery.data?.acpInjectBuiltinTools !== false}
+                  disabled={!configQuery.data?.remoteServerEnabled}
+                  onCheckedChange={(value) => saveConfig({ acpInjectBuiltinTools: value })}
+                />
+              </Control>
+              {!configQuery.data?.remoteServerEnabled && (
+                <div className="px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2 mx-3 mb-2">
+                  <span className="i-mingcute-warning-line h-4 w-4" />
+                  <span>Enable Remote Server in settings to use tool injection</span>
+                </div>
+              )}
+            </>
+          )}
+
           <Control label={<ControlLabel label="Message Queuing" tooltip="Allow queueing messages while the agent is processing. Messages will be processed in order after the current task completes." />} className="px-3">
             <Switch
               checked={configQuery.data?.mcpMessageQueueEnabled ?? true}
@@ -757,6 +883,38 @@ export function Component() {
               onCheckedChange={(value) => saveConfig({ mcpFinalSummaryEnabled: value })}
             />
           </Control>
+
+          <Control label={<ControlLabel label="Enable Memory System" tooltip="When disabled, all memory features are turned off: the save_memory tool, memory injection, auto-save, and the Memories page." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.memoriesEnabled !== false}
+              onCheckedChange={(value) => saveConfig({ memoriesEnabled: value })}
+            />
+          </Control>
+
+          {configQuery.data?.memoriesEnabled !== false && (
+            <Control label={<ControlLabel label="Inject Memories" tooltip="Include saved memories in agent context. Memories will be added to the system prompt." />} className="px-3 pl-6">
+              <Switch
+                checked={configQuery.data?.dualModelInjectMemories ?? false}
+                onCheckedChange={(value) => saveConfig({ dualModelInjectMemories: value })}
+              />
+            </Control>
+          )}
+
+          <Control label={<ControlLabel label="Enable Summarization" tooltip="When enabled, a separate model will generate summaries of each agent step for the UI. Configure the summarization model in Models settings." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.dualModelEnabled ?? false}
+              onCheckedChange={(value) => saveConfig({ dualModelEnabled: value })}
+            />
+          </Control>
+
+          {configQuery.data?.dualModelEnabled && configQuery.data?.memoriesEnabled !== false && (
+            <Control label={<ControlLabel label="Auto-save Important Summaries" tooltip="Automatically save high and critical importance summaries to memory." />} className="px-3 pl-6">
+              <Switch
+                checked={configQuery.data?.dualModelAutoSaveImportant ?? false}
+                onCheckedChange={(value) => saveConfig({ dualModelAutoSaveImportant: value })}
+              />
+            </Control>
+          )}
 
           <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
             <Input
@@ -812,10 +970,132 @@ export function Component() {
           </Control>
         </ControlGroup>
 
+        {/* Langfuse Observability */}
+        <ControlGroup
+          title="Langfuse Observability"
+          endDescription={(
+            <div className="break-words whitespace-normal">
+              <a
+                href="https://langfuse.com"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline inline-flex items-center gap-1"
+              >
+                Langfuse
+                <ExternalLink className="h-3 w-3" />
+              </a>{" "}
+              is an open-source LLM observability platform. Enable this to trace LLM calls, agent sessions, and tool executions for debugging and monitoring.
+            </div>
+          )}
+        >
+          {/* Show warning if langfuse package is not installed */}
+          {!isLangfuseInstalled && (
+            <div className="mx-3 mb-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-600 dark:text-amber-400">
+                    Langfuse package not installed
+                  </p>
+                  <p className="text-muted-foreground mt-1">
+                    Langfuse is an optional dependency. To enable observability features, install it by running:
+                  </p>
+                  <code className="mt-2 block bg-muted px-2 py-1 rounded text-xs font-mono">
+                    pnpm add langfuse
+                  </code>
+                  <p className="text-muted-foreground mt-2 text-xs">
+                    After installing, restart the app to enable Langfuse integration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Control label="Enable Langfuse Tracing" className="px-3">
+            <Switch
+              checked={configQuery.data?.langfuseEnabled ?? false}
+              disabled={!isLangfuseInstalled}
+              onCheckedChange={(value) => {
+                saveConfig({ langfuseEnabled: value })
+              }}
+            />
+          </Control>
+
+          {configQuery.data?.langfuseEnabled && (
+            <>
+              <Control label={<ControlLabel label="Public Key" tooltip="Your Langfuse project's public key" />} className="px-3">
+                <Input
+                  type="text"
+                  value={configQuery.data?.langfusePublicKey ?? ""}
+                  onChange={(e) => saveConfig({ langfusePublicKey: e.currentTarget.value || undefined })}
+                  placeholder="pk-lf-..."
+                  className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
+                />
+              </Control>
+
+              <Control label={<ControlLabel label="Secret Key" tooltip="Your Langfuse project's secret key" />} className="px-3">
+                <Input
+                  type="password"
+                  value={configQuery.data?.langfuseSecretKey ?? ""}
+                  onChange={(e) => saveConfig({ langfuseSecretKey: e.currentTarget.value || undefined })}
+                  placeholder="sk-lf-..."
+                  className="w-full sm:w-[360px] max-w-full min-w-0 font-mono text-xs"
+                />
+              </Control>
+
+              <Control label={<ControlLabel label="Base URL" tooltip="Langfuse API endpoint. Leave empty for Langfuse Cloud (cloud.langfuse.com)" />} className="px-3">
+                <Input
+                  type="text"
+                  value={configQuery.data?.langfuseBaseUrl ?? ""}
+                  onChange={(e) => saveConfig({ langfuseBaseUrl: e.currentTarget.value || undefined })}
+                  placeholder="https://cloud.langfuse.com (default)"
+                  className="w-full sm:w-[360px] max-w-full min-w-0"
+                />
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Use this for self-hosted Langfuse instances. Leave empty for Langfuse Cloud.
+                </div>
+              </Control>
+
+              {/* Status indicator */}
+              {configQuery.data?.langfusePublicKey && configQuery.data?.langfuseSecretKey && (
+                <Control label="Status" className="px-3">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-sm text-green-600 dark:text-green-400">Configured</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Traces will be sent to Langfuse for each agent session.
+                  </div>
+                </Control>
+              )}
+
+              {(!configQuery.data?.langfusePublicKey || !configQuery.data?.langfuseSecretKey) && (
+                <div className="px-3 py-2">
+                  <div className="text-sm text-amber-600 dark:text-amber-400">
+                    Enter both Public Key and Secret Key to enable tracing.
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </ControlGroup>
+
         {/* About Section */}
         <ControlGroup title="About">
           <Control label="Version" className="px-3">
             <div className="text-sm">{process.env.APP_VERSION}</div>
+          </Control>
+          <Control label="Onboarding" className="px-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                saveConfig({ onboardingCompleted: false })
+                navigate("/onboarding")
+              }}
+            >
+              Re-run Onboarding
+            </Button>
           </Control>
         </ControlGroup>
       </div>

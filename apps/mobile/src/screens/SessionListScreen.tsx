@@ -5,7 +5,10 @@ import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
 import { useConnectionManager } from '../store/connectionManager';
-import { SessionListItem } from '../types/session';
+import { useTunnelConnection } from '../store/tunnelConnection';
+import { useProfile } from '../store/profile';
+import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
+import { SessionListItem, isStubSession } from '../types/session';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
 const lightSpinner = require('../../assets/light-spinner.gif');
@@ -18,21 +21,54 @@ export default function SessionListScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const connectionManager = useConnectionManager();
+  const { connectionInfo } = useTunnelConnection();
+  const { currentProfile } = useProfile();
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
+      headerTitle: () => (
+        <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '600', color: theme.colors.foreground }}>Chats</Text>
+          {currentProfile && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.colors.primary + '33',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 10,
+              marginTop: 2,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                color: theme.colors.primary,
+                fontWeight: '500',
+              }}>
+                {currentProfile.name}
+              </Text>
+            </View>
+          )}
+        </View>
+      ),
       headerRight: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Settings')}
-          style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-        >
-          <Text style={{ fontSize: 20, color: theme.colors.foreground }}>⚙️</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ConnectionStatusIndicator
+            state={connectionInfo.state}
+            retryCount={connectionInfo.retryCount}
+            compact
+          />
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Text style={{ fontSize: 20, color: theme.colors.foreground }}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, connectionInfo.state, connectionInfo.retryCount, currentProfile]);
   const insets = useSafeAreaInsets();
   const sessionStore = useSessionContext();
   const sessions = sessionStore.getSessionList();
@@ -121,9 +157,19 @@ export default function SessionListScreen({ navigation }: Props) {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  // Build a set of stub session IDs for display purposes
+  const stubSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of sessionStore.sessions) {
+      if (isStubSession(s)) ids.add(s.id);
+    }
+    return ids;
+  }, [sessionStore.sessions]);
+
   const renderSession = ({ item }: { item: SessionListItem }) => {
     const isActive = item.id === sessionStore.currentSessionId;
-    
+    const isStub = stubSessionIds.has(item.id);
+
     return (
       <TouchableOpacity
         style={[styles.sessionItem, isActive && styles.sessionItemActive]}
@@ -131,9 +177,14 @@ export default function SessionListScreen({ navigation }: Props) {
         onLongPress={() => handleDeleteSession(item)}
       >
         <View style={styles.sessionHeader}>
-          <Text style={styles.sessionTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+            {isStub && (
+              <Text style={{ fontSize: 12, marginRight: 4 }}>💻</Text>
+            )}
+            <Text style={styles.sessionTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+          </View>
           <Text style={styles.sessionDate}>{formatDate(item.updatedAt)}</Text>
         </View>
         <Text style={styles.sessionPreview} numberOfLines={2}>
@@ -141,6 +192,7 @@ export default function SessionListScreen({ navigation }: Props) {
         </Text>
         <Text style={styles.sessionMeta}>
           {item.messageCount} message{item.messageCount !== 1 ? 's' : ''}
+          {isStub ? ' · from desktop' : ''}
         </Text>
       </TouchableOpacity>
     );
@@ -161,11 +213,20 @@ export default function SessionListScreen({ navigation }: Props) {
         <TouchableOpacity style={styles.newButton} onPress={handleCreateSession}>
           <Text style={styles.newButtonText}>+ New Chat</Text>
         </TouchableOpacity>
-        {sessions.length > 0 && (
-          <TouchableOpacity style={styles.clearButton} onPress={handleClearAll}>
-            <Text style={styles.clearButtonText}>Clear All</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {sessionStore.isSyncing && (
+            <Image
+              source={isDark ? darkSpinner : lightSpinner}
+              style={{ width: 16, height: 16, marginRight: 8 }}
+              resizeMode="contain"
+            />
+          )}
+          {sessions.length > 0 && (
+            <TouchableOpacity style={styles.clearButton} onPress={handleClearAll}>
+              <Text style={styles.clearButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <FlatList

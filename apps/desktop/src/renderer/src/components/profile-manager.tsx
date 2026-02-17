@@ -133,7 +133,7 @@ export function ProfileManager({
     },
     onSuccess: (success: boolean) => {
       if (success) {
-        toast.success("Profile exported successfully")
+        toast.success("Profile exported - review file before sharing (may contain sensitive data in args/URLs)")
       }
     },
     onError: (error: Error) => {
@@ -149,7 +149,7 @@ export function ProfileManager({
     onSuccess: (profile: Profile | null) => {
       if (profile) {
         queryClient.invalidateQueries({ queryKey: ["profiles"] })
-        toast.success(`Profile "${profile.name}" imported successfully`)
+        toast.success(`Profile "${profile.name}" imported - configure MCP server credentials as needed`)
       }
     },
     onError: (error: Error) => {

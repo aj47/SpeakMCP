@@ -3,13 +3,18 @@ import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
-// Context to share container width and gap with tile wrappers
+// Context to share container width, gap, and reset key with tile wrappers
 interface SessionGridContextValue {
   containerWidth: number
   gap: number
+  resetKey: number
 }
 
-const SessionGridContext = createContext<SessionGridContextValue>({ containerWidth: 0, gap: 16 })
+const SessionGridContext = createContext<SessionGridContextValue>({
+  containerWidth: 0,
+  gap: 16,
+  resetKey: 0,
+})
 
 export function useSessionGridContext() {
   return useContext(SessionGridContext)
@@ -19,35 +24,36 @@ interface SessionGridProps {
   children: React.ReactNode
   sessionCount: number
   className?: string
+  resetKey?: number
 }
 
-export function SessionGrid({ children, sessionCount, className }: SessionGridProps) {
+export function SessionGrid({ children, sessionCount, className, resetKey = 0 }: SessionGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const [gap, setGap] = useState(16) // Default to gap-4 = 16px
 
-  useEffect(() => {
-    const updateMeasurements = () => {
-      if (containerRef.current) {
-        // Dynamically compute padding from computed styles to handle className overrides
-        const computedStyle = getComputedStyle(containerRef.current)
-        // Use proper NaN check to allow 0 as a valid padding value
-        const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
-        const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
-        const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
-        const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
-        const totalPadding = paddingLeft + paddingRight
-        setContainerWidth(containerRef.current.clientWidth - totalPadding)
+  const updateMeasurements = () => {
+    if (containerRef.current) {
+      // Dynamically compute padding from computed styles to handle className overrides
+      const computedStyle = getComputedStyle(containerRef.current)
+      // Use proper NaN check to allow 0 as a valid padding value
+      const parsedPaddingLeft = parseFloat(computedStyle.paddingLeft)
+      const parsedPaddingRight = parseFloat(computedStyle.paddingRight)
+      const paddingLeft = !Number.isNaN(parsedPaddingLeft) ? parsedPaddingLeft : 0
+      const paddingRight = !Number.isNaN(parsedPaddingRight) ? parsedPaddingRight : 0
+      const totalHorizontalPadding = paddingLeft + paddingRight
+      setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
 
-        // Also compute gap from styles to handle className overrides (columnGap or gap)
-        // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
-        const parsedColumnGap = parseFloat(computedStyle.columnGap)
-        const parsedGap = parseFloat(computedStyle.gap)
-        const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
-        setGap(columnGap)
-      }
+      // Also compute gap from styles to handle className overrides (columnGap or gap)
+      // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
+      const parsedColumnGap = parseFloat(computedStyle.columnGap)
+      const parsedGap = parseFloat(computedStyle.gap)
+      const columnGap = !Number.isNaN(parsedColumnGap) ? parsedColumnGap : (!Number.isNaN(parsedGap) ? parsedGap : 16)
+      setGap(columnGap)
     }
+  }
 
+  useEffect(() => {
     updateMeasurements()
 
     // Also update on resize
@@ -56,11 +62,13 @@ export function SessionGrid({ children, sessionCount, className }: SessionGridPr
       resizeObserver.observe(containerRef.current)
     }
 
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+    }
   }, [])
 
   return (
-    <SessionGridContext.Provider value={{ containerWidth, gap }}>
+    <SessionGridContext.Provider value={{ containerWidth, gap, resetKey }}>
       <div
         ref={containerRef}
         className={cn(
@@ -110,8 +118,9 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { containerWidth, gap } = useSessionGridContext()
+  const { containerWidth, gap, resetKey } = useSessionGridContext()
   const hasInitializedRef = useRef(false)
+  const lastResetKeyRef = useRef(resetKey)
 
   const {
     width,
@@ -126,6 +135,15 @@ export function SessionTileWrapper({
     initialHeight: TILE_DIMENSIONS.height.default,
     storageKey: "session-tile",
   })
+
+  // Reset tile size when resetKey changes (user clicked "Reset Layout")
+  useEffect(() => {
+    if (resetKey !== lastResetKeyRef.current && containerWidth > 0) {
+      lastResetKeyRef.current = resetKey
+      const halfWidth = calculateHalfWidth(containerWidth, gap)
+      setSize({ width: halfWidth, height: TILE_DIMENSIONS.height.default })
+    }
+  }, [resetKey, containerWidth, gap, setSize])
 
   // Update width to half container width once container is measured (only on first valid measurement)
   // This handles the case where containerWidth is 0 on initial render

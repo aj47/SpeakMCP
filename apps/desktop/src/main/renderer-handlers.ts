@@ -13,12 +13,13 @@ export type RendererHandlers = {
   finishMcpRecording: () => void
   startOrFinishMcpRecording: (data?: { conversationId?: string; sessionId?: string; fromTile?: boolean; fromButtonClick?: boolean }) => void
 
-  showTextInput: () => void
+  showTextInput: (data?: { initialText?: string }) => void
   hideTextInput: () => void
 
   agentProgressUpdate: (update: AgentProgressUpdate) => void
   clearAgentProgress: () => void
   emergencyStopAgent: () => void
+  onPanelSizeChanged: (size: { width: number; height: number }) => void
   clearAgentSessionProgress: (sessionId: string) => void
   clearInactiveSessions: () => void
 
@@ -27,7 +28,7 @@ export type RendererHandlers = {
   focusAgentSession: (sessionId: string) => void
 
   // Message Queue handlers
-  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[] }) => void
+  onMessageQueueUpdate: (data: { conversationId: string; queue: QueuedMessage[]; isPaused: boolean }) => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void
@@ -38,4 +39,7 @@ export type RendererHandlers = {
 
   // MCP Sampling handlers (Protocol 2025-11-25)
   "mcp:sampling-request": (request: SamplingRequest) => void
+
+  // Skills folder change notification
+  skillsFolderChanged: () => void
 }

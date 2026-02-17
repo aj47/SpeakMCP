@@ -20,6 +20,46 @@ type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
+// Notify renderer of panel size changes from main process
+function notifyPanelSizeChanged(width: number, height: number) {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  whenPanelReady(() => {
+    getRendererHandlers<RendererHandlers>(win.webContents).onPanelSizeChanged.send({ width, height })
+  })
+}
+
+// Track panel webContents ready state to avoid sending IPC before renderer is ready
+let panelWebContentsReady = false
+
+/**
+ * Ensures the panel webContents is ready before executing a callback.
+ * If already ready (not loading), executes immediately.
+ * If still loading (e.g., right after app launch), waits for did-finish-load.
+ */
+function whenPanelReady(callback: () => void): void {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  // If webContents is not loading, it's ready to receive IPC messages
+  // This handles both cases:
+  // 1. panelWebContentsReady is true (normal case after did-finish-load)
+  // 2. panelWebContentsReady is false but did-finish-load already fired before we attached listener
+  if (!win.webContents.isLoading()) {
+    // Mark as ready in case the flag wasn't set (handles the race condition
+    // where did-finish-load fired before createPanelWindow's listener was attached)
+    panelWebContentsReady = true
+    callback()
+  } else {
+    // Still loading, wait for the renderer to finish
+    win.webContents.once("did-finish-load", () => {
+      panelWebContentsReady = true
+      callback()
+    })
+  }
+}
+
 
 function createBaseWindow({
   id,
@@ -62,8 +102,20 @@ function createBaseWindow({
 
   if (showWhenReady) {
     win.on("ready-to-show", () => {
+      logUI(`[WINDOW ${_label}] ready-to-show event fired`)
       win.show()
     })
+
+    // Fallback for Linux/Wayland where ready-to-show may not fire reliably
+    if (process.platform === "linux") {
+      win.webContents.on("did-finish-load", () => {
+        logUI(`[WINDOW ${_label}] did-finish-load event fired (Linux fallback)`)
+        if (!win.isVisible()) {
+          logUI(`[WINDOW ${_label}] Window not visible, forcing show`)
+          win.show()
+        }
+      })
+    }
   }
 
   win.on("close", () => {
@@ -86,14 +138,90 @@ function createBaseWindow({
   return win
 }
 
+// Track whether panel was hidden due to main window focus (for restore on blur)
+let panelHiddenByMainFocus = false
+
+// Track whether panel was intentionally opened alongside main window
+// When this is true, we don't hide panel when main window gains focus
+let panelOpenedWithMain = false
+
+// Exported for use in panel show event to reset stale flag
+export function clearPanelHiddenByMainFocus() {
+  panelHiddenByMainFocus = false
+}
+
+// Clear the "opened with main" flag when panel is explicitly hidden
+export function clearPanelOpenedWithMain() {
+  panelOpenedWithMain = false
+}
+
+// Set the "opened with main" flag when panel is shown while main is visible
+function setPanelOpenedWithMain() {
+  const main = WINDOWS.get("main")
+  if (main && main.isVisible()) {
+    panelOpenedWithMain = true
+  }
+}
+
 export function createMainWindow({ url }: { url?: string } = {}) {
   logApp("Creating main window...")
   const win = createBaseWindow({
     id: "main",
     url,
+    showWhenReady: true,
     windowOptions: {
-      titleBarStyle: "hiddenInset",
+      // titleBarStyle: "hiddenInset" is macOS-only, causes issues on Linux/Wayland
+      ...(process.platform === "darwin" && { titleBarStyle: "hiddenInset" as const }),
     },
+  })
+
+  // Hide floating panel when main window is focused (if setting is enabled)
+  // But skip hiding if panel was intentionally opened alongside main window
+  win.on("focus", () => {
+    const config = configStore.get()
+    if (config.hidePanelWhenMainFocused !== false) {
+      const panel = WINDOWS.get("panel")
+      if (panel && panel.isVisible()) {
+        // Don't hide panel if it was intentionally opened while main window is visible
+        // This prevents the panel from closing during drag/button interactions
+        if (panelOpenedWithMain) {
+          logApp("[createMainWindow] Main window focused - skipping panel hide (panel opened with main)")
+          return
+        }
+        logApp("[createMainWindow] Main window focused - hiding floating panel")
+        panelHiddenByMainFocus = true
+        panel.hide()
+      }
+    }
+  })
+
+  // Restore floating panel when main window loses focus (if it was hidden by focus)
+  win.on("blur", () => {
+    const config = configStore.get()
+    if (config.hidePanelWhenMainFocused !== false && panelHiddenByMainFocus) {
+      const panel = WINDOWS.get("panel")
+      if (panel && !panel.isVisible()) {
+        logApp("[createMainWindow] Main window blurred - restoring floating panel")
+        panelHiddenByMainFocus = false
+        // Use showInactive() directly to avoid stealing focus from other apps.
+        // showPanelWindow() would call win.focus() on Windows which is undesirable
+        // when the user is switching away from the main app.
+        panel.showInactive()
+        ensurePanelZOrder(panel)
+      }
+    }
+  })
+
+  // Clear "opened with main" flag when main window is hidden/closed
+  // since the context of "panel opened alongside main" no longer applies
+  win.on("hide", () => {
+    clearPanelOpenedWithMain()
+  })
+
+  // Clear the flag on close for all platforms (not just macOS)
+  // This ensures the flag doesn't stay true if main window is closed via tray on Windows/Linux
+  win.on("close", () => {
+    clearPanelOpenedWithMain()
   })
 
   if (process.env.IS_MAC) {
@@ -120,8 +248,10 @@ export function createSetupWindow() {
   const win = createBaseWindow({
     id: "setup",
     url: "/setup",
+    showWhenReady: true,
     windowOptions: {
-      titleBarStyle: "hiddenInset",
+      // titleBarStyle: "hiddenInset" is macOS-only, causes issues on Linux/Wayland
+      ...(process.platform === "darwin" && { titleBarStyle: "hiddenInset" as const }),
       width: 800,
       height: 600,
       resizable: false,
@@ -154,11 +284,35 @@ const calculateMinWaveformWidth = () => {
   return (VISUALIZER_BUFFER_LENGTH * (WAVEFORM_BAR_WIDTH + WAVEFORM_GAP)) + WAVEFORM_PADDING
 }
 
-const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~172px
+export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
+
+// Minimum height for waveform panel:
+// - Drag bar: 24px
+// - Waveform: 24px
+// - Submit button + hint: 36px
+// - Padding: ~26px
+// Total: ~110px
+export const WAVEFORM_MIN_HEIGHT = 110
+
+// Minimum height for text input panel:
+// - Hint text row: ~20px
+// - Textarea: ~80px minimum for usability
+// - Bottom bar (char count + buttons): ~28px
+// - Padding (p-3 = 12px top + 12px bottom + gap-3 = 12px between)
+// Total: ~160px minimum
+export const TEXT_INPUT_MIN_HEIGHT = 160
+
+// Minimum height for progress/agent view:
+// - Header: ~40px
+// - Progress content: ~100px
+// - Follow-up input: ~40px
+// - Padding: ~20px
+// Total: ~200px
+export const PROGRESS_MIN_HEIGHT = 200
 
 const panelWindowSize = {
   width: Math.max(260, MIN_WAVEFORM_WIDTH),
-  height: 50,
+  height: WAVEFORM_MIN_HEIGHT,
 }
 
 const agentPanelWindowSize = {
@@ -171,17 +325,16 @@ const textInputPanelWindowSize = {
   height: 180,
 }
 
-// Get the saved panel size (unified across all modes)
-const getSavedPanelSize = () => {
+// Get the saved panel size (mode-aware)
+const getSavedPanelSize = (mode?: "waveform" | "progress") => {
   const config = configStore.get()
 
-  logApp(`[window.ts] getSavedPanelSize - checking config...`)
+  logApp(`[window.ts] getSavedPanelSize - checking config for mode: ${mode || 'default'}...`)
 
-  const validateSize = (savedSize: { width: number; height: number }) => {
+  const validateSize = (savedSize: { width: number; height: number }, minHeight: number) => {
     const maxWidth = 3000
     const maxHeight = 2000
     const minWidth = 200
-    const minHeight = 100
 
     if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
       logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
@@ -196,9 +349,16 @@ const getSavedPanelSize = () => {
     return savedSize
   }
 
+  // For progress mode, check panelProgressSize first
+  if (mode === "progress" && config.panelProgressSize) {
+    logApp(`[window.ts] Found saved progress size:`, config.panelProgressSize)
+    return validateSize(config.panelProgressSize, PROGRESS_MIN_HEIGHT)
+  }
+
+  // Fall back to panelCustomSize for all modes
   if (config.panelCustomSize) {
     logApp(`[window.ts] Found saved panel size:`, config.panelCustomSize)
-    return validateSize(config.panelCustomSize)
+    return validateSize(config.panelCustomSize, WAVEFORM_MIN_HEIGHT)
   }
 
   logApp(`[window.ts] No saved panel size, using default:`, panelWindowSize)
@@ -291,16 +451,16 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
   if (!win) return
 
   // Panel size is now unified across all modes
-  // Mode switching only affects focus behavior and z-order, not size
-  // Position is not updated on mode change - this is intentional since:
-  // 1. Size is unified so position doesn't need adjustment for different dimensions
-  // 2. User's custom positioning should be respected
+  // Mode switching primarily affects focus behavior and z-order
+  // Note: setPanelMode() may conditionally resize the panel when switching to
+  // agent mode if the panel is too small (see below). This ensures the progress
+  // pane has enough space after transitioning from waveform recording.
   const now = Date.now()
 
   // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
   const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
   try {
-    win.setMinimumSize(minWidth, 100)
+    win.setMinimumSize(minWidth, WAVEFORM_MIN_HEIGHT)
   } catch {}
 
   // Update focus behavior for the mode
@@ -320,6 +480,33 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
 export function setPanelMode(mode: "normal" | "agent" | "textInput") {
   _currentPanelMode = mode
   applyPanelMode(mode)
+
+  // When switching to agent mode, ensure panel is resized appropriately
+  // This fixes the issue where panel stays at waveform size (110px) when
+  // transitioning from voice input to progress pane (needs 200px+)
+  // See: https://github.com/aj47/SpeakMCP/issues/913
+  if (mode === "agent") {
+    const win = WINDOWS.get("panel")
+    if (win) {
+      try {
+        const [currentWidth, currentHeight] = win.getSize()
+        // Only resize if panel is too small for agent mode
+        if (currentHeight < PROGRESS_MIN_HEIGHT) {
+          const savedSize = getSavedPanelSize("progress")
+          const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
+          const targetWidth = Math.max(savedSize.width, currentWidth, MIN_WAVEFORM_WIDTH)
+          logApp(`[setPanelMode] Panel too small for agent mode (${currentWidth}x${currentHeight}), resizing to ${targetWidth}x${targetHeight}`)
+          win.setSize(targetWidth, targetHeight)
+          notifyPanelSizeChanged(targetWidth, targetHeight)
+          // Reposition to maintain the panel's anchor point
+          const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "agent")
+          win.setPosition(position.x, position.y)
+        }
+      } catch (e) {
+        logApp("[setPanelMode] Failed to resize panel for agent mode:", e)
+      }
+    }
+  }
 }
 
 export function getCurrentPanelMode(): "normal" | "agent" | "textInput" {
@@ -346,7 +533,12 @@ export function createPanelWindow() {
     url: "/panel",
     showWhenReady: false,
     windowOptions: {
-      hiddenInMissionControl: true,
+      // macOS-only options
+      ...(process.platform === "darwin" && {
+        hiddenInMissionControl: true,
+        visualEffectState: "active" as const,
+        vibrancy: "under-window" as const,
+      }),
       skipTaskbar: true,
       closable: false,
       maximizable: false,
@@ -360,12 +552,10 @@ export function createPanelWindow() {
       width: savedSize.width,
       height: savedSize.height,
       minWidth: minWidth, // Ensure minimum waveform width
-      minHeight: 100, // Allow resizing down to minimum
+      minHeight: WAVEFORM_MIN_HEIGHT, // Allow compact waveform panel with reduced negative space
       resizable: true, // Enable resizing
-      focusable: false,
+      focusable: process.platform === "linux" ? true : false, // Linux needs focusable for window to display
 
-      visualEffectState: "active",
-      vibrancy: "under-window",
       alwaysOnTop: true,
       x: position.x,
       y: position.y,
@@ -374,12 +564,25 @@ export function createPanelWindow() {
 
   logApp("[window.ts] createPanelWindow - window created with size:", { width: savedSize.width, height: savedSize.height })
 
+  // Track when the panel renderer is ready to receive IPC messages
+  // Reset the ready flag since we're creating a new panel window
+  panelWebContentsReady = false
+  win.webContents.once("did-finish-load", () => {
+    panelWebContentsReady = true
+    logApp("[window.ts] Panel webContents finished loading, ready for IPC")
+  })
+
   win.on("hide", () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
   })
 
-  // Reassert z-order on lifecycle changes
-  win.on("show", () => ensurePanelZOrder(win))
+  // Reassert z-order on lifecycle changes and reset stale focus-hide flag
+  win.on("show", () => {
+    ensurePanelZOrder(win)
+    // Clear the flag when panel becomes visible through any means.
+    // This prevents stale state if user manually shows panel while main is focused.
+    clearPanelHiddenByMainFocus()
+  })
   win.on("blur", () => ensurePanelZOrder(win))
   win.on("focus", () => ensurePanelZOrder(win))
   win.on("move", () => ensurePanelZOrder(win))
@@ -396,6 +599,10 @@ export function showPanelWindow() {
   const win = WINDOWS.get("panel")
   if (win) {
     logApp(`[showPanelWindow] Called. Current visibility: ${win.isVisible()}`)
+
+    // Track that panel is being opened alongside main window (if main is visible)
+    // This prevents panel from being hidden when main window regains focus during interactions
+    setPanelOpenedWithMain()
 
     const mode = getCurrentPanelMode()
     // Apply mode sizing/positioning just before showing
@@ -429,9 +636,21 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   state.isRecordingFromButtonClick = fromButtonClick ?? false
   state.isRecordingMcpMode = false
 
-  showPanelWindow()
+  // Ensure consistent sizing by setting mode in main before showing
+  // This prevents inheriting textInput mode's focus/show behavior from prior sessions
+  setPanelMode("normal")
+
+  // Resize panel to compact waveform size before showing
+  // This fixes the issue where panel had too much negative space (#817)
+  resizePanelForWaveform()
+
+  // Start mic capture/recording as early as possible, but only after panel renderer is ready
+  // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromButtonClick so panel shows correct submit hint (Enter vs Release keys)
-  getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
+  whenPanelReady(() => {
+    getWindowRendererHandlers("panel")?.startRecording.send({ fromButtonClick })
+  })
+  showPanelWindow()
 }
 
 export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean) {
@@ -449,12 +668,21 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
 
   // Ensure consistent sizing by setting mode in main before showing
   setPanelMode("normal")
-  showPanelWindow()
+
+  // Resize panel to compact waveform size before showing
+  // This fixes the issue where panel had too much negative space (#817)
+  resizePanelForWaveform()
+
+  // Start mic capture/recording as early as possible, but only after panel renderer is ready
+  // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromTile and fromButtonClick flags so panel knows how to behave after recording ends
-  getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+  whenPanelReady(() => {
+    getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+  })
+  showPanelWindow()
 }
 
-export async function showPanelWindowAndShowTextInput() {
+export async function showPanelWindowAndShowTextInput(initialText?: string) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -463,11 +691,15 @@ export async function showPanelWindowAndShowTextInput() {
     state.focusedAppBeforeRecording = null
   }
 
-  // Set text input state first, then show panel (which will use correct positioning)
+  // Set text input state first
   state.isTextInputActive = true
-  setPanelMode("textInput")
+
+  // Resize panel for text input mode before showing
+  // This fixes the issue where panel was too small after waveform recording (#840)
+  resizePanelForTextInput()
+
   showPanelWindow() // This will now use textInput mode positioning
-  getWindowRendererHandlers("panel")?.showTextInput.send()
+  getWindowRendererHandlers("panel")?.showTextInput.send({ initialText })
 }
 
 export function makePanelWindowClosable() {
@@ -493,6 +725,8 @@ export const stopRecordingAndHidePanelWindow = () => {
     getRendererHandlers<RendererHandlers>(win.webContents).stopRecording.send()
 
     if (win.isVisible()) {
+      // Clear the "opened with main" flag since panel is being hidden
+      clearPanelOpenedWithMain()
       win.hide()
     }
   }
@@ -505,6 +739,8 @@ export const stopTextInputAndHidePanelWindow = () => {
     getRendererHandlers<RendererHandlers>(win.webContents).hideTextInput.send()
 
     if (win.isVisible()) {
+      // Clear the "opened with main" flag since panel is being hidden
+      clearPanelOpenedWithMain()
       win.hide()
     }
   }
@@ -520,6 +756,8 @@ export const closeAgentModeAndHidePanelWindow = () => {
 
     // Hide the panel immediately to avoid flash when mode changes
     if (win.isVisible()) {
+      // Clear the "opened with main" flag since panel is being hidden
+      clearPanelOpenedWithMain()
       win.hide()
     }
 
@@ -563,14 +801,110 @@ export const emergencyStopAgentMode = async () => {
 
 export function resizePanelForAgentMode() {
   setPanelMode("agent")
+
+  // Resize panel back to saved size for agent mode
+  // This is needed after resizePanelForWaveform() shrinks it to 80px
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const savedSize = getSavedPanelSize("progress")
+    const [currentWidth, currentHeight] = win.getSize()
+
+    // Always restore to at least saved size or PROGRESS_MIN_HEIGHT
+    const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
+    const targetWidth = Math.max(savedSize.width, MIN_WAVEFORM_WIDTH)
+
+    // Only resize if dimensions actually differ (avoid unnecessary reposition)
+    if (currentHeight !== targetHeight || currentWidth !== targetWidth) {
+      logApp(`[resizePanelForAgentMode] Resizing panel from ${currentWidth}x${currentHeight} to ${targetWidth}x${targetHeight}`)
+      win.setSize(targetWidth, targetHeight)
+      // Notify renderer of the size change
+      notifyPanelSizeChanged(targetWidth, targetHeight)
+
+      // Reposition to maintain the panel's anchor point
+      const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "agent")
+      win.setPosition(position.x, position.y)
+    }
+  } catch (e) {
+    logApp("[resizePanelForAgentMode] Failed to resize panel:", e)
+  }
 }
 
+/**
+ * Resize the panel for text input mode.
+ * This ensures the panel is at least TEXT_INPUT_MIN_HEIGHT tall for usability.
+ * This fixes the issue where the panel was too small for text input after
+ * being shrunk for waveform recording.
+ * See: https://github.com/aj47/SpeakMCP/issues/840
+ */
 export function resizePanelForTextInput() {
-  setPanelMode("textInput")
+  const win = WINDOWS.get("panel")
+  if (!win) {
+    setPanelMode("textInput")
+    return
+  }
+
+  try {
+    const [currentWidth, currentHeight] = win.getSize()
+    const targetHeight = Math.max(currentHeight, TEXT_INPUT_MIN_HEIGHT)
+    const targetWidth = Math.max(currentWidth, textInputPanelWindowSize.width)
+
+    logApp(`[resizePanelForTextInput] Current size: ${currentWidth}x${currentHeight}, target: ${targetWidth}x${targetHeight}`)
+
+    // Only resize if needed
+    if (currentHeight < TEXT_INPUT_MIN_HEIGHT || currentWidth < textInputPanelWindowSize.width) {
+      win.setSize(targetWidth, targetHeight)
+      // Notify renderer of the size change
+      notifyPanelSizeChanged(targetWidth, targetHeight)
+
+      // Reposition to maintain the panel's anchor point
+      const position = calculatePanelPosition({ width: targetWidth, height: targetHeight }, "textInput")
+      win.setPosition(position.x, position.y)
+    }
+
+    setPanelMode("textInput")
+  } catch (e) {
+    logApp("[resizePanelForTextInput] Failed to resize panel:", e)
+    setPanelMode("textInput")
+  }
 }
 
 export function resizePanelToNormal() {
   setPanelMode("normal")
+}
+
+/**
+ * Resize the panel to compact waveform size for recording.
+ * This shrinks the panel height to WAVEFORM_MIN_HEIGHT while keeping the current width.
+ * This fixes the issue where the panel had too much negative space when showing
+ * the waveform after being sized for agent mode.
+ * See: https://github.com/aj47/SpeakMCP/issues/817
+ */
+export function resizePanelForWaveform() {
+  const win = WINDOWS.get("panel")
+  if (!win) return
+
+  try {
+    const [currentWidth] = win.getSize()
+    const targetHeight = WAVEFORM_MIN_HEIGHT
+
+    // Keep the current width but shrink to waveform height
+    const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+    const newWidth = Math.max(currentWidth, minWidth)
+
+    logApp(`[resizePanelForWaveform] Resizing panel from current size to ${newWidth}x${targetHeight}`)
+
+    win.setSize(newWidth, targetHeight)
+    // Notify renderer of the size change
+    notifyPanelSizeChanged(newWidth, targetHeight)
+
+    // Reposition to maintain the panel's anchor point (e.g., bottom-right of screen)
+    const position = calculatePanelPosition({ width: newWidth, height: targetHeight }, "normal")
+    win.setPosition(position.x, position.y)
+  } catch (e) {
+    logApp("[resizePanelForWaveform] Failed to resize panel:", e)
+  }
 }
 
 /**

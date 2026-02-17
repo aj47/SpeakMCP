@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
 
-export type SessionViewMode = 'grid' | 'list'
+export type SessionViewMode = 'grid' | 'list' | 'kanban'
 export type SessionFilter = 'all' | 'active' | 'completed' | 'error'
 export type SessionSortBy = 'recent' | 'oldest' | 'status'
 
@@ -10,6 +10,7 @@ interface AgentState {
   focusedSessionId: string | null
   scrollToSessionId: string | null
   messageQueuesByConversation: Map<string, QueuedMessage[]> // Message queues per conversation
+  pausedQueueConversations: Set<string> // Conversations with paused queues
 
   viewMode: SessionViewMode
   filter: SessionFilter
@@ -26,8 +27,9 @@ interface AgentState {
   getAgentProgress: () => AgentProgressUpdate | null
 
   // Message queue actions
-  updateMessageQueue: (conversationId: string, queue: QueuedMessage[]) => void
+  updateMessageQueue: (conversationId: string, queue: QueuedMessage[], isPaused: boolean) => void
   getMessageQueue: (conversationId: string) => QueuedMessage[]
+  isQueuePaused: (conversationId: string) => boolean
 
   setViewMode: (mode: SessionViewMode) => void
   setFilter: (filter: SessionFilter) => void
@@ -41,6 +43,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   focusedSessionId: null,
   scrollToSessionId: null,
   messageQueuesByConversation: new Map(),
+  pausedQueueConversations: new Set(),
 
   viewMode: 'grid' as SessionViewMode,
   filter: 'all' as SessionFilter,
@@ -60,16 +63,78 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         const hasEmptyHistory = !update.conversationHistory || update.conversationHistory.length === 0
         const hasEmptySteps = !update.steps || update.steps.length === 0
 
+        // Merge delegation steps: preserve existing delegation steps and update/add new ones
+        // This ensures parallel delegations and completed delegations persist
+        const mergedSteps = (() => {
+          const existingSteps = existingProgress.steps || []
+          const newSteps = update.steps || []
+          
+          // Extract existing delegation steps (keyed by runId)
+          const existingDelegationSteps = new Map<string, typeof existingSteps[0]>()
+          const existingNonDelegationSteps: typeof existingSteps = []
+          
+          for (const step of existingSteps) {
+            if (step.delegation?.runId) {
+              existingDelegationSteps.set(step.delegation.runId, step)
+            } else {
+              existingNonDelegationSteps.push(step)
+            }
+          }
+          
+          // Extract new delegation steps (keyed by runId)
+          const newDelegationSteps = new Map<string, typeof newSteps[0]>()
+          const newNonDelegationSteps: typeof newSteps = []
+          
+          for (const step of newSteps) {
+            if (step.delegation?.runId) {
+              newDelegationSteps.set(step.delegation.runId, step)
+            } else {
+              newNonDelegationSteps.push(step)
+            }
+          }
+          
+          // Merge delegation steps: new ones override existing ones with same runId
+          const mergedDelegationSteps = new Map(existingDelegationSteps)
+          for (const [runId, step] of newDelegationSteps) {
+            mergedDelegationSteps.set(runId, step)
+          }
+          
+          // Use new non-delegation steps if available, otherwise keep existing
+          const finalNonDelegationSteps = newNonDelegationSteps.length > 0 
+            ? newNonDelegationSteps 
+            : existingNonDelegationSteps
+          
+          // Combine: non-delegation steps first, then delegation steps
+          return [...finalNonDelegationSteps, ...Array.from(mergedDelegationSteps.values())]
+        })()
+
         if (hasEmptyHistory || hasEmptySteps) {
           mergedUpdate = {
             ...existingProgress,
             ...update,
+            // Explicitly handle pendingToolApproval: if update has the key (even if undefined),
+            // use the update value; otherwise preserve existing. This ensures clearing works.
+            pendingToolApproval: 'pendingToolApproval' in update
+              ? update.pendingToolApproval
+              : existingProgress.pendingToolApproval,
             conversationHistory: hasEmptyHistory
               ? existingProgress.conversationHistory
               : update.conversationHistory,
             steps: hasEmptySteps
               ? existingProgress.steps
-              : update.steps,
+              : mergedSteps,
+          }
+        } else {
+          // Even when update has non-empty steps, we need to preserve delegation steps
+          mergedUpdate = {
+            ...existingProgress,
+            ...update,
+            // Explicitly handle pendingToolApproval: if update has the key (even if undefined),
+            // use the update value; otherwise preserve existing. This ensures clearing works.
+            pendingToolApproval: 'pendingToolApproval' in update
+              ? update.pendingToolApproval
+              : existingProgress.pendingToolApproval,
+            steps: mergedSteps,
           }
         }
       }
@@ -179,20 +244,36 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   // Message queue actions
-  updateMessageQueue: (conversationId: string, queue: QueuedMessage[]) => {
+  updateMessageQueue: (conversationId: string, queue: QueuedMessage[], isPaused: boolean) => {
     set((state) => {
-      const newMap = new Map(state.messageQueuesByConversation)
+      const newQueueMap = new Map(state.messageQueuesByConversation)
+      const newPausedSet = new Set(state.pausedQueueConversations)
+
       if (queue.length === 0) {
-        newMap.delete(conversationId)
+        newQueueMap.delete(conversationId)
       } else {
-        newMap.set(conversationId, queue)
+        newQueueMap.set(conversationId, queue)
       }
-      return { messageQueuesByConversation: newMap }
+
+      if (isPaused) {
+        newPausedSet.add(conversationId)
+      } else {
+        newPausedSet.delete(conversationId)
+      }
+
+      return {
+        messageQueuesByConversation: newQueueMap,
+        pausedQueueConversations: newPausedSet,
+      }
     })
   },
 
   getMessageQueue: (conversationId: string) => {
     return get().messageQueuesByConversation.get(conversationId) || []
+  },
+
+  isQueuePaused: (conversationId: string) => {
+    return get().pausedQueueConversations.has(conversationId)
   },
 
   // View settings actions
@@ -244,4 +325,11 @@ export const useMessageQueue = (conversationId: string | undefined) => {
   const messageQueuesByConversation = useAgentStore((state) => state.messageQueuesByConversation)
   if (!conversationId) return []
   return messageQueuesByConversation.get(conversationId) || []
+}
+
+// Hook to check if a conversation's queue is paused
+export const useIsQueuePaused = (conversationId: string | undefined) => {
+  const pausedQueueConversations = useAgentStore((state) => state.pausedQueueConversations)
+  if (!conversationId) return false
+  return pausedQueueConversations.has(conversationId)
 }

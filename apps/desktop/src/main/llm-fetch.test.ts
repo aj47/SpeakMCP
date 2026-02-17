@@ -10,6 +10,7 @@ vi.mock('./config', () => ({
       openaiApiKey: 'test-key',
       openaiBaseUrl: 'https://api.openai.com/v1',
       mcpToolsOpenaiModel: 'gpt-4o-mini',
+      mcpToolsProviderId: 'openai',
     }),
   },
 }))
@@ -33,51 +34,56 @@ vi.mock('./state', () => ({
     isAgentModeActive: false,
     agentIterationCount: 0,
   },
+  agentSessionStateManager: {
+    shouldStopSession: () => false,
+  },
   llmRequestAbortManager: {
     register: vi.fn(),
     unregister: vi.fn(),
   },
 }))
 
-describe('LLM Fetch Retry Logic', () => {
+// Mock the AI SDK functions
+vi.mock('ai', () => ({
+  generateText: vi.fn(),
+  streamText: vi.fn(),
+  // Mock the tool helper - returns a simple object representing the tool
+  tool: vi.fn((config: any) => ({ ...config, _type: 'tool' })),
+  // Mock jsonSchema helper - returns the schema wrapped
+  jsonSchema: vi.fn((schema: any) => ({ _type: 'jsonSchema', schema })),
+}))
+
+// Mock the ai-sdk-provider module
+vi.mock('./ai-sdk-provider', () => ({
+  createLanguageModel: vi.fn(() => ({})),
+  getCurrentProviderId: vi.fn(() => 'openai'),
+  getTranscriptProviderId: vi.fn(() => 'openai'),
+  getCurrentModelName: vi.fn(() => 'gpt-4o-mini'),
+}))
+
+// Mock the langfuse-service module
+vi.mock('./langfuse-service', () => ({
+  isLangfuseEnabled: vi.fn(() => false),
+  createLLMGeneration: vi.fn(() => null),
+  endLLMGeneration: vi.fn(),
+}))
+
+describe('LLM Fetch with AI SDK', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    global.fetch = vi.fn()
+    vi.resetModules()
   })
 
-  it('should treat 524 Gateway Timeout as retryable HttpError', async () => {
-    // Mock a 524 response
-    const mockResponse = {
-      ok: false,
-      status: 524,
-      statusText: 'Gateway Timeout',
-      text: async () => '<html><body>Cloudflare 524 Gateway Timeout</body></html>',
-      json: async () => ({}),
-    }
+  it('should return parsed JSON content from LLM response', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    generateTextMock.mockResolvedValue({
+      text: '{"content": "Hello, world!", "needsMoreWork": false}',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
 
-    let callCount = 0
-    global.fetch = vi.fn().mockImplementation(() => {
-      callCount++
-      if (callCount <= 2) {
-        return Promise.resolve(mockResponse)
-      }
-      // Third attempt succeeds
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: '{"content": "Success after retry"}',
-              },
-            },
-          ],
-        }),
-      })
-    })
-
-    // Import the function after mocks are set up
     const { makeLLMCallWithFetch } = await import('./llm-fetch')
 
     const result = await makeLLMCallWithFetch(
@@ -85,108 +91,325 @@ describe('LLM Fetch Retry Logic', () => {
       'openai'
     )
 
-    // Should have retried and eventually succeeded
-    expect(callCount).toBe(3)
+    expect(result.content).toBe('Hello, world!')
+    expect(result.needsMoreWork).toBe(false)
+  })
+
+  it('should return plain text when JSON parsing fails', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    generateTextMock.mockResolvedValue({
+      text: 'This is a plain text response without JSON',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toBe('This is a plain text response without JSON')
+    // When there are no tool calls and no JSON, needsMoreWork is undefined
+    // to let the agent loop decide whether to continue or nudge for proper format
+    expect(result.needsMoreWork).toBeUndefined()
+  })
+
+  it('should extract toolCalls from JSON response', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    generateTextMock.mockResolvedValue({
+      text: JSON.stringify({
+        toolCalls: [
+          { name: 'search', arguments: { query: 'test' } }
+        ],
+        content: 'Searching...',
+        needsMoreWork: true
+      }),
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls?.[0].name).toBe('search')
+    expect(result.content).toBe('Searching...')
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should throw on empty response', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    generateTextMock.mockResolvedValue({
+      text: '',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 0 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch([{ role: 'user', content: 'test' }], 'openai')
+    ).rejects.toThrow('LLM returned empty response')
+  })
+
+  it('should retry on retryable errors', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    let callCount = 0
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        throw new Error('503 Service Unavailable')
+      }
+      return Promise.resolve({
+        text: '{"content": "Success after retry"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(callCount).toBe(2)
     expect(result.content).toBe('Success after retry')
   })
 
-  it('should not treat 524 error with json keyword as structured output error', async () => {
-    // Mock a 524 response with "json" in the error text
-    const mockResponse = {
-      ok: false,
-      status: 524,
-      statusText: 'Gateway Timeout',
-      text: async () =>
-        '<html><body>Cloudflare 524 Gateway Timeout. Expected JSON response.</body></html>',
-      json: async () => ({}),
-    }
+  it('should not retry on abort errors', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
 
-    let callCount = 0
-    global.fetch = vi.fn().mockImplementation(() => {
-      callCount++
-      if (callCount <= 1) {
-        return Promise.resolve(mockResponse)
-      }
-      // Second attempt succeeds
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: '{"content": "Success"}',
-              },
-            },
-          ],
-        }),
-      })
-    })
+    const abortError = new Error('Aborted')
+    abortError.name = 'AbortError'
+    generateTextMock.mockRejectedValue(abortError)
 
     const { makeLLMCallWithFetch } = await import('./llm-fetch')
 
-    const result = await makeLLMCallWithFetch(
-      [{ role: 'user', content: 'test' }],
-      'openai'
-    )
-
-    // Should have retried (not treated as structured output error)
-    expect(callCount).toBe(2)
-    expect(result.content).toBe('Success')
-  })
-
-  it('should treat 400 error with json_schema keyword as structured output error and fallback', async () => {
-    // Mock a 400 response with structured output error
-    const mockResponse = {
-      ok: false,
-      status: 400,
-      statusText: 'Bad Request',
-      text: async () =>
-        'Invalid request: json_schema is not supported for this model',
-      json: async () => ({}),
-    }
-
-    global.fetch = vi.fn().mockResolvedValue(mockResponse)
-
-    const { makeLLMCallWithFetch } = await import('./llm-fetch')
-
-    // Should throw after trying all fallback modes
     await expect(
       makeLLMCallWithFetch([{ role: 'user', content: 'test' }], 'openai')
-    ).rejects.toThrow()
+    ).rejects.toThrow('Aborted')
 
-    // Should try JSON Schema, JSON Object, and Plain text modes (3 attempts)
-    expect(global.fetch).toHaveBeenCalledTimes(3)
+    expect(generateTextMock).toHaveBeenCalledTimes(1)
   })
 
-  it('should retry on 502 Bad Gateway', async () => {
-    const mockResponse = {
-      ok: false,
-      status: 502,
-      statusText: 'Bad Gateway',
-      text: async () => 'Bad Gateway',
-      json: async () => ({}),
-    }
+  it('should handle native AI SDK tool calls when tools are provided', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
 
+    // Mock a response with native tool calls
+    generateTextMock.mockResolvedValue({
+      text: 'I will help you play wordle.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'play_wordle',
+          input: { word: 'hello' },
+          toolCallId: 'call_123',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'play_wordle',
+        description: 'Play a game of wordle',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            word: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'play wordle' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('play_wordle')
+    expect(result.toolCalls![0].arguments).toEqual({ word: 'hello' })
+    expect(result.needsMoreWork).toBe(true)
+  })
+
+  it('should correctly restore tool names with colons from MCP server prefixes', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Mock a response with a tool call using sanitized name (colon replaced with __COLON__)
+    generateTextMock.mockResolvedValue({
+      text: 'Navigating to the page.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'playwright__COLON__browser_navigate',
+          input: { url: 'https://example.com' },
+          toolCallId: 'call_456',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'playwright:browser_navigate',
+        description: 'Navigate to a URL',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'go to example.com' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    // The tool name should be restored to original format with colon
+    expect(result.toolCalls![0].name).toBe('playwright:browser_navigate')
+    expect(result.toolCalls![0].arguments).toEqual({ url: 'https://example.com' })
+  })
+
+  it('should not incorrectly restore tool names with double underscores that are not from sanitization', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    // Mock a response with a tool that legitimately has double underscores in its name
+    generateTextMock.mockResolvedValue({
+      text: 'Running the tool.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'my__custom__tool',
+          input: { param: 'value' },
+          toolCallId: 'call_789',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'my__custom__tool',
+        description: 'A tool with double underscores in its name',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            param: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'run the tool' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    // The tool name should remain unchanged - double underscores are NOT replaced
+    // because they are not the __COLON__ pattern
+    expect(result.toolCalls![0].name).toBe('my__custom__tool')
+    expect(result.toolCalls![0].arguments).toEqual({ param: 'value' })
+  })
+
+  it('should pass tools to generateText when provided', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: 'No tools needed for this response.',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const mockTools = [
+      {
+        name: 'test_tool',
+        description: 'A test tool',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]
+
+    await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai',
+      undefined,
+      undefined,
+      mockTools
+    )
+
+    // Verify generateText was called with tools
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.any(Object),
+        toolChoice: 'auto',
+      })
+    )
+  })
+
+  it('should retry on AI SDK structured errors with isRetryable flag', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
     let callCount = 0
-    global.fetch = vi.fn().mockImplementation(() => {
+    generateTextMock.mockImplementation(() => {
       callCount++
-      if (callCount <= 1) {
-        return Promise.resolve(mockResponse)
+      if (callCount === 1) {
+        // Simulate AI SDK APICallError with structured fields
+        const error = new Error('Server error') as any
+        error.statusCode = 500
+        error.isRetryable = true
+        throw error
       }
       return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: '{"content": "Success"}',
-              },
-            },
-          ],
-        }),
-      })
+        text: '{"content": "Success after retry with structured error"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
     })
 
     const { makeLLMCallWithFetch } = await import('./llm-fetch')
@@ -197,37 +420,47 @@ describe('LLM Fetch Retry Logic', () => {
     )
 
     expect(callCount).toBe(2)
-    expect(result.content).toBe('Success')
+    expect(result.content).toBe('Success after retry with structured error')
   })
 
-  it('should retry on 503 Service Unavailable', async () => {
-    const mockResponse = {
-      ok: false,
-      status: 503,
-      statusText: 'Service Unavailable',
-      text: async () => 'Service Unavailable',
-      json: async () => ({}),
-    }
+  it('should not retry on AI SDK structured errors with isRetryable=false', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
+    // Simulate AI SDK APICallError with isRetryable=false
+    const error = new Error('Bad request') as any
+    error.statusCode = 400
+    error.isRetryable = false
+    generateTextMock.mockRejectedValue(error)
 
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch([{ role: 'user', content: 'test' }], 'openai')
+    ).rejects.toThrow('Bad request')
+
+    // Should not retry - called only once
+    expect(generateTextMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('should retry on AI SDK rate limit errors (statusCode 429)', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    
     let callCount = 0
-    global.fetch = vi.fn().mockImplementation(() => {
+    generateTextMock.mockImplementation(() => {
       callCount++
-      if (callCount <= 1) {
-        return Promise.resolve(mockResponse)
+      if (callCount === 1) {
+        // Simulate AI SDK TooManyRequestsError
+        const error = new Error('Rate limited') as any
+        error.statusCode = 429
+        throw error
       }
       return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: '{"content": "Success"}',
-              },
-            },
-          ],
-        }),
-      })
+        text: '{"content": "Success after rate limit retry"}',
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 20 },
+      } as any)
     })
 
     const { makeLLMCallWithFetch } = await import('./llm-fetch')
@@ -238,7 +471,7 @@ describe('LLM Fetch Retry Logic', () => {
     )
 
     expect(callCount).toBe(2)
-    expect(result.content).toBe('Success')
+    expect(result.content).toBe('Success after rate limit retry')
   })
 })
 

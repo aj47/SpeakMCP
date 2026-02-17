@@ -1,5 +1,87 @@
 // @ts-check
 
+// Resolve sherpa-onnx native package paths for bundling into the packaged app.
+// sherpa-onnx is an optionalDependency that pnpm hoists to the root .pnpm store,
+// so electron-builder doesn't include it automatically. We find and bundle it via extraResources.
+//
+// This block is wrapped in try-catch because electron-vite also loads this config file
+// (to read appId/productName) and converts require() calls to ESM imports that fail
+// for Node built-ins. When that happens, we just return empty arrays (no sherpa bundling needed
+// during the vite build step — only during electron-builder packaging).
+let _sherpaResources = {};
+try {
+  const _path = require('path');
+  const _fs = require('fs');
+
+  /**
+   * @param {string} platform
+   * @param {string} arch
+   * @returns {string | null}
+   */
+  function _findSherpaPackagePath(platform, arch) {
+    const platformPackage = `sherpa-onnx-${platform}-${arch}`;
+
+    // Check pnpm virtual store (monorepo root)
+    const rootPnpmBase = _path.join(__dirname, '..', '..', 'node_modules', '.pnpm');
+    if (_fs.existsSync(rootPnpmBase)) {
+      try {
+        const dirs = _fs.readdirSync(rootPnpmBase);
+        const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`));
+        if (platformDir) {
+          const libPath = _path.join(rootPnpmBase, platformDir, 'node_modules', platformPackage);
+          if (_fs.existsSync(libPath)) return libPath;
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Check local pnpm store
+    const localPnpmBase = _path.join(__dirname, 'node_modules', '.pnpm');
+    if (_fs.existsSync(localPnpmBase)) {
+      try {
+        const dirs = _fs.readdirSync(localPnpmBase);
+        const platformDir = dirs.find(d => d.startsWith(`${platformPackage}@`));
+        if (platformDir) {
+          const libPath = _path.join(localPnpmBase, platformDir, 'node_modules', platformPackage);
+          if (_fs.existsSync(libPath)) return libPath;
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Check standard node_modules
+    const standardPath = _path.join(__dirname, 'node_modules', platformPackage);
+    if (_fs.existsSync(standardPath)) return standardPath;
+
+    const rootStandardPath = _path.join(__dirname, '..', '..', 'node_modules', platformPackage);
+    if (_fs.existsSync(rootStandardPath)) return rootStandardPath;
+
+    console.warn(`[electron-builder] Could not find ${platformPackage} - local TTS/STT may not work in packaged app`);
+    return null;
+  }
+
+  /**
+   * @param {string} platform
+   * @param {string} arch
+   * @returns {Array<{from: string, to: string, filter: string[]}>}
+   */
+  function _sherpaExtraResources(platform, arch) {
+    const sherpaPath = _findSherpaPackagePath(platform, arch);
+    if (!sherpaPath) return [];
+    console.log(`[electron-builder] Bundling sherpa-onnx from: ${sherpaPath}`);
+    return [{ from: sherpaPath, to: `sherpa-onnx-${platform}-${arch}`, filter: ['**/*'] }];
+  }
+
+  _sherpaResources = {
+    macArm64: _sherpaExtraResources('darwin', 'arm64'),
+    macX64: _sherpaExtraResources('darwin', 'x64'),
+    winX64: _sherpaExtraResources('win', 'x64'),
+    linuxX64: _sherpaExtraResources('linux', 'x64'),
+    linuxArm64: _sherpaExtraResources('linux', 'arm64'),
+  };
+} catch {
+  // Running inside electron-vite ESM context — sherpa bundling not needed here
+  _sherpaResources = { macArm64: [], macX64: [], winX64: [], linuxX64: [], linuxArm64: [] };
+}
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: "app.speakmcp",
@@ -49,11 +131,23 @@ module.exports = {
       {
         from: "build/icon.ico",
         to: "icon.ico"
-      }
+      },
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
+      },
+      // sherpa-onnx native libraries for local TTS/STT
+      ..._sherpaResources.winX64,
     ]
   },
   nsis: {
-    artifactName: "${name}-${version}-setup.${ext}",
+    artifactName: "${productName}-${version}-setup.${ext}",
     shortcutName: "${productName}",
     uninstallDisplayName: "${productName}",
     createDesktopShortcut: "always",
@@ -65,16 +159,29 @@ module.exports = {
     binaries: [
       "resources/bin/speakmcp-rs",
     ],
+    extraResources: [
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
+      },
+      // sherpa-onnx native libraries for local TTS/STT
+      ..._sherpaResources.macArm64,
+      ..._sherpaResources.macX64,
+    ],
     artifactName: "${productName}-${version}-${arch}.${ext}",
     entitlementsInherit: "build/entitlements.mac.plist",
     identity: process.env.CSC_NAME || "Apple Development",
     // Disable hardened runtime and timestamp for development builds to avoid timestamp service errors
     // For production builds, set ENABLE_HARDENED_RUNTIME=true environment variable
     hardenedRuntime: process.env.ENABLE_HARDENED_RUNTIME === 'true',
-    // Skip signing native extensions that cause timestamp issues
-    signIgnore: [
-      "node_modules/@egoist/electron-panel-window/build/Release/NativeExtension.node"
-    ],
+    // All native extensions must be signed for notarization
+    // Do NOT add signIgnore entries - Apple requires all binaries to be signed
     target: [
       {
         target: "dmg",
@@ -191,7 +298,7 @@ module.exports = {
     overwriteAction: "upgrade",
   },
   linux: {
-    target: ["AppImage", "snap", "deb"],
+    target: ["AppImage", "deb"],
     maintainer: "SpeakMCP <hi@techfren.net>",
     vendor: "SpeakMCP",
     category: "Utility",
@@ -214,11 +321,24 @@ module.exports = {
         from: "resources/bin/speakmcp-rs",
         to: "bin/speakmcp-rs",
         filter: ["**/*"]
-      }
+      },
+      {
+        from: "../../packages/mcp-whatsapp/dist",
+        to: "mcp-whatsapp/dist",
+        filter: ["**/*"]
+      },
+      {
+        from: "resources/bundled-skills",
+        to: "bundled-skills",
+        filter: ["**/*"]
+      },
+      // sherpa-onnx native libraries for local TTS/STT
+      ..._sherpaResources.linuxX64,
+      ..._sherpaResources.linuxArm64,
     ]
   },
   deb: {
-    artifactName: "${name}_${version}_${arch}.${ext}",
+    artifactName: "${productName}_${version}_${arch}.${ext}",
     depends: [
       "libgtk-3-0",
       "libnotify4",
@@ -238,7 +358,7 @@ module.exports = {
     afterRemove: "build/linux/postrm.sh",
   },
   appImage: {
-    artifactName: "${name}-${version}.${ext}",
+    artifactName: "${productName}-${version}.${ext}",
   },
   npmRebuild: false,
   // After packing, clean up unnecessary files

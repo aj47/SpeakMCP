@@ -12,11 +12,58 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 
 export const configPath = path.join(dataFolder, "config.json")
 
+// Valid Orpheus voices - used for migration validation
+const ORPHEUS_ENGLISH_VOICES = ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
+const ORPHEUS_ARABIC_VOICES = ["fahad", "sultan", "lulwa", "noura"]
+
+// Valid Groq TTS model IDs
+const VALID_GROQ_TTS_MODELS = ["canopylabs/orpheus-v1-english", "canopylabs/orpheus-arabic-saudi"]
+
+/**
+ * Migrate deprecated Groq TTS PlayAI models/voices to new Orpheus equivalents.
+ * This ensures existing installs with saved PlayAI settings continue to work.
+ */
+function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
+  // Migrate deprecated PlayAI models to Orpheus equivalents
+  // Use string comparison since saved config may contain deprecated values not in current type
+  const savedModel = config.groqTtsModel as string | undefined
+  if (savedModel === "playai-tts") {
+    config.groqTtsModel = "canopylabs/orpheus-v1-english"
+  } else if (savedModel === "playai-tts-arabic") {
+    config.groqTtsModel = "canopylabs/orpheus-arabic-saudi"
+  } else if (savedModel && !VALID_GROQ_TTS_MODELS.includes(savedModel)) {
+    // Unknown model value (user-edited config.json) - reset to default English model
+    config.groqTtsModel = "canopylabs/orpheus-v1-english"
+  }
+
+  // Migrate voices: check if voice is valid for the current model
+  // Guard with typeof check since config.json is user-editable and groqTtsVoice could be non-string
+  const voice = config.groqTtsVoice
+  const isValidVoice = voice && typeof voice === "string"
+  
+  if (config.groqTtsModel === "canopylabs/orpheus-arabic-saudi") {
+    // For Arabic model, ensure voice is a valid Arabic voice
+    if (!isValidVoice || !ORPHEUS_ARABIC_VOICES.includes(voice)) {
+      config.groqTtsVoice = "fahad" // Default Arabic voice
+    }
+  } else if (config.groqTtsModel === "canopylabs/orpheus-v1-english") {
+    // For English model, ensure voice is a valid English voice
+    if (!isValidVoice || !ORPHEUS_ENGLISH_VOICES.includes(voice)) {
+      config.groqTtsVoice = "troy" // Default English voice
+    }
+  }
+
+  return config
+}
+
 const getConfig = () => {
   // Platform-specific defaults
   const isWindows = process.platform === 'win32'
 
   const defaultConfig: Partial<Config> = {
+    // Onboarding - not completed by default for new users
+    onboardingCompleted: false,
+
     // Recording shortcut: On Windows, use Ctrl+/ to avoid conflicts with common shortcuts
     // On macOS, Hold Ctrl is fine since Cmd is used for most shortcuts
     shortcut: isWindows ? "ctrl-slash" : "hold-ctrl",
@@ -60,16 +107,19 @@ const getConfig = () => {
     panelPosition: "top-right",
     panelDragEnabled: true,
     panelCustomSize: { width: 300, height: 200 },
-    // Mode-specific panel sizes (will be set on first resize in each mode)
-    panelNormalModeSize: undefined,
-    panelAgentModeSize: undefined,
-    panelTextInputModeSize: undefined,
+    panelProgressSize: undefined,
     // Floating panel auto-show - when true, panel auto-shows during agent sessions
     floatingPanelAutoShow: true,
+    // Hide floating panel when main app is focused (default: enabled)
+    hidePanelWhenMainFocused: true,
     // Theme preference defaults
     themePreference: "system",
 
-	    // App behavior
+    // Parakeet STT defaults
+    parakeetNumThreads: 2,
+    parakeetModelDownloaded: false,
+
+    // App behavior
 	    launchAtLogin: false,
 	    hideDockIcon: false,
 
@@ -91,11 +141,22 @@ const getConfig = () => {
     // OpenAI Compatible Provider defaults
     openaiCompatiblePreset: "openai",
     // Groq TTS defaults
-    groqTtsModel: "playai-tts",
-    groqTtsVoice: "Fritz-PlayAI",
+    groqTtsModel: "canopylabs/orpheus-v1-english",
+    groqTtsVoice: "troy",
     // Gemini TTS defaults
     geminiTtsModel: "gemini-2.5-flash-preview-tts",
     geminiTtsVoice: "Kore",
+    // Supertonic TTS defaults
+    supertonicVoice: "M1",
+    supertonicLanguage: "en",
+    supertonicSpeed: 1.05,
+    supertonicSteps: 5,
+
+    // Provider Section Collapse defaults - collapsed by default
+    providerSectionCollapsedOpenai: true,
+    providerSectionCollapsedGroq: true,
+    providerSectionCollapsedGemini: true,
+
     // API Retry defaults
     apiRetryCount: 3,
     apiRetryBaseDelay: 1000, // 1 second
@@ -132,6 +193,34 @@ const getConfig = () => {
 	    remoteServerCorsOrigins: ["*"],
 	    remoteServerAutoShowPanel: false, // Don't auto-show panel by default for remote sessions
 
+    // WhatsApp Integration defaults
+    whatsappEnabled: false,
+    whatsappAllowFrom: [],
+    whatsappAutoReply: false,
+    whatsappLogMessages: false,
+
+    // Streamer Mode - hides sensitive info for screen sharing
+    streamerModeEnabled: false,
+
+    // Langfuse Observability - disabled by default
+    langfuseEnabled: false,
+    langfusePublicKey: undefined,
+    langfuseSecretKey: undefined,
+    langfuseBaseUrl: undefined, // Uses cloud.langfuse.com by default
+
+    // Dual-Model Agent Mode defaults
+    dualModelEnabled: false,
+    dualModelSummarizationFrequency: "every_response",
+    dualModelSummaryDetailLevel: "compact",
+    dualModelAutoSaveImportant: false,
+    dualModelInjectMemories: false,
+
+    // Memory System defaults - enabled by default for backwards compatibility
+    memoriesEnabled: true,
+
+    // ACP Tool Injection - when true, injects SpeakMCP builtin tools into ACP agent sessions
+    // This allows ACP agents to use delegation, settings management, etc.
+    acpInjectBuiltinTools: true,
 
   }
 
@@ -139,7 +228,15 @@ const getConfig = () => {
     const savedConfig = JSON.parse(
       fs.readFileSync(configPath, "utf8"),
     ) as Config
-    return { ...defaultConfig, ...savedConfig }
+    // Apply migration for deprecated Groq TTS settings
+    const mergedConfig = { ...defaultConfig, ...savedConfig }
+
+    // Migration: Remove deprecated mode-specific panel sizes (these were never used)
+    delete (mergedConfig as any).panelNormalModeSize
+    delete (mergedConfig as any).panelAgentModeSize
+    delete (mergedConfig as any).panelTextInputModeSize
+
+    return migrateGroqTtsConfig(mergedConfig)
   } catch {
     return defaultConfig
   }

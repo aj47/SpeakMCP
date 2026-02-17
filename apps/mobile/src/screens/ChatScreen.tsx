@@ -27,22 +27,22 @@ import { useSessionContext } from '../store/sessions';
 import { useMessageQueueContext } from '../store/message-queue';
 import { MessageQueuePanel } from '../ui/MessageQueuePanel';
 import { useConnectionManager } from '../store/connectionManager';
+import { useTunnelConnection } from '../store/tunnelConnection';
+import { useProfile } from '../store/profile';
+import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
+import { SettingsApiClient } from '../lib/settingsApi';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
   preprocessTextForTTS,
-  COLLAPSED_LINES,
-  getRoleIcon,
-  getRoleLabel,
   shouldCollapseMessage,
-  getToolResultsSummary,
   formatToolArguments,
-  formatArgumentsPreview,
+  getToolResultsSummary,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
-import { spacing, radius, Theme } from '../ui/theme';
+import { spacing, radius, Theme, hexToRgba } from '../ui/theme';
 import { MarkdownRenderer } from '../ui/MarkdownRenderer';
 
 export default function ChatScreen({ route, navigation }: any) {
@@ -54,6 +54,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const sessionStore = useSessionContext();
   const messageQueue = useMessageQueueContext();
   const connectionManager = useConnectionManager();
+  const { connectionInfo } = useTunnelConnection();
+  const { currentProfile } = useProfile();
   const handsFree = !!config.handsFree;
   const messageQueueEnabled = config.messageQueueEnabled !== false; // default true
   const handsFreeRef = useRef<boolean>(handsFree);
@@ -218,6 +220,30 @@ export default function ChatScreen({ route, navigation }: any) {
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
+      headerTitle: () => (
+        <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '600', color: theme.colors.foreground }}>Chat</Text>
+          {currentProfile && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.colors.primary + '33',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 10,
+              marginTop: 2,
+            }}>
+              <Text style={{
+                fontSize: 11,
+                color: theme.colors.primary,
+                fontWeight: '500',
+              }}>
+                {currentProfile.name}
+              </Text>
+            </View>
+          )}
+        </View>
+      ),
       headerLeft: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
@@ -232,6 +258,11 @@ export default function ChatScreen({ route, navigation }: any) {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ConnectionStatusIndicator
+            state={connectionInfo.state}
+            retryCount={connectionInfo.retryCount}
+            compact
+          />
           {responding && (
             <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
               <Image
@@ -299,18 +330,38 @@ export default function ChatScreen({ route, navigation }: any) {
         </View>
       ),
     });
-  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore]);
+  }, [navigation, handsFree, handleKillSwitch, handleNewChat, responding, theme, isDark, sessionStore, connectionInfo.state, connectionInfo.retryCount, currentProfile]);
 
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Keep a ref to messages to avoid stale closures in setTimeout callbacks (PR review fix)
   const messagesRef = useRef<ChatMessage[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+	// Stable ref to the latest send() to avoid stale closures in speech callbacks
+	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
+	// Voice debug logging (dev-only) to help diagnose recording/send lifecycle.
+	const voiceLogSeqRef = useRef(0);
+	const voiceLog = useCallback((msg: string, extra?: any) => {
+		if (!__DEV__) return;
+		voiceLogSeqRef.current += 1;
+		const seq = voiceLogSeqRef.current;
+		if (typeof extra !== 'undefined') console.log(`[Voice ${seq}] ${msg}`, extra);
+		else console.log(`[Voice ${seq}] ${msg}`);
+	}, []);
   const [input, setInput] = useState('');
   const [listening, setListening] = useState(false);
+	const listeningRef = useRef<boolean>(listening);
+	useEffect(() => { listeningRef.current = listening; }, [listening]);
+	const setListeningValue = useCallback((v: boolean) => {
+		listeningRef.current = v;
+		setListening(v);
+	}, []);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
+  // Track which individual tool calls are fully expanded to show all input/output details
+  // Key format: "messageId-toolCallIndex" (messageId falls back to message array index if undefined)
+  const [expandedToolCalls, setExpandedToolCalls] = useState<Record<string, boolean>>({});
   // Track the last failed message for retry functionality
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
@@ -425,6 +476,12 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
 
+    // Reset expandedMessages and expandedToolCalls on ANY session switch to ensure consistent
+    // "final response expanded" behavior per chat and prevent stale UI state from leaking
+    // across sessions (fixes review comment about keys like "0-0" leaking across chats)
+    setExpandedMessages({});
+    setExpandedToolCalls({});
+
     let currentSession = sessionStore.getCurrentSession();
 
     // If we have an existing session, always load its messages regardless of deletions
@@ -439,6 +496,12 @@ export default function ChatScreen({ route, navigation }: any) {
           toolResults: m.toolResults,
         }));
         setMessages(chatMessages);
+      } else if (currentSession.serverConversationId && config.baseUrl && config.apiKey) {
+        // Stub session — lazy-load messages from server
+        setMessages([]);
+        const client = new SettingsApiClient(config.baseUrl, config.apiKey);
+        sessionStore.loadSessionMessages(currentSession.id, client);
+        // Messages will be populated by the store update, triggering a re-render
       } else {
         setMessages([]);
       }
@@ -453,10 +516,6 @@ export default function ChatScreen({ route, navigation }: any) {
 
     currentSession = sessionStore.createNewSession();
     lastLoadedSessionIdRef.current = currentSession.id;
-
-    // Reset expandedMessages on session switch to ensure consistent "final response expanded"
-    // behavior per chat and prevent stale entries from affecting the new session
-    setExpandedMessages({});
 
     if (currentSession.messages.length > 0) {
       const chatMessages: ChatMessage[] = currentSession.messages.map(m => ({
@@ -500,6 +559,12 @@ export default function ChatScreen({ route, navigation }: any) {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
 
+  // Toggle expansion of individual tool call details (input params and results)
+  const toggleToolCallExpansion = useCallback((messageId: string, toolCallIndex: number) => {
+    const key = `${messageId}-${toolCallIndex}`;
+    setExpandedToolCalls(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
   // Auto-expand only the final assistant message (the last one in the conversation)
   // Tool call messages (intermediate assistant messages with tool calls) should be collapsed by default
   // When a new message arrives, collapse previous assistant messages with tool calls
@@ -536,6 +601,43 @@ export default function ChatScreen({ route, navigation }: any) {
   const willCancelRef = useRef<boolean>(false);
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
   useEffect(() => { willCancelRef.current = willCancel; }, [willCancel]);
+	const setLiveTranscriptValue = useCallback((t: string) => {
+		liveTranscriptRef.current = t;
+		setLiveTranscript(t);
+	}, []);
+
+	// Merge accumulated final transcript with the latest live transcript.
+	// This avoids "cut off" endings when the recognizer ends before producing a final segment,
+	// and also helps dedupe overlaps when multiple callbacks fire.
+	const normalizeVoiceText = (t?: string) => (t || '').replace(/\s+/g, ' ').trim();
+	const mergeVoiceText = (base?: string, live?: string) => {
+		const a = normalizeVoiceText(base);
+		const b = normalizeVoiceText(live);
+		if (!a) return b;
+		if (!b) return a;
+		if (a === b) return a;
+		if (b.startsWith(a)) return b;
+		if (a.startsWith(b)) return a;
+		if (a.includes(b)) return a;
+		if (b.includes(a)) return b;
+		const aWords = a.split(' ');
+		const bWords = b.split(' ');
+		const maxOverlap = Math.min(aWords.length, bWords.length);
+		for (let k = maxOverlap; k > 0; k--) {
+			const aSuffix = aWords.slice(-k).join(' ');
+			const bPrefix = bWords.slice(0, k).join(' ');
+			if (aSuffix === bPrefix) {
+				const prefix = aWords.slice(0, aWords.length - k).join(' ');
+				return normalizeVoiceText(`${prefix} ${b}`);
+			}
+		}
+		return normalizeVoiceText(`${a} ${b}`);
+	};
+
+	// Used to dedupe push-to-talk finalization when speech engines (or subscriptions)
+	// emit multiple 'end' events for the same gesture.
+	const voiceGestureIdRef = useRef(0);
+	const voiceGestureFinalizedIdRef = useRef(0);
 
   const startingRef = useRef(false);
   const stoppingRef = useRef(false);
@@ -1224,6 +1326,11 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   };
 
+	// Keep sendRef in sync with the latest send() implementation for speech callbacks.
+	// IMPORTANT: This must live outside send() so voice callbacks can send even before any manual send() occurs.
+	// We intentionally assign during render (not useEffect) so it is available immediately.
+	sendRef.current = send;
+
   // Track modifier keys for keyboard shortcut handling
   const modifierKeysRef = useRef<{ shift: boolean; ctrl: boolean; meta: boolean }>({
     shift: false,
@@ -1333,16 +1440,25 @@ export default function ChatScreen({ route, navigation }: any) {
     // @ts-ignore
     const SRClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SRClass) {
+			voiceLog('ensureWebRecognizer: Web Speech API not available');
       console.warn('[Voice] Web Speech API not available (use Chrome/Edge over HTTPS).');
       return false;
     }
     if (!webRecognitionRef.current) {
+			voiceLog('ensureWebRecognizer: creating web recognizer');
       const rec = new SRClass();
       rec.lang = 'en-US';
       rec.interimResults = true;
       rec.continuous = true;
-      rec.onstart = () => {};
+			rec.onstart = () => {
+				voiceLog('web:onstart', {
+					gestureId: voiceGestureIdRef.current,
+					handsFree: handsFreeRef.current,
+					userReleased: userReleasedButtonRef.current,
+				});
+			};
       rec.onerror = (ev: any) => {
+				voiceLog('web:onerror', { error: ev?.error || ev });
         console.error('[Voice] Web recognition error:', ev?.error || ev);
       };
       rec.onresult = (ev: any) => {
@@ -1354,7 +1470,15 @@ export default function ChatScreen({ route, navigation }: any) {
           if (res.isFinal) finalText += txt;
           else interim += txt;
         }
-        if (interim) setLiveTranscript(interim);
+				voiceLog('web:onresult', {
+					gestureId: voiceGestureIdRef.current,
+					resultIndex: ev?.resultIndex,
+					resultsLength: ev?.results?.length,
+					interim: interim?.trim(),
+					final: finalText?.trim(),
+					handsFree: handsFreeRef.current,
+				});
+	        if (interim) setLiveTranscriptValue(interim);
         if (finalText) {
           if (handsFreeRef.current) {
             if (handsFreeDebounceRef.current) {
@@ -1369,8 +1493,8 @@ export default function ChatScreen({ route, navigation }: any) {
                 const toSend = pendingHandsFreeFinalRef.current.trim();
                 pendingHandsFreeFinalRef.current = '';
                 webFinalRef.current = '';
-                setLiveTranscript('');
-                if (toSend) send(toSend);
+	                setLiveTranscriptValue('');
+	                if (toSend) void sendRef.current(toSend);
               }, handsFreeDebounceMs);
             }
           } else {
@@ -1379,39 +1503,73 @@ export default function ChatScreen({ route, navigation }: any) {
         }
       };
       rec.onend = () => {
+				voiceLog('web:onend', {
+					gestureId: voiceGestureIdRef.current,
+					finalizedGestureId: voiceGestureFinalizedIdRef.current,
+					handsFree: handsFreeRef.current,
+					userReleased: userReleasedButtonRef.current,
+					pendingHandsFreeFinal: pendingHandsFreeFinalRef.current,
+					webFinal: webFinalRef.current,
+					live: liveTranscriptRef.current,
+				});
         if (handsFreeDebounceRef.current) {
           clearTimeout(handsFreeDebounceRef.current);
           handsFreeDebounceRef.current = null;
         }
 
         if (!handsFreeRef.current && !userReleasedButtonRef.current && webRecognitionRef.current) {
+					voiceLog('web:onend -> attempting restart (user still holding)');
           try {
             webRecognitionRef.current.start();
+						voiceLog('web:onend -> restart succeeded');
             return;
           } catch (restartErr) {
+						voiceLog('web:onend -> restart failed', restartErr);
             console.warn('[Voice] Failed to restart web recognition after voice break:', restartErr);
-            setListening(false);
-            setLiveTranscript('');
-            const accumulatedText = (webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+	            setListeningValue(false);
+	            // Capture liveTranscriptRef.current BEFORE clearing it, since setLiveTranscriptValue
+	            // updates the ref synchronously and would cause mergeVoiceText to use stale value
+	            const accumulatedText = mergeVoiceText(webFinalRef.current, liveTranscriptRef.current);
+	            setLiveTranscriptValue('');
             if (accumulatedText) {
               setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
             }
+	            // Treat as finalized for this push-to-talk gesture to prevent duplicate sends.
+	            voiceGestureFinalizedIdRef.current = voiceGestureIdRef.current;
             webFinalRef.current = '';
             pendingHandsFreeFinalRef.current = '';
             return;
           }
         }
+			const gestureId = voiceGestureIdRef.current;
+			const alreadyFinalizedPushToTalk = !handsFreeRef.current && voiceGestureFinalizedIdRef.current === gestureId;
 
-        const finalText = (pendingHandsFreeFinalRef.current || webFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+	        const finalText = mergeVoiceText(
+	          pendingHandsFreeFinalRef.current || webFinalRef.current,
+	          liveTranscriptRef.current
+	        );
+				voiceLog('web:onend -> finalize', {
+					gestureId,
+					alreadyFinalizedPushToTalk,
+					willEdit: willCancelRef.current,
+					finalText,
+				});
         pendingHandsFreeFinalRef.current = '';
-        setListening(false);
-        setLiveTranscript('');
+	        setListeningValue(false);
+	        setLiveTranscriptValue('');
         const willEdit = willCancelRef.current;
-        if (!handsFreeRef.current && finalText) {
-          if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
-          else send(finalText);
+	        if (!handsFreeRef.current && finalText && !alreadyFinalizedPushToTalk) {
+	          voiceGestureFinalizedIdRef.current = gestureId;
+					if (willEdit) {
+						voiceLog('web:onend -> willEdit=true (append to input)', { gestureId, finalText });
+						setInput((t) => (t ? `${t} ${finalText}` : finalText));
+					} else {
+						voiceLog('web:onend -> sending', { gestureId, finalText });
+						void sendRef.current(finalText);
+					}
         } else if (handsFreeRef.current && finalText) {
-          send(finalText);
+					voiceLog('web:onend -> handsFree send', { gestureId, finalText });
+	          void sendRef.current(finalText);
         }
         webFinalRef.current = '';
       };
@@ -1421,15 +1579,29 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
   const startRecording = async (e?: GestureResponderEvent) => {
-    if (startingRef.current || listening) {
+			voiceLog('startRecording called', {
+				starting: startingRef.current,
+				listening: listeningRef.current,
+				handsFree: handsFreeRef.current,
+				platform: Platform.OS,
+			});
+			if (startingRef.current || listeningRef.current) {
+				voiceLog('startRecording early return (already starting/listening)');
       return;
     }
     startingRef.current = true;
     try {
+	      // New push-to-talk gesture/session.
+	      voiceGestureIdRef.current += 1;
+			voiceLog('startRecording init', {
+				gestureId: voiceGestureIdRef.current,
+				handsFree: handsFreeRef.current,
+			});
       setWillCancel(false);
-      setLiveTranscript('');
-      setListening(true);
+	      setLiveTranscriptValue('');
+	      setListeningValue(true);
       nativeFinalRef.current = '';
+	      webFinalRef.current = '';
       pendingHandsFreeFinalRef.current = '';
       userReleasedButtonRef.current = false;
       if (handsFreeDebounceRef.current) {
@@ -1442,13 +1614,20 @@ export default function ChatScreen({ route, navigation }: any) {
         try {
           const SR: any = await import('expo-speech-recognition');
           if (SR?.ExpoSpeechRecognitionModule?.start) {
+						voiceLog('native: module available, wiring listeners');
             if (!srEmitterRef.current) {
               srEmitterRef.current = new EventEmitter(SR.ExpoSpeechRecognitionModule);
             }
             cleanupNativeSubs();
+						voiceLog('native: listeners cleaned', { count: srSubsRef.current.length });
             const subResult = srEmitterRef.current.addListener('result', (event: any) => {
               const t = event?.results?.[0]?.transcript ?? event?.text ?? event?.transcript ?? '';
-              if (t) setLiveTranscript(t);
+							voiceLog('native:result', {
+								gestureId: voiceGestureIdRef.current,
+								isFinal: event?.isFinal,
+								transcript: t,
+							});
+	                  if (t) setLiveTranscriptValue(t);
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
                   if (handsFreeDebounceRef.current) {
@@ -1463,8 +1642,8 @@ export default function ChatScreen({ route, navigation }: any) {
                       const toSend = pendingHandsFreeFinalRef.current.trim();
                       pendingHandsFreeFinalRef.current = '';
                       nativeFinalRef.current = '';
-                      setLiveTranscript('');
-                      if (toSend) send(toSend);
+	                          setLiveTranscriptValue('');
+	                          if (toSend) void sendRef.current(toSend);
                     }, handsFreeDebounceMs);
                   }
                 } else {
@@ -1475,15 +1654,26 @@ export default function ChatScreen({ route, navigation }: any) {
               }
             });
             const subError = srEmitterRef.current.addListener('error', (event: any) => {
+							voiceLog('native:error', event);
               console.error('[Voice] Native recognition error:', JSON.stringify(event));
             });
             const subEnd = srEmitterRef.current.addListener('end', async () => {
+							voiceLog('native:end', {
+								gestureId: voiceGestureIdRef.current,
+								finalizedGestureId: voiceGestureFinalizedIdRef.current,
+								handsFree: handsFreeRef.current,
+								userReleased: userReleasedButtonRef.current,
+								pendingHandsFreeFinal: pendingHandsFreeFinalRef.current,
+								nativeFinal: nativeFinalRef.current,
+								live: liveTranscriptRef.current,
+							});
               if (handsFreeDebounceRef.current) {
                 clearTimeout(handsFreeDebounceRef.current);
                 handsFreeDebounceRef.current = null;
               }
 
               if (!handsFreeRef.current && !userReleasedButtonRef.current) {
+								voiceLog('native:end -> attempting restart (user still holding)');
                 try {
                   const SR: any = await import('expo-speech-recognition');
                   if (SR?.ExpoSpeechRecognitionModule?.start) {
@@ -1493,32 +1683,56 @@ export default function ChatScreen({ route, navigation }: any) {
                       continuous: true,
                       volumeChangeEventOptions: { enabled: false, intervalMillis: 250 }
                     });
+										voiceLog('native:end -> restart succeeded');
                     return;
                   }
                 } catch (restartErr) {
+									voiceLog('native:end -> restart failed', restartErr);
                   console.warn('[Voice] Failed to restart recognition after voice break:', restartErr);
-                  setListening(false);
-                  setLiveTranscript('');
-                  const accumulatedText = (nativeFinalRef.current || '').trim() || (liveTranscriptRef.current || '').trim();
+	                  setListeningValue(false);
+	                  // Capture liveTranscriptRef.current BEFORE clearing it, since setLiveTranscriptValue
+	                  // updates the ref synchronously and would cause mergeVoiceText to use stale value
+	                  const accumulatedText = mergeVoiceText(nativeFinalRef.current, liveTranscriptRef.current);
+	                  setLiveTranscriptValue('');
                   if (accumulatedText) {
                     setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
                   }
+	                  // Treat as finalized for this push-to-talk gesture to prevent duplicate sends.
+	                  voiceGestureFinalizedIdRef.current = voiceGestureIdRef.current;
                   nativeFinalRef.current = '';
                   pendingHandsFreeFinalRef.current = '';
                   return;
                 }
               }
+					const gestureId = voiceGestureIdRef.current;
+					const alreadyFinalizedPushToTalk = !handsFreeRef.current && voiceGestureFinalizedIdRef.current === gestureId;
 
-              setListening(false);
-              const finalText = (pendingHandsFreeFinalRef.current || nativeFinalRef.current || liveTranscriptRef.current || '').trim();
+	              setListeningValue(false);
+	              const finalText = mergeVoiceText(
+	                pendingHandsFreeFinalRef.current || nativeFinalRef.current,
+	                liveTranscriptRef.current
+	              );
+							voiceLog('native:end -> finalize', {
+								gestureId,
+								alreadyFinalizedPushToTalk,
+								willEdit: willCancelRef.current,
+								finalText,
+							});
               pendingHandsFreeFinalRef.current = '';
-              setLiveTranscript('');
+	              setLiveTranscriptValue('');
               const willEdit = willCancelRef.current;
-              if (!handsFreeRef.current && finalText) {
-                if (willEdit) setInput((t) => (t ? `${t} ${finalText}` : finalText));
-                else send(finalText);
+	              if (!handsFreeRef.current && finalText && !alreadyFinalizedPushToTalk) {
+	                voiceGestureFinalizedIdRef.current = gestureId;
+								if (willEdit) {
+									voiceLog('native:end -> willEdit=true (append to input)', { gestureId, finalText });
+									setInput((t) => (t ? `${t} ${finalText}` : finalText));
+								} else {
+									voiceLog('native:end -> sending', { gestureId, finalText });
+									void sendRef.current(finalText);
+								}
               } else if (handsFreeRef.current && finalText) {
-                send(finalText);
+								voiceLog('native:end -> handsFree send', { gestureId, finalText });
+	                void sendRef.current(finalText);
               }
               nativeFinalRef.current = '';
             });
@@ -1526,11 +1740,13 @@ export default function ChatScreen({ route, navigation }: any) {
 
             try {
               const perm = await SR.ExpoSpeechRecognitionModule.getPermissionsAsync();
+							voiceLog('native: getPermissionsAsync', perm);
               if (!perm?.granted) {
                 const req = await SR.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+								voiceLog('native: requestPermissionsAsync', req);
                 if (!req?.granted) {
                   console.warn('[Voice] microphone/speech permission not granted; aborting');
-                  setListening(false);
+	                  setListeningValue(false);
                   startingRef.current = false;
                   return;
                 }
@@ -1540,6 +1756,10 @@ export default function ChatScreen({ route, navigation }: any) {
             }
 
             try {
+							voiceLog('native: start()', {
+								gestureId: voiceGestureIdRef.current,
+								handsFree: handsFreeRef.current,
+							});
               SR.ExpoSpeechRecognitionModule.start({
                 lang: 'en-US',
                 interimResults: true,
@@ -1548,18 +1768,19 @@ export default function ChatScreen({ route, navigation }: any) {
               });
             } catch (serr) {
               console.error('[Voice] Native start error:', serr);
-              setListening(false);
+	              setListeningValue(false);
             }
             startingRef.current = false;
             return;
           }
         } catch (err) {
           const errorMsg = (err as any)?.message || String(err);
+					voiceLog('native: import/start failed', { errorMsg });
           console.warn('[Voice] Native SR unavailable (likely Expo Go):', errorMsg);
 
           if (!nativeSRUnavailableShownRef.current && errorMsg.includes('ExpoSpeechRecognition')) {
             nativeSRUnavailableShownRef.current = true;
-            setListening(false);
+	            setListeningValue(false);
             startingRef.current = false;
             Alert.alert(
               'Development Build Required',
@@ -1573,6 +1794,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
       if (ensureWebRecognizer()) {
         try {
+				voiceLog('web: start()', { gestureId: voiceGestureIdRef.current, handsFree: handsFreeRef.current });
           webFinalRef.current = '';
           pendingHandsFreeFinalRef.current = '';
           if (webRecognitionRef.current) {
@@ -1581,30 +1803,39 @@ export default function ChatScreen({ route, navigation }: any) {
           webRecognitionRef.current?.start();
           startingRef.current = false;
         } catch (err) {
+				voiceLog('web: start() failed', err);
           console.error('[Voice] Web start error:', err);
-          setListening(false);
+	          setListeningValue(false);
           startingRef.current = false;
         }
       } else {
-        setListening(false);
+	        setListeningValue(false);
         startingRef.current = false;
       }
     } catch (err) {
       console.error('[Voice] startRecording error:', err);
-      setListening(false);
+	      setListeningValue(false);
       startingRef.current = false;
     }
   };
 
   const stopRecordingAndHandle = async () => {
     if (stoppingRef.current) {
+			voiceLog('stopRecordingAndHandle early return (already stopping)');
       return;
     }
     stoppingRef.current = true;
     userReleasedButtonRef.current = true;
+		voiceLog('stopRecordingAndHandle called', {
+			gestureId: voiceGestureIdRef.current,
+			listening: listeningRef.current,
+			handsFree: handsFreeRef.current,
+			platform: Platform.OS,
+		});
     try {
       const hasWeb = Platform.OS === 'web' && webRecognitionRef.current;
-      if (!listening && !hasWeb) {
+	      if (!listeningRef.current && !hasWeb) {
+				voiceLog('stopRecordingAndHandle: nothing to stop (not listening and no web recognizer)');
         return;
       }
 
@@ -1612,6 +1843,7 @@ export default function ChatScreen({ route, navigation }: any) {
         try {
           const SR: any = await import('expo-speech-recognition');
           if (SR?.ExpoSpeechRecognitionModule?.stop) {
+						voiceLog('native: stop()');
             SR.ExpoSpeechRecognitionModule.stop();
           }
         } catch (err) {
@@ -1621,19 +1853,24 @@ export default function ChatScreen({ route, navigation }: any) {
 
       if (Platform.OS === 'web' && webRecognitionRef.current) {
         try {
+					voiceLog('web: stop()');
           webRecognitionRef.current.stop();
         } catch (err) {
           console.error('[Voice] Web stop error:', err);
-          setListening(false);
+	          setListeningValue(false);
         }
       }
     } catch (err) {
       console.error('[Voice] stopRecording error:', err);
-      setListening(false);
+	      setListeningValue(false);
     } finally {
       startYRef.current = null;
       setWillCancel(false);
       stoppingRef.current = false;
+			voiceLog('stopRecordingAndHandle finished', {
+				gestureId: voiceGestureIdRef.current,
+				listening: listeningRef.current,
+			});
     }
   };
 
@@ -1647,8 +1884,8 @@ export default function ChatScreen({ route, navigation }: any) {
       <View style={{ flex: 1 }}>
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1, padding: spacing.lg, backgroundColor: theme.colors.background }}
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          style={{ flex: 1, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, backgroundColor: theme.colors.background }}
+          contentContainerStyle={{ paddingBottom: insets.bottom, gap: spacing.xs }}
           keyboardShouldPersistTaps="handled"
           contentInsetAdjustmentBehavior="automatic"
           onScroll={handleScroll}
@@ -1656,13 +1893,23 @@ export default function ChatScreen({ route, navigation }: any) {
           onScrollEndDrag={handleScrollEndDrag}
           scrollEventThrottle={16}
         >
+          {sessionStore.isLoadingMessages && messages.length === 0 && (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+              <Image
+                source={isDark ? darkSpinner : lightSpinner}
+                style={{ width: 32, height: 32, marginBottom: 12 }}
+                resizeMode="contain"
+              />
+              <Text style={{ color: theme.colors.mutedForeground, fontSize: 14 }}>
+                Loading messages from desktop…
+              </Text>
+            </View>
+          )}
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             // expandedMessages is auto-updated via useEffect to expand the last assistant message
             // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
-            const roleIcon = getRoleIcon(m.role as 'user' | 'assistant' | 'tool');
-            const roleLabel = getRoleLabel(m.role as 'user' | 'assistant' | 'tool');
 
             const toolCallCount = m.toolCalls?.length ?? 0;
             const toolResultCount = m.toolResults?.length ?? 0;
@@ -1672,10 +1919,6 @@ export default function ChatScreen({ route, navigation }: any) {
             // isPending is true when there are more tool calls than results (including partial completion)
             const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
 
-            const toolPreview = !isExpanded && m.toolCalls && m.toolCalls.length > 0 && m.toolCalls[0]?.arguments
-              ? formatArgumentsPreview(m.toolCalls[0].arguments)
-              : null;
-
             return (
               <View
                 key={i}
@@ -1684,61 +1927,35 @@ export default function ChatScreen({ route, navigation }: any) {
                   m.role === 'user' ? styles.user : styles.assistant,
                 ]}
               >
-                {/* Clickable header for expand/collapse */}
-                <Pressable
-                  onPress={shouldCollapse ? () => toggleMessageExpansion(i) : undefined}
-                  disabled={!shouldCollapse}
-                  accessibilityRole={shouldCollapse ? 'button' : undefined}
-                  accessibilityHint={
-                    shouldCollapse
-                      ? (isExpanded ? 'Collapse message' : 'Expand message')
-                      : undefined
-                  }
-                  accessibilityState={shouldCollapse ? { expanded: isExpanded } : undefined}
-                  style={({ pressed }) => [
-                    styles.messageHeader,
-                    shouldCollapse && styles.messageHeaderClickable,
-                    shouldCollapse && pressed && styles.messageHeaderPressed,
-                  ]}
-                >
-                  <Text style={styles.roleIcon} accessibilityLabel={roleLabel}>
-                    {roleIcon}
-                  </Text>
-                  {(m.toolCalls?.length ?? 0) > 0 && (
-                    <View style={[
-                      styles.toolBadgeSmall,
-                      isPending && styles.toolBadgePending,
-                      allSuccess && styles.toolBadgeSuccess,
-                      hasErrors && styles.toolBadgeError,
-                    ]}>
-                      <Text style={[
-                        styles.toolBadgeSmallText,
-                        isPending && styles.toolBadgePendingText,
-                        allSuccess && styles.toolBadgeSuccessText,
-                        hasErrors && styles.toolBadgeErrorText,
-                      ]}>
-                        {isPending ? '⏳ ' : allSuccess ? '✓ ' : hasErrors ? '✗ ' : ''}
-                        {m.toolCalls!.map(tc => tc.name).join(', ')}
-                      </Text>
-                    </View>
-                  )}
-                  {shouldCollapse && (
+                {/* Compact message header - no role labels, just tap to expand */}
+                {shouldCollapse && (
+                  <Pressable
+                    onPress={() => toggleMessageExpansion(i)}
+                    accessibilityRole="button"
+                    accessibilityHint={isExpanded ? 'Collapse message' : 'Expand message'}
+                    accessibilityState={{ expanded: isExpanded }}
+                    style={({ pressed }) => [
+                      styles.messageHeader,
+                      styles.messageHeaderClickable,
+                      pressed && styles.messageHeaderPressed,
+                    ]}
+                  >
                     <View style={styles.expandButton}>
                       <Text style={styles.expandButtonText}>
                         {isExpanded ? '▲' : '▼'}
                       </Text>
                     </View>
-                  )}
-                </Pressable>
+                  </Pressable>
+                )}
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}
-                      style={{ width: 20, height: 20 }}
+                      style={{ width: 14, height: 14 }}
                       resizeMode="contain"
                     />
-                    <Text style={{ color: theme.colors.foreground }}>Assistant is thinking</Text>
+                    <Text style={{ color: theme.colors.mutedForeground, fontSize: 11 }}>thinking...</Text>
                   </View>
                 ) : (
                   <>
@@ -1746,114 +1963,165 @@ export default function ChatScreen({ route, navigation }: any) {
                       isExpanded || !shouldCollapse ? (
                         <MarkdownRenderer content={m.content} />
                       ) : (
-                        <Text
-                          style={{ color: theme.colors.foreground }}
-                          numberOfLines={COLLAPSED_LINES}
-                        >
-                          {m.content}
-                        </Text>
+                        // Only show collapsed content preview if there are NO tool calls
+                        // Tool calls have their own compact summary row, so don't duplicate
+                        !((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                          <Text
+                            style={{ color: theme.colors.foreground, fontSize: 13, lineHeight: 18 }}
+                            numberOfLines={1}
+                          >
+                            {m.content}
+                          </Text>
+                        )
                       )
                     ) : null}
 
                     {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
                     {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
-                      <View style={[
-                        styles.toolExecutionCard,
-                        isPending && styles.toolExecutionPending,
-                        allSuccess && styles.toolExecutionSuccess,
-                        hasErrors && styles.toolExecutionError,
-                      ]}>
-                        {/* Collapsed view - show preview */}
+                      <>
+                        {/* Collapsed view - single line summary for all tools */}
                         {!isExpanded && (
-                          <View style={styles.toolExecutionCollapsed}>
-                            {toolPreview && (
-                              <Text style={styles.collapsedToolPreview} numberOfLines={1}>
-                                {toolPreview}
+                          <Pressable
+                            onPress={() => toggleMessageExpansion(i)}
+                            style={({ pressed }) => [
+                              styles.toolCallCompactRow,
+                              isPending && styles.toolCallCompactPending,
+                              allSuccess && styles.toolCallCompactSuccess,
+                              hasErrors && styles.toolCallCompactError,
+                              pressed && styles.toolCallCompactPressed,
+                            ]}
+                          >
+                            <Text style={[
+                              styles.toolCallCompactIcon,
+                              isPending && styles.toolCallCompactIconPending,
+                              allSuccess && styles.toolCallCompactIconSuccess,
+                              hasErrors && styles.toolCallCompactIconError,
+                            ]}>🔧</Text>
+                            <Text
+                              style={[
+                                styles.toolCallCompactName,
+                                isPending && styles.toolCallCompactNamePending,
+                                allSuccess && styles.toolCallCompactNameSuccess,
+                                hasErrors && styles.toolCallCompactNameError,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {(m.toolCalls?.map(tc => tc.name) ?? []).join(', ')}
+                            </Text>
+                            <Text style={[
+                              styles.toolCallCompactStatus,
+                              isPending && styles.toolCallCompactStatusPending,
+                              allSuccess && styles.toolCallCompactStatusSuccess,
+                              hasErrors && styles.toolCallCompactStatusError,
+                            ]}>
+                              {isPending ? '⏳' : allSuccess ? '✓' : '✗'}
+                            </Text>
+                            {/* Result preview - show truncated result content like desktop */}
+                            {!isPending && m.toolResults && m.toolResults.length > 0 && (
+                              <Text
+                                style={styles.toolCallCompactPreview}
+                                numberOfLines={1}
+                              >
+                                {getToolResultsSummary(m.toolResults)}
                               </Text>
                             )}
-                            {hasToolResults && (
-                              <Text style={[
-                                styles.collapsedToolText,
-                                allSuccess && styles.collapsedToolTextSuccess,
-                                hasErrors && styles.collapsedToolTextError,
-                              ]}>
-                                {getToolResultsSummary(m.toolResults!)}
-                              </Text>
-                            )}
-                          </View>
+                            <Text style={styles.toolCallCompactChevron}>▶</Text>
+                          </Pressable>
                         )}
 
-                        {/* Expanded view - show full details */}
+                        {/* Expanded view - each tool call with its own params + result */}
                         {isExpanded && (
-                          <>
-                            {/* Call Parameters Section - only show if there are toolCalls */}
-                            {(m.toolCalls?.length ?? 0) > 0 && (
-                              <View style={styles.toolParamsSection}>
-                                <Text style={styles.toolParamsSectionTitle}>Call Parameters</Text>
-                                {m.toolCalls!.map((toolCall, idx) => (
-                                  <View key={idx} style={styles.toolCallCard}>
+                          <View style={[
+                            styles.toolExecutionCard,
+                            isPending && styles.toolExecutionPending,
+                            allSuccess && styles.toolExecutionSuccess,
+                            hasErrors && styles.toolExecutionError,
+                          ]}>
+                            {m.toolCalls?.map((toolCall, idx) => {
+                              const result = m.toolResults?.[idx];
+                              const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
+                              // Use message id or fallback to array index to ensure stable, unique keys
+                              // that won't collide when m.id is undefined (which is common)
+                              const stableMessageKey = m.id ?? String(i);
+                              const toolCallKey = `${stableMessageKey}-${idx}`;
+                              const isToolCallFullyExpanded = expandedToolCalls[toolCallKey] ?? false;
+                              return (
+                                <View key={idx} style={styles.toolCallSection}>
+                                  {/* Tool name heading - tappable to toggle full expansion */}
+                                  <Pressable
+                                    onPress={() => toggleToolCallExpansion(stableMessageKey, idx)}
+                                    style={({ pressed }) => [
+                                      styles.toolCallHeader,
+                                      pressed && styles.toolCallHeaderPressed,
+                                    ]}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ expanded: isToolCallFullyExpanded }}
+                                    accessibilityHint={isToolCallFullyExpanded ? 'Collapse tool details' : 'Expand to show full input/output'}
+                                  >
                                     <Text style={styles.toolName}>{toolCall.name}</Text>
-                                    {toolCall.arguments && (
-                                      <ScrollView style={styles.toolParamsScroll} nestedScrollEnabled>
+                                    <Text style={styles.toolCallExpandHint}>
+                                      {isToolCallFullyExpanded ? '▼ Collapse' : '▶ Full Details'}
+                                    </Text>
+                                  </Pressable>
+
+                                  {/* Parameters */}
+                                  {toolCall.arguments && (
+                                    <View style={styles.toolParamsSection}>
+                                      <Text style={styles.toolSectionLabel}>Input:</Text>
+                                      <ScrollView
+                                        style={isToolCallFullyExpanded ? styles.toolParamsScrollExpanded : styles.toolParamsScroll}
+                                        nestedScrollEnabled
+                                      >
                                         <Text style={styles.toolParamsCode}>
                                           {formatToolArguments(toolCall.arguments)}
                                         </Text>
                                       </ScrollView>
-                                    )}
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-
-                            {/* Response Section */}
-                            <View style={[
-                              styles.toolResponseSection,
-                              isPending && styles.toolResponsePending,
-                              allSuccess && styles.toolResponseSuccess,
-                              hasErrors && styles.toolResponseError,
-                            ]}>
-                              <Text style={styles.toolResponseSectionTitle}>Response</Text>
-                              {/* Show any received results first, even if more are pending */}
-                              {(m.toolResults ?? []).map((result, idx) => (
-                                <View key={idx} style={styles.toolResultItem}>
-                                  <View style={styles.toolResultHeader}>
-                                    <Text style={[
-                                      styles.toolResultBadge,
-                                      result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
-                                    ]}>
-                                      {result.success ? '✅ Success' : '❌ Error'}
-                                    </Text>
-                                    <Text style={styles.toolResultCharCount}>
-                                      {(result.content?.length || 0).toLocaleString()} chars
-                                    </Text>
-                                  </View>
-                                  <ScrollView style={styles.toolResultScroll} nestedScrollEnabled>
-                                    <Text style={styles.toolResultCode}>
-                                      {result.content || 'No content returned'}
-                                    </Text>
-                                  </ScrollView>
-                                  {result.error && (
-                                    <View style={styles.toolResultErrorSection}>
-                                      <Text style={styles.toolResultErrorLabel}>Error:</Text>
-                                      <Text style={styles.toolResultErrorText}>{result.error}</Text>
                                     </View>
                                   )}
+
+                                  {/* Result for this specific tool call */}
+                                  {result ? (
+                                    <View style={styles.toolResultItem}>
+                                      <View style={styles.toolResultHeader}>
+                                        <Text style={styles.toolSectionLabel}>Output:</Text>
+                                        <Text style={[
+                                          styles.toolResultBadge,
+                                          result.success ? styles.toolResultBadgeSuccess : styles.toolResultBadgeError
+                                        ]}>
+                                          {result.success ? '✅ OK' : '❌ Error'}
+                                        </Text>
+                                        <Text style={styles.toolResultCharCount}>
+                                          {(result.content?.length || 0).toLocaleString()} chars
+                                        </Text>
+                                      </View>
+                                      <ScrollView
+                                        style={isToolCallFullyExpanded ? styles.toolResultScrollExpanded : styles.toolResultScroll}
+                                        nestedScrollEnabled
+                                      >
+                                        <Text style={styles.toolResultCode}>
+                                          {result.content || 'No content returned'}
+                                        </Text>
+                                      </ScrollView>
+                                      {result.error && (
+                                        <View style={styles.toolResultErrorSection}>
+                                          <Text style={styles.toolResultErrorLabel}>Error:</Text>
+                                          <Text style={styles.toolResultErrorText}>{result.error}</Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                  ) : isResultPending ? (
+                                    <Text style={styles.toolResponsePendingText}>⏳ Waiting...</Text>
+                                  ) : null}
                                 </View>
-                              ))}
-                              {/* Show waiting indicator if more tool calls are pending */}
-                              {isPending && (
-                                <Text style={styles.toolResponsePendingText}>
-                                  ⏳ Waiting for {toolCallCount - toolResultCount} more response{toolCallCount - toolResultCount > 1 ? 's' : ''}...
-                                </Text>
-                              )}
-                              {/* Show message if no results yet at all */}
-                              {toolResultCount === 0 && !isPending && (
-                                <Text style={styles.toolResponsePendingText}>No responses received</Text>
-                              )}
-                            </View>
-                          </>
+                              );
+                            })}
+                            {/* Show message if no tool calls */}
+                            {(m.toolCalls?.length ?? 0) === 0 && (
+                              <Text style={styles.toolResponsePendingText}>No tool calls</Text>
+                            )}
+                          </View>
                         )}
-                      </View>
+                      </>
                     )}
                   </>
                 )}
@@ -1967,7 +2235,97 @@ export default function ChatScreen({ route, navigation }: any) {
                   // the same server-created conversation when the first attempt failed mid-stream
                   const retryClient = getSessionClient();
                   const recoveryConversationId = retryClient?.getRecoveryConversationId();
-                  if (recoveryConversationId) {
+
+                  // Try to recover conversation state from server first (fixes #815)
+                  // If the server already processed the message, we should sync the state
+                  // instead of re-sending the message
+                  if (recoveryConversationId && retryClient) {
+                    console.log('[ChatScreen] Retry: Checking server conversation state:', recoveryConversationId);
+                    try {
+                      const serverConversation = await retryClient.getConversation(recoveryConversationId);
+                      if (serverConversation && serverConversation.messages.length > 0) {
+                        // Check if the server has the user's message and a response
+                        const serverMessages = serverConversation.messages;
+
+                        // Find the index of the last user message
+                        let lastUserMsgIndex = -1;
+                        for (let i = serverMessages.length - 1; i >= 0; i--) {
+                          if (serverMessages[i].role === 'user') {
+                            lastUserMsgIndex = i;
+                            break;
+                          }
+                        }
+
+                        // Check if there's ANY assistant message with content after the last user message
+                        // This handles cases where tool messages follow the assistant response
+                        let hasAssistantResponse = false;
+                        if (lastUserMsgIndex >= 0) {
+                          for (let i = lastUserMsgIndex + 1; i < serverMessages.length; i++) {
+                            if (serverMessages[i].role === 'assistant' && serverMessages[i].content) {
+                              hasAssistantResponse = true;
+                              break;
+                            }
+                          }
+                        }
+
+                        // If there's an assistant response after the last user message, server already processed the request
+                        if (hasAssistantResponse) {
+                          console.log('[ChatScreen] Retry: Server already has response, syncing state');
+
+                          // Update the server conversation ID
+                          await sessionStore.setServerConversationId(recoveryConversationId);
+
+                          // Convert server messages to ChatMessage format, filtering out tool messages
+                          // and merging their toolResults into the preceding assistant message
+                          const recoveredMessages: ChatMessage[] = [];
+                          for (const msg of serverMessages) {
+                            // Only include 'user' and 'assistant' roles
+                            if (msg.role === 'user' || msg.role === 'assistant') {
+                              recoveredMessages.push({
+                                id: msg.id,
+                                role: msg.role,
+                                content: msg.content,
+                                toolCalls: msg.toolCalls,
+                                toolResults: msg.toolResults,
+                              });
+                            } else if (msg.role === 'tool' && recoveredMessages.length > 0) {
+                              // Merge tool message toolResults into the preceding assistant message
+                              const lastMessage = recoveredMessages[recoveredMessages.length - 1];
+                              if (lastMessage.role === 'assistant' && lastMessage.toolCalls && lastMessage.toolCalls.length > 0) {
+                                const hasToolResults = msg.toolResults && msg.toolResults.length > 0;
+                                const hasContent = msg.content && msg.content.trim().length > 0;
+
+                                if (hasToolResults) {
+                                  // Merge toolResults into the existing assistant message
+                                  lastMessage.toolResults = [
+                                    ...(lastMessage.toolResults || []),
+                                    ...(msg.toolResults || []),
+                                  ];
+                                  // Also preserve any content from the tool message (e.g., error messages)
+                                  if (hasContent) {
+                                    lastMessage.content = (lastMessage.content || '') +
+                                      (lastMessage.content ? '\n' : '') + msg.content;
+                                  }
+                                }
+                              }
+                            }
+                          }
+
+                          // Replace local messages with server state
+                          setMessages(recoveredMessages);
+
+                          // Also persist to session store
+                          await sessionStore.setMessages(recoveredMessages);
+
+                          console.log('[ChatScreen] Retry: Successfully recovered', recoveredMessages.length, 'messages from server');
+                          return; // Don't retry, we've recovered the state
+                        }
+                      }
+                    } catch (error) {
+                      console.log('[ChatScreen] Retry: Could not fetch server state, will retry message:', error);
+                    }
+
+                    // If we couldn't recover, set the conversation ID for the retry
                     console.log('[ChatScreen] Retry: Using recovery conversationId:', recoveryConversationId);
                     await sessionStore.setServerConversationId(recoveryConversationId);
                   }
@@ -2007,21 +2365,42 @@ export default function ChatScreen({ route, navigation }: any) {
               activeOpacity={0.7}
               delayPressIn={0}
               onPressIn={!handsFree ? (e: GestureResponderEvent) => {
-                lastGrantTimeRef.current = Date.now();
-                if (!listening) startRecording(e);
+					lastGrantTimeRef.current = Date.now();
+					voiceLog('mic:onPressIn', {
+						gestureId: voiceGestureIdRef.current,
+						listening: listeningRef.current,
+						starting: startingRef.current,
+					});
+					if (!listeningRef.current) startRecording(e);
               } : undefined}
               onPressOut={!handsFree ? () => {
                 const now = Date.now();
                 const dt = now - lastGrantTimeRef.current;
                 const delay = Math.max(0, minHoldMs - dt);
+					voiceLog('mic:onPressOut', {
+						gestureId: voiceGestureIdRef.current,
+						listening: listeningRef.current,
+						dt,
+						delay,
+					});
                 if (delay > 0) {
-                  setTimeout(() => { if (listening) stopRecordingAndHandle(); }, delay);
+						setTimeout(() => {
+							voiceLog('mic:onPressOut -> delayed stop fired', {
+								gestureId: voiceGestureIdRef.current,
+								listening: listeningRef.current,
+							});
+							if (listeningRef.current) stopRecordingAndHandle();
+						}, delay);
                 } else {
-                  if (listening) stopRecordingAndHandle();
+	                  if (listeningRef.current) stopRecordingAndHandle();
                 }
               } : undefined}
               onPress={handsFree ? () => {
-                if (!listening) startRecording(); else stopRecordingAndHandle();
+					voiceLog('mic:onPress (handsFree)', {
+						gestureId: voiceGestureIdRef.current,
+						listening: listeningRef.current,
+					});
+					if (!listeningRef.current) startRecording(); else stopRecordingAndHandle();
               } : undefined}
             >
               <Text style={styles.micText}>
@@ -2052,35 +2431,34 @@ export default function ChatScreen({ route, navigation }: any) {
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
+    // Compact desktop-style messages: left-border accent, full width, no bubbles
     msg: {
-      padding: spacing.md,
-      borderRadius: radius.xl,
-      marginBottom: spacing.sm,
-      maxWidth: '85%',
+      paddingLeft: spacing.xs,
+      paddingVertical: 2,
+      marginBottom: 0,
+      width: '100%',
     },
     user: {
-      backgroundColor: theme.colors.secondary,
-      alignSelf: 'flex-end',
+      // User messages: subtle left border accent
+      borderLeftWidth: 2,
+      borderLeftColor: hexToRgba(theme.colors.info, 0.4),
+      paddingLeft: spacing.xs,
     },
     assistant: {
-      backgroundColor: theme.colors.card,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      alignSelf: 'flex-start',
-    },
-    roleIcon: {
-      fontSize: 14,
-      marginRight: 4,
+      // Assistant messages: subtle left-border accent like desktop
+      borderLeftWidth: 2,
+      borderLeftColor: hexToRgba(theme.colors.mutedForeground, 0.3),
+      paddingLeft: spacing.xs,
     },
     messageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       flexWrap: 'wrap',
-      gap: spacing.xs,
-      marginBottom: spacing.xs,
-      paddingVertical: spacing.xs,
-      marginHorizontal: -spacing.xs,
-      paddingHorizontal: spacing.xs,
+      gap: 2,
+      marginBottom: 1,
+      paddingVertical: 1,
+      marginHorizontal: -1,
+      paddingHorizontal: 1,
       borderRadius: radius.sm,
     },
     messageHeaderClickable: {
@@ -2089,74 +2467,23 @@ function createStyles(theme: Theme) {
     messageHeaderPressed: {
       backgroundColor: theme.colors.muted,
     },
-    toolBadgeSmall: {
-      backgroundColor: theme.colors.muted,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 3,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      flexShrink: 1,
-    },
-    toolBadgePending: {
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
-    },
-    toolBadgeSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.1)',
-      borderColor: 'rgba(34, 197, 94, 0.3)',
-    },
-    toolBadgeError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
-    },
-    toolBadgeSmallText: {
-      fontSize: 11,
-      color: theme.colors.mutedForeground,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontWeight: '600',
-    },
-    toolBadgePendingText: {
-      color: 'rgb(59, 130, 246)',
-    },
-    toolBadgeSuccessText: {
-      color: 'rgb(34, 197, 94)',
-    },
-    toolBadgeErrorText: {
-      color: 'rgb(239, 68, 68)',
-    },
     expandButton: {
       marginLeft: 'auto',
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 4,
+      paddingHorizontal: 2,
+      paddingVertical: 1,
     },
     expandButtonText: {
-      fontSize: 12,
+      fontSize: 8,
       color: theme.colors.primary,
-      fontWeight: '600',
+      fontWeight: '500',
     },
-    collapsedToolPreview: {
-      fontSize: 11,
-      color: theme.colors.mutedForeground,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      opacity: 0.7,
-      marginBottom: spacing.xs,
-    },
-    collapsedToolText: {
-      fontSize: 12,
-      color: theme.colors.mutedForeground,
-    },
-    collapsedToolTextSuccess: {
-      color: 'rgb(34, 197, 94)',
-    },
-    collapsedToolTextError: {
-      color: 'rgb(239, 68, 68)',
-    },
+
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
-      padding: spacing.md,
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
       borderTopWidth: theme.hairline,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
@@ -2170,10 +2497,10 @@ function createStyles(theme: Theme) {
       borderRadius: radius.full,
     },
     mic: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      borderWidth: 2,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      borderWidth: 1.5,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
       alignItems: 'center',
@@ -2184,20 +2511,20 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.primary,
     },
     micText: {
-      fontSize: 24,
+      fontSize: 18,
     },
     micLabel: {
-      fontSize: 10,
+      fontSize: 9,
       color: theme.colors.mutedForeground,
-      marginTop: 2,
+      marginTop: 1,
     },
     micLabelOn: {
       color: theme.colors.primaryForeground,
     },
     ttsToggle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.muted,
@@ -2209,17 +2536,18 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.primary,
     },
     ttsToggleText: {
-      fontSize: 18,
+      fontSize: 14,
     },
     sendButton: {
       backgroundColor: theme.colors.primary,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.lg,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: radius.md,
     },
     sendButtonText: {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
+      fontSize: 13,
     },
     debugInfo: {
       backgroundColor: theme.colors.muted,
@@ -2243,12 +2571,12 @@ function createStyles(theme: Theme) {
       borderWidth: 1,
     },
     connectionBannerReconnecting: {
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.info, 0.1),
+      borderColor: hexToRgba(theme.colors.info, 0.3),
     },
     connectionBannerFailed: {
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.1),
+      borderColor: hexToRgba(theme.colors.destructive, 0.3),
     },
     connectionBannerContent: {
       flexDirection: 'row',
@@ -2313,164 +2641,275 @@ function createStyles(theme: Theme) {
     },
     overlayText: {
       ...theme.typography.caption,
-      backgroundColor: 'rgba(0,0,0,0.75)',
-      color: '#FFFFFF',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.75),
+      color: theme.colors.background,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: radius.xl,
       marginBottom: 6,
     },
     overlayTranscript: {
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      color: '#FFFFFF',
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.6),
+      color: theme.colors.background,
       padding: 10,
       borderRadius: radius.lg,
       maxWidth: '90%',
     },
-    // Unified Tool Execution Card styles
+    // Unified Tool Execution Card styles - compact left-accent design matching desktop
     toolExecutionCard: {
-      marginTop: spacing.sm,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      marginTop: 2,
+      borderRadius: radius.sm,
+      borderLeftWidth: 1.5,
+      borderLeftColor: hexToRgba(theme.colors.mutedForeground, 0.5),
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.02),
       overflow: 'hidden',
     },
     toolExecutionPending: {
-      borderColor: 'rgba(59, 130, 246, 0.4)',
-      backgroundColor: 'rgba(59, 130, 246, 0.05)',
+      borderLeftColor: hexToRgba(theme.colors.info, 0.5),
+      backgroundColor: hexToRgba(theme.colors.info, 0.02),
     },
     toolExecutionSuccess: {
-      borderColor: 'rgba(34, 197, 94, 0.4)',
-      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+      borderLeftColor: hexToRgba(theme.colors.success, 0.5),
+      backgroundColor: hexToRgba(theme.colors.success, 0.02),
     },
     toolExecutionError: {
-      borderColor: 'rgba(239, 68, 68, 0.4)',
-      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+      borderLeftColor: hexToRgba(theme.colors.destructive, 0.5),
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.02),
     },
-    toolExecutionCollapsed: {
-      padding: spacing.sm,
+    toolCallCompactRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 2,
+      paddingHorizontal: 3,
+      borderRadius: radius.sm,
+      gap: 3,
+    },
+    toolCallCompactPending: {
+      backgroundColor: hexToRgba(theme.colors.info, 0.05),
+    },
+    toolCallCompactSuccess: {
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.03),
+    },
+    toolCallCompactError: {
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.03),
+    },
+    toolCallCompactPressed: {
+      opacity: 0.7,
+    },
+    toolCallCompactIcon: {
+      fontSize: 8,
+    },
+    toolCallCompactIconPending: {
+      // uses default
+    },
+    toolCallCompactIconSuccess: {
+      color: theme.colors.mutedForeground,
+    },
+    toolCallCompactIconError: {
+      color: theme.colors.mutedForeground,
+    },
+    toolCallCompactName: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 10,
+      fontWeight: '500',
+      flexShrink: 1,
+    },
+    toolCallCompactNamePending: {
+      color: theme.colors.info,
+    },
+    toolCallCompactNameSuccess: {
+      color: theme.colors.mutedForeground,
+    },
+    toolCallCompactNameError: {
+      color: theme.colors.mutedForeground,
+    },
+    toolCallCompactStatus: {
+      fontSize: 9,
+      marginLeft: 1,
+    },
+    toolCallCompactStatusPending: {
+      color: theme.colors.info,
+    },
+    toolCallCompactStatusSuccess: {
+      color: theme.colors.mutedForeground,
+    },
+    toolCallCompactStatusError: {
+      color: theme.colors.mutedForeground,
+    },
+    toolCallCompactChevron: {
+      fontSize: 8,
+      color: theme.colors.mutedForeground,
+      opacity: 0.4,
+      marginLeft: 'auto',
+    },
+    toolCallCompactPreview: {
+      fontSize: 9,
+      color: theme.colors.mutedForeground,
+      opacity: 0.6,
+      flex: 1,
+      marginLeft: 2,
     },
     toolParamsSection: {
-      padding: spacing.sm,
-      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(59, 130, 246, 0.2)',
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
     },
     toolParamsSectionTitle: {
-      fontSize: 11,
+      fontSize: 9,
       fontWeight: '600',
-      color: 'rgb(59, 130, 246)',
-      marginBottom: spacing.sm,
+      color: theme.colors.mutedForeground,
+      marginBottom: 2,
+      opacity: 0.7,
     },
     toolCallCard: {
-      backgroundColor: theme.colors.muted,
-      borderRadius: radius.md,
-      padding: spacing.sm,
+      backgroundColor: hexToRgba(theme.colors.foreground, 0.02),
+      borderRadius: radius.sm,
+      padding: 3,
+      marginBottom: 2,
+    },
+    toolCallSection: {
       marginBottom: spacing.xs,
+      paddingBottom: spacing.xs,
+      borderBottomWidth: 0.5,
+      borderBottomColor: hexToRgba(theme.colors.mutedForeground, 0.15),
     },
     toolName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
       color: theme.colors.primary,
-      fontSize: 12,
+      fontSize: 10,
+      flex: 1,
+    },
+    toolCallHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.xs,
       marginBottom: spacing.xs,
     },
+    toolCallHeaderPressed: {
+      opacity: 0.7,
+    },
+    toolCallExpandHint: {
+      fontSize: 9,
+      color: theme.colors.mutedForeground,
+      fontWeight: '500',
+    },
+    toolSectionLabel: {
+      fontSize: 8,
+      fontWeight: '600',
+      color: theme.colors.mutedForeground,
+      marginBottom: 2,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
     toolParamsScroll: {
-      maxHeight: 150,
+      maxHeight: 80,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
+    },
+    toolParamsScrollExpanded: {
+      maxHeight: 400,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
+      fontSize: 8,
       color: theme.colors.foreground,
-      backgroundColor: theme.colors.background,
-      padding: spacing.sm,
+      backgroundColor: theme.colors.muted,
+      padding: 3,
       borderRadius: radius.sm,
     },
     toolResponseSection: {
-      padding: spacing.sm,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
     },
     toolResponsePending: {
-      backgroundColor: 'rgba(59, 130, 246, 0.05)',
+      // No background - let parent handle it
     },
     toolResponseSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.05)',
+      // No background - let parent handle it
     },
     toolResponseError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.05)',
+      // No background - let parent handle it
     },
     toolResponseSectionTitle: {
-      fontSize: 11,
+      fontSize: 9,
       fontWeight: '600',
       color: theme.colors.mutedForeground,
-      marginBottom: spacing.sm,
+      marginBottom: 2,
+      opacity: 0.7,
     },
     toolResponsePendingText: {
-      fontSize: 11,
+      fontSize: 9,
       fontStyle: 'italic',
       color: theme.colors.mutedForeground,
       textAlign: 'center',
-      paddingVertical: spacing.sm,
+      paddingVertical: 2,
     },
     toolResultItem: {
-      marginBottom: spacing.sm,
+      marginBottom: 2,
     },
     toolResultHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: spacing.xs,
+      marginBottom: 1,
     },
     toolResultCharCount: {
-      fontSize: 10,
+      fontSize: 8,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       color: theme.colors.mutedForeground,
-      opacity: 0.7,
+      opacity: 0.6,
     },
     toolResultBadge: {
-      fontSize: 11,
+      fontSize: 9,
       fontWeight: '600',
-      paddingHorizontal: 8,
-      paddingVertical: 3,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
       borderRadius: radius.sm,
     },
     toolResultBadgeSuccess: {
-      backgroundColor: 'rgba(34, 197, 94, 0.2)',
-      color: '#22c55e',
+      backgroundColor: hexToRgba(theme.colors.success, 0.12),
+      color: theme.colors.success,
     },
     toolResultBadgeError: {
-      backgroundColor: 'rgba(239, 68, 68, 0.2)',
-      color: '#ef4444',
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.12),
+      color: theme.colors.destructive,
     },
     toolResultScroll: {
-      maxHeight: 150,
+      maxHeight: 80,
+      borderRadius: radius.sm,
+      overflow: 'hidden',
+    },
+    toolResultScrollExpanded: {
+      maxHeight: 400,
       borderRadius: radius.sm,
       overflow: 'hidden',
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
+      fontSize: 8,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.muted,
-      padding: spacing.sm,
+      padding: 3,
       borderRadius: radius.sm,
     },
     toolResultErrorSection: {
-      marginTop: spacing.xs,
+      marginTop: 1,
     },
     toolResultErrorLabel: {
-      fontSize: 10,
+      fontSize: 8,
       fontWeight: '500',
-      color: '#ef4444',
-      marginBottom: 2,
+      color: theme.colors.destructive,
+      marginBottom: 1,
     },
     toolResultErrorText: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
-      color: '#ef4444',
-      backgroundColor: 'rgba(239, 68, 68, 0.1)',
-      padding: spacing.sm,
+      fontSize: 8,
+      color: theme.colors.destructive,
+      backgroundColor: hexToRgba(theme.colors.destructive, 0.06),
+      padding: 3,
       borderRadius: radius.sm,
     },
   });

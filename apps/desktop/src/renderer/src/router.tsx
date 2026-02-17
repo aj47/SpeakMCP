@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom"
+import { createBrowserRouter, redirect } from "react-router-dom"
 
 export const router: ReturnType<typeof createBrowserRouter> =
   createBrowserRouter([
@@ -50,12 +50,43 @@ export const router: ReturnType<typeof createBrowserRouter> =
           path: "settings/remote-server",
           lazy: () => import("./pages/settings-remote-server"),
         },
-
+        {
+          path: "settings/skills",
+          lazy: () => import("./pages/settings-skills"),
+        },
+        {
+          path: "settings/whatsapp",
+          lazy: () => import("./pages/settings-whatsapp"),
+        },
+        {
+          path: "settings/agent-personas",
+          lazy: () => import("./pages/settings-agent-personas"),
+        },
+        {
+          path: "settings/external-agents",
+          lazy: () => import("./pages/settings-external-agents"),
+        },
+        {
+          path: "settings/agent-profiles",
+          loader: () => redirect("/settings/agent-personas"),
+        },
+        {
+          path: "settings/langfuse",
+          loader: () => redirect("/settings"),
+        },
+        {
+          path: "memories",
+          lazy: () => import("./pages/memories"),
+        },
       ],
     },
     {
       path: "/setup",
       lazy: () => import("./pages/setup"),
+    },
+    {
+      path: "/onboarding",
+      lazy: () => import("./pages/onboarding"),
     },
     {
       path: "/panel",

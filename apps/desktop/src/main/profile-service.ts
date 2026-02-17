@@ -1,11 +1,268 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
-import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig } from "@shared/types"
+import { Profile, ProfilesData, ProfileMcpServerConfig, ProfileModelConfig, ProfileSkillsConfig, MCPServerConfig } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
 import { configStore } from "./config"
 import { getBuiltinToolNames } from "./builtin-tool-definitions"
+
+const RESERVED_SERVER_NAMES = ["speakmcp-settings"]
+
+// Valid provider IDs that are supported by the application
+const VALID_PROVIDER_IDS = ["openai", "groq", "gemini"]
+// STT supports openai, groq, and parakeet (local)
+const VALID_STT_PROVIDER_IDS = ["openai", "groq", "parakeet"]
+// TTS supports openai, groq, gemini, kitten (local), and supertonic (local)
+const VALID_TTS_PROVIDER_IDS = ["openai", "groq", "gemini", "kitten", "supertonic"]
+
+/**
+ * Validates the shape of an imported MCP server config
+ * Returns true if the config has a valid structure, false otherwise
+ */
+function isValidServerConfig(config: unknown): boolean {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  // Validate transport if provided
+  if (
+    c.transport !== undefined &&
+    (typeof c.transport !== "string" ||
+      !["stdio", "websocket", "streamableHttp"].includes(c.transport))
+  ) {
+    return false
+  }
+
+  // Validate command/args for stdio transport
+  if (c.command !== undefined && typeof c.command !== "string") {
+    return false
+  }
+  if (c.args !== undefined) {
+    if (!Array.isArray(c.args) || !c.args.every((arg) => typeof arg === "string")) {
+      return false
+    }
+  }
+
+  // Validate url for remote transports
+  if (c.url !== undefined && typeof c.url !== "string") {
+    return false
+  }
+
+  // Validate transport-specific required fields to prevent configs that break MCP initialization
+  const transport = c.transport as string | undefined
+  // When transport is undefined, the app can infer based on presence of command vs url:
+  // - If command is present, treat as stdio
+  // - If url is present, treat as streamableHttp (for portability with older/handwritten configs)
+  // - If neither is present, the config is invalid
+  if (transport === "stdio" && !c.command) {
+    // Explicit stdio transport requires command field
+    return false
+  }
+  if ((transport === "websocket" || transport === "streamableHttp") && !c.url) {
+    // websocket and streamableHttp transports require url field
+    return false
+  }
+  if (transport === undefined && !c.command && !c.url) {
+    // When transport is not specified, we need at least command or url to infer the transport type
+    return false
+  }
+
+  // Validate env if provided (must be Record<string, string>)
+  if (c.env !== undefined) {
+    if (typeof c.env !== "object" || c.env === null || Array.isArray(c.env)) {
+      return false
+    }
+    const env = c.env as Record<string, unknown>
+    if (!Object.values(env).every((val) => typeof val === "string")) {
+      return false
+    }
+  }
+
+  // Validate headers if provided (must be Record<string, string>)
+  if (c.headers !== undefined) {
+    if (typeof c.headers !== "object" || c.headers === null || Array.isArray(c.headers)) {
+      return false
+    }
+    const headers = c.headers as Record<string, unknown>
+    if (!Object.values(headers).every((val) => typeof val === "string")) {
+      return false
+    }
+  }
+
+  // Validate timeout if provided (must be a number)
+  if (c.timeout !== undefined && typeof c.timeout !== "number") {
+    return false
+  }
+
+  // Validate disabled if provided (must be a boolean)
+  if (c.disabled !== undefined && typeof c.disabled !== "boolean") {
+    return false
+  }
+
+  // Validate oauth if provided (must be an object with expected structure)
+  // OAuthConfig uses serverMetadata.authorization_endpoint/token_endpoint, not authorizationUrl/tokenUrl
+  if (c.oauth !== undefined) {
+    if (typeof c.oauth !== "object" || c.oauth === null || Array.isArray(c.oauth)) {
+      return false
+    }
+    const oauth = c.oauth as Record<string, unknown>
+    // Validate top-level string fields
+    if (oauth.clientId !== undefined && typeof oauth.clientId !== "string") {
+      return false
+    }
+    if (oauth.clientSecret !== undefined && typeof oauth.clientSecret !== "string") {
+      return false
+    }
+    if (oauth.scope !== undefined && typeof oauth.scope !== "string") {
+      return false
+    }
+    if (oauth.redirectUri !== undefined && typeof oauth.redirectUri !== "string") {
+      return false
+    }
+    // Validate boolean fields
+    if (oauth.useDiscovery !== undefined && typeof oauth.useDiscovery !== "boolean") {
+      return false
+    }
+    if (oauth.useDynamicRegistration !== undefined && typeof oauth.useDynamicRegistration !== "boolean") {
+      return false
+    }
+    // Validate serverMetadata if provided (contains authorization_endpoint/token_endpoint)
+    if (oauth.serverMetadata !== undefined) {
+      if (typeof oauth.serverMetadata !== "object" || oauth.serverMetadata === null || Array.isArray(oauth.serverMetadata)) {
+        return false
+      }
+      const serverMetadata = oauth.serverMetadata as Record<string, unknown>
+      if (serverMetadata.authorization_endpoint !== undefined && typeof serverMetadata.authorization_endpoint !== "string") {
+        return false
+      }
+      if (serverMetadata.token_endpoint !== undefined && typeof serverMetadata.token_endpoint !== "string") {
+        return false
+      }
+      if (serverMetadata.issuer !== undefined && typeof serverMetadata.issuer !== "string") {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+}
+
+function isValidMcpServerConfig(config: unknown): config is Partial<ProfileMcpServerConfig> {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  if (c.disabledServers !== undefined && !isStringArray(c.disabledServers)) {
+    return false
+  }
+
+  if (c.disabledTools !== undefined && !isStringArray(c.disabledTools)) {
+    return false
+  }
+
+  if (c.enabledServers !== undefined && !isStringArray(c.enabledServers)) {
+    return false
+  }
+
+  if (c.allServersDisabledByDefault !== undefined && typeof c.allServersDisabledByDefault !== "boolean") {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Validates the shape of an imported model config
+ * Returns true if the config has a valid structure, false otherwise
+ */
+function isValidModelConfig(config: unknown): boolean {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  // Provider ID fields that must match valid provider enums (full set)
+  const providerIdFields = [
+    "mcpToolsProviderId",
+    "transcriptPostProcessingProviderId",
+  ]
+
+  // Validate provider ID fields against allowed enums
+  for (const field of providerIdFields) {
+    if (c[field] !== undefined) {
+      if (typeof c[field] !== "string" || !VALID_PROVIDER_IDS.includes(c[field] as string)) {
+        return false
+      }
+    }
+  }
+
+  // sttProviderId supports openai, groq, and parakeet (local)
+  if (c.sttProviderId !== undefined) {
+    if (typeof c.sttProviderId !== "string" || !VALID_STT_PROVIDER_IDS.includes(c.sttProviderId as string)) {
+      return false
+    }
+  }
+
+  // ttsProviderId supports openai, groq, gemini, and kitten (local)
+  if (c.ttsProviderId !== undefined) {
+    if (typeof c.ttsProviderId !== "string" || !VALID_TTS_PROVIDER_IDS.includes(c.ttsProviderId as string)) {
+      return false
+    }
+  }
+
+  // Other string fields that don't need enum validation
+  const stringFields = [
+    "mcpToolsOpenaiModel",
+    "mcpToolsGroqModel",
+    "mcpToolsGeminiModel",
+    "currentModelPresetId",
+    "transcriptPostProcessingOpenaiModel",
+    "transcriptPostProcessingGroqModel",
+    "transcriptPostProcessingGeminiModel",
+  ]
+
+  for (const field of stringFields) {
+    if (c[field] !== undefined && typeof c[field] !== "string") {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Validates the shape of an imported skills config
+ * Returns true if the config has a valid structure, false otherwise
+ */
+function isValidSkillsConfig(config: unknown): config is Partial<ProfileSkillsConfig> {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+    return false
+  }
+
+  const c = config as Record<string, unknown>
+
+  // enabledSkillIds must be an array of strings if present
+  if (c.enabledSkillIds !== undefined && !isStringArray(c.enabledSkillIds)) {
+    return false
+  }
+
+  // allSkillsDisabledByDefault must be a boolean if present
+  if (c.allSkillsDisabledByDefault !== undefined && typeof c.allSkillsDisabledByDefault !== "boolean") {
+    return false
+  }
+
+  return true
+}
 
 export const profilesPath = path.join(
   app.getPath("appData"),
@@ -307,14 +564,117 @@ class ProfileService {
     return this.updateProfileModelConfig(id, modelConfig)
   }
 
+  /**
+   * Update the skills configuration for a profile
+   * Merges with existing config - only provided fields are updated
+   */
+  updateProfileSkillsConfig(id: string, skillsConfig: Partial<ProfileSkillsConfig>): Profile {
+    if (!this.profilesData) {
+      this.loadProfiles()
+    }
+
+    const profile = this.getProfile(id)
+    if (!profile) {
+      throw new Error(`Profile with id ${id} not found`)
+    }
+
+    // Merge with existing config - only update fields that are explicitly provided
+    const mergedSkillsConfig: ProfileSkillsConfig = {
+      ...(profile.skillsConfig ?? {}),
+      ...(skillsConfig.enabledSkillIds !== undefined && { enabledSkillIds: skillsConfig.enabledSkillIds }),
+      ...(skillsConfig.allSkillsDisabledByDefault !== undefined && { allSkillsDisabledByDefault: skillsConfig.allSkillsDisabledByDefault }),
+    }
+
+    const updatedProfile = {
+      ...profile,
+      skillsConfig: mergedSkillsConfig,
+      updatedAt: Date.now(),
+    }
+
+    const index = this.profilesData!.profiles.findIndex((p) => p.id === id)
+    this.profilesData!.profiles[index] = updatedProfile
+    this.saveProfiles()
+    return updatedProfile
+  }
+
+  /**
+   * Toggle a skill's enabled state for a specific profile
+   */
+  toggleProfileSkill(profileId: string, skillId: string): Profile {
+    const profile = this.getProfile(profileId)
+    if (!profile) {
+      throw new Error(`Profile with id ${profileId} not found`)
+    }
+
+    const currentEnabledSkills = profile.skillsConfig?.enabledSkillIds ?? []
+    const isCurrentlyEnabled = currentEnabledSkills.includes(skillId)
+
+    const newEnabledSkillIds = isCurrentlyEnabled
+      ? currentEnabledSkills.filter(id => id !== skillId)
+      : [...currentEnabledSkills, skillId]
+
+    return this.updateProfileSkillsConfig(profileId, {
+      enabledSkillIds: newEnabledSkillIds,
+      allSkillsDisabledByDefault: true, // Ensure opt-in behavior
+    })
+  }
+
+  /**
+   * Check if a skill is enabled for a specific profile
+   */
+  isSkillEnabledForProfile(profileId: string, skillId: string): boolean {
+    const profile = this.getProfile(profileId)
+    if (!profile) {
+      return false
+    }
+
+    const enabledSkillIds = profile.skillsConfig?.enabledSkillIds ?? []
+    return enabledSkillIds.includes(skillId)
+  }
+
+  /**
+   * Get all enabled skill IDs for a profile
+   */
+  getEnabledSkillIdsForProfile(profileId: string): string[] {
+    const profile = this.getProfile(profileId)
+    if (!profile) {
+      return []
+    }
+    return profile.skillsConfig?.enabledSkillIds ?? []
+  }
+
+  /**
+   * Enable a skill for the current profile (used when installing new skills)
+   * This allows newly installed skills to be immediately usable by the agent
+   */
+  enableSkillForCurrentProfile(skillId: string): Profile | undefined {
+    const currentProfile = this.getCurrentProfile()
+    if (!currentProfile) {
+      return undefined
+    }
+
+    const currentEnabledSkills = currentProfile.skillsConfig?.enabledSkillIds ?? []
+
+    // Already enabled, no need to update
+    if (currentEnabledSkills.includes(skillId)) {
+      return currentProfile
+    }
+
+    return this.updateProfileSkillsConfig(currentProfile.id, {
+      enabledSkillIds: [...currentEnabledSkills, skillId],
+      allSkillsDisabledByDefault: true, // Maintain opt-in behavior
+    })
+  }
+
   exportProfile(id: string): string {
     const profile = this.getProfile(id)
     if (!profile) {
       throw new Error(`Profile with id ${id} not found`)
     }
 
-    // Create a clean export without the id (will be regenerated on import)
-    const exportData: { name: string; guidelines: string; systemPrompt?: string } = {
+    // Create a comprehensive export with all profile settings and enabled MCP servers
+    const exportData: any = {
+      version: 1, // For future compatibility
       name: profile.name,
       guidelines: profile.guidelines,
     }
@@ -322,6 +682,64 @@ class ProfileService {
     // Include systemPrompt if it exists
     if (profile.systemPrompt) {
       exportData.systemPrompt = profile.systemPrompt
+    }
+
+    // Include MCP server configuration if it exists
+    if (profile.mcpServerConfig) {
+      exportData.mcpServerConfig = profile.mcpServerConfig
+    }
+
+    // Include model configuration if it exists
+    if (profile.modelConfig) {
+      exportData.modelConfig = profile.modelConfig
+    }
+
+    // Include skills configuration if it exists
+    if (profile.skillsConfig) {
+      exportData.skillsConfig = profile.skillsConfig
+    }
+
+    // Include actual MCP server definitions for enabled servers
+    const config = configStore.get()
+    const mcpConfig = config.mcpConfig
+    if (mcpConfig && mcpConfig.mcpServers) {
+      const enabledServers: Record<string, any> = {}
+      const allServerNames = Object.keys(mcpConfig.mcpServers)
+
+      // Determine which servers are enabled based on the profile's configuration
+      // When mcpServerConfig is missing/falsy, it means "all servers enabled" (legacy behavior)
+      let serversToExport: string[]
+      if (profile.mcpServerConfig) {
+        const disabledServers = profile.mcpServerConfig.disabledServers || []
+        const explicitlyEnabledServers = profile.mcpServerConfig.enabledServers || []
+        const allServersDisabledByDefault = profile.mcpServerConfig.allServersDisabledByDefault || false
+
+        // Logic to determine enabled servers:
+        // If allServersDisabledByDefault is true, only enabledServers are enabled
+        // Otherwise, all servers except those in disabledServers are enabled
+        if (allServersDisabledByDefault) {
+          serversToExport = explicitlyEnabledServers
+        } else {
+          serversToExport = allServerNames.filter(name => !disabledServers.includes(name))
+        }
+      } else {
+        // Legacy profiles without mcpServerConfig have all servers enabled
+        serversToExport = allServerNames
+      }
+
+      // Export the definitions of enabled servers
+      for (const serverName of serversToExport) {
+        if (mcpConfig.mcpServers[serverName]) {
+          const serverConfig = mcpConfig.mcpServers[serverName]
+          // Strip sensitive fields that may contain API keys/secrets
+          const { env, headers, oauth, ...sanitizedConfig } = serverConfig
+          enabledServers[serverName] = sanitizedConfig
+        }
+      }
+
+      if (Object.keys(enabledServers).length > 0) {
+        exportData.mcpServers = enabledServers
+      }
     }
 
     return JSON.stringify(exportData, null, 2)
@@ -345,11 +763,115 @@ class ProfileService {
         throw new Error("Invalid profile data: systemPrompt must be a string")
       }
 
-      return this.createProfile(
+      // Create the basic profile
+      const newProfile = this.createProfile(
         importData.name,
         importData.guidelines || "",
         importData.systemPrompt
       )
+
+      // Import MCP server definitions if present
+      // Check both for object type AND that it's not an array (arrays are objects in JS)
+      // Track imported server names for enabling them when no mcpServerConfig is provided
+      const importedServerNames: string[] = []
+      if (importData.mcpServers && typeof importData.mcpServers === "object" && !Array.isArray(importData.mcpServers)) {
+        const config = configStore.get()
+        const currentMcpServers = config.mcpConfig?.mcpServers || {}
+
+        // Merge imported servers with existing ones (don't overwrite existing servers)
+        const mergedServers = { ...currentMcpServers }
+        let newServersAdded = 0
+
+        for (const [serverName, serverConfig] of Object.entries(importData.mcpServers)) {
+          // Normalize server name for comparison (trim whitespace)
+          const normalizedServerName = serverName.trim()
+
+          // Reject empty normalized server names (e.g., whitespace-only keys)
+          if (!normalizedServerName) {
+            logApp(`Skipping empty server name: "${serverName}"`)
+            continue
+          }
+
+          // Validate against prototype pollution attacks
+          if (normalizedServerName === "__proto__" || normalizedServerName === "constructor" || normalizedServerName === "prototype") {
+            logApp(`Skipping dangerous server name: ${serverName}`)
+            continue
+          }
+
+          // Validate against reserved names (case-insensitive, trimmed)
+          if (RESERVED_SERVER_NAMES.some(reserved => reserved.toLowerCase() === normalizedServerName.toLowerCase())) {
+            logApp(`Skipping reserved server name: ${serverName}`)
+            continue
+          }
+
+          // Use normalizedServerName for both existence check and insertion
+          // to prevent duplicates that differ only by whitespace
+          if (!mergedServers[normalizedServerName]) {
+            // Validate server config shape
+            if (!isValidServerConfig(serverConfig)) {
+              logApp(`Skipping server "${serverName}" with invalid configuration`)
+              continue
+            }
+            mergedServers[normalizedServerName] = serverConfig as MCPServerConfig
+            importedServerNames.push(normalizedServerName)
+            newServersAdded++
+          }
+        }
+
+        // Update config with merged servers
+        if (newServersAdded > 0) {
+          configStore.save({
+            ...config,
+            mcpConfig: {
+              ...config.mcpConfig,
+              mcpServers: mergedServers,
+            },
+          })
+          logApp(`Imported ${newServersAdded} new MCP server(s)`)
+        }
+      }
+
+      // Apply MCP server configuration if present
+      if (importData.mcpServerConfig && typeof importData.mcpServerConfig === "object") {
+        if (isValidMcpServerConfig(importData.mcpServerConfig)) {
+          this.updateProfileMcpConfig(newProfile.id, importData.mcpServerConfig)
+        } else {
+          logApp("Warning: Invalid mcpServerConfig format in import data, skipping")
+        }
+      } else if (importedServerNames.length > 0) {
+        // Legacy behavior: when mcpServers are present but mcpServerConfig is missing,
+        // it means "all imported servers should be enabled". Since createProfile()
+        // disables all servers by default, we need to explicitly enable the imported servers.
+        const currentProfile = this.getProfile(newProfile.id)
+        if (currentProfile?.mcpServerConfig) {
+          const currentEnabledServers = currentProfile.mcpServerConfig.enabledServers || []
+          this.updateProfileMcpConfig(newProfile.id, {
+            enabledServers: [...new Set([...currentEnabledServers, ...importedServerNames])],
+          })
+          logApp(`Enabled ${importedServerNames.length} imported server(s) for legacy import`)
+        }
+      }
+
+      // Apply model configuration if present
+      if (importData.modelConfig && typeof importData.modelConfig === "object") {
+        if (isValidModelConfig(importData.modelConfig)) {
+          this.updateProfileModelConfig(newProfile.id, importData.modelConfig)
+        } else {
+          logApp("Warning: Invalid modelConfig format in import data, skipping")
+        }
+      }
+
+      // Apply skills configuration if present
+      if (importData.skillsConfig && typeof importData.skillsConfig === "object") {
+        if (isValidSkillsConfig(importData.skillsConfig)) {
+          this.updateProfileSkillsConfig(newProfile.id, importData.skillsConfig)
+        } else {
+          logApp("Warning: Invalid skillsConfig format in import data, skipping")
+        }
+      }
+
+      // Return the updated profile
+      return this.getProfile(newProfile.id)!
     } catch (error) {
       throw new Error(`Failed to import profile: ${error instanceof Error ? error.message : String(error)}`)
     }

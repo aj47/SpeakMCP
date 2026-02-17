@@ -9,6 +9,10 @@ export const STT_PROVIDERS = [
     label: "Groq",
     value: "groq",
   },
+  {
+    label: "Parakeet (Local)",
+    value: "parakeet",
+  },
 ] as const
 
 export type STT_PROVIDER_ID = (typeof STT_PROVIDERS)[number]["value"]
@@ -43,6 +47,14 @@ export const TTS_PROVIDERS = [
     label: "Gemini",
     value: "gemini",
   },
+  {
+    label: "Kitten (Local)",
+    value: "kitten",
+  },
+  {
+    label: "Supertonic (Local)",
+    value: "supertonic",
+  },
 ] as const
 
 export type TTS_PROVIDER_ID = (typeof TTS_PROVIDERS)[number]["value"]
@@ -62,40 +74,27 @@ export const OPENAI_TTS_MODELS = [
   { label: "TTS-1-HD (High Quality)", value: "tts-1-hd" },
 ] as const
 
-// Groq TTS Voice Options (English)
+// Groq TTS Voice Options (English) - Orpheus model voices
 export const GROQ_TTS_VOICES_ENGLISH = [
-  { label: "Arista", value: "Arista-PlayAI" },
-  { label: "Atlas", value: "Atlas-PlayAI" },
-  { label: "Basil", value: "Basil-PlayAI" },
-  { label: "Briggs", value: "Briggs-PlayAI" },
-  { label: "Calum", value: "Calum-PlayAI" },
-  { label: "Celeste", value: "Celeste-PlayAI" },
-  { label: "Cheyenne", value: "Cheyenne-PlayAI" },
-  { label: "Chip", value: "Chip-PlayAI" },
-  { label: "Cillian", value: "Cillian-PlayAI" },
-  { label: "Deedee", value: "Deedee-PlayAI" },
-  { label: "Fritz", value: "Fritz-PlayAI" },
-  { label: "Gail", value: "Gail-PlayAI" },
-  { label: "Indigo", value: "Indigo-PlayAI" },
-  { label: "Mamaw", value: "Mamaw-PlayAI" },
-  { label: "Mason", value: "Mason-PlayAI" },
-  { label: "Mikail", value: "Mikail-PlayAI" },
-  { label: "Mitch", value: "Mitch-PlayAI" },
-  { label: "Quinn", value: "Quinn-PlayAI" },
-  { label: "Thunder", value: "Thunder-PlayAI" },
+  { label: "Autumn", value: "autumn" },
+  { label: "Diana", value: "diana" },
+  { label: "Hannah", value: "hannah" },
+  { label: "Austin", value: "austin" },
+  { label: "Daniel", value: "daniel" },
+  { label: "Troy", value: "troy" },
 ] as const
 
-// Groq TTS Voice Options (Arabic)
+// Groq TTS Voice Options (Arabic Saudi) - Orpheus model voices
 export const GROQ_TTS_VOICES_ARABIC = [
-  { label: "Ahmad", value: "Ahmad-PlayAI" },
-  { label: "Amira", value: "Amira-PlayAI" },
-  { label: "Khalid", value: "Khalid-PlayAI" },
-  { label: "Nasser", value: "Nasser-PlayAI" },
+  { label: "Fahad", value: "fahad" },
+  { label: "Sultan", value: "sultan" },
+  { label: "Lulwa", value: "lulwa" },
+  { label: "Noura", value: "noura" },
 ] as const
 
 export const GROQ_TTS_MODELS = [
-  { label: "PlayAI TTS (English)", value: "playai-tts" },
-  { label: "PlayAI TTS (Arabic)", value: "playai-tts-arabic" },
+  { label: "Orpheus TTS (English)", value: "canopylabs/orpheus-v1-english" },
+  { label: "Orpheus TTS (Arabic Saudi)", value: "canopylabs/orpheus-arabic-saudi" },
 ] as const
 
 // Gemini TTS Voice Options (30 voices)
@@ -135,6 +134,43 @@ export const GEMINI_TTS_VOICES = [
 export const GEMINI_TTS_MODELS = [
   { label: "Gemini 2.5 Flash TTS", value: "gemini-2.5-flash-preview-tts" },
   { label: "Gemini 2.5 Pro TTS", value: "gemini-2.5-pro-preview-tts" },
+] as const
+
+// Kitten TTS Voice Options (8 voices, sid 0-7)
+// Based on official docs: https://k2-fsa.github.io/sherpa/onnx/tts/all/English/kitten-nano-en-v0_1.html
+// Even IDs (0,2,4,6) are male (-m), odd IDs (1,3,5,7) are female (-f)
+export const KITTEN_TTS_VOICES = [
+  { label: "Voice 2 - Male (Default)", value: 0 },
+  { label: "Voice 2 - Female", value: 1 },
+  { label: "Voice 3 - Male", value: 2 },
+  { label: "Voice 3 - Female", value: 3 },
+  { label: "Voice 4 - Male", value: 4 },
+  { label: "Voice 4 - Female", value: 5 },
+  { label: "Voice 5 - Male", value: 6 },
+  { label: "Voice 5 - Female", value: 7 },
+] as const
+
+// Supertonic TTS Voice Options (10 voices: 5 male + 5 female)
+export const SUPERTONIC_TTS_VOICES = [
+  { label: "Male 1 (M1)", value: "M1" },
+  { label: "Male 2 (M2)", value: "M2" },
+  { label: "Male 3 (M3)", value: "M3" },
+  { label: "Male 4 (M4)", value: "M4" },
+  { label: "Male 5 (M5)", value: "M5" },
+  { label: "Female 1 (F1)", value: "F1" },
+  { label: "Female 2 (F2)", value: "F2" },
+  { label: "Female 3 (F3)", value: "F3" },
+  { label: "Female 4 (F4)", value: "F4" },
+  { label: "Female 5 (F5)", value: "F5" },
+] as const
+
+// Supertonic TTS Language Options
+export const SUPERTONIC_TTS_LANGUAGES = [
+  { label: "English", value: "en" },
+  { label: "Korean", value: "ko" },
+  { label: "Spanish", value: "es" },
+  { label: "Portuguese", value: "pt" },
+  { label: "French", value: "fr" },
 ] as const
 
 // OpenAI Compatible Provider Presets
@@ -199,6 +235,19 @@ export const getBuiltInModelPresets = (): ModelPreset[] => {
 // Default preset ID
 export const DEFAULT_MODEL_PRESET_ID = "builtin-openai"
 
+/**
+ * Get the current preset display name from config.
+ * Looks up the preset by ID and returns its name.
+ */
+export const getCurrentPresetName = (
+  currentModelPresetId: string | undefined,
+  modelPresets: ModelPreset[] | undefined
+): string => {
+  const presetId = currentModelPresetId || DEFAULT_MODEL_PRESET_ID
+  const allPresets = [...getBuiltInModelPresets(), ...(modelPresets || [])]
+  return allPresets.find(p => p.id === presetId)?.name || "OpenAI"
+}
+
 // Helper to check if a provider has TTS support
 export const providerHasTts = (providerId: string): boolean => {
   return TTS_PROVIDERS.some(p => p.value === providerId)
@@ -225,9 +274,11 @@ export const getTtsVoicesForProvider = (providerId: string, ttsModel?: string) =
       return OPENAI_TTS_VOICES
     case 'groq':
       // Groq voices depend on the selected model (English vs Arabic)
-      return ttsModel === 'playai-tts-arabic' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
+      return ttsModel === 'canopylabs/orpheus-arabic-saudi' ? GROQ_TTS_VOICES_ARABIC : GROQ_TTS_VOICES_ENGLISH
     case 'gemini':
       return GEMINI_TTS_VOICES
+    case 'supertonic':
+      return SUPERTONIC_TTS_VOICES
     default:
       return []
   }

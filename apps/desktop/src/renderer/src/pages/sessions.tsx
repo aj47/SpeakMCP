@@ -4,27 +4,26 @@ import { useParams } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
+import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, Calendar, Trash2, Search, ChevronDown, FolderOpen, CheckCircle2 } from "lucide-react"
+import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
-import { Input } from "@renderer/components/ui/input"
-import { Card, CardContent } from "@renderer/components/ui/card"
-import { Badge } from "@renderer/components/ui/badge"
-import { useConversationHistoryQuery, useDeleteConversationMutation, useDeleteAllConversationsMutation } from "@renderer/lib/queries"
-import { ConversationHistoryItem, AgentProgressUpdate } from "@shared/types"
+import { AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
 import { toast } from "sonner"
-import dayjs from "dayjs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@renderer/components/ui/dialog"
+import { SessionsKanban } from "@renderer/components/sessions-kanban"
+import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
+import { useConfigQuery } from "@renderer/lib/query-client"
+import { getMcpToolsShortcutDisplay, getTextInputShortcutDisplay, getDictationShortcutDisplay } from "@shared/key-utils"
 
-function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; onVoiceClick: () => void }) {
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortcut, voiceInputShortcut, dictationShortcut }: {
+  onTextClick: () => void
+  onVoiceClick: () => void
+  onSelectPrompt: (content: string) => void
+  textInputShortcut: string
+  voiceInputShortcut: string
+  dictationShortcut: string
+}) {
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -34,22 +33,46 @@ function EmptyState({ onTextClick, onVoiceClick }: { onTextClick: () => void; on
       <p className="text-muted-foreground mb-6 max-w-md">
         Start a new agent session using text or voice input. Your sessions will appear here as tiles.
       </p>
-      <div className="flex gap-3">
-        <Button onClick={onTextClick} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Start with Text
-        </Button>
-        <Button variant="secondary" onClick={onVoiceClick} className="gap-2">
-          <Mic className="h-4 w-4" />
-          Start with Voice
-        </Button>
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex gap-3 items-center">
+          <Button onClick={onTextClick} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Start with Text
+          </Button>
+          <Button variant="secondary" onClick={onVoiceClick} className="gap-2">
+            <Mic className="h-4 w-4" />
+            Start with Voice
+          </Button>
+          <PredefinedPromptsMenu
+            onSelectPrompt={onSelectPrompt}
+          />
+        </div>
+        {/* Keybind hints - hidden on narrow screens */}
+        <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Keyboard className="h-4 w-4" />
+            <span>Text:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {textInputShortcut}
+            </kbd>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Voice:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {voiceInputShortcut}
+            </kbd>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>Dictation:</span>
+            <kbd className="px-2 py-0.5 text-xs font-semibold bg-muted border rounded">
+              {dictationShortcut}
+            </kbd>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
-
-const INITIAL_PAST_SESSIONS = 10
-const LOAD_MORE_INCREMENT = 10
 
 export function Component() {
   const queryClient = useQueryClient()
@@ -59,22 +82,30 @@ export function Component() {
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
   const scrollToSessionId = useAgentStore((s) => s.scrollToSessionId)
   const setScrollToSessionId = useAgentStore((s) => s.setScrollToSessionId)
+  const viewMode = useAgentStore((s) => s.viewMode)
+  const setViewMode = useAgentStore((s) => s.setViewMode)
+
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
+
+  // Get config for shortcut displays
+  const configQuery = useConfigQuery()
+  const textInputShortcut = getTextInputShortcutDisplay(configQuery.data?.textInputShortcut, configQuery.data?.customTextInputShortcut)
+  const voiceInputShortcut = getMcpToolsShortcutDisplay(configQuery.data?.mcpToolsShortcut, configQuery.data?.customMcpToolsShortcut)
+  const dictationShortcut = getDictationShortcutDisplay(configQuery.data?.shortcut, configQuery.data?.customShortcut)
 
   const [sessionOrder, setSessionOrder] = useState<string[]>([])
   const [draggedSessionId, setDraggedSessionId] = useState<string | null>(null)
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null)
   const [collapsedSessions, setCollapsedSessions] = useState<Record<string, boolean>>({})
-  const [pastSessionsExpanded, setPastSessionsExpanded] = useState(true)
-  const [pastSessionsCount, setPastSessionsCount] = useState(INITIAL_PAST_SESSIONS)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
-  const deleteConversationMutation = useDeleteConversationMutation()
-  const deleteAllConversationsMutation = useDeleteAllConversationsMutation()
+  const [tileResetKey, setTileResetKey] = useState(0)
 
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const handleCollapsedChange = useCallback((sessionId: string, collapsed: boolean) => {
-    setCollapsedSessions(prev => ({ ...prev, [sessionId]: collapsed }))
+    setCollapsedSessions(prev => ({
+      ...prev,
+      [sessionId]: collapsed
+    }))
   }, [])
 
   const allProgressEntries = React.useMemo(() => {
@@ -124,54 +155,6 @@ export function Component() {
 
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)
-
-  // Fetch all conversations from history
-  const conversationHistoryQuery = useConversationHistoryQuery()
-
-  // Filter and group past sessions for display
-  const filteredHistory = useMemo(() => {
-    if (!conversationHistoryQuery.data) return []
-    return conversationHistoryQuery.data.filter(
-      (historyItem) =>
-        historyItem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        historyItem.preview.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
-  }, [conversationHistoryQuery.data, searchQuery])
-
-  // Group history by date for display
-  const groupedHistory = useMemo(() => {
-    const groups = new Map<string, ConversationHistoryItem[]>()
-    const today = dayjs().format("YYYY-MM-DD")
-    const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
-
-    // Take only the number we want to show (lazy loading)
-    const visibleItems = filteredHistory.slice(0, pastSessionsCount)
-
-    for (const historyItem of visibleItems) {
-      const date = dayjs(historyItem.updatedAt).format("YYYY-MM-DD")
-      let groupKey: string
-
-      if (date === today) {
-        groupKey = "Today"
-      } else if (date === yesterday) {
-        groupKey = "Yesterday"
-      } else {
-        groupKey = dayjs(historyItem.updatedAt).format("MMM D, YYYY")
-      }
-
-      const items = groups.get(groupKey) || []
-      items.push(historyItem)
-      groups.set(groupKey, items)
-    }
-
-    return Array.from(groups.entries()).map(([date, items]) => ({
-      date,
-      items: items.sort((a, b) => b.updatedAt - a.updatedAt),
-    }))
-  }, [filteredHistory, pastSessionsCount])
-
-  // Check if there are more items to load
-  const hasMorePastSessions = filteredHistory.length > pastSessionsCount
 
   // Handle route parameter for deep-linking to specific session
   // When navigating to /:id, focus the active session tile or create a new tile for past sessions
@@ -298,6 +281,11 @@ export function Component() {
     await tipcClient.triggerMcpRecording({})
   }
 
+  // Handle predefined prompt selection - open panel with text input pre-filled
+  const handleSelectPrompt = async (content: string) => {
+    await tipcClient.showPanelWindowWithTextInput({ initialText: content })
+  }
+
   const handleFocusSession = async (sessionId: string) => {
     setFocusedSessionId(sessionId)
     // Also show the panel window with this session focused
@@ -345,39 +333,6 @@ export function Component() {
     setDragTargetIndex(null)
   }, [draggedSessionId, dragTargetIndex, allProgressEntries])
 
-  // Past sessions handlers
-  const handleLoadMore = useCallback(() => {
-    setPastSessionsCount(prev => prev + LOAD_MORE_INCREMENT)
-  }, [])
-
-  const handleDeleteHistoryItem = async (historyItemId: string) => {
-    try {
-      await deleteConversationMutation.mutateAsync(historyItemId)
-      toast.success("Session deleted")
-    } catch (error) {
-      toast.error("Failed to delete session")
-    }
-  }
-
-  const handleDeleteAllHistory = async () => {
-    try {
-      await deleteAllConversationsMutation.mutateAsync()
-      toast.success("All history deleted")
-      setShowDeleteAllDialog(false)
-    } catch (error) {
-      toast.error("Failed to delete history")
-    }
-  }
-
-  const handleOpenHistoryFolder = async () => {
-    try {
-      await tipcClient.openConversationsFolder()
-      toast.success("History folder opened")
-    } catch (error) {
-      toast.error("Failed to open history folder")
-    }
-  }
-
   const handleClearInactiveSessions = async () => {
     try {
       await tipcClient.clearInactiveSessions()
@@ -387,10 +342,57 @@ export function Component() {
     }
   }
 
+  const handleResetTileLayout = useCallback(() => {
+    clearPersistedSize("session-tile")
+    setTileResetKey(prev => prev + 1)
+    toast.success("Tile sizes reset to default")
+  }, [])
+
+  const handleCollapseExpanded = useCallback(() => {
+    setExpandedSessionId(null)
+  }, [])
+
   // Count inactive (completed) sessions
   const inactiveSessionCount = useMemo(() => {
     return allProgressEntries.filter(([_, progress]) => progress?.isComplete).length
   }, [allProgressEntries])
+
+  // Check if expanded session is a regular session or a pending session
+  const expandedProgress = expandedSessionId
+    ? (agentProgressById.get(expandedSessionId) || (expandedSessionId === pendingSessionId ? pendingProgress : null))
+    : null
+  const isExpandedPending = expandedSessionId === pendingSessionId
+
+  // If a session is expanded, show the expanded view
+  if (expandedSessionId && expandedProgress) {
+    const isCollapsed = collapsedSessions[expandedSessionId] ?? false
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 min-h-0 p-4">
+          <div className="h-full">
+            <AgentProgress
+              progress={expandedProgress}
+              variant="tile"
+              isExpanded={true}
+              isFocused={true}
+              onFocus={() => {}}
+              onDismiss={async () => {
+                if (isExpandedPending) {
+                  handleDismissPendingContinuation()
+                } else {
+                  await handleDismissSession(expandedSessionId)
+                }
+                setExpandedSessionId(null)
+              }}
+              isCollapsed={isCollapsed}
+              onCollapsedChange={(collapsed) => handleCollapsedChange(expandedSessionId, collapsed)}
+              onExpand={handleCollapseExpanded}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="group/tile flex h-full flex-col">
@@ -398,266 +400,161 @@ export function Component() {
       <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
         {allProgressEntries.length === 0 && !pendingProgress ? (
-          <EmptyState onTextClick={handleTextClick} onVoiceClick={handleVoiceStart} />
+          <EmptyState
+            onTextClick={handleTextClick}
+            onVoiceClick={handleVoiceStart}
+            onSelectPrompt={handleSelectPrompt}
+            textInputShortcut={textInputShortcut}
+            voiceInputShortcut={voiceInputShortcut}
+            dictationShortcut={dictationShortcut}
+          />
         ) : (
           <>
-            {/* Header with clear inactive button */}
-            {inactiveSessionCount > 0 && (
-              <div className="px-4 py-2 flex items-center justify-end bg-muted/20 border-b">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearInactiveSessions}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
-                  title="Clear all completed sessions from view (conversations are saved to history)"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Clear {inactiveSessionCount} completed
+            {/* Header with start buttons, view toggle, and clear inactive button */}
+            <div className="px-4 py-2 flex items-center justify-between bg-muted/20 border-b">
+              <div className="flex gap-2 items-center">
+                <Button size="sm" onClick={handleTextClick} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Start with Text
                 </Button>
+                <Button variant="secondary" size="sm" onClick={handleVoiceStart} className="gap-2">
+                  <Mic className="h-4 w-4" />
+                  Start with Voice
+                </Button>
+                <PredefinedPromptsMenu
+                  onSelectPrompt={handleSelectPrompt}
+                />
               </div>
-            )}
-            {/* Active sessions grid - includes pending continuation if any */}
-            <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)}>
-              {/* Pending continuation tile first */}
-              {pendingProgress && pendingSessionId && (
-                <SessionTileWrapper
-                  key={pendingSessionId}
-                  sessionId={pendingSessionId}
-                  index={0}
-                  isCollapsed={false}
-                  onDragStart={() => {}}
-                  onDragOver={() => {}}
-                  onDragEnd={() => {}}
-                  isDragTarget={false}
-                  isDragging={false}
-                >
-                  <AgentProgress
-                    progress={pendingProgress}
-                    variant="tile"
-                    isFocused={true}
-                    onFocus={() => {}}
-                    onDismiss={handleDismissPendingContinuation}
-                    isCollapsed={false}
-                    onCollapsedChange={() => {}}
-                  />
-                </SessionTileWrapper>
-              )}
-              {/* Regular sessions */}
-              {allProgressEntries.map(([sessionId, progress], index) => {
-                const isCollapsed = collapsedSessions[sessionId] ?? false
-                const adjustedIndex = pendingProgress ? index + 1 : index
-                return (
-                  <div
-                    key={sessionId}
-                    ref={(el) => { sessionRefs.current[sessionId] = el }}
+              <div className="flex items-center gap-2">
+                {/* View mode toggle */}
+                <div className="flex border rounded-md overflow-hidden" role="group" aria-label="Session view mode">
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className="rounded-none h-7 px-2"
+                    title="Grid view"
+                    aria-label="Grid view"
+                    aria-pressed={viewMode === "grid"}
                   >
-                    <SessionTileWrapper
-                      sessionId={sessionId}
-                      index={adjustedIndex}
-                      isCollapsed={isCollapsed}
-                      onDragStart={handleDragStart}
-                      onDragOver={handleDragOver}
-                      onDragEnd={handleDragEnd}
-                      isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
-                      isDragging={draggedSessionId === sessionId}
+                    <LayoutGrid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "kanban" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("kanban")}
+                    className="rounded-none h-7 px-2"
+                    title="Kanban view"
+                    aria-label="Kanban view"
+                    aria-pressed={viewMode === "kanban"}
+                  >
+                    <Kanban className="h-4 w-4" />
+                  </Button>
+                </div>
+                {viewMode === "grid" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetTileLayout}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                    title="Reset all tile sizes to default dimensions"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset Layout
+                  </Button>
+                )}
+                {inactiveSessionCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearInactiveSessions}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                    title="Clear all completed sessions from view (conversations are saved to history)"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Clear {inactiveSessionCount} completed
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* Active sessions - grid or kanban view */}
+            {viewMode === "kanban" ? (
+              <SessionsKanban
+                sessions={allProgressEntries}
+                focusedSessionId={focusedSessionId}
+                onFocusSession={handleFocusSession}
+                onDismissSession={handleDismissSession}
+                pendingProgress={pendingProgress}
+                pendingSessionId={pendingSessionId}
+                onDismissPendingContinuation={handleDismissPendingContinuation}
+              />
+            ) : (
+              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey}>
+                {/* Pending continuation tile first */}
+                {pendingProgress && pendingSessionId && (
+                  <SessionTileWrapper
+                    key={pendingSessionId}
+                    sessionId={pendingSessionId}
+                    index={0}
+                    isCollapsed={collapsedSessions[pendingSessionId] ?? false}
+                    onDragStart={() => {}}
+                    onDragOver={() => {}}
+                    onDragEnd={() => {}}
+                    isDragTarget={false}
+                    isDragging={false}
+                  >
+                    <AgentProgress
+                      progress={pendingProgress}
+                      variant="tile"
+                      isFocused={true}
+                      onFocus={() => {}}
+                      onDismiss={handleDismissPendingContinuation}
+                      isCollapsed={collapsedSessions[pendingSessionId] ?? false}
+                      onCollapsedChange={(collapsed) => handleCollapsedChange(pendingSessionId, collapsed)}
+                      onExpand={() => setExpandedSessionId(pendingSessionId)}
+                    />
+                  </SessionTileWrapper>
+                )}
+                {/* Regular sessions */}
+                {allProgressEntries.map(([sessionId, progress], index) => {
+                  const isCollapsed = collapsedSessions[sessionId] ?? false
+                  const adjustedIndex = pendingProgress ? index + 1 : index
+                  return (
+                    <div
+                      key={sessionId}
+                      ref={(el) => { sessionRefs.current[sessionId] = el }}
                     >
-                      <AgentProgress
-                        progress={progress}
-                        variant="tile"
-                        isFocused={focusedSessionId === sessionId}
-                        onFocus={() => handleFocusSession(sessionId)}
-                        onDismiss={() => handleDismissSession(sessionId)}
+                      <SessionTileWrapper
+                        sessionId={sessionId}
+                        index={adjustedIndex}
                         isCollapsed={isCollapsed}
-                        onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                      />
-                    </SessionTileWrapper>
-                  </div>
-                )
-              })}
-            </SessionGrid>
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDragEnd={handleDragEnd}
+                        isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
+                        isDragging={draggedSessionId === sessionId}
+                      >
+                        <AgentProgress
+                          progress={progress}
+                          variant="tile"
+                          isFocused={focusedSessionId === sessionId}
+                          onFocus={() => handleFocusSession(sessionId)}
+                          onDismiss={() => handleDismissSession(sessionId)}
+                          isCollapsed={isCollapsed}
+                          onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                          onExpand={() => setExpandedSessionId(sessionId)}
+                        />
+                      </SessionTileWrapper>
+                    </div>
+                  )
+                })}
+              </SessionGrid>
+            )}
           </>
         )}
 
-        {/* Past Sessions Section - always shown with lazy loading */}
-        <div className="border-t">
-          <div className="px-4 py-3 flex items-center justify-between bg-muted/30">
-            <button
-              onClick={() => setPastSessionsExpanded(!pastSessionsExpanded)}
-              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronDown className={cn("h-4 w-4 transition-transform", !pastSessionsExpanded && "-rotate-90")} />
-              <Calendar className="h-4 w-4" />
-              <span>Past Sessions</span>
-              {conversationHistoryQuery.data && (
-                <Badge variant="secondary" className="text-xs">
-                  {conversationHistoryQuery.data.length}
-                </Badge>
-              )}
-            </button>
-            <div className="flex items-center gap-2">
-              {pastSessionsExpanded && (
-                <>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search..."
-                      className="w-40 h-7 pl-7 text-xs"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleOpenHistoryFolder}
-                    className="h-7 w-7 p-0"
-                    title="Open history folder"
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowDeleteAllDialog(true)}
-                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-                    title="Delete all history"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {pastSessionsExpanded && (
-            <div className="px-4 py-4">
-              {groupedHistory.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {searchQuery ? "No matching sessions" : "No past sessions yet"}
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {groupedHistory.map(({ date, items }) => (
-                    <div key={date}>
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {date}
-                      </h4>
-                      <div className="space-y-2">
-                        {items.map((historyItem) => (
-                          <PastSessionCard
-                            key={historyItem.id}
-                            conversation={historyItem}
-                            onOpen={() => handleContinueConversation(historyItem.id)}
-                            onDelete={() => handleDeleteHistoryItem(historyItem.id)}
-                            isDeleting={deleteConversationMutation.isPending}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Load more button */}
-                  {hasMorePastSessions && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleLoadMore}
-                        className="gap-2"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                        Load More ({filteredHistory.length - pastSessionsCount} remaining)
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* Delete All Confirmation Dialog */}
-      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete All History</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete all session history? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteAllDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAllHistory}
-              disabled={deleteAllConversationsMutation.isPending}
-            >
-              {deleteAllConversationsMutation.isPending ? "Deleting..." : "Delete All"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
-  )
-}
-
-/** Card for a past session in the history list - clicking opens as a new tile */
-interface PastSessionCardProps {
-  conversation: ConversationHistoryItem
-  onOpen: () => void
-  onDelete: () => void
-  isDeleting: boolean
-}
-
-function PastSessionCard({
-  conversation,
-  onOpen,
-  onDelete,
-  isDeleting,
-}: PastSessionCardProps) {
-  return (
-    <Card
-      className={cn(
-        "cursor-pointer transition-all hover:shadow-md hover:border-primary/50",
-      )}
-      onClick={onOpen}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="mb-1 truncate font-medium">{conversation.title}</h3>
-            <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">
-              {conversation.preview}
-            </p>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary" className="text-xs">
-                {conversation.messageCount} messages
-              </Badge>
-              <span>•</span>
-              <span>
-                {dayjs(conversation.updatedAt).format("MMM D, h:mm A")}
-              </span>
-            </div>
-          </div>
-          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-              disabled={isDeleting}
-              className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
-              title="Delete session"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 

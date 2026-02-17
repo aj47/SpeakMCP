@@ -5,10 +5,11 @@ import {
   spacing,
   radius,
   typography as sharedTypography,
+  hexToRgba,
 } from '@speakmcp/shared';
 
 // Re-export shared tokens
-export { spacing, radius };
+export { spacing, radius, hexToRgba };
 
 // Extend shared colors with mobile-specific legacy aliases
 const lightColors = {

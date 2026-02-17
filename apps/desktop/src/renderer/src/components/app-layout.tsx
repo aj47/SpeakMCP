@@ -7,6 +7,7 @@ import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
+import { useConfigQuery } from "@renderer/lib/query-client"
 import { PanelLeftClose, PanelLeft } from "lucide-react"
 
 type NavLinkItem = {
@@ -20,6 +21,10 @@ export const Component = () => {
   const location = useLocation()
   const [settingsExpanded, setSettingsExpanded] = useState(true)
   const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
+  const configQuery = useConfigQuery()
+
+  const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
+  const memoriesEnabled = configQuery.data?.memoriesEnabled !== false  // default true
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -32,6 +37,12 @@ export const Component = () => {
       href: "/settings/models",
       icon: "i-mingcute-brain-line",
     },
+    // Only show Memories when enabled
+    ...(memoriesEnabled ? [{
+      text: "Memories",
+      href: "/memories",
+      icon: "i-mingcute-book-2-line",
+    }] : []),
     {
       text: "Profile",
       href: "/settings/tools",
@@ -43,9 +54,30 @@ export const Component = () => {
       icon: "i-mingcute-tool-line",
     },
     {
+      text: "Skills",
+      href: "/settings/skills",
+      icon: "i-mingcute-sparkles-line",
+    },
+    {
       text: "Remote Server",
       href: "/settings/remote-server",
       icon: "i-mingcute-server-line",
+    },
+    // Only show WhatsApp settings when enabled
+    ...(whatsappEnabled ? [{
+      text: "WhatsApp",
+      href: "/settings/whatsapp",
+      icon: "i-mingcute-message-4-line",
+    }] : []),
+    {
+      text: "Agent Personas",
+      href: "/settings/agent-personas",
+      icon: "i-mingcute-group-line",
+    },
+    {
+      text: "External Agents",
+      href: "/settings/external-agents",
+      icon: "i-mingcute-robot-line",
     },
   ]
 
@@ -146,15 +178,8 @@ export const Component = () => {
           </div>
         )}
 
-        {/* Sessions Section - shows sessions list with active count badge */}
-        {!isCollapsed && (
-          <div className="max-h-[40vh] overflow-y-auto">
-            <ActiveAgentsSidebar />
-          </div>
-        )}
-
-        {/* Settings Section - Collapsible */}
-        <div className={cn("mt-4", isCollapsed ? "px-1" : "px-2")}>
+        {/* Settings Section - Collapsible, collapsed by default */}
+        <div className={cn("shrink-0", isCollapsed ? "px-1" : "px-2")}>
           {isCollapsed ? (
             /* Collapsed: Show all settings icons for quick navigation */
             <div className="grid gap-1">
@@ -198,7 +223,7 @@ export const Component = () => {
               </button>
 
               {settingsExpanded && (
-                <div className="mt-1 grid gap-0.5 pl-2 text-sm">
+                <div className="mt-1 grid gap-0.5 text-sm">
                   {settingsNavLinks.map(renderNavLink)}
                 </div>
               )}
@@ -206,10 +231,46 @@ export const Component = () => {
           )}
         </div>
 
+        {/* Sessions Section - shows sessions list, scrollable to bottom */}
+        {!isCollapsed && (
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-none">
+            <ActiveAgentsSidebar />
+          </div>
+        )}
+
+        {/* Sessions icon when collapsed - navigates to sessions page */}
+        {isCollapsed && (
+          <div className="mt-2 px-1">
+            {(() => {
+              const isSessionsActive = location.pathname === "/" || (!location.pathname.startsWith("/settings") && !location.pathname.startsWith("/onboarding") && !location.pathname.startsWith("/setup") && !location.pathname.startsWith("/panel"))
+              return (
+                <NavLink
+                  to="/"
+                  end
+                  className={cn(
+                    "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                    isSessionsActive
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                  title="Sessions"
+                  aria-label="Sessions"
+                  aria-current={isSessionsActive ? "page" : undefined}
+                >
+                  <span className="i-mingcute-chat-3-line"></span>
+                </NavLink>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Spacer to push footer down when collapsed */}
+        {isCollapsed && <div className="flex-1" />}
+
         {/* Loading spinner at the bottom of the sidebar */}
-        <div className="flex flex-1 flex-col justify-end">
+        <div className="shrink-0">
           <div className={cn(
-            "flex flex-col items-center pb-4",
+            "flex flex-col items-center pb-4 pt-2",
             isCollapsed ? "space-y-1" : "space-y-2"
           )}>
             <LoadingSpinner size={isCollapsed ? "sm" : "lg"} />

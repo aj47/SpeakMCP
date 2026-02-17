@@ -28,7 +28,7 @@ export type OnConnectionStatusChange = (state: RecoveryState) => void;
 
 export type ChatMessage = {
   id?: string;
-  role: 'system' | 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
@@ -863,6 +863,54 @@ export class OpenAIClient {
     }
 
     return result;
+  }
+
+  /**
+   * Fetch conversation state from the server for recovery purposes.
+   * This is used when the mobile app loses connection and needs to sync
+   * with the server's conversation state.
+   */
+  async getConversation(conversationId: string): Promise<{
+    id: string;
+    title: string;
+    createdAt: number;
+    updatedAt: number;
+    messages: Array<{
+      id: string;
+      role: 'user' | 'assistant' | 'tool';
+      content: string;
+      timestamp: number;
+      toolCalls?: any[];
+      toolResults?: any[];
+    }>;
+    metadata?: any;
+  } | null> {
+    const url = this.getUrl(`/conversations/${conversationId}`);
+    console.log('[OpenAIClient] Fetching conversation for recovery:', url);
+
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: this.authHeaders(),
+      });
+
+      if (res.status === 404) {
+        console.log('[OpenAIClient] Conversation not found on server:', conversationId);
+        return null;
+      }
+
+      if (!res.ok) {
+        console.error('[OpenAIClient] Failed to fetch conversation:', res.status, res.statusText);
+        return null;
+      }
+
+      const data = await res.json();
+      console.log('[OpenAIClient] Fetched conversation:', data.id, 'with', data.messages?.length, 'messages');
+      return data;
+    } catch (error: any) {
+      console.error('[OpenAIClient] Error fetching conversation:', error);
+      return null;
+    }
   }
 
   async killSwitch(): Promise<{ success: boolean; message?: string; error?: string; processesKilled?: number }> {

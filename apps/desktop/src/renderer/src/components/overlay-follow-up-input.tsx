@@ -1,10 +1,11 @@
 import React, { useState, useRef } from "react"
 import { cn } from "@renderer/lib/utils"
 import { Button } from "@renderer/components/ui/button"
-import { Send, Mic } from "lucide-react"
+import { Send, Mic, OctagonX } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useConfigQuery } from "@renderer/lib/queries"
+import { PredefinedPromptsMenu } from "./predefined-prompts-menu"
 
 interface OverlayFollowUpInputProps {
   conversationId?: string
@@ -13,6 +14,8 @@ interface OverlayFollowUpInputProps {
   className?: string
   /** Called when a message is successfully sent */
   onMessageSent?: () => void
+  /** Called when stop button is clicked (optional - will call stopAgentSession directly if not provided) */
+  onStopSession?: () => void | Promise<void>
 }
 
 /**
@@ -25,7 +28,9 @@ export function OverlayFollowUpInput({
   isSessionActive = false,
   className,
   onMessageSent,
+  onStopSession,
 }: OverlayFollowUpInputProps) {
+  const [isStoppingSession, setIsStoppingSession] = useState(false)
   const [text, setText] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
   const configQuery = useConfigQuery()
@@ -103,13 +108,45 @@ export function OverlayFollowUpInput({
     await tipcClient.triggerMcpRecording({ conversationId, sessionId: realSessionId })
   }
 
+  // Handle stop session - kill switch functionality
+  const handleStopSession = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isStoppingSession || !sessionId) return
+
+    // Use custom handler if provided, otherwise call stopAgentSession directly
+    if (onStopSession) {
+      setIsStoppingSession(true)
+      try {
+        await onStopSession()
+      } catch (error) {
+        console.error("Failed to stop agent session via callback:", error)
+      } finally {
+        setIsStoppingSession(false)
+      }
+      return
+    }
+
+    // Don't try to stop fake "pending-*" sessions
+    if (sessionId.startsWith('pending-')) return
+
+    setIsStoppingSession(true)
+    try {
+      await tipcClient.stopAgentSession({ sessionId })
+    } catch (error) {
+      console.error("Failed to stop agent session:", error)
+    } finally {
+      setIsStoppingSession(false)
+    }
+  }
+
   // When queue is enabled, allow TEXT input even when session is active
   // When queue is disabled, don't allow input while session is active
   const isDisabled = sendMutation.isPending || (isSessionActive && !isQueueEnabled)
 
-  // Voice recording cannot be queued, so always disable voice button when session is active
-  // This prevents concurrent processing issues from voice recordings during active sessions
-  const isVoiceDisabled = sendMutation.isPending || isSessionActive
+  // When queue is enabled, allow voice recording even when session is active
+  // The transcript will be queued after transcription completes
+  // When queue is disabled, don't allow voice input while session is active
+  const isVoiceDisabled = sendMutation.isPending || (isSessionActive && !isQueueEnabled)
 
   // Show appropriate placeholder based on state
   const getPlaceholder = () => {
@@ -147,6 +184,10 @@ export function OverlayFollowUpInput({
         )}
         disabled={isDisabled}
       />
+      <PredefinedPromptsMenu
+        onSelectPrompt={(content) => setText(content)}
+        disabled={isDisabled}
+      />
       <Button
         type="submit"
         size="icon"
@@ -173,10 +214,32 @@ export function OverlayFollowUpInput({
         disabled={isVoiceDisabled}
         onMouseDown={handleInputInteraction}
         onClick={handleVoiceClick}
-        title={isSessionActive ? "Voice unavailable while agent is processing" : "Continue with voice"}
+        title={isSessionActive && isQueueEnabled ? "Record voice message (will be queued)" : isSessionActive ? "Voice unavailable while agent is processing" : "Continue with voice"}
       >
         <Mic className="h-3.5 w-3.5" />
       </Button>
+      {/* Kill switch - stop agent button (only show when session is active) */}
+      {isSessionActive && sessionId && !sessionId.startsWith('pending-') && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className={cn(
+            "h-7 w-7 flex-shrink-0",
+            "text-red-500 hover:text-red-600",
+            "hover:bg-red-100 dark:hover:bg-red-950/30"
+          )}
+          disabled={isStoppingSession}
+          onMouseDown={handleInputInteraction}
+          onClick={handleStopSession}
+          title="Stop agent execution"
+        >
+          <OctagonX className={cn(
+            "h-3.5 w-3.5",
+            isStoppingSession && "animate-pulse"
+          )} />
+        </Button>
+      )}
     </form>
   )
 }

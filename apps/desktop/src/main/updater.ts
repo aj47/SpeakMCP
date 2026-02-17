@@ -1,121 +1,40 @@
-import electronUpdater, { UpdateInfo } from "electron-updater"
 import { MenuItem, dialog } from "electron"
-import { makePanelWindowClosable, WINDOWS } from "./window"
-import { getRendererHandlers } from "@egoist/tipc/main"
-import { RendererHandlers } from "./renderer-handlers"
 
-electronUpdater.autoUpdater.fullChangelog = true
-electronUpdater.autoUpdater.autoDownload = false
-electronUpdater.autoUpdater.autoInstallOnAppQuit = true
-
-if (import.meta.env.PROD) {
-  electronUpdater.autoUpdater.setFeedURL({
-    provider: "github",
-    host: "electron-releases.umida.co",
-    owner: "aj47",
-    repo: "SpeakMCP",
-  })
-}
-
-let updateInfo: UpdateInfo | null = null
-let downloadedUpdates: string[] | null = null
-let menuItem: MenuItem | null = null
-
-function enableMenuItem() {
-  if (menuItem) {
-    menuItem.enabled = true
-    menuItem = null
-  }
-}
+/**
+ * Auto-updater is disabled - updates are manual via GitHub releases.
+ * This prevents 403 errors from the invalid update server (electron-releases.umida.co).
+ */
 
 export function init() {
-  electronUpdater.autoUpdater.addListener("update-downloaded", (e) => {
-    const window = WINDOWS.get("main")
-    if (window) {
-      getRendererHandlers<RendererHandlers>(
-        window.webContents,
-      ).updateAvailable.send(e)
-    }
-  })
-
-  electronUpdater.autoUpdater.addListener("update-not-available", () => {
-    updateInfo = null
-    enableMenuItem()
-  })
-
-  let hasSetDownloaing = false
-  electronUpdater.autoUpdater.addListener("download-progress", (_info) => {
-    if (!hasSetDownloaing) {
-      hasSetDownloaing = true
-    }
-  })
+  // Auto-updater is disabled - no initialization needed
 }
 
 export function getUpdateInfo() {
-  return updateInfo
+  return null
 }
 
 export async function checkForUpdatesMenuItem(_menuItem: MenuItem) {
-  menuItem = _menuItem
-  menuItem.enabled = false
-
-  const checkResult = await checkForUpdatesAndDownload().catch(() => null)
-
-  if (checkResult && checkResult.updateInfo) {
-  } else {
-    await dialog.showMessageBox({
-      title: "No updates available",
-      message: `You are already using the latest version of ${process.env.PRODUCT_NAME}.`,
-    })
-  }
-}
-
-export async function checkForUpdatesAndDownload() {
-  if (updateInfo && downloadedUpdates) return { downloadedUpdates, updateInfo }
-  if (updateInfo) return { updateInfo, downloadedUpdates }
-
-  const updates = await electronUpdater.autoUpdater.checkForUpdates()
-
-  if (
-    updates &&
-    electronUpdater.autoUpdater.currentVersion.compare(
-      updates.updateInfo.version,
-    ) === -1
-  ) {
-    updateInfo = updates.updateInfo
-    downloadedUpdates = await downloadUpdate()
-    return { updateInfo, downloadedUpdates }
-  }
-
-  updateInfo = null
-  downloadedUpdates = null
-  return { updateInfo, downloadedUpdates }
-}
-
-export function quitAndInstall() {
-  makePanelWindowClosable()
-  setTimeout(() => {
-    electronUpdater.autoUpdater.quitAndInstall()
+  // Auto-updater is disabled - show message directing to GitHub releases
+  await dialog.showMessageBox({
+    title: "Check for Updates",
+    message: `To check for updates, please visit:\nhttps://github.com/aj47/SpeakMCP/releases`,
   })
 }
 
-let cancellationToken: electronUpdater.CancellationToken | null = null
+export async function checkForUpdatesAndDownload() {
+  // Auto-updater is disabled - always return null
+  return { updateInfo: null, downloadedUpdates: null }
+}
+
+export function quitAndInstall() {
+  // No-op - auto-updater is disabled
+}
 
 export async function downloadUpdate() {
-  if (cancellationToken) {
-    return null
-  }
-
-  cancellationToken = new electronUpdater.CancellationToken()
-  const result =
-    await electronUpdater.autoUpdater.downloadUpdate(cancellationToken)
-  cancellationToken = null
-  return result
+  // No-op - auto-updater is disabled
+  return null
 }
 
 export function cancelDownloadUpdate() {
-  if (cancellationToken) {
-    cancellationToken.cancel()
-    cancellationToken = null
-  }
+  // No-op - auto-updater is disabled
 }

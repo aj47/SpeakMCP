@@ -662,7 +662,7 @@ export async function showPanelWindowAndStartRecording(fromButtonClick?: boolean
   showPanelWindow()
 }
 
-export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean) {
+export async function showPanelWindowAndStartMcpRecording(conversationId?: string, sessionId?: string, fromTile?: boolean, fromButtonClick?: boolean, conversationTitle?: string, isStillHeld?: () => boolean) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -686,12 +686,13 @@ export async function showPanelWindowAndStartMcpRecording(conversationId?: strin
   // This prevents lost IPC messages right after app launch when webContents may not have finished loading
   // Pass fromTile and fromButtonClick flags so panel knows how to behave after recording ends
   whenPanelReady(() => {
-    getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, sessionId, fromTile, fromButtonClick })
+    if (isStillHeld && !isStillHeld()) return
+    getWindowRendererHandlers("panel")?.startMcpRecording.send({ conversationId, conversationTitle, sessionId, fromTile, fromButtonClick })
   })
   showPanelWindow()
 }
 
-export async function showPanelWindowAndShowTextInput(initialText?: string) {
+export async function showPanelWindowAndShowTextInput(initialText?: string, conversationId?: string, conversationTitle?: string) {
   // Capture focus before showing panel
   try {
     const focusedApp = await getFocusedAppInfo()
@@ -708,7 +709,10 @@ export async function showPanelWindowAndShowTextInput(initialText?: string) {
   resizePanelForTextInput()
 
   showPanelWindow() // This will now use textInput mode positioning
-  getWindowRendererHandlers("panel")?.showTextInput.send({ initialText })
+  // Guard against early IPC loss right after app launch (mirrors recording start paths)
+  whenPanelReady(() => {
+    getWindowRendererHandlers("panel")?.showTextInput.send({ initialText, conversationId, conversationTitle })
+  })
 }
 
 export function makePanelWindowClosable() {

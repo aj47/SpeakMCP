@@ -13,6 +13,7 @@ import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
+import { decodeBlobToPcm } from "@renderer/lib/audio-utils"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { ttsManager } from "@renderer/lib/tts-manager"
 import { formatKeyComboForDisplay } from "@shared/key-utils"
@@ -41,6 +42,7 @@ export function Component() {
   const mcpConversationIdRef = useRef<string | undefined>(undefined)
   const mcpSessionIdRef = useRef<string | undefined>(undefined)
   const fromTileRef = useRef<boolean>(false)
+  const [continueConversationTitle, setContinueConversationTitle] = useState<string | null>(null)
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const [previewText, setPreviewText] = useState("")
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -184,8 +186,14 @@ export function Component() {
         await startNewConversation(transcript, "user")
       }
 
+      // Fetch config synchronously to avoid race condition where configQuery.data
+      // is undefined on early interactions (augment review feedback)
+      const config = await tipcClient.getConfig()
+      const isParakeet = config?.sttProviderId === "parakeet"
+      const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       await tipcClient.createRecording({
         recording: await blob.arrayBuffer(),
+        pcmRecording,
         duration,
       })
     },
@@ -208,6 +216,11 @@ export function Component() {
       duration: number
       transcript?: string
     }) => {
+      // Fetch config synchronously to avoid race condition where configQuery.data
+      // is undefined on early interactions (augment review feedback)
+      const config = await tipcClient.getConfig()
+      const isParakeet = config?.sttProviderId === "parakeet"
+      const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       const arrayBuffer = await blob.arrayBuffer()
 
       // Use the conversationId and sessionId passed through IPC (from mic button clicks).
@@ -234,6 +247,7 @@ export function Component() {
 
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
+        pcmRecording,
         duration,
         // Pass conversationId and sessionId if user explicitly continued a conversation,
         // otherwise undefined to create a fresh conversation/session.
@@ -399,11 +413,15 @@ export function Component() {
       setMcpMode(false)
       mcpModeRef.current = false
       setFromButtonClick(false)
+      setContinueConversationTitle(null)
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
   // Transcription preview: periodically send audio chunks for live transcription
-  const isPreviewEnabled = configQuery.data?.transcriptionPreviewEnabled ?? false
+  // Disable transcription preview for Parakeet since it requires PCM decoding which is
+  // expensive to do for live preview chunks. Groq/OpenAI can transcribe WebM directly.
+  const isPreviewEnabled = (configQuery.data?.transcriptionPreviewEnabled ?? false) &&
+    configQuery.data?.sttProviderId !== "parakeet"
   useEffect(() => {
     if (!recording || !isPreviewEnabled) {
       // Clear preview state when not recording
@@ -485,6 +503,7 @@ export function Component() {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
+      setContinueConversationTitle(null)
       // Track if recording was triggered via UI button click (e.g., tray menu)
       setFromButtonClick(data?.fromButtonClick ?? false)
       // Hide text input panel if it was showing - voice recording takes precedence
@@ -533,6 +552,8 @@ export function Component() {
         mcpModeRef.current = false
         // Track if recording was triggered via UI button click
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Clear any stale "Continuing:" banner from a prior continue session
+        setContinueConversationTitle(null)
         // Set recording state immediately to show waveform UI without waiting for async mic init
         // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
         setRecording(true)
@@ -553,10 +574,17 @@ export function Component() {
       textInputMutation.reset()
       mcpTextInputMutation.reset()
 
-      // Clear any existing conversation ID to ensure a fresh conversation is started
-      // This prevents the bug where previous session messages are included when
-      // submitting a new message via the text input keybind
-      endConversation()
+      // If a conversationId was provided (continue mode), set it as current
+      if (data?.conversationId) {
+        setCurrentConversationId(data.conversationId)
+        setContinueConversationTitle(data.conversationTitle || "conversation")
+      } else {
+        // Clear any existing conversation ID to ensure a fresh conversation is started
+        // This prevents the bug where previous session messages are included when
+        // submitting a new message via the text input keybind
+        endConversation()
+        setContinueConversationTitle(null)
+      }
 
       // Show text input and focus
       setShowTextInput(true)
@@ -572,7 +600,7 @@ export function Component() {
     })
 
     return unlisten
-  }, [endConversation])
+  }, [endConversation, setCurrentConversationId])
 
   useEffect(() => {
     const unlisten = rendererHandlers.hideTextInput.listen(() => {
@@ -621,6 +649,14 @@ export function Component() {
       // Track if recording was triggered via UI button click vs keyboard shortcut
       // When true, we show "Enter" as the submit hint instead of "Release keys"
       setFromButtonClick(data?.fromButtonClick ?? false)
+
+      // Track continue conversation title for visual indicator
+      // Use fallback title when conversationId is provided without explicit title
+      if (data?.conversationId) {
+        setContinueConversationTitle(data.conversationTitle || "conversation")
+      } else {
+        setContinueConversationTitle(null)
+      }
 
       // If recording is NOT from a tile and no explicit conversationId was passed,
       // clear any existing conversation ID to ensure a fresh conversation is started.
@@ -671,6 +707,7 @@ export function Component() {
         mcpSessionIdRef.current = data?.sessionId
         // Track if recording was triggered via UI button click vs keyboard shortcut
         setFromButtonClick(data?.fromButtonClick ?? false)
+        setContinueConversationTitle(null)
         // Hide text input panel if it was showing - voice recording takes precedence
         // This fixes bug #903 where mic button in continue conversation showed text input
         setShowTextInput(false)
@@ -887,6 +924,7 @@ export function Component() {
               textInputMutation.isPending || mcpTextInputMutation.isPending
             }
             agentProgress={agentProgress}
+            continueConversationTitle={continueConversationTitle}
           />
         ) : (
           <div
@@ -918,6 +956,13 @@ export function Component() {
               {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
+                  {/* Continue conversation indicator */}
+                  {continueConversationTitle && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 mb-1 rounded bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-400 text-xs">
+                      <span className="opacity-70">Continuing:</span>
+                      <span className="font-medium truncate max-w-[200px]">{continueConversationTitle}</span>
+                    </div>
+                  )}
                   {/* Waveform - shrinks when preview text is showing */}
                   <div
                     className={cn(

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@renderer/components/ui/select"
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
+import { decodeBlobToPcm } from "@renderer/lib/audio-utils"
 import { Config } from "@shared/types"
 import { useNavigate } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
@@ -63,8 +64,14 @@ export function Component() {
   const transcribeMutation = useMutation({
     mutationFn: async ({ blob, duration }: { blob: Blob; duration: number }) => {
       setIsTranscribing(true)
+      // Fetch config synchronously to avoid race condition where configQuery.data
+      // is undefined on early interactions (augment review feedback)
+      const config = await tipcClient.getConfig()
+      const isParakeet = config?.sttProviderId === "parakeet"
+      const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       const result = await tipcClient.createRecording({
         recording: await blob.arrayBuffer(),
+        pcmRecording,
         duration,
       })
       return result

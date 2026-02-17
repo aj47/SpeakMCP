@@ -119,6 +119,7 @@ function float32ToWav(samples: Float32Array, sampleRate: number): Buffer {
 
 async function initializeMcpWithProgress(config: Config, sessionId: string): Promise<void> {
   const shouldStop = () => agentSessionStateManager.shouldStopSession(sessionId)
+  const effectiveMaxIterations = config.mcpUnlimitedIterations ? Infinity : (config.mcpMaxIterations ?? 10)
 
   if (shouldStop()) {
     return
@@ -129,7 +130,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   await emitAgentProgress({
     sessionId,
     currentIteration: 0,
-    maxIterations: config.mcpMaxIterations ?? 10,
+    maxIterations: effectiveMaxIterations,
     steps: [
       {
         id: `mcp_init_${Date.now()}`,
@@ -156,7 +157,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
       await emitAgentProgress({
         sessionId,
         currentIteration: 0,
-        maxIterations: config.mcpMaxIterations ?? 10,
+        maxIterations: effectiveMaxIterations,
         steps: [
           {
             id: `mcp_init_${Date.now()}`,
@@ -189,7 +190,7 @@ async function initializeMcpWithProgress(config: Config, sessionId: string): Pro
   await emitAgentProgress({
     sessionId,
     currentIteration: 0,
-    maxIterations: config.mcpMaxIterations ?? 10,
+    maxIterations: effectiveMaxIterations,
     steps: [
       {
         id: `mcp_init_complete_${Date.now()}`,
@@ -212,6 +213,7 @@ async function processWithAgentMode(
   startSnoozed: boolean = false, // Whether to start session snoozed (default: false to show panel)
 ): Promise<string> {
   const config = configStore.get()
+  const effectiveMaxIterations = config.mcpUnlimitedIterations ? Infinity : (config.mcpMaxIterations ?? 10)
 
   // Check if ACP main agent mode is enabled - route to ACP agent instead of LLM API
   if (config.mainAgentMode === "acp" && config.mainAgentName) {
@@ -319,7 +321,7 @@ async function processWithAgentMode(
         await emitAgentProgress({
           sessionId,
           currentIteration: 0, // Will be updated by the agent loop
-          maxIterations: config.mcpMaxIterations ?? 10,
+          maxIterations: effectiveMaxIterations,
           steps: [],
           isComplete: false,
           pendingToolApproval: {
@@ -336,7 +338,7 @@ async function processWithAgentMode(
         await emitAgentProgress({
           sessionId,
           currentIteration: 0,
-          maxIterations: config.mcpMaxIterations ?? 10,
+          maxIterations: effectiveMaxIterations,
           steps: [],
           isComplete: false,
           pendingToolApproval: undefined, // Explicitly clear to sync state across all windows
@@ -425,7 +427,7 @@ async function processWithAgentMode(
       text,
       availableTools,
       executeToolCall,
-      config.mcpMaxIterations ?? 10, // Use configured max iterations or default to 10
+      effectiveMaxIterations, // Use configured max iterations or Infinity if unlimited mode
       previousConversationHistory,
       conversationId, // Pass conversation ID for linking to conversation history
       sessionId, // Pass session ID for progress routing and isolation
@@ -448,7 +450,7 @@ async function processWithAgentMode(
       conversationId: conversationId || "",
       conversationTitle: conversationTitle,
       currentIteration: 1,
-      maxIterations: config.mcpMaxIterations ?? 10,
+      maxIterations: effectiveMaxIterations,
       steps: [{
         id: `error_${Date.now()}`,
         type: "thinking",

@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from "fastify"
 import cors from "@fastify/cors"
 import crypto from "crypto"
 import fs from "fs"
+import os from "os"
 import path from "path"
 import QRCode from "qrcode"
 import { configStore, recordingsFolder } from "./config"
@@ -74,6 +75,36 @@ function redact(value?: string) {
   if (!value) return ""
   if (value.length <= 8) return "***"
   return `${value.slice(0, 4)}...${value.slice(-4)}`
+}
+
+/**
+ * Gets a connectable IP address for the QR code URL
+ * When bind is 0.0.0.0 or 127.0.0.1, we need to find the actual LAN IP
+ * that a mobile device can connect to
+ */
+function getConnectableIp(bind: string): string {
+  // If already a specific IP (not wildcard or loopback), use it
+  if (bind !== "0.0.0.0" && bind !== "127.0.0.1" && bind !== "localhost") {
+    return bind
+  }
+
+  // Find first non-internal IPv4 address
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    const addrs = interfaces[name]
+    if (!addrs) continue
+    for (const addr of addrs) {
+      if (addr.family === "IPv4" && !addr.internal) {
+        return addr.address
+      }
+    }
+  }
+
+  // Fallback to the original bind address with a warning
+  console.warn(
+    `[Remote Server] Warning: Could not find LAN IP. QR code will use ${bind} which may not be reachable from mobile devices.`
+  )
+  return bind
 }
 
 function resolveActiveModelId(cfg: any): string {
@@ -1445,9 +1476,12 @@ export async function startRemoteServer() {
 
     // Print QR code to terminal for mobile app pairing
     // Auto-print in headless environments, or when explicitly requested
+    // Suppress when streamer mode is enabled to prevent credential leakage
     const currentCfg = configStore.get()
-    if (currentCfg.remoteServerApiKey) {
-      const serverUrl = `http://${bind}:${port}/v1`
+    if (currentCfg.remoteServerApiKey && !currentCfg.streamerModeEnabled) {
+      // Use connectable IP for QR code (not 0.0.0.0 or 127.0.0.1)
+      const connectableIp = getConnectableIp(bind)
+      const serverUrl = `http://${connectableIp}:${port}/v1`
 
       // In headless environments, always print the QR code
       // Otherwise, print if terminal QR is explicitly enabled
@@ -1496,12 +1530,18 @@ export function getRemoteServerStatus() {
  * Prints the QR code to the terminal for mobile app pairing
  * Can be called manually when the user wants to see the QR code
  * @param urlOverride Optional URL to use instead of the local server URL (e.g., Cloudflare tunnel URL)
- * @returns true if QR code was printed, false if server is not running or no API key
+ * @returns true if QR code was printed, false if server is not running, no API key, or streamer mode enabled
  */
 export async function printQRCodeToTerminal(urlOverride?: string): Promise<boolean> {
   const cfg = configStore.get()
   if (!server || !cfg.remoteServerApiKey) {
     console.log("[Remote Server] Cannot print QR code: server not running or no API key configured")
+    return false
+  }
+
+  // Suppress QR output when streamer mode is enabled to prevent credential leakage
+  if (cfg.streamerModeEnabled) {
+    console.log("[Remote Server] Cannot print QR code: streamer mode is enabled")
     return false
   }
 
@@ -1513,7 +1553,9 @@ export async function printQRCodeToTerminal(urlOverride?: string): Promise<boole
   } else {
     const bind = cfg.remoteServerBindAddress || "127.0.0.1"
     const port = cfg.remoteServerPort || 3210
-    serverUrl = `http://${bind}:${port}/v1`
+    // Use connectable IP for QR code (not 0.0.0.0 or 127.0.0.1)
+    const connectableIp = getConnectableIp(bind)
+    serverUrl = `http://${connectableIp}:${port}/v1`
   }
 
   await printTerminalQRCode(serverUrl, cfg.remoteServerApiKey)

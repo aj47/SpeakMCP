@@ -543,6 +543,8 @@ export function Component() {
         mcpModeRef.current = false
         // Track if recording was triggered via UI button click
         setFromButtonClick(data?.fromButtonClick ?? false)
+        // Clear any stale "Continuing:" banner from a prior continue session
+        setContinueConversationTitle(null)
         // Set recording state immediately to show waveform UI without waiting for async mic init
         // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
         setRecording(true)

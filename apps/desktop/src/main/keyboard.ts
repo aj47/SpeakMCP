@@ -370,7 +370,7 @@ export function listenToKeyboardEvents() {
       if (isPressedShiftKey) {
         startMcpRecordingWithLastConversation(() => isPressedCtrlKey && isPressedAltKey)
       } else {
-        showPanelWindowAndStartMcpRecording()
+        showPanelWindowAndStartMcpRecording(undefined, undefined, undefined, undefined, undefined, () => isPressedCtrlKey && isPressedAltKey)
       }
     }, HOLD_TO_RECORD_DELAY_MS)
   }
@@ -906,7 +906,7 @@ export function listenToKeyboardEvents() {
               if (!stillMatches) return
 
               isHoldingCustomMcpKey = true
-              showPanelWindowAndStartMcpRecording()
+              showPanelWindowAndStartMcpRecording(undefined, undefined, undefined, undefined, undefined, () => isHoldingCustomMcpKey)
             }, HOLD_TO_RECORD_DELAY_MS)
             return
           }
@@ -1133,7 +1133,7 @@ export function listenToKeyboardEvents() {
             if (isPressedShiftKey) {
               startMcpRecordingWithLastConversation(() => isPressedCtrlKey && isPressedAltKey)
             } else {
-              showPanelWindowAndStartMcpRecording()
+              showPanelWindowAndStartMcpRecording(undefined, undefined, undefined, undefined, undefined, () => isPressedCtrlKey && isPressedAltKey)
             }
           }, HOLD_TO_RECORD_DELAY_MS)
         } else {

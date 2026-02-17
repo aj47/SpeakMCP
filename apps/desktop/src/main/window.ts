@@ -709,7 +709,10 @@ export async function showPanelWindowAndShowTextInput(initialText?: string, conv
   resizePanelForTextInput()
 
   showPanelWindow() // This will now use textInput mode positioning
-  getWindowRendererHandlers("panel")?.showTextInput.send({ initialText, conversationId, conversationTitle })
+  // Guard against early IPC loss right after app launch (mirrors recording start paths)
+  whenPanelReady(() => {
+    getWindowRendererHandlers("panel")?.showTextInput.send({ initialText, conversationId, conversationTitle })
+  })
 }
 
 export function makePanelWindowClosable() {

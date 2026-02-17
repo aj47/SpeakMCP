@@ -452,12 +452,25 @@ async function withRetry<T>(
         })
       }
 
-      // Wait before retry
-      if (state.shouldStopAgent) {
-        clearRetryStatus()
-        throw new Error("Aborted by emergency stop")
+      // Wait before retry with interruptible delay
+      // Check shouldStopAgent and session stop every 100ms to allow kill switch to interrupt
+      const startTime = Date.now()
+      while (Date.now() - startTime < delay) {
+        if (state.shouldStopAgent) {
+          clearRetryStatus()
+          throw new Error("Aborted by emergency stop")
+        }
+        if (
+          options.sessionId &&
+          agentSessionStateManager.shouldStopSession(options.sessionId)
+        ) {
+          clearRetryStatus()
+          throw new Error("Session stopped by kill switch")
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(100, delay - (Date.now() - startTime)))
+        )
       }
-      await new Promise((resolve) => setTimeout(resolve, delay))
       attempt++
     }
   }

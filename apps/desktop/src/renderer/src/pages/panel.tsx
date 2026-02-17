@@ -487,6 +487,7 @@ export function Component() {
       // Ensure we are in normal dictation mode (not MCP/agent)
       setMcpMode(false)
       mcpModeRef.current = false
+      setContinueConversationTitle(null)
       // Track if recording was triggered via UI button click (e.g., tray menu)
       setFromButtonClick(data?.fromButtonClick ?? false)
       // Hide text input panel if it was showing - voice recording takes precedence
@@ -687,6 +688,7 @@ export function Component() {
         mcpSessionIdRef.current = data?.sessionId
         // Track if recording was triggered via UI button click vs keyboard shortcut
         setFromButtonClick(data?.fromButtonClick ?? false)
+        setContinueConversationTitle(null)
         // Hide text input panel if it was showing - voice recording takes precedence
         // This fixes bug #903 where mic button in continue conversation showed text input
         setShowTextInput(false)

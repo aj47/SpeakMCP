@@ -264,10 +264,10 @@ const startMcpRecordingWithLastConversation = async (isStillHeld?: () => boolean
     if (isDebugKeybinds()) {
       logKeybinds("Continue last conversation:", recent.id, recent.title)
     }
-    showPanelWindowAndStartMcpRecording(recent.id, undefined, undefined, undefined, recent.title)
+    showPanelWindowAndStartMcpRecording(recent.id, undefined, undefined, undefined, recent.title, isStillHeld)
   } else {
     // No conversations yet — fall back to a fresh MCP recording
-    showPanelWindowAndStartMcpRecording()
+    showPanelWindowAndStartMcpRecording(undefined, undefined, undefined, undefined, undefined, isStillHeld)
   }
 }
 

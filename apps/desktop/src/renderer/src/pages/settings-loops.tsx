@@ -11,7 +11,7 @@ import { Trash2, Plus, Edit2, Save, X, Play, Clock } from "lucide-react"
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useQuery } from "@tanstack/react-query"
-import { LoopConfig, Profile } from "../../../shared/types"
+import { LoopConfig, Profile } from "@shared/types"
 import { toast } from "sonner"
 
 interface EditingLoop {
@@ -22,6 +22,13 @@ interface EditingLoop {
   enabled: boolean
   profileId?: string
   runOnStartup: boolean
+}
+
+interface LoopRuntimeStatus {
+  id: string
+  isRunning: boolean
+  nextRunAt?: number
+  lastRunAt?: number
 }
 
 const emptyLoop: EditingLoop = {
@@ -63,9 +70,17 @@ export function SettingsLoops() {
     queryKey: ["profiles"],
     queryFn: async () => tipcClient.getProfiles() as Promise<Profile[]>,
   })
+  const loopStatusesQuery = useQuery({
+    queryKey: ["loop-statuses"],
+    queryFn: async () => tipcClient.getLoopStatuses() as Promise<LoopRuntimeStatus[]>,
+    refetchInterval: 5000,
+  })
 
   const loops: LoopConfig[] = configQuery.data?.loops || []
   const profiles: Profile[] = profilesQuery.data || []
+  const statusByLoopId = new Map(
+    (loopStatusesQuery.data || []).map((s) => [s.id, s] as const)
+  )
 
   const handleCreate = () => {
     setIsCreating(true)
@@ -171,14 +186,21 @@ export function SettingsLoops() {
 
   const renderLoopList = () => (
     <div className="space-y-4">
-      {loops.map((loop) => (
+      {loops.map((loop) => {
+        const runtime = statusByLoopId.get(loop.id)
+        const isRunning = runtime?.isRunning ?? false
+        const nextRunAt = runtime?.nextRunAt
+        const lastRunAt = runtime?.lastRunAt ?? loop.lastRunAt
+        return (
         <Card key={loop.id} className={!loop.enabled ? "opacity-60" : ""}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <CardTitle className="text-lg flex items-center gap-2">
                   {loop.name}
-                  {loop.enabled ? (
+                  {isRunning ? (
+                    <Badge variant="secondary">Running</Badge>
+                  ) : loop.enabled ? (
                     <Badge variant="default">Active</Badge>
                   ) : (
                     <Badge variant="outline">Disabled</Badge>
@@ -211,7 +233,10 @@ export function SettingsLoops() {
                 <div>Profile: {profiles.find(p => p.id === loop.profileId)?.name || loop.profileId}</div>
               )}
               {loop.runOnStartup && <Badge variant="secondary">Run on startup</Badge>}
-              <div className="ml-auto">Last run: {formatLastRun(loop.lastRunAt)}</div>
+              {typeof nextRunAt === "number" && (
+                <div>Next run: {formatLastRun(nextRunAt)}</div>
+              )}
+              <div className="ml-auto">Last run: {formatLastRun(lastRunAt)}</div>
             </div>
             <div className="mt-2 flex items-center gap-2">
               <Switch
@@ -222,7 +247,8 @@ export function SettingsLoops() {
             </div>
           </CardContent>
         </Card>
-      ))}
+        )
+      })}
       {loops.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           No agent loops configured. Click "Add Loop" to create one.
@@ -358,4 +384,3 @@ export function SettingsLoops() {
 }
 
 export { SettingsLoops as Component }
-

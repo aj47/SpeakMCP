@@ -416,13 +416,14 @@ async function processWithAgentMode(
       logLLM(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
     }
 
-    // Focus this session in the panel window so it's immediately visible
-    // Note: Initial progress will be emitted by processTranscriptWithAgentMode
-    // to avoid duplicate user messages in the conversation history
-    try {
-      getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
-    } catch (e) {
-      logApp("[tipc] Failed to focus new agent session:", e)
+    // Focus interactive sessions in the panel window.
+    // Background/snoozed sessions (e.g. scheduled loops) should not steal focus.
+    if (!startSnoozed) {
+      try {
+        getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
+      } catch (e) {
+        logApp("[tipc] Failed to focus new agent session:", e)
+      }
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -473,6 +474,14 @@ async function processWithAgentMode(
   } finally {
 
   }
+}
+
+export async function runAgentLoopSession(
+  text: string,
+  conversationId: string,
+  existingSessionId: string
+): Promise<string> {
+  return processWithAgentMode(text, conversationId, existingSessionId, true)
 }
 import { diagnosticsService } from "./diagnostics"
 import { memoryService } from "./memory-service"

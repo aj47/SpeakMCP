@@ -303,6 +303,7 @@ app.whenReady().then(() => {
 
   app.on("before-quit", async (event) => {
     makePanelWindowClosable()
+    loopService.stopAllLoops()
 
     // Shutdown ACP agents gracefully
     acpService.shutdown().catch((error) => {

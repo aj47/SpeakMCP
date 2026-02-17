@@ -1,6 +1,6 @@
 /**
  * Loop Service
- * Manages scheduled agent loops that run at regular intervals
+ * Manages scheduled agent loops that run at regular intervals.
  */
 
 import { configStore } from "./config"
@@ -22,8 +22,9 @@ export interface LoopStatus {
 
 class LoopService {
   private static instance: LoopService | null = null
-  private activeTimers: Map<string, ReturnType<typeof setInterval>> = new Map()
+  private activeTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private loopNextRunAt: Map<string, number> = new Map()
+  private executingLoops: Set<string> = new Set()
 
   static getInstance(): LoopService {
     if (!LoopService.instance) {
@@ -34,14 +35,8 @@ class LoopService {
 
   private constructor() {}
 
-  /**
-   * Start all enabled loops from config
-   * Called on app startup
-   */
   startAllLoops(): void {
-    const config = configStore.get()
-    const loops = config.loops || []
-
+    const loops = configStore.get().loops || []
     logApp(`[LoopService] Starting all loops. Found ${loops.length} configured loops.`)
 
     for (const loop of loops) {
@@ -51,120 +46,87 @@ class LoopService {
     }
   }
 
-  /**
-   * Stop all active loops
-   * Called on app shutdown
-   */
   stopAllLoops(): void {
     logApp(`[LoopService] Stopping all loops. Active timers: ${this.activeTimers.size}`)
-
     for (const [loopId] of this.activeTimers) {
       this.stopLoop(loopId)
     }
   }
 
-  /**
-   * Start a specific loop by ID
-   */
   startLoop(loopId: string): boolean {
-    const config = configStore.get()
-    const loop = (config.loops || []).find(l => l.id === loopId)
-
+    const loop = (configStore.get().loops || []).find((l) => l.id === loopId)
     if (!loop) {
       logApp(`[LoopService] Cannot start loop ${loopId}: not found`)
       return false
     }
 
-    // Stop existing timer if running
-    if (this.activeTimers.has(loopId)) {
-      this.stopLoop(loopId)
+    if (!loop.enabled) {
+      logApp(`[LoopService] Not starting loop ${loopId}: disabled`)
+      return false
     }
 
-    const intervalMs = loop.intervalMinutes * 60 * 1000
-
-    // Calculate next run time
-    this.loopNextRunAt.set(loopId, Date.now() + intervalMs)
-
-    // Create the interval timer
-    const timer = setInterval(() => {
-      this.executeLoop(loopId)
-    }, intervalMs)
-
-    this.activeTimers.set(loopId, timer)
+    this.clearScheduledTimer(loopId)
 
     logApp(`[LoopService] Started loop "${loop.name}" (${loopId}), interval: ${loop.intervalMinutes}m`)
 
-    // If runOnStartup is true, trigger immediately
     if (loop.runOnStartup) {
       logApp(`[LoopService] Loop "${loop.name}" has runOnStartup=true, triggering immediately`)
-      // Use setImmediate to avoid blocking startup
-      setImmediate(() => this.executeLoop(loopId))
+      setImmediate(() => {
+        void this.executeLoop(loopId, { rescheduleAfterRun: true })
+      })
+    } else {
+      this.scheduleNextRun(loopId, this.getIntervalMs(loop))
     }
 
     return true
   }
 
-  /**
-   * Stop a specific loop by ID
-   */
   stopLoop(loopId: string): boolean {
-    const timer = this.activeTimers.get(loopId)
+    const hadTimer = this.activeTimers.has(loopId)
+    this.clearScheduledTimer(loopId)
 
-    if (!timer) {
-      logApp(`[LoopService] Cannot stop loop ${loopId}: not running`)
+    if (!hadTimer) {
+      logApp(`[LoopService] Stop requested for ${loopId}: no scheduled timer`)
       return false
     }
-
-    clearInterval(timer)
-    this.activeTimers.delete(loopId)
-    this.loopNextRunAt.delete(loopId)
 
     logApp(`[LoopService] Stopped loop ${loopId}`)
     return true
   }
 
-  /**
-   * Manually trigger a loop execution
-   */
   async triggerLoop(loopId: string): Promise<boolean> {
-    const config = configStore.get()
-    const loop = (config.loops || []).find(l => l.id === loopId)
-
+    const loop = (configStore.get().loops || []).find((l) => l.id === loopId)
     if (!loop) {
       logApp(`[LoopService] Cannot trigger loop ${loopId}: not found`)
       return false
     }
 
+    if (this.executingLoops.has(loopId)) {
+      logApp(`[LoopService] Skip manual trigger for "${loop.name}" (${loopId}): already executing`)
+      return false
+    }
+
     logApp(`[LoopService] Manually triggering loop "${loop.name}" (${loopId})`)
-    await this.executeLoop(loopId)
+    await this.executeLoop(loopId, { rescheduleAfterRun: false })
     return true
   }
 
-  /**
-   * Get status of all loops
-   */
   getLoopStatuses(): LoopStatus[] {
-    const config = configStore.get()
-    const loops = config.loops || []
+    const loops = configStore.get().loops || []
 
-    return loops.map(loop => ({
+    return loops.map((loop) => ({
       id: loop.id,
       name: loop.name,
       enabled: loop.enabled,
-      isRunning: this.activeTimers.has(loop.id),
+      isRunning: this.executingLoops.has(loop.id),
       lastRunAt: loop.lastRunAt,
       nextRunAt: this.loopNextRunAt.get(loop.id),
       intervalMinutes: loop.intervalMinutes,
     }))
   }
 
-  /**
-   * Get status of a specific loop
-   */
   getLoopStatus(loopId: string): LoopStatus | undefined {
-    const config = configStore.get()
-    const loop = (config.loops || []).find(l => l.id === loopId)
-
+    const loop = (configStore.get().loops || []).find((l) => l.id === loopId)
     if (!loop) {
       return undefined
     }
@@ -173,42 +135,39 @@ class LoopService {
       id: loop.id,
       name: loop.name,
       enabled: loop.enabled,
-      isRunning: this.activeTimers.has(loop.id),
+      isRunning: this.executingLoops.has(loop.id),
       lastRunAt: loop.lastRunAt,
       nextRunAt: this.loopNextRunAt.get(loop.id),
       intervalMinutes: loop.intervalMinutes,
     }
   }
 
-  /**
-   * Execute a loop - creates and starts an agent session with the loop's prompt
-   */
-  private async executeLoop(loopId: string): Promise<void> {
+  private async executeLoop(loopId: string, options: { rescheduleAfterRun: boolean }): Promise<void> {
     const config = configStore.get()
     const loops = config.loops || []
-    const loop = loops.find(l => l.id === loopId)
+    const loop = loops.find((l) => l.id === loopId)
 
     if (!loop) {
       logApp(`[LoopService] Cannot execute loop ${loopId}: not found`)
       return
     }
 
+    if (this.executingLoops.has(loopId)) {
+      logApp(`[LoopService] Skip execution for "${loop.name}" (${loopId}): already executing`)
+      return
+    }
+
+    this.executingLoops.add(loopId)
+    this.clearScheduledTimer(loopId)
+
     logApp(`[LoopService] Executing loop "${loop.name}" (${loopId})`)
 
     try {
-      // Update lastRunAt in config
-      const updatedLoops = loops.map(l =>
+      const updatedLoops = loops.map((l) =>
         l.id === loopId ? { ...l, lastRunAt: Date.now() } : l
       )
       configStore.save({ ...config, loops: updatedLoops })
 
-      // Update next run time if timer is active
-      if (this.activeTimers.has(loopId)) {
-        const intervalMs = loop.intervalMinutes * 60 * 1000
-        this.loopNextRunAt.set(loopId, Date.now() + intervalMs)
-      }
-
-      // Build profile snapshot if loop has a specific profile
       let profileSnapshot: SessionProfileSnapshot | undefined
       if (loop.profileId) {
         const profile = profileService.getProfile(loop.profileId)
@@ -225,33 +184,67 @@ class LoopService {
         }
       }
 
-      // Create a new conversation for this loop execution
+      const conversation = await conversationService.createConversation(loop.prompt, "user")
       const conversationTitle = `[Loop] ${loop.name}`
-      const conversation = await conversationService.createConversation(
-        loop.prompt,
-        "user"
-      )
-
-      // Start agent session - snoozed so it runs in background
       const sessionId = agentSessionTracker.startSession(
         conversation.id,
         conversationTitle,
-        true, // startSnoozed = true for background execution
+        true,
         profileSnapshot
       )
 
       logApp(`[LoopService] Created session ${sessionId} for loop "${loop.name}"`)
 
-      // Import processWithAgentMode dynamically to avoid circular dependency
-      // The actual agent processing will be handled by tipc.ts
-      const { processLoopAgentSession } = await import("./loop-agent-processor")
-      await processLoopAgentSession(loop.prompt, conversation.id, sessionId, profileSnapshot)
-
+      // Reuse the main agent execution flow.
+      const { runAgentLoopSession } = await import("./tipc")
+      await runAgentLoopSession(loop.prompt, conversation.id, sessionId)
     } catch (error) {
       logApp(`[LoopService] Error executing loop "${loop.name}":`, error)
+    } finally {
+      this.executingLoops.delete(loopId)
+
+      if (options.rescheduleAfterRun) {
+        const latestLoop = (configStore.get().loops || []).find((l) => l.id === loopId)
+        if (latestLoop?.enabled) {
+          this.scheduleNextRun(loopId, this.getIntervalMs(latestLoop))
+        }
+      }
     }
+  }
+
+  private scheduleNextRun(loopId: string, delayMs: number): void {
+    this.clearScheduledTimer(loopId)
+    this.loopNextRunAt.set(loopId, Date.now() + delayMs)
+
+    const timer = setTimeout(() => {
+      this.activeTimers.delete(loopId)
+      this.loopNextRunAt.delete(loopId)
+      void this.executeLoop(loopId, { rescheduleAfterRun: true })
+    }, delayMs)
+
+    this.activeTimers.set(loopId, timer)
+  }
+
+  private clearScheduledTimer(loopId: string): void {
+    const timer = this.activeTimers.get(loopId)
+    if (timer) {
+      clearTimeout(timer)
+    }
+    this.activeTimers.delete(loopId)
+    this.loopNextRunAt.delete(loopId)
+  }
+
+  private getIntervalMs(loop: LoopConfig): number {
+    const safeMinutes = Number.isFinite(loop.intervalMinutes) && loop.intervalMinutes >= 1
+      ? Math.floor(loop.intervalMinutes)
+      : 1
+
+    if (safeMinutes !== loop.intervalMinutes) {
+      logApp(`[LoopService] Loop ${loop.id} has invalid interval (${loop.intervalMinutes}), clamping to ${safeMinutes} minute(s)`)
+    }
+
+    return safeMinutes * 60 * 1000
   }
 }
 
 export const loopService = LoopService.getInstance()
-

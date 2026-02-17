@@ -443,6 +443,71 @@ describe('LLM Fetch with AI SDK', () => {
     expect(generateTextMock).toHaveBeenCalledTimes(1)
   })
 
+  it('should append user message when conversation ends with assistant message (prefill fix)', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: '{"content": "Continuing the work.", "needsMoreWork": false}',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    // Messages ending with an assistant message (the prefill scenario)
+    await makeLLMCallWithFetch(
+      [
+        { role: 'system', content: 'You are helpful.' },
+        { role: 'user', content: 'Summarize X feed' },
+        { role: 'assistant', content: 'I will start working on that.' },
+      ],
+      'openai'
+    )
+
+    // Verify that generateText was called with a "Please continue." user message appended
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          { role: 'user', content: 'Summarize X feed' },
+          { role: 'assistant', content: 'I will start working on that.' },
+          { role: 'user', content: 'Please continue.' },
+        ],
+      })
+    )
+  })
+
+  it('should not append user message when conversation already ends with user message', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: '{"content": "Here is the result.", "needsMoreWork": false}',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    // Messages ending with a user message (normal scenario)
+    await makeLLMCallWithFetch(
+      [
+        { role: 'system', content: 'You are helpful.' },
+        { role: 'user', content: 'Hello' },
+      ],
+      'openai'
+    )
+
+    // Verify that generateText was called without an extra user message
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          { role: 'user', content: 'Hello' },
+        ],
+      })
+    )
+  })
+
   it('should retry on AI SDK rate limit errors (statusCode 429)', async () => {
     const { generateText } = await import('ai')
     const generateTextMock = vi.mocked(generateText)

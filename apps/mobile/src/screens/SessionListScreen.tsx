@@ -1,6 +1,7 @@
-import { useLayoutEffect, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image } from 'react-native';
+import { useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image, GestureResponderEvent, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { EventEmitter } from 'expo-modules-core';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
@@ -19,10 +20,113 @@ interface Props {
 
 export default function SessionListScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { height: screenHeight } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(theme, screenHeight), [theme, screenHeight]);
   const connectionManager = useConnectionManager();
   const { connectionInfo } = useTunnelConnection();
   const { currentProfile } = useProfile();
+
+  // ── Rapid Fire voice state ─────────────────────────────────────────────────
+  const [rfListening, setRfListening] = useState(false);
+  const [rfTranscript, setRfTranscript] = useState('');
+  const rfListeningRef = useRef(false);
+  const rfStartingRef = useRef(false);
+  const rfStoppingRef = useRef(false);
+  const rfFinalRef = useRef('');
+  const rfLiveRef = useRef('');
+  const rfSrEmitterRef = useRef<any>(null);
+  const rfSrSubsRef = useRef<any[]>([]);
+  const rfGrantTimeRef = useRef(0);
+  const rfMinHoldMs = 200;
+  const sessionStoreRef = useRef<SessionStore | null>(null);
+
+  const rfSetListening = useCallback((v: boolean) => {
+    rfListeningRef.current = v;
+    setRfListening(v);
+  }, []);
+
+  const rfCleanupSubs = useCallback(() => {
+    for (const sub of rfSrSubsRef.current) {
+      try { sub.remove(); } catch {}
+    }
+    rfSrSubsRef.current = [];
+  }, []);
+
+  const rfStartRecording = useCallback(async (e?: GestureResponderEvent) => {
+    if (rfStartingRef.current || rfListeningRef.current) return;
+    rfStartingRef.current = true;
+    rfStoppingRef.current = false;
+    rfFinalRef.current = '';
+    rfLiveRef.current = '';
+    setRfTranscript('');
+    rfGrantTimeRef.current = Date.now();
+    rfSetListening(true);
+    try {
+      if (Platform.OS !== 'web') {
+        const SR: any = await import('expo-speech-recognition');
+        if (SR?.ExpoSpeechRecognitionModule?.start) {
+          if (!rfSrEmitterRef.current) {
+            rfSrEmitterRef.current = new EventEmitter(SR.ExpoSpeechRecognitionModule);
+          }
+          rfCleanupSubs();
+          const subResult = rfSrEmitterRef.current.addListener('result', (event: any) => {
+            const t = event?.results?.[0]?.transcript ?? event?.text ?? event?.transcript ?? '';
+            if (t) { rfLiveRef.current = t; setRfTranscript(t); }
+            if (event?.isFinal && t) { rfFinalRef.current = rfFinalRef.current ? `${rfFinalRef.current} ${t}` : t; }
+          });
+          const subError = rfSrEmitterRef.current.addListener('error', (event: any) => {
+            console.error('[RapidFire] SR error:', JSON.stringify(event));
+          });
+          const subEnd = rfSrEmitterRef.current.addListener('end', () => {
+            if (!rfStoppingRef.current) return; // still holding - ignore spurious end
+            rfSetListening(false);
+          });
+          rfSrSubsRef.current.push(subResult, subError, subEnd);
+          try {
+            const perm = await SR.ExpoSpeechRecognitionModule.getPermissionsAsync();
+            if (!perm?.granted) {
+              const req = await SR.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+              if (!req?.granted) { rfSetListening(false); rfStartingRef.current = false; return; }
+            }
+          } catch {}
+          SR.ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: true,
+            volumeChangeEventOptions: { enabled: false, intervalMillis: 250 } });
+          rfStartingRef.current = false;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[RapidFire] SR unavailable:', (err as any)?.message || err);
+    }
+    rfSetListening(false);
+    rfStartingRef.current = false;
+  }, [rfCleanupSubs, rfSetListening]);
+
+  const rfStopAndFire = useCallback(async () => {
+    if (rfStoppingRef.current) return;
+    rfStoppingRef.current = true;
+    try {
+      if (Platform.OS !== 'web') {
+        const SR: any = await import('expo-speech-recognition');
+        if (SR?.ExpoSpeechRecognitionModule?.stop) SR.ExpoSpeechRecognitionModule.stop();
+      }
+    } catch {}
+    rfCleanupSubs();
+    rfSetListening(false);
+    const finalText = (rfFinalRef.current || rfLiveRef.current).trim();
+    rfFinalRef.current = '';
+    rfLiveRef.current = '';
+    setRfTranscript('');
+    if (finalText) {
+      // Create a new session and navigate to Chat with the transcript
+      const ss = sessionStoreRef.current;
+      if (ss) {
+        ss.createNewSession();
+        navigation.navigate('Chat', { initialMessage: finalText });
+      }
+    }
+  }, [rfCleanupSubs, rfSetListening, navigation]);
+  // ── end Rapid Fire ─────────────────────────────────────────────────────────
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
@@ -71,6 +175,7 @@ export default function SessionListScreen({ navigation }: Props) {
   }, [navigation, theme, connectionInfo.state, connectionInfo.retryCount, currentProfile]);
   const insets = useSafeAreaInsets();
   const sessionStore = useSessionContext();
+  sessionStoreRef.current = sessionStore;
   const sessions = sessionStore.getSessionList();
 
   if (!sessionStore.ready) {
@@ -236,11 +341,43 @@ export default function SessionListScreen({ navigation }: Props) {
         contentContainerStyle={sessions.length === 0 ? styles.emptyList : styles.list}
         ListEmptyComponent={EmptyState}
       />
+
+      {/* Rapid Fire hold-to-speak button */}
+      <View style={styles.rfContainer}>
+        {rfListening && rfTranscript ? (
+          <Text style={styles.rfTranscript} numberOfLines={2}>{rfTranscript}</Text>
+        ) : null}
+        <Text style={styles.rfHint}>
+          {rfListening ? 'Release to send...' : 'Hold to talk (Rapid Fire)'}
+        </Text>
+        <TouchableOpacity
+          style={[styles.rfButton, rfListening && styles.rfButtonOn]}
+          activeOpacity={0.8}
+          delayPressIn={0}
+          onPressIn={(e: GestureResponderEvent) => {
+            rfGrantTimeRef.current = Date.now();
+            if (!rfListeningRef.current) { void rfStartRecording(e); }
+          }}
+          onPressOut={() => {
+            const dt = Date.now() - rfGrantTimeRef.current;
+            const delay = Math.max(0, rfMinHoldMs - dt);
+            if (delay > 0) {
+              setTimeout(() => { if (rfListeningRef.current) { void rfStopAndFire(); } }, delay);
+            } else {
+              if (rfListeningRef.current) { void rfStopAndFire(); }
+            }
+          }}
+        >
+          <Text style={styles.rfButtonText}>{rfListening ? '\uD83C\uDF99\uFE0F' : '\uD83C\uDFA4'}</Text>
+          <Text style={styles.rfButtonLabel}>{rfListening ? '...' : 'Hold'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, screenHeight: number) {
+  const rfButtonHeight = Math.round(screenHeight * 0.18);
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -341,6 +478,51 @@ function createStyles(theme: Theme) {
       ...theme.typography.body,
       color: theme.colors.mutedForeground,
       textAlign: 'center',
+    },
+    rfContainer: {
+      borderTopWidth: theme.hairline,
+      borderTopColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.sm,
+      alignItems: 'center',
+    },
+    rfHint: {
+      ...theme.typography.caption,
+      color: theme.colors.mutedForeground,
+      marginBottom: spacing.xs,
+      textAlign: 'center',
+    },
+    rfTranscript: {
+      ...theme.typography.body,
+      color: theme.colors.foreground,
+      textAlign: 'center',
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md,
+    },
+    rfButton: {
+      width: '100%' as any,
+      height: rfButtonHeight,
+      borderRadius: radius.xl,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rfButtonOn: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    rfButtonText: {
+      fontSize: 36,
+    },
+    rfButtonLabel: {
+      fontSize: 13,
+      color: theme.colors.mutedForeground,
+      marginTop: 4,
+      fontWeight: '600',
     },
   });
 }

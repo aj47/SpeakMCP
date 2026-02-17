@@ -16,6 +16,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   TextInputKeyPressEventData,
+  useWindowDimensions,
 } from 'react-native';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
@@ -49,7 +50,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme, isDark } = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { height: screenHeight } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(theme, screenHeight), [theme, screenHeight]);
   const { config, setConfig } = useConfigContext();
   const sessionStore = useSessionContext();
   const messageQueue = useMessageQueueContext();
@@ -529,6 +531,22 @@ export default function ChatScreen({ route, navigation }: any) {
       setMessages([]);
     }
   }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size]);
+
+  // Auto-send initialMessage from route params (e.g. from rapid fire mode in SessionListScreen)
+  const initialMessageRef = useRef<string | null>(route?.params?.initialMessage ?? null);
+  const initialMessageSentRef = useRef(false);
+  useEffect(() => {
+    if (!initialMessageRef.current || initialMessageSentRef.current) return;
+    if (!sessionStore.currentSessionId) return;
+    initialMessageSentRef.current = true;
+    const msg = initialMessageRef.current;
+    initialMessageRef.current = null;
+    // Small delay to ensure the session is fully loaded and the component is rendered
+    const timer = setTimeout(() => {
+      void sendRef.current(msg);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [sessionStore.currentSessionId]);
 
   const prevMessagesLengthRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
@@ -2351,14 +2369,30 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
-        <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
-          <TouchableOpacity
-            style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
-            onPress={toggleTts}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
-          </TouchableOpacity>
+        <View style={[styles.inputArea, { paddingBottom: 12 + insets.bottom }]}>
+          {/* Top row: TTS toggle, text input, send button */}
+          <View style={styles.inputRow}>
+            <TouchableOpacity
+              style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
+              onPress={toggleTts}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              value={input}
+              onChangeText={handleInputChange}
+              onKeyPress={handleInputKeyPress}
+              placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
+              placeholderTextColor={theme.colors.mutedForeground}
+              multiline
+            />
+            <TouchableOpacity style={styles.sendButton} onPress={() => send(input)}>
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+          {/* Large mic button - ~20% of screen height */}
           <View style={styles.micWrapper}>
             <TouchableOpacity
               style={[styles.mic, listening && styles.micOn]}
@@ -2411,25 +2445,14 @@ export default function ChatScreen({ route, navigation }: any) {
               </Text>
             </TouchableOpacity>
           </View>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={handleInputChange}
-            onKeyPress={handleInputKeyPress}
-            placeholder={handsFree ? (listening ? 'Listening…' : 'Type or tap mic') : (listening ? 'Listening…' : 'Type or hold mic')}
-            placeholderTextColor={theme.colors.mutedForeground}
-            multiline
-          />
-          <TouchableOpacity style={styles.sendButton} onPress={() => send(input)}>
-            <Text style={styles.sendButtonText}>Send</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-function createStyles(theme: Theme) {
+function createStyles(theme: Theme, screenHeight: number) {
+  const micButtonHeight = Math.round(screenHeight * 0.2);
   return StyleSheet.create({
     // Compact desktop-style messages: left-border accent, full width, no bubbles
     msg: {
@@ -2478,15 +2501,17 @@ function createStyles(theme: Theme) {
       fontWeight: '500',
     },
 
+    inputArea: {
+      borderTopWidth: theme.hairline,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
+    },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
-      borderTopWidth: theme.hairline,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.card,
     },
     input: {
       ...theme.input,
@@ -2494,12 +2519,13 @@ function createStyles(theme: Theme) {
       maxHeight: 120,
     },
     micWrapper: {
-      borderRadius: radius.full,
+      paddingHorizontal: spacing.sm,
+      paddingBottom: spacing.xs,
     },
     mic: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: '100%' as any,
+      height: micButtonHeight,
+      borderRadius: radius.xl,
       borderWidth: 1.5,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
@@ -2511,12 +2537,13 @@ function createStyles(theme: Theme) {
       borderColor: theme.colors.primary,
     },
     micText: {
-      fontSize: 18,
+      fontSize: 32,
     },
     micLabel: {
-      fontSize: 9,
+      fontSize: 13,
       color: theme.colors.mutedForeground,
-      marginTop: 1,
+      marginTop: 4,
+      fontWeight: '600',
     },
     micLabelOn: {
       color: theme.colors.primaryForeground,

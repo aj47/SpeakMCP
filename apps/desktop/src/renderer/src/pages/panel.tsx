@@ -13,6 +13,7 @@ import { useAgentStore, useAgentProgress, useConversationStore } from "@renderer
 import { useConversationQuery, useCreateConversationMutation, useAddMessageToConversationMutation } from "@renderer/lib/queries"
 import { PanelDragBar } from "@renderer/components/panel-drag-bar"
 import { useConfigQuery } from "@renderer/lib/query-client"
+import { decodeBlobToPcm } from "@renderer/lib/audio-utils"
 import { useTheme } from "@renderer/contexts/theme-context"
 import { ttsManager } from "@renderer/lib/tts-manager"
 import { formatKeyComboForDisplay } from "@shared/key-utils"
@@ -185,8 +186,11 @@ export function Component() {
         await startNewConversation(transcript, "user")
       }
 
+      const isParakeet = configQuery.data?.sttProviderId === "parakeet"
+      const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       await tipcClient.createRecording({
         recording: await blob.arrayBuffer(),
+        pcmRecording,
         duration,
       })
     },
@@ -209,6 +213,8 @@ export function Component() {
       duration: number
       transcript?: string
     }) => {
+      const isParakeet = configQuery.data?.sttProviderId === "parakeet"
+      const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       const arrayBuffer = await blob.arrayBuffer()
 
       // Use the conversationId and sessionId passed through IPC (from mic button clicks).
@@ -235,6 +241,7 @@ export function Component() {
 
       const result = await tipcClient.createMcpRecording({
         recording: arrayBuffer,
+        pcmRecording,
         duration,
         // Pass conversationId and sessionId if user explicitly continued a conversation,
         // otherwise undefined to create a fresh conversation/session.

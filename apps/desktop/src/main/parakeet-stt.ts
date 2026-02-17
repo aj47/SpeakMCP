@@ -644,6 +644,16 @@ export async function transcribe(
     throw new Error("Recognizer not initialized. Call initializeRecognizer() first.")
   }
 
+  // Validate that the buffer contains properly-aligned float32 PCM data.
+  // Each float32 sample is 4 bytes; if the byte length isn't divisible by 4 the
+  // buffer is not valid PCM (e.g. raw webm/compressed audio was passed instead).
+  if (audioBuffer.byteLength % 4 !== 0) {
+    throw new Error(
+      `Invalid PCM audio buffer: byte length ${audioBuffer.byteLength} is not a multiple of 4. ` +
+      `Audio must be decoded to float32 PCM before transcription with Parakeet.`
+    )
+  }
+
   // Convert ArrayBuffer to Float32Array
   const samples = new Float32Array(audioBuffer)
 

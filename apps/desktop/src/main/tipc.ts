@@ -1169,6 +1169,7 @@ export const router = {
   createRecording: t.procedure
     .input<{
       recording: ArrayBuffer
+      pcmRecording?: ArrayBuffer
       duration: number
     }>()
     .action(async ({ input }) => {
@@ -1186,11 +1187,10 @@ export const router = {
         // Initialize recognizer if needed
         await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-        // TODO: Audio format conversion needed
-        // The input is webm ArrayBuffer from MediaRecorder
-        // Parakeet expects Float32Array samples at 16kHz mono
-        // For now, this will not work correctly until audio conversion is added
-        transcript = await parakeetStt.transcribe(input.recording, 16000)
+        if (!input.pcmRecording) {
+          throw new Error("Parakeet STT requires pre-decoded float32 PCM audio. pcmRecording was not provided.")
+        }
+        transcript = await parakeetStt.transcribe(input.pcmRecording, 16000)
         transcript = await postProcessTranscript(transcript)
       } else {
         // Use OpenAI or Groq for transcription
@@ -1521,6 +1521,7 @@ export const router = {
   createMcpRecording: t.procedure
     .input<{
       recording: ArrayBuffer
+      pcmRecording?: ArrayBuffer
       duration: number
       conversationId?: string
       sessionId?: string
@@ -1551,10 +1552,10 @@ export const router = {
 
               await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-              // TODO: Audio format conversion needed
-              // The input is webm ArrayBuffer from MediaRecorder
-              // Parakeet expects Float32Array samples at 16kHz mono
-              transcript = await parakeetStt.transcribe(input.recording, 16000)
+              if (!input.pcmRecording) {
+                throw new Error("Parakeet STT requires pre-decoded float32 PCM audio. pcmRecording was not provided.")
+              }
+              transcript = await parakeetStt.transcribe(input.pcmRecording, 16000)
             } else {
               const form = new FormData()
               form.append(
@@ -1736,10 +1737,10 @@ export const router = {
 
           await parakeetStt.initializeRecognizer(config.parakeetNumThreads)
 
-          // TODO: Audio format conversion needed
-          // The input is webm ArrayBuffer from MediaRecorder
-          // Parakeet expects Float32Array samples at 16kHz mono
-          transcript = await parakeetStt.transcribe(input.recording, 16000)
+          if (!input.pcmRecording) {
+            throw new Error("Parakeet STT requires pre-decoded float32 PCM audio. pcmRecording was not provided.")
+          }
+          transcript = await parakeetStt.transcribe(input.pcmRecording, 16000)
         } else {
           // Use OpenAI or Groq for transcription
           const form = new FormData()

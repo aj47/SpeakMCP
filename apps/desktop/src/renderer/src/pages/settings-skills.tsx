@@ -412,7 +412,7 @@ export function Component() {
         </div>
 
         {/* Skills List */}
-        <div className="space-y-3">
+        <div className="space-y-1">
           {skillsQuery.isLoading ? (
             <div className="text-center py-8 text-muted-foreground">
               <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin" />
@@ -432,25 +432,17 @@ export function Component() {
             skills.map((skill) => (
               <div
                 key={skill.id}
-                className="flex items-start justify-between p-4 rounded-lg border bg-card"
+                className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card"
               >
-                <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                   <Switch
                     checked={isSkillEnabled(skill.id)}
                     onCheckedChange={() => toggleProfileSkillMutation.mutate(skill.id)}
                     disabled={!currentProfileId}
                   />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium">{skill.name}</h3>
-                    {skill.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{skill.description}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {skill.instructions.length} characters • {skill.source || "local"}
-                    </p>
-                  </div>
+                  <span className="font-medium truncate">{skill.name}</span>
                 </div>
-                <div className="flex gap-1 ml-2">
+                <div className="flex gap-1 ml-2 shrink-0">
                   <Button
                     variant="ghost"
                     size="sm"

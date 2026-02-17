@@ -602,6 +602,22 @@ class SkillsService {
       return false
     }
 
+    // If the skill was loaded from a file inside the managed skills folder,
+    // delete the folder from disk so the file watcher doesn't re-import it.
+    if (skill.filePath) {
+      try {
+        const skillDir = path.dirname(skill.filePath)
+        // Only delete if it lives inside the managed skills folder (safety check)
+        if (skillDir.startsWith(skillsFolder) && skillDir !== skillsFolder) {
+          fs.rmSync(skillDir, { recursive: true, force: true })
+          logApp(`Deleted skill folder from disk: ${skillDir}`)
+        }
+      } catch (error) {
+        logApp(`Failed to delete skill folder for "${skill.name}":`, error)
+        // Non-fatal: still remove from skills.json
+      }
+    }
+
     this.skillsData!.skills = this.skillsData!.skills.filter(s => s.id !== id)
     this.saveSkills()
     return true

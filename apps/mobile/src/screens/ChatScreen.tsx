@@ -1331,15 +1331,19 @@ export default function ChatScreen({ route, navigation }: any) {
 	// We intentionally assign during render (not useEffect) so it is available immediately.
 	sendRef.current = send;
 
-  // Handle Google Assistant / deep link params: auto-send initial message or auto-start voice
-  const initialMessageHandled = useRef(false);
+  // Handle Google Assistant / deep link params: auto-send initial message or auto-start voice.
+  // Track the last *handled* params object by reference instead of a simple boolean flag so
+  // that a second deep link arriving on the same mounted screen (params update without remount)
+  // is also processed correctly.
+  const handledParamsRef = useRef<typeof route.params | null>(null);
   useEffect(() => {
-    if (initialMessageHandled.current) return;
     const params = route?.params;
     if (!params) return;
+    // Skip if we already handled this exact params object
+    if (params === handledParamsRef.current) return;
 
     if (params.initialMessage && typeof params.initialMessage === 'string') {
-      initialMessageHandled.current = true;
+      handledParamsRef.current = params;
       // Small delay to ensure the chat screen is fully mounted
       const timer = setTimeout(() => {
         sendRef.current(params.initialMessage);
@@ -1348,7 +1352,7 @@ export default function ChatScreen({ route, navigation }: any) {
     }
 
     if (params.autoVoice) {
-      initialMessageHandled.current = true;
+      handledParamsRef.current = params;
       // Start voice recording after a brief delay for mount
       const timer = setTimeout(() => {
         startRecording();

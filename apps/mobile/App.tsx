@@ -57,11 +57,15 @@ function parseDeepLink(url: string | null): DeepLinkResult | null {
   if (!url) return null;
   try {
     const parsed = Linking.parse(url);
-    const path = parsed.path || parsed.hostname || '';
+    // Use hostname as the primary routing key.
+    // For speakmcp://feature/settings, Linking.parse gives hostname='feature', path='settings'.
+    // Using `parsed.path || parsed.hostname` would incorrectly use 'settings' as the route.
+    const hostname = parsed.hostname || '';
+    const subPath = (parsed.path || '').replace(/^\//, '');
     const params = parsed.queryParams || {};
 
     // Handle speakmcp://config?baseUrl=...&apiKey=...&model=...
-    if (path === 'config') {
+    if (hostname === 'config') {
       const { baseUrl, apiKey, model } = params;
       if (baseUrl || apiKey || model) {
         return {
@@ -74,7 +78,7 @@ function parseDeepLink(url: string | null): DeepLinkResult | null {
     }
 
     // Handle speakmcp://assistant?query=... (Google Assistant App Actions)
-    if (path === 'assistant') {
+    if (hostname === 'assistant') {
       const query = typeof params.query === 'string' ? params.query : '';
       if (query) {
         return { type: 'assistant', query };
@@ -84,19 +88,19 @@ function parseDeepLink(url: string | null): DeepLinkResult | null {
     }
 
     // Handle speakmcp://chat (open chat screen)
-    if (path === 'chat') {
+    if (hostname === 'chat') {
       return { type: 'chat' };
     }
 
     // Handle speakmcp://voice (open chat in voice mode)
-    if (path === 'voice') {
+    if (hostname === 'voice') {
       return { type: 'voice' };
     }
 
     // Handle speakmcp://feature/{name} (Google Assistant OPEN_APP_FEATURE)
-    if (path.startsWith('feature/') || path === 'feature') {
-      const feature = path.replace('feature/', '').replace('feature', '') ||
-        (typeof params.feature === 'string' ? params.feature : '');
+    // URL: speakmcp://feature/settings → hostname='feature', subPath='settings'
+    if (hostname === 'feature') {
+      const feature = subPath || (typeof params.feature === 'string' ? params.feature : '');
       if (feature) {
         return { type: 'feature', feature };
       }
@@ -204,6 +208,7 @@ function Navigation() {
         }
         case 'feature': {
           // Google Assistant OPEN_APP_FEATURE - route to the named feature
+          console.log('[App] Opening feature via deep link:', result.feature);
           const featureLower = result.feature.toLowerCase();
           if (isNavigationReady.current) {
             if (featureLower.includes('chat') || featureLower.includes('message') || featureLower.includes('talk')) {

@@ -20,7 +20,7 @@ import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
-import { startRemoteServer } from "./remote-server"
+import { startRemoteServer, printQRCodeToTerminal } from "./remote-server"
 import { acpService } from "./acp-service"
 import { agentProfileService } from "./agent-profile-service"
 import { initializeBundledSkills, skillsService, startSkillsFolderWatcher } from "./skills-service"
@@ -30,6 +30,9 @@ import {
   checkCloudflaredInstalled,
 } from "./cloudflare-tunnel"
 import { initModelsDevService } from "./models-dev-service"
+
+// Check for --qr flag (headless mode with QR code)
+const isQRMode = process.argv.includes("--qr")
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -52,9 +55,40 @@ if (process.platform === 'linux') {
 
 registerServeSchema()
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   initDebugFlags(process.argv)
   logApp("SpeakMCP starting up...")
+
+  // Handle --qr mode: start remote server, print QR code, run headlessly
+  if (isQRMode) {
+    logApp("Running in --qr mode (headless with QR code)")
+
+    // Hide dock icon on macOS for headless mode
+    if (process.platform === "darwin" && app.dock) {
+      app.dock.hide()
+    }
+
+    try {
+      // Start remote server (force enabled for --qr mode)
+      await startRemoteServer()
+      logApp("Remote server started in --qr mode")
+
+      // Print QR code to terminal
+      const printed = await printQRCodeToTerminal()
+      if (!printed) {
+        console.error("[QR Mode] Failed to print QR code. Ensure remoteServerApiKey is configured.")
+        console.log("[QR Mode] You can set an API key in the config or run the app normally first.")
+      }
+
+      console.log("[QR Mode] Server running. Press Ctrl+C to exit.")
+    } catch (err) {
+      console.error("[QR Mode] Failed to start remote server:", err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+
+    // Keep the process running - don't create any windows
+    return
+  }
 
   initializeDeepLinkHandling()
   logApp("Deep link handling initialized")
@@ -344,6 +378,10 @@ app.whenReady().then(() => {
 })
 
 app.on("window-all-closed", () => {
+  // Don't quit in --qr mode (headless server)
+  if (isQRMode) {
+    return
+  }
   if (process.platform !== "darwin") {
     app.quit()
   }

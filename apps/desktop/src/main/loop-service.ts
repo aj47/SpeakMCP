@@ -25,6 +25,7 @@ class LoopService {
   private activeTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private loopNextRunAt: Map<string, number> = new Map()
   private executingLoops: Set<string> = new Set()
+  private isStopping: boolean = false
 
   static getInstance(): LoopService {
     if (!LoopService.instance) {
@@ -47,10 +48,15 @@ class LoopService {
   }
 
   stopAllLoops(): void {
+    this.isStopping = true
     logApp(`[LoopService] Stopping all loops. Active timers: ${this.activeTimers.size}`)
     for (const [loopId] of this.activeTimers) {
       this.stopLoop(loopId)
     }
+  }
+
+  resumeScheduling(): void {
+    this.isStopping = false
   }
 
   startLoop(loopId: string): boolean {
@@ -107,7 +113,9 @@ class LoopService {
     }
 
     logApp(`[LoopService] Manually triggering loop "${loop.name}" (${loopId})`)
-    await this.executeLoop(loopId, { rescheduleAfterRun: false })
+    // Reschedule after manual run if the loop is enabled so we don't lose the timer
+    const shouldReschedule = loop.enabled && this.activeTimers.has(loopId)
+    await this.executeLoop(loopId, { rescheduleAfterRun: shouldReschedule })
     return true
   }
 
@@ -163,10 +171,13 @@ class LoopService {
     logApp(`[LoopService] Executing loop "${loop.name}" (${loopId})`)
 
     try {
-      const updatedLoops = loops.map((l) =>
+      // Re-fetch latest config to avoid race conditions with other config updates
+      const latestConfig = configStore.get()
+      const latestLoops = latestConfig.loops || []
+      const updatedLoops = latestLoops.map((l) =>
         l.id === loopId ? { ...l, lastRunAt: Date.now() } : l
       )
-      configStore.save({ ...config, loops: updatedLoops })
+      configStore.save({ ...latestConfig, loops: updatedLoops })
 
       let profileSnapshot: SessionProfileSnapshot | undefined
       if (loop.profileId) {
@@ -203,7 +214,7 @@ class LoopService {
     } finally {
       this.executingLoops.delete(loopId)
 
-      if (options.rescheduleAfterRun) {
+      if (options.rescheduleAfterRun && !this.isStopping) {
         const latestLoop = (configStore.get().loops || []).find((l) => l.id === loopId)
         if (latestLoop?.enabled) {
           this.scheduleNextRun(loopId, this.getIntervalMs(latestLoop))

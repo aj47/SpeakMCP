@@ -56,8 +56,20 @@ function formatLastRun(timestamp?: number): string {
 
 function formatInterval(minutes: number): string {
   if (minutes < 60) return `${minutes}m`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h`
-  return `${Math.floor(minutes / 1440)}d`
+  if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    if (remainingMinutes === 0) return `${hours}h`
+    return `${hours}h ${remainingMinutes}m`
+  }
+  const days = Math.floor(minutes / 1440)
+  const remainingMinutes = minutes % 1440
+  if (remainingMinutes === 0) return `${days}d`
+  const hours = Math.floor(remainingMinutes / 60)
+  const mins = remainingMinutes % 60
+  if (hours === 0) return `${days}d ${mins}m`
+  if (mins === 0) return `${days}d ${hours}h`
+  return `${days}d ${hours}h ${mins}m`
 }
 
 export function SettingsLoops() {

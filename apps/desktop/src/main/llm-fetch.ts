@@ -495,6 +495,11 @@ async function withRetry<T>(
  * Convert messages to AI SDK format, extracting system messages separately
  * This is needed for compatibility with Anthropic/Claude APIs which expect
  * system prompts as a separate parameter, not in the messages array
+ *
+ * Also ensures the conversation never ends with an assistant message.
+ * OpenAI-compatible APIs (including OpenRouter) do not support "assistant
+ * message prefill" and require the conversation to end with a user message.
+ * See: https://github.com/aj47/SpeakMCP/issues/1035
  */
 function convertMessages(messages: Array<{ role: string; content: string }>): {
   system: string | undefined
@@ -513,6 +518,16 @@ function convertMessages(messages: Array<{ role: string; content: string }>): {
         content: msg.content,
       })
     }
+  }
+
+  // Ensure the conversation doesn't end with an assistant message.
+  // Some providers (e.g., OpenRouter proxying to Claude models) don't support
+  // assistant message prefill and require the last message to be from the user.
+  if (otherMessages.length > 0 && otherMessages[otherMessages.length - 1].role === "assistant") {
+    otherMessages.push({
+      role: "user",
+      content: "Please continue.",
+    })
   }
 
   return {

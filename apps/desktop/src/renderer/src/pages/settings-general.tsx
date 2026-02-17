@@ -35,7 +35,9 @@ import { ExternalLink, AlertCircle } from "lucide-react"
 import { useState, useCallback, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 import { Config } from "@shared/types"
+import { AlertTriangle } from "lucide-react"
 import { KeyRecorder } from "@renderer/components/key-recorder"
 import {
   getEffectiveShortcut,
@@ -45,6 +47,13 @@ import {
 export function Component() {
   const configQuery = useConfigQuery()
   const navigate = useNavigate()
+
+  // Check if user is in input group on Linux (required for global hotkeys)
+  const linuxInputGroupQuery = useQuery({
+    queryKey: ["linux-input-group"],
+    queryFn: () => tipcClient.checkLinuxInputGroup(),
+    staleTime: 60000, // Cache result for 1 minute (avoids refetch on navigation)
+  })
 
   const saveConfigMutation = useSaveConfigMutation()
 
@@ -222,6 +231,27 @@ export function Component() {
             </div>
           }
         >
+          {/* Linux input group warning */}
+          {linuxInputGroupQuery.data?.isLinux && !linuxInputGroupQuery.data?.inInputGroup && (
+            <div className="mx-3 mb-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/50 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                  Global hotkeys require additional permissions
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  To use keyboard shortcuts on Linux, add your user to the 'input' group:
+                </p>
+                <code className="block text-xs bg-muted px-2 py-1 rounded font-mono">
+                  sudo usermod -aG input $USER
+                </code>
+                <p className="text-xs text-muted-foreground">
+                  Then log out and log back in for the change to take effect.
+                </p>
+              </div>
+            </div>
+          )}
+
           <Control label="Recording" className="px-3">
             <div className="space-y-2">
               <Select

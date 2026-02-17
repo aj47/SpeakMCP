@@ -3,15 +3,17 @@ import { cn } from "@renderer/lib/utils"
 import { GripVertical } from "lucide-react"
 import { useResizable, TILE_DIMENSIONS } from "@renderer/hooks/use-resizable"
 
-// Context to share container width, gap, and reset key with tile wrappers
+// Context to share container width, height, gap, and reset key with tile wrappers
 interface SessionGridContextValue {
   containerWidth: number
+  containerHeight: number
   gap: number
   resetKey: number
 }
 
 const SessionGridContext = createContext<SessionGridContextValue>({
   containerWidth: 0,
+  containerHeight: 0,
   gap: 16,
   resetKey: 0,
 })
@@ -30,6 +32,7 @@ interface SessionGridProps {
 export function SessionGrid({ children, sessionCount, className, resetKey = 0 }: SessionGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(0)
   const [gap, setGap] = useState(16) // Default to gap-4 = 16px
 
   const updateMeasurements = () => {
@@ -44,6 +47,20 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
       const totalHorizontalPadding = paddingLeft + paddingRight
       setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
 
+      // Measure available vertical space from the *parent* (the overflow-y-auto scrollable
+      // wrapper) rather than this div itself. This div has min-h-full and grows with content,
+      // so measuring its own clientHeight creates a feedback loop where tiles expand the grid,
+      // which reports a larger height, which makes tiles taller, which expands the grid further.
+      const scrollParent = containerRef.current.parentElement
+      if (scrollParent) {
+        const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
+        const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
+        const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
+        const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
+        const totalVerticalPadding = paddingTop + paddingBottom
+        setContainerHeight(scrollParent.clientHeight - totalVerticalPadding)
+      }
+
       // Also compute gap from styles to handle className overrides (columnGap or gap)
       // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
       const parsedColumnGap = parseFloat(computedStyle.columnGap)
@@ -56,10 +73,15 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
   useEffect(() => {
     updateMeasurements()
 
-    // Also update on resize
+    // Observe the grid div for width changes and the parent for height changes.
+    // We must not observe the grid div's height — it grows with content (min-h-full)
+    // so observing it for height would re-trigger tile sizing in a loop.
     const resizeObserver = new ResizeObserver(updateMeasurements)
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current)
+    }
+    if (containerRef.current?.parentElement) {
+      resizeObserver.observe(containerRef.current.parentElement)
     }
 
     return () => {
@@ -68,11 +90,11 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
   }, [])
 
   return (
-    <SessionGridContext.Provider value={{ containerWidth, gap, resetKey }}>
+    <SessionGridContext.Provider value={{ containerWidth, containerHeight, gap, resetKey }}>
       <div
         ref={containerRef}
         className={cn(
-          "flex flex-wrap gap-4 p-4 content-start",
+          "flex flex-wrap gap-4 p-4 content-start min-h-full",
           className
         )}
       >
@@ -118,9 +140,17 @@ export function SessionTileWrapper({
   isDragging,
 }: SessionTileWrapperProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { containerWidth, gap, resetKey } = useSessionGridContext()
+  const { containerWidth, containerHeight, gap, resetKey } = useSessionGridContext()
   const hasInitializedRef = useRef(false)
   const lastResetKeyRef = useRef(resetKey)
+
+  // Calculate initial height: fill available vertical space when container is known,
+  // otherwise fall back to the default height constant.
+  const calculateFillHeight = (availableHeight: number): number => {
+    if (availableHeight <= 0) return TILE_DIMENSIONS.height.default
+    const fillHeight = Math.max(TILE_DIMENSIONS.height.min, availableHeight)
+    return Math.min(TILE_DIMENSIONS.height.max, fillHeight)
+  }
 
   const {
     width,
@@ -132,7 +162,7 @@ export function SessionTileWrapper({
     setSize,
   } = useResizable({
     initialWidth: calculateHalfWidth(containerWidth, gap),
-    initialHeight: TILE_DIMENSIONS.height.default,
+    initialHeight: calculateFillHeight(containerHeight),
     storageKey: "session-tile",
   })
 
@@ -141,14 +171,14 @@ export function SessionTileWrapper({
     if (resetKey !== lastResetKeyRef.current && containerWidth > 0) {
       lastResetKeyRef.current = resetKey
       const halfWidth = calculateHalfWidth(containerWidth, gap)
-      setSize({ width: halfWidth, height: TILE_DIMENSIONS.height.default })
+      setSize({ width: halfWidth, height: calculateFillHeight(containerHeight) })
     }
-  }, [resetKey, containerWidth, gap, setSize])
+  }, [resetKey, containerWidth, containerHeight, gap, setSize])
 
-  // Update width to half container width once container is measured (only on first valid measurement)
-  // This handles the case where containerWidth is 0 on initial render
+  // Update width and height to fill container once it is measured (only on first valid measurement)
+  // This handles the case where containerWidth/containerHeight are 0 on initial render
   useEffect(() => {
-    // Only run once when containerWidth becomes valid and we haven't initialized yet
+    // Only run once when container dimensions become valid and we haven't initialized yet
     if (containerWidth > 0 && !hasInitializedRef.current) {
       hasInitializedRef.current = true
       // Check if there's already a persisted size - if so, don't override it
@@ -162,10 +192,10 @@ export function SessionTileWrapper({
       }
       if (!hasPersistedSize) {
         const halfWidth = calculateHalfWidth(containerWidth, gap)
-        setSize({ width: halfWidth })
+        setSize({ width: halfWidth, height: calculateFillHeight(containerHeight) })
       }
     }
-  }, [containerWidth, gap, setSize])
+  }, [containerWidth, containerHeight, gap, setSize])
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move"

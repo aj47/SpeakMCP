@@ -422,12 +422,85 @@ export function Component() {
     )
   }
 
+  const hasSessions = allProgressEntries.length > 0 || !!pendingProgress
+
   return (
     <div className="group/tile flex h-full flex-col">
-      {/* Main content area */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide-until-hover">
+      {/* Header with start buttons - outside the scroll area so its height is excluded
+          when SessionGrid measures the parent to size tiles. */}
+      {hasSessions && (
+        <div className="flex-shrink-0 px-4 py-2 flex items-center justify-between bg-muted/20 border-b">
+          <div className="flex gap-2 items-center">
+            <Button size="sm" onClick={handleTextClick} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Start with Text
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleVoiceStart} className="gap-2">
+              <Mic className="h-4 w-4" />
+              Start with Voice
+            </Button>
+            <PredefinedPromptsMenu
+              onSelectPrompt={handleSelectPrompt}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            {/* View mode toggle */}
+            <div className="flex border rounded-md overflow-hidden" role="group" aria-label="Session view mode">
+              <Button
+                variant={viewMode === "grid" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className="rounded-none h-7 px-2"
+                title="Grid view"
+                aria-label="Grid view"
+                aria-pressed={viewMode === "grid"}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("kanban")}
+                className="rounded-none h-7 px-2"
+                title="Kanban view"
+                aria-label="Kanban view"
+                aria-pressed={viewMode === "kanban"}
+              >
+                <Kanban className="h-4 w-4" />
+              </Button>
+            </div>
+            {viewMode === "grid" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetTileLayout}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+                title="Reset all tile sizes to default dimensions"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset Layout
+              </Button>
+            )}
+            {inactiveSessionCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearInactiveSessions}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+                title="Clear all completed sessions from view (conversations are saved to history)"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Clear {inactiveSessionCount} completed
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Scrollable content area - flex-1 min-h-0 so it fills remaining height without overflow */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide-until-hover">
         {/* Show empty state when no sessions and no pending */}
-        {allProgressEntries.length === 0 && !pendingProgress ? (
+        {!hasSessions ? (
           <EmptyState
             onTextClick={handleTextClick}
             onVoiceClick={handleVoiceStart}
@@ -437,150 +510,80 @@ export function Component() {
             dictationShortcut={dictationShortcut}
           />
         ) : (
-          <>
-            {/* Header with start buttons, view toggle, and clear inactive button */}
-            <div className="px-4 py-2 flex items-center justify-between bg-muted/20 border-b">
-              <div className="flex gap-2 items-center">
-                <Button size="sm" onClick={handleTextClick} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Start with Text
-                </Button>
-                <Button variant="secondary" size="sm" onClick={handleVoiceStart} className="gap-2">
-                  <Mic className="h-4 w-4" />
-                  Start with Voice
-                </Button>
-                <PredefinedPromptsMenu
-                  onSelectPrompt={handleSelectPrompt}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                {/* View mode toggle */}
-                <div className="flex border rounded-md overflow-hidden" role="group" aria-label="Session view mode">
-                  <Button
-                    variant={viewMode === "grid" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("grid")}
-                    className="rounded-none h-7 px-2"
-                    title="Grid view"
-                    aria-label="Grid view"
-                    aria-pressed={viewMode === "grid"}
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "kanban" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("kanban")}
-                    className="rounded-none h-7 px-2"
-                    title="Kanban view"
-                    aria-label="Kanban view"
-                    aria-pressed={viewMode === "kanban"}
-                  >
-                    <Kanban className="h-4 w-4" />
-                  </Button>
-                </div>
-                {viewMode === "grid" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleResetTileLayout}
-                    className="gap-2 text-muted-foreground hover:text-foreground"
-                    title="Reset all tile sizes to default dimensions"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Reset Layout
-                  </Button>
-                )}
-                {inactiveSessionCount > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearInactiveSessions}
-                    className="gap-2 text-muted-foreground hover:text-foreground"
-                    title="Clear all completed sessions from view (conversations are saved to history)"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Clear {inactiveSessionCount} completed
-                  </Button>
-                )}
-              </div>
-            </div>
-            {/* Active sessions - grid or kanban view */}
-            {viewMode === "kanban" ? (
-              <SessionsKanban
-                sessions={allProgressEntries}
-                focusedSessionId={focusedSessionId}
-                onFocusSession={handleFocusSession}
-                onDismissSession={handleDismissSession}
-                pendingProgress={pendingProgress}
-                pendingSessionId={pendingSessionId}
-                onDismissPendingContinuation={handleDismissPendingContinuation}
-              />
-            ) : (
-              <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey}>
-                {/* Pending continuation tile first */}
-                {pendingProgress && pendingSessionId && (
-                  <SessionTileWrapper
-                    key={pendingSessionId}
-                    sessionId={pendingSessionId}
-                    index={0}
+          /* Active sessions - grid or kanban view */
+          viewMode === "kanban" ? (
+            <SessionsKanban
+              sessions={allProgressEntries}
+              focusedSessionId={focusedSessionId}
+              onFocusSession={handleFocusSession}
+              onDismissSession={handleDismissSession}
+              pendingProgress={pendingProgress}
+              pendingSessionId={pendingSessionId}
+              onDismissPendingContinuation={handleDismissPendingContinuation}
+            />
+          ) : (
+            <SessionGrid sessionCount={allProgressEntries.length + (pendingProgress ? 1 : 0)} resetKey={tileResetKey}>
+              {/* Pending continuation tile first */}
+              {pendingProgress && pendingSessionId && (
+                <SessionTileWrapper
+                  key={pendingSessionId}
+                  sessionId={pendingSessionId}
+                  index={0}
+                  isCollapsed={collapsedSessions[pendingSessionId] ?? false}
+                  onDragStart={() => {}}
+                  onDragOver={() => {}}
+                  onDragEnd={() => {}}
+                  isDragTarget={false}
+                  isDragging={false}
+                >
+                  <AgentProgress
+                    progress={pendingProgress}
+                    variant="tile"
+                    isFocused={true}
+                    onFocus={() => {}}
+                    onDismiss={handleDismissPendingContinuation}
                     isCollapsed={collapsedSessions[pendingSessionId] ?? false}
-                    onDragStart={() => {}}
-                    onDragOver={() => {}}
-                    onDragEnd={() => {}}
-                    isDragTarget={false}
-                    isDragging={false}
+                    onCollapsedChange={(collapsed) => handleCollapsedChange(pendingSessionId, collapsed)}
+                    onExpand={() => setExpandedSessionId(pendingSessionId)}
+                  />
+                </SessionTileWrapper>
+              )}
+              {/* Regular sessions */}
+              {allProgressEntries.map(([sessionId, progress], index) => {
+                const isCollapsed = collapsedSessions[sessionId] ?? false
+                const adjustedIndex = pendingProgress ? index + 1 : index
+                return (
+                  <div
+                    key={sessionId}
+                    ref={(el) => { sessionRefs.current[sessionId] = el }}
                   >
-                    <AgentProgress
-                      progress={pendingProgress}
-                      variant="tile"
-                      isFocused={true}
-                      onFocus={() => {}}
-                      onDismiss={handleDismissPendingContinuation}
-                      isCollapsed={collapsedSessions[pendingSessionId] ?? false}
-                      onCollapsedChange={(collapsed) => handleCollapsedChange(pendingSessionId, collapsed)}
-                      onExpand={() => setExpandedSessionId(pendingSessionId)}
-                    />
-                  </SessionTileWrapper>
-                )}
-                {/* Regular sessions */}
-                {allProgressEntries.map(([sessionId, progress], index) => {
-                  const isCollapsed = collapsedSessions[sessionId] ?? false
-                  const adjustedIndex = pendingProgress ? index + 1 : index
-                  return (
-                    <div
-                      key={sessionId}
-                      ref={(el) => { sessionRefs.current[sessionId] = el }}
+                    <SessionTileWrapper
+                      sessionId={sessionId}
+                      index={adjustedIndex}
+                      isCollapsed={isCollapsed}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDragEnd={handleDragEnd}
+                      isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
+                      isDragging={draggedSessionId === sessionId}
                     >
-                      <SessionTileWrapper
-                        sessionId={sessionId}
-                        index={adjustedIndex}
+                      <AgentProgress
+                        progress={progress}
+                        variant="tile"
+                        isFocused={focusedSessionId === sessionId}
+                        onFocus={() => handleFocusSession(sessionId)}
+                        onDismiss={() => handleDismissSession(sessionId)}
                         isCollapsed={isCollapsed}
-                        onDragStart={handleDragStart}
-                        onDragOver={handleDragOver}
-                        onDragEnd={handleDragEnd}
-                        isDragTarget={dragTargetIndex === adjustedIndex && draggedSessionId !== sessionId}
-                        isDragging={draggedSessionId === sessionId}
-                      >
-                        <AgentProgress
-                          progress={progress}
-                          variant="tile"
-                          isFocused={focusedSessionId === sessionId}
-                          onFocus={() => handleFocusSession(sessionId)}
-                          onDismiss={() => handleDismissSession(sessionId)}
-                          isCollapsed={isCollapsed}
-                          onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
-                          onExpand={() => setExpandedSessionId(sessionId)}
-                        />
-                      </SessionTileWrapper>
-                    </div>
-                  )
-                })}
-              </SessionGrid>
-            )}
-          </>
+                        onCollapsedChange={(collapsed) => handleCollapsedChange(sessionId, collapsed)}
+                        onExpand={() => setExpandedSessionId(sessionId)}
+                      />
+                    </SessionTileWrapper>
+                  </div>
+                )
+              })}
+            </SessionGrid>
+          )
         )}
-
       </div>
     </div>
   )

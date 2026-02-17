@@ -64,7 +64,10 @@ export function Component() {
   const transcribeMutation = useMutation({
     mutationFn: async ({ blob, duration }: { blob: Blob; duration: number }) => {
       setIsTranscribing(true)
-      const isParakeet = configQuery.data?.sttProviderId === "parakeet"
+      // Fetch config synchronously to avoid race condition where configQuery.data
+      // is undefined on early interactions (augment review feedback)
+      const config = await tipcClient.getConfig()
+      const isParakeet = config?.sttProviderId === "parakeet"
       const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       const result = await tipcClient.createRecording({
         recording: await blob.arrayBuffer(),

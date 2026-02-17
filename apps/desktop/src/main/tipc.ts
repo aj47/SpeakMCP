@@ -71,6 +71,7 @@ import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
 import { fetchModelsDevData, getModelFromModelsDevByProviderId, findBestModelMatch, refreshModelsDevCache } from "./models-dev-service"
 import * as parakeetStt from "./parakeet-stt"
+import { loopService } from "./loop-service"
 
 /**
  * Convert Float32Array audio samples to WAV format buffer
@@ -3996,6 +3997,39 @@ export const router = {
     .action(async ({ input }) => {
       return summarizationService.getImportantSummaries(input.sessionId)
     }),
+
+  // Agent Loops handlers
+  getLoopStatuses: t.procedure.action(async () => {
+    return loopService.getLoopStatuses()
+  }),
+
+  startLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: loopService.startLoop(input.loopId) }
+    }),
+
+  stopLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: loopService.stopLoop(input.loopId) }
+    }),
+
+  triggerLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: await loopService.triggerLoop(input.loopId) }
+    }),
+
+  startAllLoops: t.procedure.action(async () => {
+    loopService.startAllLoops()
+    return { success: true }
+  }),
+
+  stopAllLoops: t.procedure.action(async () => {
+    loopService.stopAllLoops()
+    return { success: true }
+  }),
 }
 
 // TTS Provider Implementation Functions

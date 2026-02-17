@@ -186,7 +186,10 @@ export function Component() {
         await startNewConversation(transcript, "user")
       }
 
-      const isParakeet = configQuery.data?.sttProviderId === "parakeet"
+      // Fetch config synchronously to avoid race condition where configQuery.data
+      // is undefined on early interactions (augment review feedback)
+      const config = await tipcClient.getConfig()
+      const isParakeet = config?.sttProviderId === "parakeet"
       const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       await tipcClient.createRecording({
         recording: await blob.arrayBuffer(),
@@ -213,7 +216,10 @@ export function Component() {
       duration: number
       transcript?: string
     }) => {
-      const isParakeet = configQuery.data?.sttProviderId === "parakeet"
+      // Fetch config synchronously to avoid race condition where configQuery.data
+      // is undefined on early interactions (augment review feedback)
+      const config = await tipcClient.getConfig()
+      const isParakeet = config?.sttProviderId === "parakeet"
       const pcmRecording = isParakeet ? await decodeBlobToPcm(blob) : undefined
       const arrayBuffer = await blob.arrayBuffer()
 
@@ -412,7 +418,10 @@ export function Component() {
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
   // Transcription preview: periodically send audio chunks for live transcription
-  const isPreviewEnabled = configQuery.data?.transcriptionPreviewEnabled ?? false
+  // Disable transcription preview for Parakeet since it requires PCM decoding which is
+  // expensive to do for live preview chunks. Groq/OpenAI can transcribe WebM directly.
+  const isPreviewEnabled = (configQuery.data?.transcriptionPreviewEnabled ?? false) &&
+    configQuery.data?.sttProviderId !== "parakeet"
   useEffect(() => {
     if (!recording || !isPreviewEnabled) {
       // Clear preview state when not recording

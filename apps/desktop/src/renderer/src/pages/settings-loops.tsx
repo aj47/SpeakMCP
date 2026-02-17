@@ -93,6 +93,12 @@ export function SettingsLoops() {
   const statusByLoopId = new Map(
     (loopStatusesQuery.data || []).map((s) => [s.id, s] as const)
   )
+  const getConfigWithLoops = (updatedLoops: LoopConfig[]) => {
+    if (!configQuery.data) {
+      return null
+    }
+    return { ...configQuery.data, loops: updatedLoops }
+  }
 
   const handleCreate = () => {
     setIsCreating(true)
@@ -120,7 +126,12 @@ export function SettingsLoops() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this loop?")) return
     const updatedLoops = loops.filter((l) => l.id !== id)
-    await saveConfigMutation.mutateAsync({ config: { ...configQuery.data, loops: updatedLoops } })
+    const nextConfig = getConfigWithLoops(updatedLoops)
+    if (!nextConfig) {
+      toast.error("Configuration is still loading. Please try again.")
+      return
+    }
+    await saveConfigMutation.mutateAsync({ config: nextConfig })
     // Stop the loop if it was running
     try {
       await tipcClient.stopLoop?.({ loopId: id })
@@ -136,11 +147,14 @@ export function SettingsLoops() {
       return
     }
 
+    const sanitizedIntervalMinutes = Number.isFinite(editing.intervalMinutes) && editing.intervalMinutes >= 1
+      ? Math.floor(editing.intervalMinutes)
+      : 1
     const loopData: LoopConfig = {
       id: editing.id || crypto.randomUUID(),
       name: editing.name.trim(),
       prompt: editing.prompt.trim(),
-      intervalMinutes: editing.intervalMinutes,
+      intervalMinutes: sanitizedIntervalMinutes,
       enabled: editing.enabled,
       profileId: editing.profileId || undefined,
       runOnStartup: editing.runOnStartup,
@@ -153,7 +167,12 @@ export function SettingsLoops() {
       updatedLoops = loops.map((l) => (l.id === loopData.id ? loopData : l))
     }
 
-    await saveConfigMutation.mutateAsync({ config: { ...configQuery.data, loops: updatedLoops } })
+    const nextConfig = getConfigWithLoops(updatedLoops)
+    if (!nextConfig) {
+      toast.error("Configuration is still loading. Please try again.")
+      return
+    }
+    await saveConfigMutation.mutateAsync({ config: nextConfig })
     setEditing(null)
     setIsCreating(false)
     toast.success(isCreating ? "Loop created" : "Loop updated")
@@ -161,9 +180,15 @@ export function SettingsLoops() {
     // Start/stop loop based on enabled state
     try {
       if (loopData.enabled) {
-        await tipcClient.startLoop?.({ loopId: loopData.id })
+        const result = await tipcClient.startLoop?.({ loopId: loopData.id })
+        if (result && !result.success) {
+          toast.error("Loop was saved but could not be started")
+        }
       } else {
-        await tipcClient.stopLoop?.({ loopId: loopData.id })
+        const result = await tipcClient.stopLoop?.({ loopId: loopData.id })
+        if (result && !result.success) {
+          toast.error("Loop was saved but could not be stopped")
+        }
       }
     } catch {
       // Handler may not exist yet
@@ -173,13 +198,26 @@ export function SettingsLoops() {
   const handleToggleEnabled = async (loop: LoopConfig) => {
     const updatedLoop = { ...loop, enabled: !loop.enabled }
     const updatedLoops = loops.map((l) => (l.id === loop.id ? updatedLoop : l))
-    await saveConfigMutation.mutateAsync({ config: { ...configQuery.data, loops: updatedLoops } })
+    const nextConfig = getConfigWithLoops(updatedLoops)
+    if (!nextConfig) {
+      toast.error("Configuration is still loading. Please try again.")
+      return
+    }
+    await saveConfigMutation.mutateAsync({ config: nextConfig })
 
     try {
       if (updatedLoop.enabled) {
-        await tipcClient.startLoop?.({ loopId: loop.id })
+        const result = await tipcClient.startLoop?.({ loopId: loop.id })
+        if (result && !result.success) {
+          toast.error("Loop enabled in settings, but runtime start failed")
+          return
+        }
       } else {
-        await tipcClient.stopLoop?.({ loopId: loop.id })
+        const result = await tipcClient.stopLoop?.({ loopId: loop.id })
+        if (result && !result.success) {
+          toast.error("Loop disabled in settings, but runtime stop failed")
+          return
+        }
       }
     } catch {
       // Handler may not exist yet
@@ -189,7 +227,11 @@ export function SettingsLoops() {
 
   const handleRunNow = async (loop: LoopConfig) => {
     try {
-      await tipcClient.triggerLoop?.({ loopId: loop.id })
+      const result = await tipcClient.triggerLoop?.({ loopId: loop.id })
+      if (result && !result.success) {
+        toast.error(`Could not trigger "${loop.name}" right now`)
+        return
+      }
       toast.success(`Running "${loop.name}"...`)
     } catch {
       toast.error("Failed to trigger loop")

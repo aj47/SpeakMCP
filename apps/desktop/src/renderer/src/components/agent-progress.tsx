@@ -2474,7 +2474,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                 </div>
               )}
               {!isComplete && (
-                <span>Step {currentIteration}/{maxIterations}</span>
+                <span>Step {currentIteration}/{isFinite(maxIterations) ? maxIterations : "∞"}</span>
               )}
               {isComplete && (
                 <span>{wasStopped ? "Stopped" : hasErrors ? "Failed" : "Complete"}</span>
@@ -2598,7 +2598,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
           )}
           {!isComplete && (
             <span className="text-xs text-muted-foreground">
-              {`${currentIteration}/${maxIterations}`}
+              {`${currentIteration}/${isFinite(maxIterations) ? maxIterations : "∞"}`}
             </span>
           )}
           {!isComplete && (
@@ -2819,10 +2819,10 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       {variant !== "overlay" && !isComplete && (
         <div className="h-0.5 w-full bg-muted/50">
           <div
-            className="h-full bg-primary transition-all duration-500 ease-out"
-            style={{
+            className={`h-full bg-primary transition-all duration-500 ease-out${!isFinite(maxIterations) ? " animate-pulse w-full" : ""}`}
+            style={isFinite(maxIterations) ? {
               width: `${Math.min(100, (currentIteration / maxIterations) * 100)}%`,
-            }}
+            } : undefined}
           />
         </div>
       )}

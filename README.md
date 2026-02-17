@@ -4,6 +4,8 @@
 [![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)](https://reactjs.org/)
 
 ## 🎬 Preview
+v1.4
+<img width="1341" height="1174" alt="image" src="https://github.com/user-attachments/assets/4ea2fa66-9a22-4d56-b388-457dfc99fed6" />
 
 [Click here to see v1 launch video on youtube ](https://www.youtube.com/watch?v=A4oKYCaeaaw)
 <img width="2050" height="1564" alt="image" src="https://github.com/user-attachments/assets/a1e55c53-838f-414f-92e7-d752f74e7107" />

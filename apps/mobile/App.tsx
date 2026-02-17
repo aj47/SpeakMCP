@@ -11,6 +11,7 @@ import { ConnectionManagerContext, useConnectionManagerProvider } from './src/st
 import { TunnelConnectionContext, useTunnelConnectionProvider } from './src/store/tunnelConnection';
 import { ProfileContext, useProfileProvider } from './src/store/profile';
 import { usePushNotifications, NotificationData, clearNotifications, clearServerBadge } from './src/lib/pushNotifications';
+import { SettingsApiClient } from './src/lib/settingsApi';
 import { View, Image, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/ui/ThemeProvider';
@@ -195,6 +196,31 @@ function Navigation() {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
   }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey]);
+
+  // Auto-sync sessions with desktop server
+  useEffect(() => {
+    if (!cfg.ready || !sessionStore.ready) return;
+    if (!cfg.config.baseUrl || !cfg.config.apiKey) return;
+
+    const client = new SettingsApiClient(cfg.config.baseUrl, cfg.config.apiKey);
+
+    // Sync on initial load
+    sessionStore.syncWithServer(client).catch((err) => {
+      console.warn('[App] Initial session sync failed:', err);
+    });
+
+    // Sync when app returns to foreground
+    const handleAppStateForSync = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        sessionStore.syncWithServer(client).catch((err) => {
+          console.warn('[App] Foreground session sync failed:', err);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateForSync);
+    return () => subscription.remove();
+  }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey, sessionStore.ready]);
 
   if (!cfg.ready || !sessionStore.ready) {
     return (

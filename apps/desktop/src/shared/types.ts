@@ -1254,6 +1254,7 @@ export type Config = {
   mcpAutoPasteEnabled?: boolean
   mcpAutoPasteDelay?: number
   mcpMaxIterations?: number
+  mcpUnlimitedIterations?: boolean
 
   // MCP Server Configuration
   mcpConfig?: MCPConfig

@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import { Session, SessionListItem, generateSessionId, generateMessageId, generateSessionTitle, sessionToListItem } from '../types/session';
 import { ChatMessage } from '../lib/openaiClient';
 import { SettingsApiClient } from '../lib/settingsApi';
-import { syncConversations, SyncResult } from '../lib/syncService';
+import { syncConversations, SyncResult, fetchFullConversation } from '../lib/syncService';
 
 const SESSIONS_KEY = 'chat_sessions_v1';
 const CURRENT_SESSION_KEY = 'current_session_id_v1';
@@ -38,6 +38,10 @@ export interface SessionStore {
   syncWithServer: (client: SettingsApiClient) => Promise<SyncResult>;
   isSyncing: boolean;
   lastSyncResult: SyncResult | null;
+
+  // Lazy loading
+  loadSessionMessages: (sessionId: string, client: SettingsApiClient) => Promise<boolean>;
+  isLoadingMessages: boolean;
 }
 
 async function loadSessions(): Promise<Session[]> {
@@ -567,6 +571,51 @@ export function useSessions(): SessionStore {
     }
   }, [queueSave]);
 
+  // Lazy loading state
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  // Lazy-load messages for a stub session from server
+  const loadSessionMessages = useCallback(async (sessionId: string, client: SettingsApiClient): Promise<boolean> => {
+    const session = sessionsRef.current.find(s => s.id === sessionId);
+    if (!session?.serverConversationId) return false;
+    // Already has messages - no need to fetch
+    if (session.messages.length > 0) return true;
+
+    setIsLoadingMessages(true);
+    try {
+      const result = await fetchFullConversation(client, session.serverConversationId);
+      if (!result) return false;
+
+      const now = Date.now();
+      const currentSessions = sessionsRef.current;
+      const sessionsToSave = currentSessions.map(s => {
+        if (s.id !== sessionId) return s;
+        return {
+          ...s,
+          title: result.title,
+          updatedAt: result.updatedAt,
+          messages: result.messages,
+          // Clear serverMetadata since we now have real messages
+          serverMetadata: undefined,
+        };
+      });
+
+      sessionsRef.current = sessionsToSave;
+      setSessions(sessionsToSave);
+
+      queueSave(async () => {
+        await saveSessions(sessionsToSave);
+      });
+
+      return true;
+    } catch (err: any) {
+      console.error('[sessions] Failed to load session messages:', err);
+      return false;
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  }, [queueSave]);
+
   return {
     sessions,
     currentSessionId,
@@ -588,6 +637,8 @@ export function useSessions(): SessionStore {
     syncWithServer,
     isSyncing,
     lastSyncResult,
+    loadSessionMessages,
+    isLoadingMessages,
   };
 }
 

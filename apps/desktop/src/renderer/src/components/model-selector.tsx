@@ -214,60 +214,59 @@ export function ModelSelector({
           />
         </SelectTrigger>
         <SelectContent
-          className="max-h-[400px] w-[300px]"
+          className="w-[300px]"
           onCloseAutoFocus={(e) => {
             // Prevent Radix from moving focus back to the trigger; we'll manage it
             e.preventDefault()
           }}
+          header={
+            <div
+              className="flex items-center border-b px-3 py-2"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                placeholder="Search models..."
+                value={searchQuery}
+                onChange={(e) => {
+                  const newValue = e.target.value
+                  logStateChange('ModelSelector', 'searchQuery', searchQuery, newValue)
+                  logUI('[ModelSelector] Search input onChange, activeElement:', document.activeElement?.tagName)
+                  e.stopPropagation()
+                  setSearchQuery(newValue)
+                }}
+                onKeyDown={(e) => {
+                  logUI('[ModelSelector] Search input onKeyDown:', e.key, 'activeElement:', document.activeElement?.tagName)
+                  e.stopPropagation()
+                  if (e.key === "Escape") {
+                    logUI('[ModelSelector] Escape pressed, closing dropdown')
+                    setIsOpen(false)
+                  } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    logUI('[ModelSelector] Arrow key pressed:', e.key)
+                    e.preventDefault()
+                  }
+                }}
+                onFocus={(e) => {
+                  e.stopPropagation()
+                  logFocus('ModelSelector.searchInput', 'focus', {
+                    relatedTarget: e.relatedTarget?.tagName,
+                    activeElement: document.activeElement?.tagName
+                  })
+                }}
+                onBlur={(e) => {
+                  e.stopPropagation()
+                  logFocus('ModelSelector.searchInput', 'blur', {
+                    relatedTarget: e.relatedTarget?.tagName,
+                    activeElement: document.activeElement?.tagName
+                  })
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="h-auto border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </div>
+          }
         >
-          {/* Search input */}
-          <div
-            className="mb-2 flex items-center border-b px-3 pb-2"
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            <Search className="mr-2 h-4 w-4 text-muted-foreground" />
-            <Input
-              ref={searchInputRef}
-              placeholder="Search models..."
-              value={searchQuery}
-              onChange={(e) => {
-                const newValue = e.target.value
-                logStateChange('ModelSelector', 'searchQuery', searchQuery, newValue)
-                logUI('[ModelSelector] Search input onChange, activeElement:', document.activeElement?.tagName)
-                e.stopPropagation()
-                setSearchQuery(newValue)
-              }}
-              onKeyDown={(e) => {
-                logUI('[ModelSelector] Search input onKeyDown:', e.key, 'activeElement:', document.activeElement?.tagName)
-                e.stopPropagation()
-                if (e.key === "Escape") {
-                  logUI('[ModelSelector] Escape pressed, closing dropdown')
-                  setIsOpen(false)
-                } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                  logUI('[ModelSelector] Arrow key pressed:', e.key)
-                  // Allow arrow keys to navigate through the list
-                  e.preventDefault()
-                }
-              }}
-              onFocus={(e) => {
-                e.stopPropagation()
-                logFocus('ModelSelector.searchInput', 'focus', {
-                  relatedTarget: e.relatedTarget?.tagName,
-                  activeElement: document.activeElement?.tagName
-                })
-              }}
-              onBlur={(e) => {
-                e.stopPropagation()
-                logFocus('ModelSelector.searchInput', 'blur', {
-                  relatedTarget: e.relatedTarget?.tagName,
-                  activeElement: document.activeElement?.tagName
-                })
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="h-auto border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-            />
-          </div>
-
           {/* Scrollable content area with fixed height */}
           <div className="max-h-[300px] min-h-[200px] overflow-y-auto">
             {isLoading && (

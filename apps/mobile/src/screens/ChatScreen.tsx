@@ -31,6 +31,7 @@ import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
+import { SettingsApiClient } from '../lib/settingsApi';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
@@ -495,6 +496,12 @@ export default function ChatScreen({ route, navigation }: any) {
           toolResults: m.toolResults,
         }));
         setMessages(chatMessages);
+      } else if (currentSession.serverConversationId && config.baseUrl && config.apiKey) {
+        // Stub session — lazy-load messages from server
+        setMessages([]);
+        const client = new SettingsApiClient(config.baseUrl, config.apiKey);
+        sessionStore.loadSessionMessages(currentSession.id, client);
+        // Messages will be populated by the store update, triggering a re-render
       } else {
         setMessages([]);
       }
@@ -1886,6 +1893,18 @@ export default function ChatScreen({ route, navigation }: any) {
           onScrollEndDrag={handleScrollEndDrag}
           scrollEventThrottle={16}
         >
+          {sessionStore.isLoadingMessages && messages.length === 0 && (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+              <Image
+                source={isDark ? darkSpinner : lightSpinner}
+                style={{ width: 32, height: 32, marginBottom: 12 }}
+                resizeMode="contain"
+              />
+              <Text style={{ color: theme.colors.mutedForeground, fontSize: 14 }}>
+                Loading messages from desktop…
+              </Text>
+            </View>
+          )}
           {messages.map((m, i) => {
             const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
             // expandedMessages is auto-updated via useEffect to expand the last assistant message

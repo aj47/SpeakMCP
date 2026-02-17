@@ -25,6 +25,12 @@ export interface Session {
     model?: string;
     totalTokens?: number;
   };
+  /** Cached server metadata for lazy-loaded sessions (messages not yet fetched) */
+  serverMetadata?: {
+    messageCount: number;
+    lastMessage: string;
+    preview: string;
+  };
 }
 
 export interface SessionListItem {
@@ -92,9 +98,22 @@ export function createSession(firstMessage?: string): Session {
  * Convert a Session to a SessionListItem for display in list
  */
 export function sessionToListItem(session: Session): SessionListItem {
+  // For lazy-loaded sessions (stub sessions with no messages), use cached server metadata
+  if (session.messages.length === 0 && session.serverMetadata) {
+    return {
+      id: session.id,
+      title: session.title,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      messageCount: session.serverMetadata.messageCount,
+      lastMessage: session.serverMetadata.lastMessage,
+      preview: session.serverMetadata.preview,
+    };
+  }
+
   const lastMsg = session.messages[session.messages.length - 1];
   const preview = lastMsg?.content || '';
-  
+
   return {
     id: session.id,
     title: session.title,
@@ -104,5 +123,12 @@ export function sessionToListItem(session: Session): SessionListItem {
     lastMessage: preview.substring(0, 100),
     preview: preview.substring(0, 200),
   };
+}
+
+/**
+ * Check if a session is a lazy stub (has serverConversationId but no messages loaded)
+ */
+export function isStubSession(session: Session): boolean {
+  return session.messages.length === 0 && !!session.serverConversationId && !!session.serverMetadata;
 }
 

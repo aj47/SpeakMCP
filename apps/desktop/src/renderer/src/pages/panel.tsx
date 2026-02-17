@@ -423,20 +423,32 @@ export function Component() {
     const INITIAL_DELAY_MS = 3_000
     const CHUNK_INTERVAL_MS = 10_000
     let inflight = false
+    // Guard: only call the API when there is new audio since the last request.
+    // We always send the FULL cumulative recording (getRecordingBlob) so the
+    // WebM structure is always valid — partial blobs starting mid-stream have
+    // a timestamp gap that Groq rejects as "not a valid media file".
+    let lastChunkCount = 0
 
     const sendChunk = async () => {
       if (inflight) return
       const recorder = recorderRef.current
       if (!recorder) return
+      const currentCount = recorder.getAudioChunkCount()
+      if (currentCount === 0 || currentCount <= lastChunkCount) return
       const blob = recorder.getRecordingBlob()
       if (!blob || blob.size === 0) return
-
+      // Snapshot now so a slow API response doesn't race with new chunks
+      const sentUpTo = currentCount
       inflight = true
       try {
         const result = await tipcClient.transcribeChunk({
           recording: await blob.arrayBuffer(),
         })
+        // Advance the pointer so the next tick skips if no new audio arrived.
+        lastChunkCount = sentUpTo
         if (result?.text) {
+          // Replace (not append) — each call returns the full transcript for
+          // the entire recording so far, so there is no need to accumulate.
           setPreviewText(result.text)
         }
       } catch (err) {

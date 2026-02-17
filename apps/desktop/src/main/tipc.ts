@@ -1344,6 +1344,10 @@ export const router = {
         )
 
         if (!transcriptResponse.ok) {
+          const errBody = await transcriptResponse.text().catch(() => "<unreadable>")
+          console.error(
+            `[transcribeChunk] API error ${transcriptResponse.status} ${transcriptResponse.statusText}: ${errBody}`,
+          )
           return { text: "" }
         }
 

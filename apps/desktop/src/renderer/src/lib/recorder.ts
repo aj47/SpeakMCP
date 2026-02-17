@@ -130,6 +130,10 @@ export class Recorder extends EventEmitter<{
     return new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType })
   }
 
+  getAudioChunkCount(): number {
+    return this.audioChunks.length
+  }
+
   stopRecording() {
     if (this.mediaRecorder) {
       this.mediaRecorder.stop()

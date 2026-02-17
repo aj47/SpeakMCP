@@ -108,6 +108,22 @@ export function Component() {
     }))
   }, [])
 
+  /**
+   * Returns the timestamp of the most recent activity in a session.
+   * Used to sort sessions by last modified time on initial load.
+   */
+  const getLastActivityTimestamp = useCallback((progress: AgentProgressUpdate | null | undefined): number => {
+    if (!progress) return 0
+    const lastStepTimestamp = progress.steps?.length > 0
+      ? progress.steps[progress.steps.length - 1].timestamp
+      : 0
+    const history = progress.conversationHistory
+    const lastHistoryTimestamp = history && history.length > 0
+      ? (history[history.length - 1].timestamp ?? 0)
+      : 0
+    return Math.max(lastStepTimestamp, lastHistoryTimestamp)
+  }, [])
+
   const allProgressEntries = React.useMemo(() => {
     const entries = Array.from(agentProgressById.entries())
       .filter(([_, progress]) => progress !== null)
@@ -118,8 +134,8 @@ export function Component() {
         const bIndex = sessionOrder.indexOf(b[0])
         // New sessions (not in order list) should appear first (at top)
         if (aIndex === -1 && bIndex === -1) {
-          // Both are new - sort by timestamp (newest first)
-          return (b[1]?.steps?.[0]?.timestamp ?? 0) - (a[1]?.steps?.[0]?.timestamp ?? 0)
+          // Both are new - sort by last activity (newest first)
+          return getLastActivityTimestamp(b[1]) - getLastActivityTimestamp(a[1])
         }
         if (aIndex === -1) return -1  // a is new, put it first
         if (bIndex === -1) return 1   // b is new, put it first
@@ -127,14 +143,14 @@ export function Component() {
       })
     }
 
-    // Default sort: active sessions first, then by start time (newest first)
+    // Default sort: active sessions first, then by last activity (newest first)
     return entries.sort((a, b) => {
       const aComplete = a[1]?.isComplete ?? false
       const bComplete = b[1]?.isComplete ?? false
       if (aComplete !== bComplete) return aComplete ? 1 : -1
-      return (b[1]?.steps?.[0]?.timestamp ?? 0) - (a[1]?.steps?.[0]?.timestamp ?? 0)
+      return getLastActivityTimestamp(b[1]) - getLastActivityTimestamp(a[1])
     })
-  }, [agentProgressById, sessionOrder])
+  }, [agentProgressById, sessionOrder, getLastActivityTimestamp])
 
   // Sync session order when new sessions appear
   useEffect(() => {
@@ -142,8 +158,20 @@ export function Component() {
     const newIds = currentIds.filter(id => !sessionOrder.includes(id))
 
     if (newIds.length > 0) {
-      // Add new sessions to the beginning of the order
-      setSessionOrder(prev => [...newIds, ...prev.filter(id => currentIds.includes(id))])
+      const isInitialLoad = sessionOrder.length === 0
+
+      // On initial load, sort sessions by most recently modified first so the
+      // freshest sessions appear at the top of the list.
+      // When a new session is added during an active view, it still goes to the front.
+      const sortedNewIds = isInitialLoad
+        ? [...newIds].sort((a, b) =>
+            getLastActivityTimestamp(agentProgressById.get(b)) -
+            getLastActivityTimestamp(agentProgressById.get(a))
+          )
+        : newIds
+
+      // Add (sorted) new sessions to the beginning of the order
+      setSessionOrder(prev => [...sortedNewIds, ...prev.filter(id => currentIds.includes(id))])
     } else {
       // Remove sessions that no longer exist
       const validOrder = sessionOrder.filter(id => currentIds.includes(id))
@@ -151,7 +179,7 @@ export function Component() {
         setSessionOrder(validOrder)
       }
     }
-  }, [agentProgressById])
+  }, [agentProgressById, getLastActivityTimestamp])
 
   // State for pending conversation continuation (user selected a conversation to continue)
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null)

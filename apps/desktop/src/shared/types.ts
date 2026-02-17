@@ -1122,6 +1122,17 @@ export interface AgentSkillsData {
   skills: AgentSkill[]
 }
 
+export interface LoopConfig {
+  id: string               // unique identifier (uuid)
+  name: string             // display name
+  prompt: string           // the prompt text sent to the agent
+  intervalMinutes: number  // how often to run (in minutes)
+  enabled: boolean         // whether this loop is active
+  profileId?: string       // optional profile to use for the agent session
+  lastRunAt?: number       // timestamp (ms) of last execution
+  runOnStartup?: boolean   // if true, fires immediately on app start before first interval
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash" | "custom"
   customShortcut?: string
@@ -1416,6 +1427,9 @@ export type Config = {
 
   // Memory System Configuration
   memoriesEnabled?: boolean  // When false, disables all memory features (save_memory tool, injection, auto-save, UI)
+
+  // Agent Loops Configuration
+  loops?: LoopConfig[]  // Scheduled agent loops that run at intervals
 }
 
 // Push Notification Token (from mobile clients)

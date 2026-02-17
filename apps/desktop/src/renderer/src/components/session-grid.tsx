@@ -47,13 +47,19 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
       const totalHorizontalPadding = paddingLeft + paddingRight
       setContainerWidth(containerRef.current.clientWidth - totalHorizontalPadding)
 
-      // Measure available vertical space (the scrollable container's client height)
-      const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
-      const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
-      const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
-      const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
-      const totalVerticalPadding = paddingTop + paddingBottom
-      setContainerHeight(containerRef.current.clientHeight - totalVerticalPadding)
+      // Measure available vertical space from the *parent* (the overflow-y-auto scrollable
+      // wrapper) rather than this div itself. This div has min-h-full and grows with content,
+      // so measuring its own clientHeight creates a feedback loop where tiles expand the grid,
+      // which reports a larger height, which makes tiles taller, which expands the grid further.
+      const scrollParent = containerRef.current.parentElement
+      if (scrollParent) {
+        const parsedPaddingTop = parseFloat(computedStyle.paddingTop)
+        const parsedPaddingBottom = parseFloat(computedStyle.paddingBottom)
+        const paddingTop = !Number.isNaN(parsedPaddingTop) ? parsedPaddingTop : 0
+        const paddingBottom = !Number.isNaN(parsedPaddingBottom) ? parsedPaddingBottom : 0
+        const totalVerticalPadding = paddingTop + paddingBottom
+        setContainerHeight(scrollParent.clientHeight - totalVerticalPadding)
+      }
 
       // Also compute gap from styles to handle className overrides (columnGap or gap)
       // Use a proper check that doesn't treat 0 as falsy (0 is a valid gap value)
@@ -67,10 +73,15 @@ export function SessionGrid({ children, sessionCount, className, resetKey = 0 }:
   useEffect(() => {
     updateMeasurements()
 
-    // Also update on resize
+    // Observe the grid div for width changes and the parent for height changes.
+    // We must not observe the grid div's height — it grows with content (min-h-full)
+    // so observing it for height would re-trigger tile sizing in a loop.
     const resizeObserver = new ResizeObserver(updateMeasurements)
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current)
+    }
+    if (containerRef.current?.parentElement) {
+      resizeObserver.observe(containerRef.current.parentElement)
     }
 
     return () => {

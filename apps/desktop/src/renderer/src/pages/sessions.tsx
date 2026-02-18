@@ -264,7 +264,7 @@ export function Component() {
   const handleContinueConversation = (conversationId: string) => {
     // Check if there's already an active session for this conversationId
     const existingSession = Array.from(agentProgressById.entries()).find(
-      ([_, progress]) => progress?.conversationId === conversationId
+      ([_, progress]) => progress?.conversationId === conversationId && !progress?.isComplete
     )
     if (existingSession) {
       // Focus the existing session tile instead of creating a duplicate
@@ -591,4 +591,3 @@ export function Component() {
     </div>
   )
 }
-

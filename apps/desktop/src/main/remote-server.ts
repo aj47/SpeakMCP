@@ -594,6 +594,12 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
 
       // Extract conversationId from request body (custom extension to OpenAI API)
       const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      if (conversationId) {
+        const conversationIdError = getConversationIdValidationError(conversationId)
+        if (conversationIdError) {
+          return reply.code(400).send({ error: conversationIdError })
+        }
+      }
       // Check if client wants SSE streaming
       const isStreaming = body.stream === true
 

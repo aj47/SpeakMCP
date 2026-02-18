@@ -550,19 +550,18 @@ export default function ChatScreen({ route, navigation }: any) {
         pendingLazyLoadSessionIdRef.current = stubSessionId;
         const client = new SettingsApiClient(config.baseUrl, config.apiKey);
         sessionStore.loadSessionMessages(stubSessionId, client)
-          .then((loadedMessages) => {
-            if (!loadedMessages) return;
+          .then((result) => {
+            if (!result) return;
             // Ignore late results if the user switched sessions while loading.
             if (currentSessionIdRef.current !== stubSessionId) return;
-            // Messages are already persisted by loadSessionMessages; skip the
-            // persistence effect so we don't regenerate IDs/updatedAt.
-            // Only skip if there are actual messages; if the array is empty,
-            // setting the flag would leave it stuck and cause the next real
-            // message to be skipped (never persisted).
-            if (loadedMessages.length > 0) {
+            // Only skip persistence when messages were freshly fetched and already
+            // saved by loadSessionMessages. If loadSessionMessages returned existing
+            // local messages (e.g., added in-flight), don't skip — those changes
+            // still need the persistence effect to run correctly.
+            if (result.freshlyFetched && result.messages.length > 0) {
               skipNextPersistRef.current = true;
             }
-            setMessages(loadedMessages.map(m => ({
+            setMessages(result.messages.map(m => ({
               id: m.id,
               role: m.role,
               content: m.content,

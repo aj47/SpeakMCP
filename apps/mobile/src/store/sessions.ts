@@ -40,7 +40,7 @@ export interface SessionStore {
   lastSyncResult: SyncResult | null;
 
   // Lazy loading
-  loadSessionMessages: (sessionId: string, client: SettingsApiClient) => Promise<ChatMessage[] | null>;
+  loadSessionMessages: (sessionId: string, client: SettingsApiClient) => Promise<{ messages: ChatMessage[]; freshlyFetched: boolean } | null>;
   isLoadingMessages: boolean;
 }
 
@@ -575,11 +575,11 @@ export function useSessions(): SessionStore {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   // Lazy-load messages for a stub session from server
-  const loadSessionMessages = useCallback(async (sessionId: string, client: SettingsApiClient): Promise<ChatMessage[] | null> => {
+  const loadSessionMessages = useCallback(async (sessionId: string, client: SettingsApiClient): Promise<{ messages: ChatMessage[]; freshlyFetched: boolean } | null> => {
     const session = sessionsRef.current.find(s => s.id === sessionId);
     if (!session?.serverConversationId) return null;
     // Already has messages - no need to fetch
-    if (session.messages.length > 0) return session.messages;
+    if (session.messages.length > 0) return { messages: session.messages, freshlyFetched: false };
 
     setIsLoadingMessages(true);
     try {
@@ -592,7 +592,7 @@ export function useSessions(): SessionStore {
       const currentSessions = sessionsRef.current;
       const latestSession = currentSessions.find(s => s.id === sessionId);
       if (latestSession && latestSession.messages.length > 0) {
-        return latestSession.messages;
+        return { messages: latestSession.messages, freshlyFetched: false };
       }
 
       const sessionsToSave = currentSessions.map(s => {
@@ -614,7 +614,7 @@ export function useSessions(): SessionStore {
         await saveSessions(sessionsToSave);
       });
 
-      return result.messages;
+      return { messages: result.messages, freshlyFetched: true };
     } catch (err: any) {
       console.error('[sessions] Failed to load session messages:', err);
       return null;

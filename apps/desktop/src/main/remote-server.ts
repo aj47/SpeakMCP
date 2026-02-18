@@ -73,13 +73,15 @@ function notifyConversationHistoryChanged(): void {
   }
 }
 
-// Reserved filenames that must not be used as conversation IDs to avoid colliding with
-// internal storage files (e.g. index.json, metadata.json) or Windows device names
-// (CON, NUL, COM1–COM9, LPT1–LPT9, etc.) that cause failures on case-insensitive filesystems.
-const RESERVED_CONVERSATION_IDS = new Set([
-  "index",
-  "metadata",
-  // Windows reserved device names (case-insensitive check is applied before lookup)
+// Exact reserved names that collide with internal storage files.
+// Checked against the exact (lowercased) ID — no extension stripping applied,
+// so IDs like "index.v2" or "metadata.backup" are NOT rejected by this set.
+const FILE_RESERVED_IDS = new Set(["index", "metadata"])
+
+// Windows reserved device names (CON, NUL, COM1–COM9, LPT1–LPT9, etc.).
+// Checked against both the exact lowercased ID and the stem before the first dot,
+// because Windows treats "con.txt" and "nul." as reserved filenames too.
+const WINDOWS_DEVICE_NAMES = new Set([
   "con",
   "prn",
   "aux",
@@ -123,11 +125,16 @@ function getConversationIdValidationError(conversationId: string): string | null
     return "Invalid conversation ID format"
   }
   // Normalize to lowercase for case-insensitive filesystem compatibility (Windows/macOS).
-  // Also strip any extension (e.g. "con.txt" → "con") so Windows device names with
-  // extensions are rejected too, since they are still invalid filenames on Windows.
   const normalized = conversationId.toLowerCase()
-  const withoutExt = normalized.includes(".") ? normalized.slice(0, normalized.indexOf(".")) : normalized
-  if (RESERVED_CONVERSATION_IDS.has(normalized) || RESERVED_CONVERSATION_IDS.has(withoutExt)) {
+  // Exact-match check for internal storage file collisions (e.g. index.json, metadata.json).
+  // Extension stripping is NOT applied here so IDs like "index.v2" pass through.
+  if (FILE_RESERVED_IDS.has(normalized)) {
+    return "Invalid conversation ID: reserved name"
+  }
+  // For Windows device names, also strip the first extension (e.g. "con.txt" → "con")
+  // because Windows treats device names with any extension as still reserved.
+  const stem = normalized.includes(".") ? normalized.slice(0, normalized.indexOf(".")) : normalized
+  if (WINDOWS_DEVICE_NAMES.has(normalized) || WINDOWS_DEVICE_NAMES.has(stem)) {
     return "Invalid conversation ID: reserved name"
   }
   return null

@@ -61,6 +61,11 @@ function notifyConversationHistoryChanged(): void {
       if (!pendingNotificationWebContentsIds.has(win.webContents.id)) {
         pendingNotificationWebContentsIds.add(win.webContents.id)
         win.webContents.once("did-finish-load", sendNotification)
+        // If the window is destroyed before it finishes loading, clean up to prevent
+        // the webContents ID from being permanently retained in the pending set.
+        win.webContents.once("destroyed", () => {
+          pendingNotificationWebContentsIds.delete(win.webContents.id)
+        })
       }
     } else {
       sendNotification()
@@ -117,7 +122,12 @@ function getConversationIdValidationError(conversationId: string): string | null
   if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
     return "Invalid conversation ID format"
   }
-  if (RESERVED_CONVERSATION_IDS.has(conversationId.toLowerCase())) {
+  // Normalize to lowercase for case-insensitive filesystem compatibility (Windows/macOS).
+  // Also strip any extension (e.g. "con.txt" → "con") so Windows device names with
+  // extensions are rejected too, since they are still invalid filenames on Windows.
+  const normalized = conversationId.toLowerCase()
+  const withoutExt = normalized.includes(".") ? normalized.slice(0, normalized.indexOf(".")) : normalized
+  if (RESERVED_CONVERSATION_IDS.has(normalized) || RESERVED_CONVERSATION_IDS.has(withoutExt)) {
     return "Invalid conversation ID: reserved name"
   }
   return null

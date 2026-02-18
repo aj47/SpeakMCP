@@ -4,7 +4,8 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic, OctagonX } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useConfigQuery } from "@renderer/lib/queries"
+import { queryClient, useConfigQuery } from "@renderer/lib/queries"
+import { useAgentStore } from "@renderer/stores"
 import { PredefinedPromptsMenu } from "./predefined-prompts-menu"
 
 interface OverlayFollowUpInputProps {
@@ -68,8 +69,18 @@ export function OverlayFollowUpInput({
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       setText("")
+      // Optimistically append user message to the session's conversation history
+      // so it appears immediately in the overlay without waiting for agent progress updates
+      if (sessionId) {
+        useAgentStore.getState().appendUserMessageToSession(sessionId, variables)
+      }
+      // Also invalidate React Query caches so other views stay in sync
+      if (conversationId) {
+        queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] })
+        queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+      }
       onMessageSent?.()
     },
   })

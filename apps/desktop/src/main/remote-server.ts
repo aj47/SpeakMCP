@@ -16,9 +16,129 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import { WINDOWS } from "./window"
+import type { RendererHandlers } from "./renderer-handlers"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
+
+// Track webContents IDs that already have a pending did-finish-load notification queued,
+// to avoid registering multiple once-listeners if notifyConversationHistoryChanged() is
+// called several times while a window is still loading.
+const pendingNotificationWebContentsIds = new Set<number>()
+
+/**
+ * Notify all renderer windows that conversation history has changed.
+ * Used after remote server creates or modifies conversations (e.g. from mobile).
+ * Defers the notification if the window's renderer is still loading to avoid dropped events.
+ * Uses pendingNotificationWebContentsIds to deduplicate deferred listeners.
+ */
+function notifyConversationHistoryChanged(): void {
+  const notifiedWebContentsIds = new Set<number>()
+  for (const windowId of ["main", "panel"] as const) {
+    const win = WINDOWS.get(windowId)
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
+      continue
+    }
+    if (notifiedWebContentsIds.has(win.webContents.id)) {
+      continue
+    }
+
+    notifiedWebContentsIds.add(win.webContents.id)
+    const sendNotification = () => {
+      pendingNotificationWebContentsIds.delete(win.webContents.id)
+      try {
+        getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
+      } catch (err) {
+        diagnosticsService.logWarning("remote-server", `Failed to notify ${windowId} window about conversation history changes: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+
+    if (win.webContents.isLoading()) {
+      // Only register a did-finish-load listener if one isn't already pending for this webContents,
+      // to avoid listener buildup when called multiple times during window load.
+      if (!pendingNotificationWebContentsIds.has(win.webContents.id)) {
+        pendingNotificationWebContentsIds.add(win.webContents.id)
+        win.webContents.once("did-finish-load", sendNotification)
+        // If the window is destroyed before it finishes loading, clean up to prevent
+        // the webContents ID from being permanently retained in the pending set.
+        win.webContents.once("destroyed", () => {
+          pendingNotificationWebContentsIds.delete(win.webContents.id)
+        })
+      }
+    } else {
+      sendNotification()
+    }
+  }
+}
+
+// Exact reserved names that collide with internal storage files.
+// Checked against the exact (lowercased) ID — no extension stripping applied,
+// so IDs like "index.v2" or "metadata.backup" are NOT rejected by this set.
+const FILE_RESERVED_IDS = new Set(["index", "metadata"])
+
+// Windows reserved device names (CON, NUL, COM1–COM9, LPT1–LPT9, etc.).
+// Checked against both the exact lowercased ID and the stem before the first dot,
+// because Windows treats "con.txt" and "nul." as reserved filenames too.
+const WINDOWS_DEVICE_NAMES = new Set([
+  "con",
+  "prn",
+  "aux",
+  "nul",
+  "com0",
+  "com1",
+  "com2",
+  "com3",
+  "com4",
+  "com5",
+  "com6",
+  "com7",
+  "com8",
+  "com9",
+  "lpt0",
+  "lpt1",
+  "lpt2",
+  "lpt3",
+  "lpt4",
+  "lpt5",
+  "lpt6",
+  "lpt7",
+  "lpt8",
+  "lpt9",
+])
+
+/**
+ * Validate conversation IDs sent over remote HTTP endpoints.
+ * Performs null-byte, path-traversal, character-allowlist, and reserved-name checks.
+ * This is NOT equivalent to ConversationService.validateConversationId(), which also
+ * sanitizes disallowed characters and performs a path.resolve containment check.
+ */
+function getConversationIdValidationError(conversationId: string): string | null {
+  if (conversationId.includes("\0")) {
+    return "Invalid conversation ID: null bytes not allowed"
+  }
+  if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+    return "Invalid conversation ID: path traversal characters not allowed"
+  }
+  if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
+    return "Invalid conversation ID format"
+  }
+  // Normalize to lowercase for case-insensitive filesystem compatibility (Windows/macOS).
+  const normalized = conversationId.toLowerCase()
+  // Exact-match check for internal storage file collisions (e.g. index.json, metadata.json).
+  // Extension stripping is NOT applied here so IDs like "index.v2" pass through.
+  if (FILE_RESERVED_IDS.has(normalized)) {
+    return "Invalid conversation ID: reserved name"
+  }
+  // For Windows device names, also strip the first extension (e.g. "con.txt" → "con")
+  // because Windows treats device names with any extension as still reserved.
+  const stem = normalized.includes(".") ? normalized.slice(0, normalized.indexOf(".")) : normalized
+  if (WINDOWS_DEVICE_NAMES.has(normalized) || WINDOWS_DEVICE_NAMES.has(stem)) {
+    return "Invalid conversation ID: reserved name"
+  }
+  return null
+}
 
 /**
  * Detects if we're running in a headless/terminal environment
@@ -413,11 +533,18 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Format conversation history for API response (convert MCPToolResult to ToolResult format)
     const formattedHistory = formatConversationHistoryForApi(agentResult.conversationHistory)
 
+    // Notify renderer that conversation history has changed (for sidebar refresh)
+    notifyConversationHistoryChanged()
+
     return { content: agentResult.content, conversationId, conversationHistory: formattedHistory }
   } catch (error) {
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
+
+    // Conversation was already created/updated before agent execution started.
+    // Refresh renderer history even on failure so UI reflects the latest persisted state.
+    notifyConversationHistoryChanged()
 
     throw error
   } finally {
@@ -546,7 +673,15 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Extract conversationId from request body (custom extension to OpenAI API)
-      const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      // Use undefined for absent/non-string values; treat empty string as absent
+      const rawConversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      const conversationId = rawConversationId !== "" ? rawConversationId : undefined
+      if (conversationId) {
+        const conversationIdError = getConversationIdValidationError(conversationId)
+        if (conversationIdError) {
+          return reply.code(400).send({ error: conversationIdError })
+        }
+      }
       // Check if client wants SSE streaming
       const isStreaming = body.stream === true
 
@@ -1009,12 +1144,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Validate conversation ID format to prevent path traversal attacks
-      // Valid IDs match pattern: conv_${timestamp}_${random} where random is alphanumeric
-      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
-        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
-      }
-      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
-        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      const conversationIdError = getConversationIdValidationError(conversationId)
+      if (conversationIdError) {
+        return reply.code(400).send({ error: conversationIdError })
       }
 
       const conversation = await conversationService.loadConversation(conversationId)
@@ -1258,6 +1390,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       await conversationService.saveConversation(conversation, true)
       diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} with ${messages.length} messages`)
 
+      // Notify renderer that conversation history has changed (for sidebar refresh)
+      notifyConversationHistoryChanged()
+
       return reply.code(201).send({
         id: conversation.id,
         title: conversation.title,
@@ -1289,11 +1424,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Validate conversation ID format to prevent path traversal attacks
-      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
-        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
-      }
-      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
-        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      const conversationIdError = getConversationIdValidationError(conversationId)
+      if (conversationIdError) {
+        return reply.code(400).send({ error: conversationIdError })
       }
 
       // Validate request body is a valid object
@@ -1384,6 +1517,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         await conversationService.saveConversation(conversation, true)
         diagnosticsService.logInfo("remote-server", `Updated conversation ${conversationId}`)
       }
+
+      // Notify renderer that conversation history has changed (for sidebar refresh)
+      notifyConversationHistoryChanged()
 
       return reply.send({
         id: conversation.id,
@@ -1597,4 +1733,3 @@ export async function printQRCodeToTerminal(urlOverride?: string): Promise<boole
   // Return the actual result from printTerminalQRCode to indicate success/failure
   return await printTerminalQRCode(serverUrl, cfg.remoteServerApiKey)
 }
-

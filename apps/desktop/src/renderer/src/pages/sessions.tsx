@@ -188,9 +188,12 @@ export function Component() {
   // When navigating to /:id, focus the active session tile or create a new tile for past sessions
   useEffect(() => {
     if (routeHistoryItemId) {
-      // Check if this ID matches an active session - if so, focus it
+      // Check if this ID matches an active (non-complete) session - if so, focus it.
+      // Completed sessions should reload from disk to ensure fresh data,
+      // especially for sessions created remotely (e.g. from mobile) where
+      // in-memory progress data may be stale or incomplete.
       const activeSession = Array.from(agentProgressById.entries()).find(
-        ([_, progress]) => progress?.conversationId === routeHistoryItemId
+        ([_, progress]) => progress?.conversationId === routeHistoryItemId && !progress?.isComplete
       )
       if (activeSession) {
         setFocusedSessionId(activeSession[0])
@@ -199,7 +202,7 @@ export function Component() {
           sessionRefs.current[activeSession[0]]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }, 100)
       } else {
-        // It's a past session - create a new tile by setting pendingConversationId
+        // It's a past session or completed session - load fresh data from disk
         setPendingConversationId(routeHistoryItemId)
       }
       // Clear the route param from URL without causing a remount
@@ -261,7 +264,7 @@ export function Component() {
   const handleContinueConversation = (conversationId: string) => {
     // Check if there's already an active session for this conversationId
     const existingSession = Array.from(agentProgressById.entries()).find(
-      ([_, progress]) => progress?.conversationId === conversationId
+      ([_, progress]) => progress?.conversationId === conversationId && !progress?.isComplete
     )
     if (existingSession) {
       // Focus the existing session tile instead of creating a duplicate
@@ -286,10 +289,14 @@ export function Component() {
   useEffect(() => {
     if (!pendingConversationId) return
 
-    // Check if any real session exists for this conversationId
+    // Check if any active (non-complete) real session exists for this conversationId.
+    // Completed sessions should not dismiss the pending tile because we want to
+    // reload completed history from disk for freshness and remote-sync correctness.
     const hasRealSession = Array.from(agentProgressById.entries()).some(
       ([sessionId, progress]) =>
-        !sessionId.startsWith("pending-") && progress?.conversationId === pendingConversationId
+        !sessionId.startsWith("pending-") &&
+        progress?.conversationId === pendingConversationId &&
+        !progress?.isComplete
     )
 
     if (hasRealSession) {
@@ -588,4 +595,3 @@ export function Component() {
     </div>
   )
 }
-

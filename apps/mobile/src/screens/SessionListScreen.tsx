@@ -29,6 +29,9 @@ export default function SessionListScreen({ navigation }: Props) {
   // ── Rapid Fire voice state ─────────────────────────────────────────────────
   const [rfListening, setRfListening] = useState(false);
   const [rfTranscript, setRfTranscript] = useState('');
+  const [rfStatus, setRfStatus] = useState<
+    'idle' | 'listening' | 'sending' | 'sent' | 'empty' | 'permissionDenied' | 'unavailable' | 'error'
+  >('idle');
   const rfListeningRef = useRef(false);
   const rfStartingRef = useRef(false);
   const rfStoppingRef = useRef(false);
@@ -39,6 +42,7 @@ export default function SessionListScreen({ navigation }: Props) {
   const rfGrantTimeRef = useRef(0);
   const rfMinHoldMs = 200;
   const sessionStoreRef = useRef<SessionStore | null>(null);
+  const rfStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const rfSetListening = useCallback((v: boolean) => {
     rfListeningRef.current = v;
@@ -52,6 +56,21 @@ export default function SessionListScreen({ navigation }: Props) {
     rfSrSubsRef.current = [];
   }, []);
 
+  const rfSetTransientStatus = useCallback((
+    status: 'sent' | 'empty' | 'permissionDenied' | 'unavailable' | 'error',
+    clearAfterMs = 2500
+  ) => {
+    if (rfStatusTimeoutRef.current) {
+      clearTimeout(rfStatusTimeoutRef.current);
+      rfStatusTimeoutRef.current = null;
+    }
+    setRfStatus(status);
+    rfStatusTimeoutRef.current = setTimeout(() => {
+      setRfStatus('idle');
+      rfStatusTimeoutRef.current = null;
+    }, clearAfterMs);
+  }, []);
+
   const rfStartRecording = useCallback(async (e?: GestureResponderEvent) => {
     if (rfStartingRef.current || rfListeningRef.current) return;
     rfStartingRef.current = true;
@@ -59,6 +78,7 @@ export default function SessionListScreen({ navigation }: Props) {
     rfFinalRef.current = '';
     rfLiveRef.current = '';
     setRfTranscript('');
+    setRfStatus('listening');
     rfGrantTimeRef.current = Date.now();
     rfSetListening(true);
     try {
@@ -76,6 +96,7 @@ export default function SessionListScreen({ navigation }: Props) {
           });
           const subError = rfSrEmitterRef.current.addListener('error', (event: any) => {
             console.error('[RapidFire] SR error:', JSON.stringify(event));
+            rfSetTransientStatus('error');
           });
           const subEnd = rfSrEmitterRef.current.addListener('end', () => {
             if (!rfStoppingRef.current) return; // still holding - ignore spurious end
@@ -86,7 +107,17 @@ export default function SessionListScreen({ navigation }: Props) {
             const perm = await SR.ExpoSpeechRecognitionModule.getPermissionsAsync();
             if (!perm?.granted) {
               const req = await SR.ExpoSpeechRecognitionModule.requestPermissionsAsync();
-              if (!req?.granted) { rfSetListening(false); rfStartingRef.current = false; return; }
+              if (!req?.granted) {
+                rfSetListening(false);
+                rfStartingRef.current = false;
+                rfSetTransientStatus('permissionDenied', 4000);
+                Alert.alert(
+                  'Microphone Permission Required',
+                  'Rapid Fire needs microphone permission. Enable it in system settings and try again.',
+                  [{ text: 'OK' }]
+                );
+                return;
+              }
             }
           } catch {}
           SR.ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: true,
@@ -97,10 +128,11 @@ export default function SessionListScreen({ navigation }: Props) {
       }
     } catch (err) {
       console.warn('[RapidFire] SR unavailable:', (err as any)?.message || err);
+      rfSetTransientStatus('unavailable', 4000);
     }
     rfSetListening(false);
     rfStartingRef.current = false;
-  }, [rfCleanupSubs, rfSetListening]);
+  }, [rfCleanupSubs, rfSetListening, rfSetTransientStatus]);
 
   const rfStopAndFire = useCallback(async () => {
     if (rfStoppingRef.current) return;
@@ -113,20 +145,41 @@ export default function SessionListScreen({ navigation }: Props) {
     } catch {}
     rfCleanupSubs();
     rfSetListening(false);
+    setRfStatus('sending');
     const finalText = (rfFinalRef.current || rfLiveRef.current).trim();
     rfFinalRef.current = '';
     rfLiveRef.current = '';
     setRfTranscript('');
     if (finalText) {
-      // Create a new session and navigate to Chat with the transcript
+      // Create a new session and persist transcript, but keep user on Sessions screen.
       const ss = sessionStoreRef.current;
       if (ss) {
-        ss.createNewSession();
-        navigation.navigate('Chat', { initialMessage: finalText });
+        try {
+          const newSession = ss.createNewSession();
+          await ss.setMessagesForSession(newSession.id, [{ role: 'user', content: finalText }]);
+          setRfTranscript(finalText);
+          rfSetTransientStatus('sent');
+        } catch (err) {
+          console.error('[RapidFire] Failed to persist transcript:', err);
+          rfSetTransientStatus('error');
+        }
+      } else {
+        rfSetTransientStatus('error');
       }
+    } else {
+      rfSetTransientStatus('empty');
     }
-  }, [rfCleanupSubs, rfSetListening, navigation]);
+  }, [rfCleanupSubs, rfSetListening, rfSetTransientStatus]);
   // ── end Rapid Fire ─────────────────────────────────────────────────────────
+
+  useLayoutEffect(() => {
+    return () => {
+      rfCleanupSubs();
+      if (rfStatusTimeoutRef.current) {
+        clearTimeout(rfStatusTimeoutRef.current);
+      }
+    };
+  }, [rfCleanupSubs]);
 
   useLayoutEffect(() => {
     navigation?.setOptions?.({
@@ -312,6 +365,22 @@ export default function SessionListScreen({ navigation }: Props) {
     </View>
   );
 
+  const rfHintText = rfStatus === 'listening'
+    ? 'Release to send...'
+    : rfStatus === 'sending'
+      ? 'Sending...'
+      : rfStatus === 'sent'
+        ? 'Sent to a new chat. Tap it to open.'
+        : rfStatus === 'empty'
+          ? 'No speech detected. Try again.'
+          : rfStatus === 'permissionDenied'
+            ? 'Microphone permission denied. Enable it in settings.'
+            : rfStatus === 'unavailable'
+              ? 'Speech recognition unavailable on this build/device.'
+              : rfStatus === 'error'
+                ? 'Rapid Fire failed. Try again.'
+                : 'Hold to talk (Rapid Fire)';
+
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
@@ -344,11 +413,11 @@ export default function SessionListScreen({ navigation }: Props) {
 
       {/* Rapid Fire hold-to-speak button */}
       <View style={styles.rfContainer}>
-        {rfListening && rfTranscript ? (
+        {(rfListening || rfStatus === 'sent') && rfTranscript ? (
           <Text style={styles.rfTranscript} numberOfLines={2}>{rfTranscript}</Text>
         ) : null}
         <Text style={styles.rfHint}>
-          {rfListening ? 'Release to send...' : 'Hold to talk (Rapid Fire)'}
+          {rfHintText}
         </Text>
         <TouchableOpacity
           style={[styles.rfButton, rfListening && styles.rfButtonOn]}
@@ -369,7 +438,9 @@ export default function SessionListScreen({ navigation }: Props) {
           }}
         >
           <Text style={styles.rfButtonText}>{rfListening ? '\uD83C\uDF99\uFE0F' : '\uD83C\uDFA4'}</Text>
-          <Text style={styles.rfButtonLabel}>{rfListening ? '...' : 'Hold'}</Text>
+          <Text style={styles.rfButtonLabel}>
+            {rfListening ? '...' : (rfStatus === 'sending' ? 'Sending' : 'Hold')}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -526,4 +597,3 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
   });
 }
-

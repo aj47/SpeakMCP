@@ -523,6 +523,9 @@ export default function ChatScreen({ route, navigation }: any) {
       setExpandedToolCalls({});
       // Clear stale in-flight marker when switching sessions.
       pendingLazyLoadSessionIdRef.current = null;
+      // Clear skipNextPersistRef to prevent the first real message in the new session
+      // from being skipped if a lazy-load from the previous session had set it.
+      skipNextPersistRef.current = false;
     }
 
     // If we have an existing session, always load its messages regardless of deletions

@@ -780,6 +780,12 @@ export function Component() {
         setRecording(false)
         recordingRef.current = false
         setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+        // Also clear MCP context to avoid leaving the panel stuck in MCP mode
+        // with no active recording.
+        setMcpMode(false)
+        mcpModeRef.current = false
+        mcpConversationIdRef.current = undefined
+        mcpSessionIdRef.current = undefined
       })
     })
 
@@ -828,6 +834,12 @@ export function Component() {
           setRecording(false)
           recordingRef.current = false
           setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+          // Also clear MCP context to avoid leaving the panel stuck in MCP mode
+          // with no active recording (similar to aborted/empty/too-short early returns).
+          setMcpMode(false)
+          mcpModeRef.current = false
+          mcpConversationIdRef.current = undefined
+          mcpSessionIdRef.current = undefined
         })
       }
     })

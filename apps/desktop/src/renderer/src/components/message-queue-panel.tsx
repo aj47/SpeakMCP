@@ -268,6 +268,12 @@ export function MessageQueuePanel({
   isPaused = false,
 }: MessageQueuePanelProps) {
   const [isListCollapsed, setIsListCollapsed] = useState(false)
+  const messageListId = `message-queue-list-${conversationId}`
+
+  // Reset collapse state when switching to a different conversation.
+  useEffect(() => {
+    setIsListCollapsed(false)
+  }, [conversationId])
 
   const clearMutation = useMutation({
     mutationFn: async () => {
@@ -412,7 +418,10 @@ export function MessageQueuePanel({
                 ? "text-orange-700 dark:text-orange-300 hover:text-orange-900 dark:hover:text-orange-100 hover:bg-orange-200/50 dark:hover:bg-orange-800/50"
                 : "text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
             )}
-            onClick={() => setIsListCollapsed(!isListCollapsed)}
+            onClick={() => setIsListCollapsed((prev) => !prev)}
+            aria-expanded={!isListCollapsed}
+            aria-controls={messageListId}
+            aria-label={isListCollapsed ? "Expand queue" : "Collapse queue"}
             title={isListCollapsed ? "Expand queue" : "Collapse queue"}
           >
             {isListCollapsed ? (
@@ -433,7 +442,7 @@ export function MessageQueuePanel({
 
       {/* Message List */}
       {!isListCollapsed && (
-        <div className="divide-y max-h-60 overflow-y-auto">
+        <div id={messageListId} className="divide-y max-h-60 overflow-y-auto">
           {messages.map((msg) => (
             <QueuedMessageItem
               key={msg.id}
@@ -446,4 +455,3 @@ export function MessageQueuePanel({
     </div>
   )
 }
-

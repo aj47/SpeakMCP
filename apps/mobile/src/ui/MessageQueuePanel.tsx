@@ -293,6 +293,10 @@ export function MessageQueuePanel({
   const { theme } = useTheme();
   const [isListCollapsed, setIsListCollapsed] = useState(false);
 
+  useEffect(() => {
+    setIsListCollapsed(false);
+  }, [conversationId]);
+
   const hasProcessingMessage = messages.some((m) => m.status === 'processing');
 
   if (messages.length === 0) {
@@ -400,7 +404,10 @@ export function MessageQueuePanel({
           )}
           <TouchableOpacity
             style={styles.clearButton}
-            onPress={() => setIsListCollapsed(!isListCollapsed)}
+            onPress={() => setIsListCollapsed((prev) => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={isListCollapsed ? 'Expand queue' : 'Collapse queue'}
+            accessibilityState={{ expanded: !isListCollapsed }}
           >
             <Ionicons
               name={isListCollapsed ? 'chevron-down' : 'chevron-up'}
@@ -428,4 +435,3 @@ export function MessageQueuePanel({
     </View>
   );
 }
-

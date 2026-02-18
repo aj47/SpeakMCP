@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Label } from "./ui/label"
 import {
   Select,
@@ -7,8 +7,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select"
-import { AlertCircle, RefreshCw, Wrench, Brain, Image } from "lucide-react"
+import {
+  AlertCircle,
+  RefreshCw,
+  Wrench,
+  Brain,
+  Image,
+  Search,
+} from "lucide-react"
 import { Button } from "./ui/button"
+import { Input } from "./ui/input"
 import { tipcClient } from "@renderer/lib/tipc-client"
 
 /** Local type matching models.dev service response */
@@ -42,8 +50,6 @@ interface PresetModelSelectorProps {
   disabled?: boolean
 }
 
-
-
 /** Format price in a compact way */
 function formatPrice(price: number | undefined): string | null {
   if (price === undefined || price === null) return null
@@ -74,7 +80,12 @@ export function PresetModelSelector({
   const [isLoading, setIsLoading] = useState(false)
   const [models, setModels] = useState<Array<{ id: string; name: string }>>([])
   const [error, setError] = useState<string | null>(null)
-  const [modelsDevData, setModelsDevData] = useState<Record<string, ModelsDevModel>>({})
+  const [modelsDevData, setModelsDevData] = useState<
+    Record<string, ModelsDevModel>
+  >({})
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isOpen, setIsOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const fetchModels = async () => {
     if (!baseUrl || !apiKey) {
@@ -119,7 +130,7 @@ export function PresetModelSelector({
           } catch {
             // Silently ignore - enrichment is optional
           }
-        })
+        }),
       )
 
       setModelsDevData(enrichedData)
@@ -132,7 +143,32 @@ export function PresetModelSelector({
     if (baseUrl && apiKey) {
       fetchModels()
     }
-  }, [baseUrl, apiKey])
+  }, [baseUrl, apiKey, presetId])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery("")
+      return
+    }
+
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+    })
+  }, [isOpen])
+
+  // Keep search focus stable while typing; Radix can move focus during content reflow.
+  useEffect(() => {
+    if (!isOpen) return
+
+    requestAnimationFrame(() => {
+      if (
+        searchInputRef.current &&
+        document.activeElement !== searchInputRef.current
+      ) {
+        searchInputRef.current.focus()
+      }
+    })
+  }, [searchQuery, isOpen])
 
   const hasError = !!error && models.length === 0
 
@@ -140,6 +176,40 @@ export function PresetModelSelector({
   const getModelInfo = (modelId: string): ModelsDevModel | undefined => {
     return modelsDevData[modelId]
   }
+
+  const filteredModels = models.filter((model) => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    const info = getModelInfo(model.id)
+    return (
+      model.id.toLowerCase().includes(query) ||
+      model.name.toLowerCase().includes(query) ||
+      info?.name?.toLowerCase().includes(query)
+    )
+  })
+
+  const selectedDisplayValue = (() => {
+    if (!value) return undefined
+
+    const selectedModel = models.find((model) => model.id === value)
+    if (!selectedModel) return value
+
+    const selectedInfo = getModelInfo(selectedModel.id)
+    const selectedInputPrice = formatPrice(selectedInfo?.cost?.input)
+    const selectedOutputPrice = formatPrice(selectedInfo?.cost?.output)
+    const selectedContextSize = formatContextSize(selectedInfo?.limit?.context)
+
+    const metaParts: string[] = []
+    if (selectedInputPrice && selectedOutputPrice) {
+      metaParts.push(`${selectedInputPrice}/${selectedOutputPrice}/M`)
+    }
+    if (selectedContextSize) {
+      metaParts.push(selectedContextSize)
+    }
+
+    if (metaParts.length === 0) return selectedModel.name
+    return `${selectedModel.name} • ${metaParts.join(" • ")}`
+  })()
 
   /** Render model item with pricing and capabilities */
   const renderModelItem = (model: { id: string; name: string }) => {
@@ -154,36 +224,36 @@ export function PresetModelSelector({
 
     return (
       <SelectItem key={model.id} value={model.id}>
-        <div className="flex flex-col gap-0.5 py-0.5">
-          <div className="flex items-center gap-2">
-            <span>{model.name}</span>
-            {/* Capability indicators */}
-            <div className="flex items-center gap-1">
-              {hasToolCall && (
-                <span title="Tool calling">
-                  <Wrench className="h-3 w-3 text-blue-500" />
-                </span>
-              )}
-              {hasReasoning && (
-                <span title="Reasoning">
-                  <Brain className="h-3 w-3 text-purple-500" />
-                </span>
-              )}
-              {hasVision && (
-                <span title="Vision">
-                  <Image className="h-3 w-3 text-green-500" />
-                </span>
-              )}
-            </div>
+        <div className="flex w-full min-w-0 items-center gap-2 py-0.5">
+          <span className="truncate">{model.name}</span>
+          {/* Capability indicators */}
+          <div className="flex shrink-0 items-center gap-1">
+            {hasToolCall && (
+              <span title="Tool calling">
+                <Wrench className="h-3 w-3 text-blue-500" />
+              </span>
+            )}
+            {hasReasoning && (
+              <span title="Reasoning">
+                <Brain className="h-3 w-3 text-purple-500" />
+              </span>
+            )}
+            {hasVision && (
+              <span title="Vision">
+                <Image className="h-3 w-3 text-green-500" />
+              </span>
+            )}
           </div>
           {/* Pricing and context info */}
           {(inputPrice || contextSize) && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="text-muted-foreground ml-auto flex shrink-0 items-center gap-2 text-xs">
               {inputPrice && outputPrice && (
-                <span>{inputPrice}/{outputPrice}/M</span>
+                <span className="whitespace-nowrap">
+                  {inputPrice}/{outputPrice}/M
+                </span>
               )}
               {contextSize && (
-                <span>{contextSize}</span>
+                <span className="whitespace-nowrap">{contextSize}</span>
               )}
             </div>
           )}
@@ -210,7 +280,8 @@ export function PresetModelSelector({
       <Select
         value={value || ""}
         onValueChange={onValueChange}
-        disabled={disabled || isLoading || (!baseUrl || !apiKey)}
+        onOpenChange={setIsOpen}
+        disabled={disabled || isLoading || !baseUrl || !apiKey}
       >
         <SelectTrigger className="w-full">
           <SelectValue
@@ -223,12 +294,49 @@ export function PresetModelSelector({
                     ? "Failed to load"
                     : placeholder
             }
-          />
+          >
+            {selectedDisplayValue}
+          </SelectValue>
         </SelectTrigger>
-        <SelectContent className="max-h-[300px]">
-          {models.map((model) => renderModelItem(model))}
+        <SelectContent
+          className="max-h-[300px]"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          header={
+            <div
+              className="flex items-center border-b px-3 py-2"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <Search className="text-muted-foreground mr-2 h-4 w-4 shrink-0" />
+              <Input
+                ref={searchInputRef}
+                placeholder="Search models..."
+                value={searchQuery}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  setSearchQuery(e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault()
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="h-auto border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            </div>
+          }
+        >
+          {filteredModels.map((model) => renderModelItem(model))}
+          {models.length > 0 &&
+            filteredModels.length === 0 &&
+            searchQuery.trim() && (
+              <div className="text-muted-foreground flex items-center justify-center py-4 text-sm">
+                No models match "{searchQuery}"
+              </div>
+            )}
           {models.length === 0 && !isLoading && (
-            <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+            <div className="text-muted-foreground flex items-center justify-center py-4 text-sm">
               {hasError ? (
                 <>
                   <AlertCircle className="mr-2 h-4 w-4" />
@@ -241,13 +349,6 @@ export function PresetModelSelector({
           )}
         </SelectContent>
       </Select>
-
-      {value && (
-        <p className="text-xs text-muted-foreground truncate">
-          Selected: {value}
-        </p>
-      )}
     </div>
   )
 }
-

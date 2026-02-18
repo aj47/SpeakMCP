@@ -344,10 +344,10 @@ const getSavedPanelSize = (mode?: "waveform" | "progress") => {
     savedSize: { width: number; height: number },
     minHeight: number,
     fallbackSize: { width: number; height: number } = panelWindowSize,
+    minWidth: number = Math.max(200, MIN_WAVEFORM_WIDTH),
   ) => {
     const maxWidth = 3000
     const maxHeight = 2000
-    const minWidth = 200
 
     if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
       logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, fallbackSize)
@@ -366,6 +366,17 @@ const getSavedPanelSize = (mode?: "waveform" | "progress") => {
     if (config.panelProgressSize) {
       logApp(`[window.ts] Found saved progress size:`, config.panelProgressSize)
       return validateSize(config.panelProgressSize, PROGRESS_MIN_HEIGHT, agentPanelWindowSize)
+    }
+
+    if (config.panelCustomSize) {
+      // Migration fallback for users that had a single shared panel size before
+      // progress-mode persistence existed.
+      const migratedProgressSize = {
+        width: config.panelCustomSize.width,
+        height: Math.max(config.panelCustomSize.height, PROGRESS_MIN_HEIGHT),
+      }
+      logApp(`[window.ts] No saved progress size; using migrated panel size:`, migratedProgressSize)
+      return validateSize(migratedProgressSize, PROGRESS_MIN_HEIGHT, agentPanelWindowSize)
     }
 
     logApp(`[window.ts] No saved progress size, using agent default:`, agentPanelWindowSize)

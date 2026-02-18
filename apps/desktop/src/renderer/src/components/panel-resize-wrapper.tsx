@@ -5,6 +5,8 @@ import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 // Minimum height for waveform panel - matches WAVEFORM_MIN_HEIGHT in main/window.ts
 const WAVEFORM_MIN_HEIGHT = 150
 type PanelMode = "normal" | "agent" | "textInput"
+const isPanelMode = (value: unknown): value is PanelMode =>
+  value === "normal" || value === "agent" || value === "textInput"
 
 interface PanelResizeWrapperProps {
   children: React.ReactNode
@@ -86,7 +88,8 @@ export function PanelResizeWrapper({
     try {
       const finalWidth = Math.max(minWidth, size.width)
       const finalHeight = Math.max(minHeight, size.height)
-      const mode = (await tipcClient.getPanelMode()) as PanelMode
+      const rawMode = await tipcClient.getPanelMode()
+      const mode: PanelMode = isPanelMode(rawMode) ? rawMode : "normal"
       await tipcClient.savePanelModeSize({
         mode,
         width: finalWidth,
@@ -101,7 +104,7 @@ export function PanelResizeWrapper({
         await tipcClient.savePanelCustomSize({ width: finalWidth, height: finalHeight })
         setCurrentSize({ width: finalWidth, height: finalHeight })
       } catch (fallbackError) {
-        console.error("Failed to save panel size:", fallbackError || error)
+        console.error("Failed to save panel size:", error, fallbackError)
       }
     }
   }, [enableResize, minWidth, minHeight])

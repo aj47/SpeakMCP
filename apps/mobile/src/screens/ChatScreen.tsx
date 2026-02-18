@@ -492,22 +492,41 @@ export default function ChatScreen({ route, navigation }: any) {
   }, [sessionStore.currentSessionId]);
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
+  const pendingLazyLoadSessionIdRef = useRef<string | null>(null);
+  // Set to true before hydrating local state from a server lazy-load so the
+  // persistence effect doesn't re-save the just-fetched messages (which would
+  // regenerate IDs/timestamps and cause unnecessary updatedAt drift).
+  const skipNextPersistRef = useRef(false);
 
-  // Load messages when currentSessionId changes (fixes #470)
+  // Load messages when currentSession changes (fixes #470)
   useEffect(() => {
     const currentSessionId = sessionStore.currentSessionId;
+    const hasServerAuth = !!config.baseUrl && !!config.apiKey;
+    let currentSession = sessionStore.getCurrentSession();
+    const shouldAttemptStubLoad = !!(
+      currentSession &&
+      currentSession.messages.length === 0 &&
+      currentSession.serverConversationId &&
+      hasServerAuth
+    );
 
-    if (lastLoadedSessionIdRef.current === currentSessionId) {
+    // Avoid repeated work on stable sessions unless we still need to lazy-load stub messages.
+    if (lastLoadedSessionIdRef.current === currentSessionId && !shouldAttemptStubLoad) {
       return;
     }
 
-    // Reset expandedMessages and expandedToolCalls on ANY session switch to ensure consistent
-    // "final response expanded" behavior per chat and prevent stale UI state from leaking
-    // across sessions (fixes review comment about keys like "0-0" leaking across chats)
-    setExpandedMessages({});
-    setExpandedToolCalls({});
-
-    let currentSession = sessionStore.getCurrentSession();
+    const isSessionSwitch = lastLoadedSessionIdRef.current !== currentSessionId;
+    if (isSessionSwitch) {
+      // Reset expandedMessages and expandedToolCalls on session switch to ensure consistent
+      // "final response expanded" behavior per chat and prevent stale UI state from leaking.
+      setExpandedMessages({});
+      setExpandedToolCalls({});
+      // Clear stale in-flight marker when switching sessions.
+      pendingLazyLoadSessionIdRef.current = null;
+      // Clear skipNextPersistRef to prevent the first real message in the new session
+      // from being skipped if a lazy-load from the previous session had set it.
+      skipNextPersistRef.current = false;
+    }
 
     // If we have an existing session, always load its messages regardless of deletions
     if (currentSession) {
@@ -521,12 +540,43 @@ export default function ChatScreen({ route, navigation }: any) {
           toolResults: m.toolResults,
         }));
         setMessages(chatMessages);
-      } else if (currentSession.serverConversationId && config.baseUrl && config.apiKey) {
+      } else if (currentSession.serverConversationId && hasServerAuth) {
         // Stub session — lazy-load messages from server
         setMessages([]);
+        const stubSessionId = currentSession.id;
+        if (pendingLazyLoadSessionIdRef.current === stubSessionId) {
+          return;
+        }
+        pendingLazyLoadSessionIdRef.current = stubSessionId;
         const client = new SettingsApiClient(config.baseUrl, config.apiKey);
-        sessionStore.loadSessionMessages(currentSession.id, client);
-        // Messages will be populated by the store update, triggering a re-render
+        sessionStore.loadSessionMessages(stubSessionId, client)
+          .then((result) => {
+            if (!result) return;
+            // Ignore late results if the user switched sessions while loading.
+            if (currentSessionIdRef.current !== stubSessionId) return;
+            // Skip persistence whenever loadSessionMessages returned messages that are
+            // already in the store (both freshly fetched and in-flight bail-out cases)
+            // to avoid ID/updatedAt regeneration. The flag is always cleared by the
+            // persistence effect on the next render (or immediately if length is unchanged).
+            if (result.messages.length > 0) {
+              skipNextPersistRef.current = true;
+            }
+            setMessages(result.messages.map(m => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              toolCalls: m.toolCalls,
+              toolResults: m.toolResults,
+            })));
+          })
+          .catch((err) => {
+            console.warn('[ChatScreen] Failed to lazy-load session messages:', err);
+          })
+          .finally(() => {
+            if (pendingLazyLoadSessionIdRef.current === stubSessionId) {
+              pendingLazyLoadSessionIdRef.current = null;
+            }
+          });
       } else {
         setMessages([]);
       }
@@ -553,7 +603,7 @@ export default function ChatScreen({ route, navigation }: any) {
     } else {
       setMessages([]);
     }
-  }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size]);
+  }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size, config.baseUrl, config.apiKey]);
 
   // Auto-send initialMessage from route params (e.g. from rapid fire mode in SessionListScreen)
   const initialMessageRef = useRef<string | null>(route?.params?.initialMessage ?? null);
@@ -591,7 +641,18 @@ export default function ChatScreen({ route, navigation }: any) {
     }
 
     if (messages.length > 0 && messages.length !== prevMessagesLengthRef.current) {
-      sessionStore.setMessages(messages);
+      if (skipNextPersistRef.current) {
+        // Messages were just hydrated from a server lazy-load and are already
+        // saved by loadSessionMessages; skip to avoid ID/updatedAt regeneration.
+        skipNextPersistRef.current = false;
+      } else {
+        sessionStore.setMessages(messages);
+      }
+    } else if (skipNextPersistRef.current) {
+      // Length didn't change (or is 0), so the effect above won't fire — clear
+      // the flag now to prevent it from accidentally skipping the next real
+      // message persistence (e.g., lazy-load returned same count as before).
+      skipNextPersistRef.current = false;
     }
     prevMessagesLengthRef.current = messages.length;
   }, [messages, sessionStore, sessionStore.currentSessionId, sessionStore.deletingSessionIds]);

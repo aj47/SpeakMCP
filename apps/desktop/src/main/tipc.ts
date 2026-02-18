@@ -2876,10 +2876,14 @@ export const router = {
   savePanelCustomSize: t.procedure
     .input<{ width: number; height: number }>()
     .action(async ({ input }) => {
+      const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+      const width = Math.max(minWidth, input.width)
+      const height = Math.max(WAVEFORM_MIN_HEIGHT, input.height)
+
       const config = configStore.get()
       const updatedConfig = {
         ...config,
-        panelCustomSize: { width: input.width, height: input.height }
+        panelCustomSize: { width, height }
       }
       configStore.save(updatedConfig)
       return updatedConfig.panelCustomSize
@@ -2889,17 +2893,27 @@ export const router = {
   savePanelModeSize: t.procedure
     .input<{ mode: "normal" | "agent" | "textInput"; width: number; height: number }>()
     .action(async ({ input }) => {
+      const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+      const minHeight =
+        input.mode === "agent"
+          ? PROGRESS_MIN_HEIGHT
+          : input.mode === "textInput"
+            ? TEXT_INPUT_MIN_HEIGHT
+            : WAVEFORM_MIN_HEIGHT
+      const width = Math.max(minWidth, input.width)
+      const height = Math.max(minHeight, input.height)
+
       const config = configStore.get()
       const updatedConfig = { ...config }
 
       if (input.mode === "agent") {
-        updatedConfig.panelProgressSize = { width: input.width, height: input.height }
+        updatedConfig.panelProgressSize = { width, height }
       } else {
-        updatedConfig.panelCustomSize = { width: input.width, height: input.height }
+        updatedConfig.panelCustomSize = { width, height }
       }
 
       configStore.save(updatedConfig)
-      return { mode: input.mode, size: { width: input.width, height: input.height } }
+      return { mode: input.mode, size: { width, height } }
     }),
 
   // Get current panel mode (from centralized window state)

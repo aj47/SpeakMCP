@@ -19,6 +19,17 @@ export interface PredefinedPrompt {
   updatedAt: number
 }
 
+// Internal loops - reusable recurring task definitions managed by built-in tools
+export interface InternalLoop {
+  id: string
+  name: string
+  prompt: string
+  intervalMinutes: number
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
 // MCP Server Configuration Types
 export type MCPTransportType = "stdio" | "websocket" | "streamableHttp"
 
@@ -1335,6 +1346,9 @@ export type Config = {
 
   // Predefined Prompts - frequently used prompts that can be quickly accessed
   predefinedPrompts?: PredefinedPrompt[]
+
+  // Internal Loops - recurring task definitions managed by built-in tools
+  internalLoops?: InternalLoop[]
 
 	  // Remote Server Configuration
 	  remoteServerEnabled?: boolean

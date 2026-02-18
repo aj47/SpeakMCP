@@ -185,6 +185,9 @@ const getConfig = () => {
     // Message queue - when enabled, users can queue messages while agent is processing (enabled by default)
     mcpMessageQueueEnabled: true,
 
+    // Internal loops - recurring task definitions managed via built-in tools
+    internalLoops: [],
+
 	    // Remote Server defaults
 	    remoteServerEnabled: false,
 	    remoteServerPort: 3210,

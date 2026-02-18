@@ -420,7 +420,7 @@ export function MessageQueuePanel({
             )}
             onClick={() => setIsListCollapsed((prev) => !prev)}
             aria-expanded={!isListCollapsed}
-            aria-controls={messageListId}
+            aria-controls={!isListCollapsed ? messageListId : undefined}
             aria-label={isListCollapsed ? "Expand queue" : "Collapse queue"}
             title={isListCollapsed ? "Expand queue" : "Collapse queue"}
           >

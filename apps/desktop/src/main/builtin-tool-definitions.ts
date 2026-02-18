@@ -268,7 +268,8 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
           description: "Task prompt to run for this loop",
         },
         intervalMinutes: {
-          type: "number",
+          type: "integer",
+          minimum: 1,
           description: "Loop interval in minutes (must be a positive integer)",
         },
         enabled: {
@@ -298,7 +299,8 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
           description: "Updated task prompt (optional)",
         },
         intervalMinutes: {
-          type: "number",
+          type: "integer",
+          minimum: 1,
           description: "Updated interval in minutes (optional, must be a positive integer)",
         },
         enabled: {

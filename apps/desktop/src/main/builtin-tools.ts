@@ -22,6 +22,7 @@ import { executeACPRouterTool, isACPRouterTool } from "./acp/acp-router-tools"
 import { memoryService } from "./memory-service"
 import { messageQueueService } from "./message-queue-service"
 import { exec } from "child_process"
+import { randomUUID } from "crypto"
 import { promisify } from "util"
 import path from "path"
 import type { AgentMemory, InternalLoop } from "../shared/types"
@@ -1027,7 +1028,7 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     const now = Date.now()
     const loop: InternalLoop = {
-      id: `loop_${now}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `loop_${randomUUID()}`,
       name,
       prompt,
       intervalMinutes: args.intervalMinutes,

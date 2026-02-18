@@ -622,13 +622,14 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   let messages = [...opts.messages]
   let tokens = estimateTokensFromMessages(messages)
+  const initialTokens = tokens
 
   if (isDebugLLM()) {
     logLLM("ContextBudget: initial", { providerId, model, maxTokens, targetTokens, estTokens: tokens, count: messages.length })
   }
 
   if (tokens <= targetTokens) {
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: initialTokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 0: Aggressive truncation of very large tool responses (>5000 chars)
@@ -642,12 +643,16 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     }
 
     // Heuristic: aggressively truncate oversized tool payloads first.
+    // JSON-key heuristics are only applied to non-user messages to avoid
+    // accidentally truncating user prompts that happen to contain JSON.
     const looksLikeToolPayload =
       msg.role === "tool" ||
-      msg.content.includes('"stdout"') ||
-      msg.content.includes('"stderr"') ||
-      msg.content.includes('"url":') ||
-      msg.content.includes('"id":')
+      (msg.role !== "user" && (
+        msg.content.includes('"stdout"') ||
+        msg.content.includes('"stderr"') ||
+        msg.content.includes('"url":') ||
+        msg.content.includes('"id":')
+      ))
 
     if (looksLikeToolPayload) {
       messages[i] = {
@@ -701,7 +706,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after summarize", { estTokens: tokens })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+    return { messages, appliedStrategies: applied, estTokensBefore: initialTokens, estTokensAfter: tokens, maxTokens }
   }
 
   // Tier 2: Remove middle messages (keep system, first user, last N)
@@ -769,7 +774,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (tokens <= targetTokens) {
     if (isDebugLLM()) logLLM("ContextBudget: after drop_middle", { estTokens: tokens, kept: messages.length })
-    return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
+    return { messages, appliedStrategies: applied, estTokensBefore: initialTokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
   }
 
   // Tier 3: Minimal system prompt
@@ -789,5 +794,5 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
 
   if (isDebugLLM()) logLLM("ContextBudget: after minimal_system_prompt", { estTokens: tokens })
 
-  return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
+  return { messages, appliedStrategies: applied, estTokensBefore: initialTokens, estTokensAfter: tokens, maxTokens, toolResultsSummarized }
 }

@@ -211,7 +211,11 @@ export class ConversationService {
       }
     })
 
-    const { kept: retained, removed } = this.applyConversationRetention(normalized)
+    // Sort by updatedAt descending before applying retention so that the most
+    // recent conversations are always kept, regardless of their position in the
+    // raw index file.
+    const sortedForRetention = [...normalized].sort((a, b) => b.updatedAt - a.updatedAt)
+    const { kept: retained, removed } = this.applyConversationRetention(sortedForRetention)
     if (removed.length > 0) {
       changed = true
     }

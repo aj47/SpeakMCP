@@ -499,6 +499,11 @@ const t = tipc.create()
 
 const RECORDING_FILE_EXTENSIONS = ["webm", "wav"] as const
 
+// Track recording IDs that have been written to disk but not yet committed to
+// history.json (i.e. agent processing is still in progress). The orphan cleanup
+// routine excludes these IDs so it cannot delete a just-created file.
+const inFlightRecordingIds = new Set<string>()
+
 const getRecordingsHistoryPath = (): string => path.join(recordingsFolder, "history.json")
 
 const getRecordingCleanupConfig = () => {
@@ -578,10 +583,16 @@ const cleanupRecordingFiles = (history: RecordingHistoryItem[]) => {
       const historyItem = historyById.get(recordingId)
 
       // Remove orphan files (no matching history entry).
-      // Apply a grace period before deleting orphans: recording files are written
-      // to disk before the history entry is saved (async processing window), so
-      // a recently-created file may not yet appear in history.
+      // Skip files whose recording ID is currently being processed (in-flight):
+      // the file was written before the history entry is appended, so cleaning
+      // it up now would delete a valid recording mid-flight.
+      // Fall back to a time-based grace period for files written before the
+      // process started (e.g. after a crash) where in-flight state is lost.
       if (!historyItem) {
+        if (inFlightRecordingIds.has(recordingId)) {
+          // Recording is actively being processed; never treat as orphan.
+          continue
+        }
         const ORPHAN_GRACE_PERIOD_MS = 5 * 60 * 1000 // 5 minutes
         let fileMtimeMs = 0
         try {
@@ -1993,6 +2004,9 @@ export const router = {
         path.join(recordingsFolder, `${recordingId}.webm`),
         Buffer.from(input.recording),
       )
+      // Mark as in-flight so orphan cleanup won't delete the file before
+      // the history entry is written (agent processing is asynchronous).
+      inFlightRecordingIds.add(recordingId)
 
         // Fire-and-forget: Start agent processing without blocking
         // This allows multiple sessions to run concurrently
@@ -2023,6 +2037,8 @@ export const router = {
             removeRecordingFilesById(recordingId)
           })
           .finally(() => {
+            // Recording is no longer in-flight regardless of outcome.
+            inFlightRecordingIds.delete(recordingId)
             // Process queued messages after this session completes (success or error)
             processQueuedMessages(conversationId!).catch((err) => {
               logLLM("[createMcpRecording] Error processing queued messages:", err)

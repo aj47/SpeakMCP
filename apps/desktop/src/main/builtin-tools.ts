@@ -49,8 +49,11 @@ function truncateToolText(
   }
 
   const omitted = originalLength - maxChars
+  const footer = `\n\n[truncated ${omitted} characters]`
+  // Slice enough that the content + footer together don't exceed maxChars.
+  const contentChars = Math.max(0, maxChars - footer.length)
   return {
-    text: `${input.slice(0, maxChars)}\n\n[truncated ${omitted} characters]`,
+    text: `${input.slice(0, contentChars)}${footer}`,
     truncated: true,
     originalLength,
   }

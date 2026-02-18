@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
 import { AgentProgressUpdate, Conversation, ConversationMessage, QueuedMessage } from '@shared/types'
-import { useSaveConversationMutation, queryClient } from '@renderer/lib/queries'
+import { queryClient } from '@renderer/lib/queries'
 import { logUI } from '@renderer/lib/debug'
 
 export function useStoreSync() {
@@ -96,6 +96,7 @@ export function useStoreSync() {
   useEffect(() => {
     const unlisten = rendererHandlers.conversationHistoryChanged.listen(() => {
       queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+      queryClient.invalidateQueries({ queryKey: ["conversation"] })
     })
     return unlisten
   }, [])

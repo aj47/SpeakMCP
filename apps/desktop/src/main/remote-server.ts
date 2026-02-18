@@ -28,15 +28,40 @@ let lastError: string | undefined
  * Used after remote server creates or modifies conversations (e.g. from mobile).
  */
 function notifyConversationHistoryChanged(): void {
-  for (const win of [WINDOWS.get("main"), WINDOWS.get("panel")]) {
-    if (win) {
-      try {
-        getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
-      } catch {
-        // Window may not be ready yet, ignore
-      }
+  const notifiedWebContentsIds = new Set<number>()
+  for (const windowId of ["main", "panel"] as const) {
+    const win = WINDOWS.get(windowId)
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
+      continue
+    }
+    if (notifiedWebContentsIds.has(win.webContents.id)) {
+      continue
+    }
+
+    notifiedWebContentsIds.add(win.webContents.id)
+    try {
+      getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
+    } catch {
+      diagnosticsService.logWarning("remote-server", `Failed to notify ${windowId} window about conversation history changes`)
     }
   }
+}
+
+/**
+ * Validate conversation IDs sent over remote HTTP endpoints.
+ * Mirrors conversation-service ID safety checks to prevent traversal and null-byte attacks.
+ */
+function getConversationIdValidationError(conversationId: string): string | null {
+  if (conversationId.includes("\0")) {
+    return "Invalid conversation ID: null bytes not allowed"
+  }
+  if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
+    return "Invalid conversation ID: path traversal characters not allowed"
+  }
+  if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
+    return "Invalid conversation ID format"
+  }
+  return null
 }
 
 /**
@@ -1031,12 +1056,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Validate conversation ID format to prevent path traversal attacks
-      // Allow characters consistent with validateConversationId: alphanumeric, underscore, hyphen, @, dot
-      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
-        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
-      }
-      if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
-        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      const conversationIdError = getConversationIdValidationError(conversationId)
+      if (conversationIdError) {
+        return reply.code(400).send({ error: conversationIdError })
       }
 
       const conversation = await conversationService.loadConversation(conversationId)
@@ -1314,12 +1336,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Validate conversation ID format to prevent path traversal attacks
-      // Allow characters consistent with validateConversationId: alphanumeric, underscore, hyphen, @, dot
-      if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
-        return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
-      }
-      if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
-        return reply.code(400).send({ error: "Invalid conversation ID format" })
+      const conversationIdError = getConversationIdValidationError(conversationId)
+      if (conversationIdError) {
+        return reply.code(400).send({ error: conversationIdError })
       }
 
       // Validate request body is a valid object
@@ -1626,4 +1645,3 @@ export async function printQRCodeToTerminal(urlOverride?: string): Promise<boole
   // Return the actual result from printTerminalQRCode to indicate success/failure
   return await printTerminalQRCode(serverUrl, cfg.remoteServerApiKey)
 }
-

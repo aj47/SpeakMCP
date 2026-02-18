@@ -111,7 +111,7 @@ export function OverlayFollowUpInput({
   // Handle stop session - kill switch functionality
   const handleStopSession = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (isStoppingSession || !sessionId) return
+    if (isStoppingSession) return
 
     // Use custom handler if provided, otherwise call stopAgentSession directly
     if (onStopSession) {
@@ -126,9 +126,9 @@ export function OverlayFollowUpInput({
       return
     }
 
-    // For fake "pending-*" sessions, fall back to global emergency stop
+    // For undefined or fake "pending-*" sessions, fall back to global emergency stop
     // so the kill switch always works regardless of session state
-    if (sessionId.startsWith('pending-')) {
+    if (!sessionId || sessionId.startsWith('pending-')) {
       setIsStoppingSession(true)
       try {
         await tipcClient.emergencyStopAgent()

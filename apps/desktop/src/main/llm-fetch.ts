@@ -221,17 +221,22 @@ function calculateBackoffDelay(
  * Throws an error if the emergency stop is triggered.
  */
 async function interruptibleDelay(delay: number, sessionId?: string): Promise<void> {
-  // Helper to check both global and session-specific stop flags
-  const shouldStop = () =>
-    state.shouldStopAgent ||
-    (sessionId != null && agentSessionStateManager.shouldStopSession(sessionId))
+  // Compute the stop reason once to avoid double-check races and mislabeling
+  const getStopReason = (): string | null => {
+    // Check session-specific stop first (only when session ID is known and registered)
+    if (sessionId != null && agentSessionStateManager.isSessionRegistered(sessionId) && agentSessionStateManager.shouldStopSession(sessionId)) {
+      return "Aborted by session stop"
+    }
+    if (state.shouldStopAgent) {
+      return "Aborted by emergency stop"
+    }
+    return null
+  }
 
   // Immediate check (also covers delay === 0 case semantics)
-  if (shouldStop()) {
-    const reason = sessionId != null && agentSessionStateManager.shouldStopSession(sessionId)
-      ? "Aborted by session stop"
-      : "Aborted by emergency stop"
-    throw new Error(reason)
+  const immediateReason = getStopReason()
+  if (immediateReason) {
+    throw new Error(immediateReason)
   }
 
   if (delay <= 0) {
@@ -240,10 +245,8 @@ async function interruptibleDelay(delay: number, sessionId?: string): Promise<vo
 
   const startTime = Date.now()
   while (Date.now() - startTime < delay) {
-    if (shouldStop()) {
-      const reason = sessionId != null && agentSessionStateManager.shouldStopSession(sessionId)
-        ? "Aborted by session stop"
-        : "Aborted by emergency stop"
+    const reason = getStopReason()
+    if (reason) {
       throw new Error(reason)
     }
     const remaining = delay - (Date.now() - startTime)
@@ -378,22 +381,27 @@ async function withRetry<T>(
     }
   }
 
-  while (true) {
-    // Check for emergency stop
-    if (state.shouldStopAgent) {
-      clearRetryStatus()
-      throw lastError instanceof Error
-        ? lastError
-        : new Error("Aborted by emergency stop")
-    }
-
-    // Check for session-specific stop
+  // Helper to get the stop reason string, checking session-specific stop before global
+  const getStopReason = (): string | null => {
     if (
       options.sessionId &&
+      agentSessionStateManager.isSessionRegistered(options.sessionId) &&
       agentSessionStateManager.shouldStopSession(options.sessionId)
     ) {
+      return "Session stopped by kill switch"
+    }
+    if (state.shouldStopAgent) {
+      return "Aborted by emergency stop"
+    }
+    return null
+  }
+
+  while (true) {
+    // Check for stop conditions before each attempt
+    const stopReason = getStopReason()
+    if (stopReason) {
       clearRetryStatus()
-      throw new Error("Session stopped by kill switch")
+      throw new Error(stopReason)
     }
 
     try {
@@ -408,13 +416,12 @@ async function withRetry<T>(
         clearRetryStatus()
         throw error
       }
-      if (options.sessionId && agentSessionStateManager.shouldStopSession(options.sessionId)) {
+
+      // If a stop was triggered, surface a clear stop reason instead of the underlying error
+      const catchStopReason = getStopReason()
+      if (catchStopReason) {
         clearRetryStatus()
-        throw new Error("Session stopped by kill switch")
-      }
-      if (state.shouldStopAgent) {
-        clearRetryStatus()
-        throw new Error("Aborted by emergency stop")
+        throw new Error(catchStopReason)
       }
 
       // Check if retryable

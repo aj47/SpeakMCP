@@ -1,6 +1,6 @@
 import fs from "fs"
 import path from "path"
-import { conversationsFolder } from "./config"
+import { configStore, conversationsFolder } from "./config"
 import { logApp } from "./debug"
 import {
   Conversation,
@@ -14,6 +14,14 @@ import { summarizeContent } from "./context-budget"
 const COMPACTION_MESSAGE_THRESHOLD = 20
 // Number of recent messages to keep intact after compaction
 const COMPACTION_KEEP_LAST = 10
+// Compact conversations that are large on disk even if message count is low
+const COMPACTION_BYTE_THRESHOLD = 250_000 // ~250KB
+// Storage safety caps to prevent runaway file growth from tool payloads
+const MAX_PERSISTED_MESSAGE_CONTENT_CHARS = 50_000
+const MAX_PERSISTED_TOOL_MESSAGE_CONTENT_CHARS = 20_000
+const MAX_PERSISTED_TOOL_RESULT_FIELD_CHARS = 20_000
+const MAX_INDEX_LAST_MESSAGE_CHARS = 500
+const DEFAULT_MAX_CONVERSATIONS_TO_KEEP = 100
 
 export class ConversationService {
   private static instance: ConversationService | null = null
@@ -65,6 +73,146 @@ export class ConversationService {
     return title.length < firstMessage.trim().length ? `${title}...` : title
   }
 
+  private truncateText(text: string, maxChars: number): string {
+    if (text.length <= maxChars) {
+      return text
+    }
+
+    const omitted = text.length - maxChars
+    return `${text.slice(0, maxChars)}\n\n[truncated ${omitted} characters]`
+  }
+
+  private truncateIndexText(text: string): string {
+    if (text.length <= MAX_INDEX_LAST_MESSAGE_CHARS) {
+      return text
+    }
+    return `${text.slice(0, MAX_INDEX_LAST_MESSAGE_CHARS)}...`
+  }
+
+  private sanitizeMessageForStorage(message: ConversationMessage): ConversationMessage {
+    const maxContentChars = message.role === "tool"
+      ? MAX_PERSISTED_TOOL_MESSAGE_CONTENT_CHARS
+      : MAX_PERSISTED_MESSAGE_CONTENT_CHARS
+
+    return {
+      ...message,
+      content: this.truncateText(message.content || "", maxContentChars),
+      toolResults: message.toolResults?.map((toolResult) => ({
+        ...toolResult,
+        content: this.truncateText(
+          typeof toolResult.content === "string" ? toolResult.content : JSON.stringify(toolResult.content ?? ""),
+          MAX_PERSISTED_TOOL_RESULT_FIELD_CHARS,
+        ),
+        error: toolResult.error
+          ? this.truncateText(
+              typeof toolResult.error === "string" ? toolResult.error : JSON.stringify(toolResult.error),
+              MAX_PERSISTED_TOOL_RESULT_FIELD_CHARS,
+            )
+          : undefined,
+      })),
+    }
+  }
+
+  private sanitizeConversationForStorage(conversation: Conversation): Conversation {
+    return {
+      ...conversation,
+      messages: conversation.messages.map((msg) => this.sanitizeMessageForStorage(msg)),
+    }
+  }
+
+  private estimateConversationBytes(conversation: Conversation): number {
+    try {
+      return JSON.stringify(conversation).length
+    } catch {
+      return 0
+    }
+  }
+
+  private hasOversizedMessagePayloads(conversation: Conversation): boolean {
+    return conversation.messages.some((msg) => {
+      const maxContentChars = msg.role === "tool"
+        ? MAX_PERSISTED_TOOL_MESSAGE_CONTENT_CHARS
+        : MAX_PERSISTED_MESSAGE_CONTENT_CHARS
+
+      if ((msg.content || "").length > maxContentChars) {
+        return true
+      }
+
+      if (!msg.toolResults || msg.toolResults.length === 0) {
+        return false
+      }
+
+      return msg.toolResults.some((toolResult) => {
+        const content = typeof toolResult.content === "string"
+          ? toolResult.content
+          : JSON.stringify(toolResult.content ?? "")
+        if (content.length > MAX_PERSISTED_TOOL_RESULT_FIELD_CHARS) {
+          return true
+        }
+        const error = toolResult.error
+          ? (typeof toolResult.error === "string" ? toolResult.error : JSON.stringify(toolResult.error))
+          : ""
+        return error.length > MAX_PERSISTED_TOOL_RESULT_FIELD_CHARS
+      })
+    })
+  }
+
+  private getConversationRetentionLimit(): number {
+    const configured = configStore.get().maxConversationsToKeep
+    if (typeof configured !== "number" || !Number.isFinite(configured)) {
+      return DEFAULT_MAX_CONVERSATIONS_TO_KEEP
+    }
+
+    const normalized = Math.floor(configured)
+    return normalized > 0 ? normalized : DEFAULT_MAX_CONVERSATIONS_TO_KEEP
+  }
+
+  private applyConversationRetention(index: ConversationHistoryItem[]): ConversationHistoryItem[] {
+    const maxToKeep = this.getConversationRetentionLimit()
+    if (index.length <= maxToKeep) {
+      return index
+    }
+
+    const kept = index.slice(0, maxToKeep)
+    const removed = index.slice(maxToKeep)
+
+    for (const item of removed) {
+      const conversationPath = this.getConversationPath(item.id)
+      if (!fs.existsSync(conversationPath)) {
+        continue
+      }
+      try {
+        fs.unlinkSync(conversationPath)
+      } catch (error) {
+        logApp(`[ConversationService] Failed to delete retained-overflow conversation ${item.id}:`, error)
+      }
+    }
+
+    return kept
+  }
+
+  private normalizeIndex(index: ConversationHistoryItem[]): { index: ConversationHistoryItem[]; changed: boolean } {
+    let changed = false
+
+    const normalized = index.map((item) => {
+      const normalizedLastMessage = this.truncateIndexText(item.lastMessage || "")
+      if (normalizedLastMessage !== item.lastMessage) {
+        changed = true
+      }
+      return {
+        ...item,
+        lastMessage: normalizedLastMessage,
+      }
+    })
+
+    const retained = this.applyConversationRetention(normalized)
+    if (retained.length !== normalized.length) {
+      changed = true
+    }
+
+    return { index: retained, changed }
+  }
+
   private updateConversationIndex(conversation: Conversation) {
     try {
       const indexPath = this.getConversationIndexPath()
@@ -87,12 +235,13 @@ export class ConversationService {
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
-        lastMessage: lastMessage?.content || "",
+        lastMessage: this.truncateIndexText(lastMessage?.content || ""),
         preview: this.generatePreview(conversation.messages),
       }
 
       // Add to beginning of array (most recent first)
       index.unshift(indexItem)
+      index = this.applyConversationRetention(index)
 
       // Save updated index
       fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
@@ -129,11 +278,13 @@ export class ConversationService {
       conversation.updatedAt = Date.now()
     }
 
+    const conversationToPersist = this.sanitizeConversationForStorage(conversation)
+
     // Save conversation to file
-    fs.writeFileSync(conversationPath, JSON.stringify(conversation, null, 2))
+    fs.writeFileSync(conversationPath, JSON.stringify(conversationToPersist, null, 2))
 
     // Update the index
-    this.updateConversationIndex(conversation)
+    this.updateConversationIndex(conversationToPersist)
   }
 
   async loadConversation(conversationId: string): Promise<Conversation | null> {
@@ -189,9 +340,13 @@ export class ConversationService {
       const indexData = fs.readFileSync(indexPath, "utf8")
 
       const history: ConversationHistoryItem[] = JSON.parse(indexData)
+      const { index: normalizedHistory, changed } = this.normalizeIndex(history)
+      if (changed) {
+        fs.writeFileSync(indexPath, JSON.stringify(normalizedHistory, null, 2))
+      }
 
       // Sort by updatedAt descending (most recent first)
-      const sorted = history.sort((a, b) => b.updatedAt - a.updatedAt)
+      const sorted = normalizedHistory.sort((a, b) => b.updatedAt - a.updatedAt)
       return sorted
     } catch (error) {
       logApp("[ConversationService] Error loading conversation history:", error)
@@ -334,16 +489,38 @@ export class ConversationService {
    */
   private async compactOnLoad(conversation: Conversation, sessionId?: string): Promise<Conversation> {
     const messageCount = conversation.messages.length
-    if (messageCount <= COMPACTION_MESSAGE_THRESHOLD) {
+    const estimatedBytes = this.estimateConversationBytes(conversation)
+    if (
+      messageCount <= COMPACTION_MESSAGE_THRESHOLD &&
+      estimatedBytes <= COMPACTION_BYTE_THRESHOLD &&
+      !this.hasOversizedMessagePayloads(conversation)
+    ) {
       return conversation
     }
 
     // Calculate how many messages to summarize
-    const messagesToSummarize = conversation.messages.slice(0, messageCount - COMPACTION_KEEP_LAST)
-    const messagesToKeep = conversation.messages.slice(messageCount - COMPACTION_KEEP_LAST)
+    const keepLast = estimatedBytes > COMPACTION_BYTE_THRESHOLD
+      ? Math.min(COMPACTION_KEEP_LAST, Math.max(3, Math.floor(messageCount / 2)))
+      : COMPACTION_KEEP_LAST
+    const safeKeepLast = Math.max(1, Math.min(keepLast, messageCount))
+    const messagesToSummarize = conversation.messages.slice(0, messageCount - safeKeepLast)
+    const messagesToKeep = conversation.messages.slice(messageCount - safeKeepLast)
 
     if (messagesToSummarize.length === 0) {
-      return conversation
+      if (!this.hasOversizedMessagePayloads(conversation)) {
+        return conversation
+      }
+      const sanitizedConversation: Conversation = {
+        ...conversation,
+        updatedAt: Date.now(),
+      }
+      try {
+        await this.saveConversation(sanitizedConversation, true)
+      } catch (error) {
+        logApp(`[conversationService] compactOnLoad: failed to sanitize oversized conversation ${conversation.id}:`, error)
+        return conversation
+      }
+      return this.sanitizeConversationForStorage(sanitizedConversation)
     }
 
     logApp(`[conversationService] compactOnLoad: compacting ${messagesToSummarize.length} messages for ${conversation.id}`)

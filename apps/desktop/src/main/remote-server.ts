@@ -432,6 +432,16 @@ function recordHistory(transcript: string) {
   try {
     fs.mkdirSync(recordingsFolder, { recursive: true })
     const historyPath = path.join(recordingsFolder, "history.json")
+    const cfg = configStore.get()
+    const cleanupEnabled = cfg.recordingsCleanupEnabled !== false
+    const maxItems = typeof cfg.recordingHistoryMaxItems === "number" && Number.isFinite(cfg.recordingHistoryMaxItems)
+      ? Math.max(1, Math.floor(cfg.recordingHistoryMaxItems))
+      : 2000
+    const retentionDays = typeof cfg.recordingHistoryRetentionDays === "number" && Number.isFinite(cfg.recordingHistoryRetentionDays)
+      ? Math.max(1, Math.floor(cfg.recordingHistoryRetentionDays))
+      : 90
+    const retentionCutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+
     let history: Array<{ id: string; createdAt: number; duration: number; transcript: string }>
     try {
       history = JSON.parse(fs.readFileSync(historyPath, "utf8"))
@@ -446,6 +456,23 @@ function recordHistory(transcript: string) {
       transcript,
     }
     history.push(item)
+    history.sort((a, b) => b.createdAt - a.createdAt)
+
+    // Dedupe by ID (keep latest item)
+    const deduped: Array<{ id: string; createdAt: number; duration: number; transcript: string }> = []
+    const seen = new Set<string>()
+    for (const entry of history) {
+      if (seen.has(entry.id)) continue
+      seen.add(entry.id)
+      deduped.push(entry)
+    }
+
+    if (cleanupEnabled) {
+      history = deduped.filter((entry) => entry.createdAt >= retentionCutoff).slice(0, maxItems)
+    } else {
+      history = deduped
+    }
+
     fs.writeFileSync(historyPath, JSON.stringify(history))
   } catch (e) {
     diagnosticsService.logWarning(
@@ -1597,4 +1624,3 @@ export async function printQRCodeToTerminal(urlOverride?: string): Promise<boole
   // Return the actual result from printTerminalQRCode to indicate success/failure
   return await printTerminalQRCode(serverUrl, cfg.remoteServerApiKey)
 }
-

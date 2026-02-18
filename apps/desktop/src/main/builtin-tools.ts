@@ -27,6 +27,34 @@ import path from "path"
 import type { AgentMemory } from "../shared/types"
 
 const execAsync = promisify(exec)
+const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 20_000
+const MAX_ALLOWED_TOOL_OUTPUT_CHARS = 200_000
+const DEFAULT_MAX_SKILL_INSTRUCTIONS_CHARS = 20_000
+
+function clampMaxOutputChars(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback
+  }
+  const rounded = Math.floor(value)
+  return Math.min(Math.max(rounded, 1_000), MAX_ALLOWED_TOOL_OUTPUT_CHARS)
+}
+
+function truncateToolText(
+  input: string,
+  maxChars: number,
+): { text: string; truncated: boolean; originalLength: number } {
+  const originalLength = input.length
+  if (originalLength <= maxChars) {
+    return { text: input, truncated: false, originalLength }
+  }
+
+  const omitted = originalLength - maxChars
+  return {
+    text: `${input.slice(0, maxChars)}\n\n[truncated ${omitted} characters]`,
+    truncated: true,
+    originalLength,
+  }
+}
 
 // Re-export from the dependency-free definitions module for backward compatibility
 // This breaks the circular dependency: profile-service -> builtin-tool-definitions (no cycle)
@@ -853,6 +881,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     const timeout = (typeof rawTimeout === "number" && Number.isFinite(rawTimeout) && rawTimeout >= 0) 
       ? rawTimeout 
       : 30000
+    const maxOutputChars = clampMaxOutputChars(args.maxOutputChars, DEFAULT_MAX_TOOL_OUTPUT_CHARS)
 
     // Determine the working directory
     let cwd: string | undefined
@@ -909,6 +938,8 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
 
       const { stdout, stderr } = await execAsync(command, execOptions)
+      const truncatedStdout = truncateToolText(stdout || "", maxOutputChars)
+      const truncatedStderr = truncateToolText(stderr || "", maxOutputChars)
 
       return {
         content: [
@@ -919,8 +950,12 @@ const toolHandlers: Record<string, ToolHandler> = {
               command,
               cwd: cwd || process.cwd(),
               skillName,
-              stdout: stdout || "",
-              stderr: stderr || "",
+              stdout: truncatedStdout.text,
+              stderr: truncatedStderr.text,
+              maxOutputChars,
+              stdoutOriginalLength: truncatedStdout.originalLength,
+              stderrOriginalLength: truncatedStderr.originalLength,
+              outputTruncated: truncatedStdout.truncated || truncatedStderr.truncated,
             }, null, 2),
           },
         ],
@@ -932,6 +967,8 @@ const toolHandlers: Record<string, ToolHandler> = {
       const stderr = error.stderr || ""
       const errorMessage = error.message || String(error)
       const exitCode = error.code
+      const truncatedStdout = truncateToolText(stdout, maxOutputChars)
+      const truncatedStderr = truncateToolText(stderr, maxOutputChars)
 
       return {
         content: [
@@ -944,8 +981,12 @@ const toolHandlers: Record<string, ToolHandler> = {
               skillName,
               error: errorMessage,
               exitCode,
-              stdout,
-              stderr,
+              stdout: truncatedStdout.text,
+              stderr: truncatedStderr.text,
+              maxOutputChars,
+              stdoutOriginalLength: truncatedStdout.originalLength,
+              stderrOriginalLength: truncatedStderr.originalLength,
+              outputTruncated: truncatedStdout.truncated || truncatedStderr.truncated,
             }, null, 2),
           },
         ],
@@ -1800,10 +1841,14 @@ const toolHandlers: Record<string, ToolHandler> = {
       const skillByName = allSkills.find(s => s.name.toLowerCase() === skillId.toLowerCase())
 
       if (skillByName) {
+        const truncated = truncateToolText(
+          `# ${skillByName.name}\n\n${skillByName.instructions}`,
+          DEFAULT_MAX_SKILL_INSTRUCTIONS_CHARS,
+        )
         return {
           content: [{
             type: "text",
-            text: `# ${skillByName.name}\n\n${skillByName.instructions}`,
+            text: truncated.text,
           }],
           isError: false,
         }
@@ -1821,10 +1866,15 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
     }
 
+    const truncated = truncateToolText(
+      `# ${skill.name}\n\n${skill.instructions}`,
+      DEFAULT_MAX_SKILL_INSTRUCTIONS_CHARS,
+    )
+
     return {
       content: [{
         type: "text",
-        text: `# ${skill.name}\n\n${skill.instructions}`,
+        text: truncated.text,
       }],
       isError: false,
     }

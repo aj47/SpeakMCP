@@ -83,6 +83,10 @@ const getConfig = () => {
     conversationsEnabled: true,
     maxConversationsToKeep: 100,
     autoSaveConversations: true,
+    recordingsCleanupEnabled: true,
+    recordingHistoryMaxItems: 2000,
+    recordingHistoryRetentionDays: 90,
+    recordingFileRetentionDays: 90,
     // Settings hotkey defaults
     settingsHotkeyEnabled: true,
     settingsHotkey: "ctrl-shift-s",

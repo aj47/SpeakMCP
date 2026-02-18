@@ -497,24 +497,149 @@ import { preprocessTextForTTSWithLLM } from "./tts-llm-preprocessing"
 
 const t = tipc.create()
 
+const RECORDING_FILE_EXTENSIONS = ["webm", "wav"] as const
+
+const getRecordingsHistoryPath = (): string => path.join(recordingsFolder, "history.json")
+
+const getRecordingCleanupConfig = () => {
+  const config = configStore.get()
+  const toPositiveInt = (value: unknown, fallback: number): number => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+    const normalized = Math.floor(value)
+    return normalized > 0 ? normalized : fallback
+  }
+
+  return {
+    enabled: config.recordingsCleanupEnabled !== false,
+    historyMaxItems: toPositiveInt(config.recordingHistoryMaxItems, 2000),
+    historyRetentionMs: toPositiveInt(config.recordingHistoryRetentionDays, 90) * 24 * 60 * 60 * 1000,
+    fileRetentionMs: toPositiveInt(config.recordingFileRetentionDays, 90) * 24 * 60 * 60 * 1000,
+  }
+}
+
+const isValidRecordingHistoryItem = (item: unknown): item is RecordingHistoryItem => {
+  if (typeof item !== "object" || item === null) return false
+  const entry = item as Partial<RecordingHistoryItem>
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.createdAt === "number" &&
+    typeof entry.duration === "number" &&
+    typeof entry.transcript === "string"
+  )
+}
+
+const normalizeRecordingHistory = (history: RecordingHistoryItem[]): RecordingHistoryItem[] => {
+  // Sort newest first and dedupe by ID (keep latest instance).
+  const sorted = [...history].sort((a, b) => b.createdAt - a.createdAt)
+  const seen = new Set<string>()
+  const deduped: RecordingHistoryItem[] = []
+
+  for (const item of sorted) {
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    deduped.push(item)
+  }
+
+  return deduped
+}
+
+const removeRecordingFilesById = (recordingId: string) => {
+  for (const ext of RECORDING_FILE_EXTENSIONS) {
+    const filePath = path.join(recordingsFolder, `${recordingId}.${ext}`)
+    if (!fs.existsSync(filePath)) continue
+    try {
+      fs.unlinkSync(filePath)
+    } catch {
+      // Best effort; orphan cleanup runs again during subsequent history reads/writes.
+    }
+  }
+}
+
+const cleanupRecordingFiles = (history: RecordingHistoryItem[]) => {
+  const cleanupConfig = getRecordingCleanupConfig()
+  if (!cleanupConfig.enabled) {
+    return
+  }
+
+  const now = Date.now()
+  const retentionCutoff = now - cleanupConfig.fileRetentionMs
+  const historyById = new Map(history.map((item) => [item.id, item]))
+
+  try {
+    fs.mkdirSync(recordingsFolder, { recursive: true })
+    const files = fs.readdirSync(recordingsFolder)
+    for (const fileName of files) {
+      if (fileName === "history.json") continue
+      const match = fileName.match(/^(.+)\.(webm|wav)$/)
+      if (!match) continue
+
+      const recordingId = match[1]
+      const filePath = path.join(recordingsFolder, fileName)
+      const historyItem = historyById.get(recordingId)
+
+      // Remove orphan files (no matching history entry).
+      if (!historyItem) {
+        try {
+          fs.unlinkSync(filePath)
+        } catch {
+          // Best effort
+        }
+        continue
+      }
+
+      // Remove old recording files while keeping transcript history.
+      if (historyItem.createdAt < retentionCutoff) {
+        try {
+          fs.unlinkSync(filePath)
+        } catch {
+          // Best effort
+        }
+      }
+    }
+  } catch {
+    // Best effort only
+  }
+}
+
+const reconcileRecordingHistory = (
+  inputHistory: RecordingHistoryItem[],
+  persist: boolean,
+): RecordingHistoryItem[] => {
+  let history = normalizeRecordingHistory(inputHistory)
+  const cleanupConfig = getRecordingCleanupConfig()
+
+  if (cleanupConfig.enabled) {
+    const now = Date.now()
+    const historyCutoff = now - cleanupConfig.historyRetentionMs
+    history = history.filter((item) => item.createdAt >= historyCutoff)
+    if (history.length > cleanupConfig.historyMaxItems) {
+      history = history.slice(0, cleanupConfig.historyMaxItems)
+    }
+  }
+
+  if (persist) {
+    fs.mkdirSync(recordingsFolder, { recursive: true })
+    fs.writeFileSync(getRecordingsHistoryPath(), JSON.stringify(history))
+  }
+
+  cleanupRecordingFiles(history)
+  return history
+}
+
 const getRecordingHistory = () => {
   try {
-    const history = JSON.parse(
-      fs.readFileSync(path.join(recordingsFolder, "history.json"), "utf8"),
-    ) as RecordingHistoryItem[]
-
-    // sort desc by createdAt
-    return history.sort((a, b) => b.createdAt - a.createdAt)
+    const raw = JSON.parse(
+      fs.readFileSync(getRecordingsHistoryPath(), "utf8"),
+    ) as unknown
+    const history = Array.isArray(raw) ? raw.filter(isValidRecordingHistoryItem) : []
+    return reconcileRecordingHistory(history, true)
   } catch {
     return []
   }
 }
 
 const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
-  fs.writeFileSync(
-    path.join(recordingsFolder, "history.json"),
-    JSON.stringify(history),
-  )
+  reconcileRecordingHistory(history, true)
 }
 
 /**
@@ -1879,6 +2004,8 @@ export const router = {
         })
           .catch((error) => {
             logLLM("[createMcpRecording] Agent processing error:", error)
+            // Recording file was already persisted; remove it to avoid orphan buildup
+            removeRecordingFilesById(recordingId)
           })
           .finally(() => {
             // Process queued messages after this session completes (success or error)
@@ -1932,7 +2059,7 @@ export const router = {
         (item) => item.id !== input.id,
       )
       saveRecordingsHitory(recordings)
-      fs.unlinkSync(path.join(recordingsFolder, `${input.id}.webm`))
+      removeRecordingFilesById(input.id)
     }),
 
   deleteRecordingHistory: t.procedure.action(async () => {

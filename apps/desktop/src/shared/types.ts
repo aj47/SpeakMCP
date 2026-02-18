@@ -1283,6 +1283,12 @@ export type Config = {
   maxConversationsToKeep?: number
   autoSaveConversations?: boolean
 
+  // Recording Storage Cleanup Configuration
+  recordingsCleanupEnabled?: boolean
+  recordingHistoryMaxItems?: number
+  recordingHistoryRetentionDays?: number
+  recordingFileRetentionDays?: number
+
   // Provider Section Collapse Configuration
   providerSectionCollapsedOpenai?: boolean
   providerSectionCollapsedGroq?: boolean

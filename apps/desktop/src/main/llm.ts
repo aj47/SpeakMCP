@@ -498,16 +498,21 @@ export async function processTranscriptWithAgentMode(
     }
 
     try {
-      // Convert toolResults from MCPToolResult format to stored format
-      const convertedToolResults = toolResults?.map(tr => ({
-        success: !tr.isError,
-        content: Array.isArray(tr.content)
-          ? tr.content.map(c => c.text).join("\n")
-          : String(tr.content || ""),
-        error: tr.isError
-          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
-          : undefined
-      }))
+      // Avoid persisting duplicate payloads for tool messages.
+      // Tool message content already contains the rendered result text.
+      // Persisting full toolResults again can double disk usage for large outputs.
+      const shouldPersistToolResults = role !== "tool"
+      const convertedToolResults = shouldPersistToolResults
+        ? toolResults?.map(tr => ({
+            success: !tr.isError,
+            content: Array.isArray(tr.content)
+              ? tr.content.map(c => c.text).join("\n")
+              : String(tr.content || ""),
+            error: tr.isError
+              ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
+              : undefined
+          }))
+        : undefined
 
       await conversationService.addMessageToConversation(
         currentConversationId,

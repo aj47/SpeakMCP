@@ -288,20 +288,20 @@ export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
 
 // Minimum height for waveform panel:
 // - Drag bar: 24px
-// - Waveform: 24px
+// - Waveform: 64px (h-16)
 // - Submit button + hint: 36px
 // - Padding: ~26px
-// Total: ~110px
-export const WAVEFORM_MIN_HEIGHT = 110
+// Total: ~150px
+export const WAVEFORM_MIN_HEIGHT = 150
 
 // Minimum height for waveform panel with transcription preview:
 // - Drag bar: 24px
-// - Waveform (shrunk): 12px
+// - Waveform (shrunk): 40px (h-10)
 // - Preview text: ~32px (2 lines)
 // - Submit button + hint: 36px
-// - Padding/margins: ~26px
-// Total: ~150px
-export const WAVEFORM_WITH_PREVIEW_HEIGHT = 150
+// - Padding/margins: ~28px
+// Total: ~160px
+export const WAVEFORM_WITH_PREVIEW_HEIGHT = 160
 
 // Minimum height for text input panel:
 // - Hint text row: ~20px

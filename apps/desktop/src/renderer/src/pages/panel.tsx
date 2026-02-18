@@ -20,8 +20,8 @@ import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
 const VISUALIZER_BUFFER_LENGTH = 70
-const WAVEFORM_MIN_HEIGHT = 110
-const WAVEFORM_WITH_PREVIEW_HEIGHT = 150
+const WAVEFORM_MIN_HEIGHT = 150
+const WAVEFORM_WITH_PREVIEW_HEIGHT = 160
 const TEXT_INPUT_MIN_HEIGHT = 160
 const PROGRESS_MIN_HEIGHT = 200
 
@@ -963,17 +963,17 @@ export function Component() {
                       <span className="font-medium truncate max-w-[200px]">{continueConversationTitle}</span>
                     </div>
                   )}
-                  {/* Waveform - shrinks when preview text is showing */}
+                  {/* Waveform - shrinks slightly when preview text is showing */}
                   <div
                     className={cn(
                       "flex items-center justify-center transition-all duration-300 px-4 pointer-events-none",
-                      isPreviewEnabled && previewText ? "h-3" : "h-6",
+                      isPreviewEnabled && previewText ? "h-10" : "h-16",
                       "opacity-100",
                     )}
                   >
                     <div className={cn(
                       "flex items-center gap-0.5",
-                      isPreviewEnabled && previewText ? "h-3" : "h-6",
+                      isPreviewEnabled && previewText ? "h-10" : "h-16",
                     )}>
                       {visualizerData
                         .slice()

@@ -28,6 +28,8 @@ export class ConversationService {
   private indexWriteTimer: ReturnType<typeof setTimeout> | null = null
   // Promise that resolves when the current index write completes (for flush)
   private indexWritePromise: Promise<void> | null = null
+  // Queue that serializes index cache mutations to prevent lost updates under concurrent saves.
+  private indexMutationQueue: Promise<void> = Promise.resolve()
 
   static getInstance(): ConversationService {
     if (!ConversationService.instance) {
@@ -86,12 +88,22 @@ export class ConversationService {
     try {
       const indexPath = this.getConversationIndexPath()
       const data = await fsPromises.readFile(indexPath, "utf8")
-      this.indexCache = JSON.parse(data)
+      const parsed = JSON.parse(data)
+      this.indexCache = Array.isArray(parsed) ? parsed : []
     } catch {
       // File doesn't exist or is corrupted — start fresh
       this.indexCache = []
     }
     return this.indexCache!
+  }
+
+  /**
+   * Serialize index-cache mutations so async saves cannot clobber each other.
+   */
+  private enqueueIndexMutation<T>(mutation: () => Promise<T>): Promise<T> {
+    const run = this.indexMutationQueue.then(mutation)
+    this.indexMutationQueue = run.then(() => undefined, () => undefined)
+    return run
   }
 
   /**
@@ -101,36 +113,38 @@ export class ConversationService {
    * collapse into a single I/O operation.
    */
   private async updateConversationIndex(conversation: Conversation): Promise<void> {
-    try {
-      let index = await this.ensureIndexLoaded()
+    await this.enqueueIndexMutation(async () => {
+      try {
+        let index = await this.ensureIndexLoaded()
 
-      // Remove existing entry if it exists
-      index = index.filter((item) => item.id !== conversation.id)
+        // Remove existing entry if it exists
+        index = index.filter((item) => item.id !== conversation.id)
 
-      // Create new index entry
-      const lastMessage =
-        conversation.messages[conversation.messages.length - 1]
-      const indexItem: ConversationHistoryItem = {
-        id: conversation.id,
-        title: conversation.title,
-        createdAt: conversation.createdAt,
-        updatedAt: conversation.updatedAt,
-        messageCount: conversation.messages.length,
-        lastMessage: lastMessage?.content || "",
-        preview: this.generatePreview(conversation.messages),
+        // Create new index entry
+        const lastMessage =
+          conversation.messages[conversation.messages.length - 1]
+        const indexItem: ConversationHistoryItem = {
+          id: conversation.id,
+          title: conversation.title,
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          messageCount: conversation.messages.length,
+          lastMessage: lastMessage?.content || "",
+          preview: this.generatePreview(conversation.messages),
+        }
+
+        // Add to beginning of array (most recent first)
+        index.unshift(indexItem)
+
+        // Update in-memory cache immediately
+        this.indexCache = index
+
+        // Schedule debounced disk write
+        this.scheduleDiskWrite()
+      } catch (error) {
+        logApp("[ConversationService] Error updating conversation index:", error)
       }
-
-      // Add to beginning of array (most recent first)
-      index.unshift(indexItem)
-
-      // Update in-memory cache immediately
-      this.indexCache = index
-
-      // Schedule debounced disk write
-      this.scheduleDiskWrite()
-    } catch (error) {
-      logApp("[ConversationService] Error updating conversation index:", error)
-    }
+    })
   }
 
   /**
@@ -278,13 +292,15 @@ export class ConversationService {
       // File may not exist — ignore
     }
 
-    // Update in-memory index cache
-    let index = await this.ensureIndexLoaded()
-    index = index.filter((item) => item.id !== conversationId)
-    this.indexCache = index
+    await this.enqueueIndexMutation(async () => {
+      // Update in-memory index cache
+      let index = await this.ensureIndexLoaded()
+      index = index.filter((item) => item.id !== conversationId)
+      this.indexCache = index
 
-    // Flush to disk immediately for deletes (important for consistency)
-    await this.flushIndexWrite()
+      // Flush to disk immediately for deletes (important for consistency)
+      await this.flushIndexWrite()
+    })
   }
 
   async createConversation(
@@ -508,16 +524,18 @@ export class ConversationService {
   }
 
   async deleteAllConversations(): Promise<void> {
-    // Ensure pending/in-flight index writes are settled before deleting files.
-    await this.flushIndexWrite()
+    await this.enqueueIndexMutation(async () => {
+      // Ensure pending/in-flight index writes are settled before deleting files.
+      await this.flushIndexWrite()
 
-    if (fs.existsSync(conversationsFolder)) {
-      fs.rmSync(conversationsFolder, { recursive: true, force: true })
-    }
-    this.ensureConversationsFolder()
+      if (fs.existsSync(conversationsFolder)) {
+        fs.rmSync(conversationsFolder, { recursive: true, force: true })
+      }
+      this.ensureConversationsFolder()
 
-    // Clear the in-memory cache
-    this.indexCache = []
+      // Clear the in-memory cache
+      this.indexCache = []
+    })
   }
 }
 

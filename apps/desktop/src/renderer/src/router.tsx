@@ -67,6 +67,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
           lazy: () => import("./pages/settings-external-agents"),
         },
         {
+          path: "settings/loops",
+          lazy: () => import("./pages/settings-loops"),
+        },
+        {
           path: "settings/agent-profiles",
           loader: () => redirect("/settings/agent-personas"),
         },

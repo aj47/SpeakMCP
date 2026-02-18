@@ -30,6 +30,7 @@ import {
   checkCloudflaredInstalled,
 } from "./cloudflare-tunnel"
 import { initModelsDevService } from "./models-dev-service"
+import { loopService } from "./loop-service"
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -147,6 +148,14 @@ app.whenReady().then(() => {
       )
       logApp("Failed to initialize MCP service on startup:", error)
     })
+
+  // Start all enabled agent loops
+  try {
+    loopService.startAllLoops()
+    logApp("Agent loops started")
+  } catch (error) {
+    logApp("Failed to start agent loops:", error)
+  }
 
   // Initialize models.dev service (fetches model metadata in background)
   initModelsDevService()
@@ -294,6 +303,7 @@ app.whenReady().then(() => {
 
   app.on("before-quit", async (event) => {
     makePanelWindowClosable()
+    loopService.stopAllLoops()
 
     // Shutdown ACP agents gracefully
     acpService.shutdown().catch((error) => {

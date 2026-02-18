@@ -79,6 +79,11 @@ export const Component = () => {
       href: "/settings/external-agents",
       icon: "i-mingcute-robot-line",
     },
+    {
+      text: "Loops",
+      href: "/settings/loops",
+      icon: "i-mingcute-refresh-3-line",
+    },
   ]
 
   // Route aliases that should highlight the same nav item

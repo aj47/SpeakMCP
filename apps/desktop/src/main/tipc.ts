@@ -71,6 +71,7 @@ import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
 import { fetchModelsDevData, getModelFromModelsDevByProviderId, findBestModelMatch, refreshModelsDevCache } from "./models-dev-service"
 import * as parakeetStt from "./parakeet-stt"
+import { loopService } from "./loop-service"
 
 /**
  * Convert Float32Array audio samples to WAV format buffer
@@ -415,13 +416,14 @@ async function processWithAgentMode(
       logLLM(`[tipc.ts processWithAgentMode] No conversationId provided, starting fresh conversation`)
     }
 
-    // Focus this session in the panel window so it's immediately visible
-    // Note: Initial progress will be emitted by processTranscriptWithAgentMode
-    // to avoid duplicate user messages in the conversation history
-    try {
-      getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
-    } catch (e) {
-      logApp("[tipc] Failed to focus new agent session:", e)
+    // Focus interactive sessions in the panel window.
+    // Background/snoozed sessions (e.g. scheduled loops) should not steal focus.
+    if (!startSnoozed) {
+      try {
+        getWindowRendererHandlers("panel")?.focusAgentSession.send(sessionId)
+      } catch (e) {
+        logApp("[tipc] Failed to focus new agent session:", e)
+      }
     }
 
     const agentResult = await processTranscriptWithAgentMode(
@@ -472,6 +474,14 @@ async function processWithAgentMode(
   } finally {
 
   }
+}
+
+export async function runAgentLoopSession(
+  text: string,
+  conversationId: string,
+  existingSessionId: string
+): Promise<string> {
+  return processWithAgentMode(text, conversationId, existingSessionId, true)
 }
 import { diagnosticsService } from "./diagnostics"
 import { memoryService } from "./memory-service"
@@ -3996,6 +4006,39 @@ export const router = {
     .action(async ({ input }) => {
       return summarizationService.getImportantSummaries(input.sessionId)
     }),
+
+  // Agent Loops handlers
+  getLoopStatuses: t.procedure.action(async () => {
+    return loopService.getLoopStatuses()
+  }),
+
+  startLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: loopService.startLoop(input.loopId) }
+    }),
+
+  stopLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: loopService.stopLoop(input.loopId) }
+    }),
+
+  triggerLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: await loopService.triggerLoop(input.loopId) }
+    }),
+
+  startAllLoops: t.procedure.action(async () => {
+    loopService.startAllLoops()
+    return { success: true }
+  }),
+
+  stopAllLoops: t.procedure.action(async () => {
+    loopService.stopAllLoops()
+    return { success: true }
+  }),
 }
 
 // TTS Provider Implementation Functions

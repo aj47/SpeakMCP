@@ -183,10 +183,11 @@ export const Component = () => {
           </div>
         )}
 
-        {/* Settings Section - Collapsible, collapsed by default */}
-        <div className={cn("shrink-0", isCollapsed ? "px-1" : "px-2")}>
-          {isCollapsed ? (
-            /* Collapsed: Show all settings icons for quick navigation */
+        {/* Scrollable area: Settings + Sessions scroll together */}
+        {isCollapsed ? (
+          /* Collapsed: Show settings icons then sessions icon */
+          <div className={cn("px-1")}>
+            {/* Settings Section - Collapsed: Show all settings icons for quick navigation */}
             <div className="grid gap-1">
               {settingsNavLinks.map((link) => {
                 const isActive = isNavLinkActive(link.href)
@@ -209,9 +210,12 @@ export const Component = () => {
                 )
               })}
             </div>
-          ) : (
-            /* Expanded: Show full settings menu */
-            <>
+          </div>
+        ) : (
+          /* Expanded: Settings and Sessions share one scrollable container */
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-none">
+            {/* Settings Section - Collapsible, collapsed by default */}
+            <div className="px-2">
               <button
                 onClick={() => setSettingsExpanded(!settingsExpanded)}
                 className={cn(
@@ -232,13 +236,9 @@ export const Component = () => {
                   {settingsNavLinks.map(renderNavLink)}
                 </div>
               )}
-            </>
-          )}
-        </div>
+            </div>
 
-        {/* Sessions Section - shows sessions list, scrollable to bottom */}
-        {!isCollapsed && (
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-none">
+            {/* Sessions Section - shows sessions list */}
             <ActiveAgentsSidebar />
           </div>
         )}

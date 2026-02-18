@@ -35,7 +35,10 @@ vi.mock('./state', () => ({
     agentIterationCount: 0,
   },
   agentSessionStateManager: {
+    isSessionRegistered: () => false,
     shouldStopSession: () => false,
+    registerAbortController: vi.fn(),
+    unregisterAbortController: vi.fn(),
   },
   llmRequestAbortManager: {
     register: vi.fn(),
@@ -537,6 +540,115 @@ describe('LLM Fetch with AI SDK', () => {
 
     expect(callCount).toBe(2)
     expect(result.content).toBe('Success after rate limit retry')
+  })
+
+  it('should not retry and throw "Session stopped by kill switch" when session stopped after API failure', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    const { agentSessionStateManager } = await import('./state')
+
+    // Start with session not stopped; flip to stopped after first API call fails
+    let sessionStopped = false
+    const isRegisteredSpy = vi.spyOn(agentSessionStateManager, 'isSessionRegistered')
+      .mockReturnValue(true)
+    const shouldStopSpy = vi.spyOn(agentSessionStateManager, 'shouldStopSession')
+      .mockImplementation(() => sessionStopped)
+
+    let callCount = 0
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      sessionStopped = true // mark stopped so the catch block skips retry
+      return Promise.reject(new Error('503 Service Unavailable'))
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch(
+        [{ role: 'user', content: 'test' }],
+        'openai',
+        undefined,
+        'test-session-id'
+      )
+    ).rejects.toThrow('Session stopped by kill switch')
+
+    // Should be called exactly once (no retry attempted because session was stopped)
+    expect(callCount).toBe(1)
+
+    isRegisteredSpy.mockRestore()
+    shouldStopSpy.mockRestore()
+  })
+
+  it('should throw "Session stopped by kill switch" (not API error) when stopped mid-retry', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    const { agentSessionStateManager } = await import('./state')
+
+    const isRegisteredSpy = vi.spyOn(agentSessionStateManager, 'isSessionRegistered')
+      .mockReturnValue(true)
+    const shouldStopSpy = vi.spyOn(agentSessionStateManager, 'shouldStopSession')
+      .mockReturnValue(true)
+
+    const apiError = new Error('503 Service Unavailable')
+    generateTextMock.mockRejectedValue(apiError)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    await expect(
+      makeLLMCallWithFetch(
+        [{ role: 'user', content: 'test' }],
+        'openai',
+        undefined,
+        'test-session-id'
+      )
+    ).rejects.toThrow('Session stopped by kill switch')
+
+    // withRetry checks session stop at the top of each loop iteration,
+    // so when session is already stopped, the API is never even called.
+    expect(generateTextMock).toHaveBeenCalledTimes(0)
+
+    isRegisteredSpy.mockRestore()
+    shouldStopSpy.mockRestore()
+  })
+
+  it('should interrupt backoff delay and throw "Session stopped by kill switch" when session stopped during wait', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+    const { agentSessionStateManager } = await import('./state')
+
+    // Session stop is triggered after the first API failure, during backoff wait
+    let sessionStopped = false
+    const isRegisteredSpy = vi.spyOn(agentSessionStateManager, 'isSessionRegistered')
+      .mockReturnValue(true)
+    const shouldStopSpy = vi.spyOn(agentSessionStateManager, 'shouldStopSession')
+      .mockImplementation(() => sessionStopped)
+
+    let callCount = 0
+    generateTextMock.mockImplementation(() => {
+      callCount++
+      // Trigger session stop after the first failure so interruptibleDelay sees it
+      setTimeout(() => { sessionStopped = true }, 50)
+      return Promise.reject(new Error('503 Service Unavailable'))
+    })
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    // The call should reject with a session-stop error, not the API error,
+    // even though the stop was triggered during the backoff delay
+    await expect(
+      makeLLMCallWithFetch(
+        [{ role: 'user', content: 'test' }],
+        'openai',
+        undefined,
+        'test-session-id'
+      )
+    ).rejects.toThrow('Session stopped by kill switch')
+
+    // Only one API call should have been made (backoff was interrupted before retry)
+    expect(callCount).toBe(1)
+
+    isRegisteredSpy.mockRestore()
+    shouldStopSpy.mockRestore()
   })
 })
 

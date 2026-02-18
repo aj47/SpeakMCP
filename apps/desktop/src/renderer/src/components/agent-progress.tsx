@@ -1518,16 +1518,23 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     })
   }
 
-  // Kill switch handler - stop only this session
+  // Kill switch handler - stop only this session, with fallback to global emergency stop
   const handleKillSwitch = async () => {
-    if (isKilling || !progress?.sessionId) return // Prevent double-clicks
+    if (isKilling) return // Prevent double-clicks
 
     setIsKilling(true)
     try {
-      await tipcClient.stopAgentSession({ sessionId: progress.sessionId })
+      if (progress?.sessionId) {
+        await tipcClient.stopAgentSession({ sessionId: progress.sessionId })
+      } else {
+        // No session ID available, fall back to global emergency stop
+        // so the kill switch always works regardless of state
+        await tipcClient.emergencyStopAgent()
+      }
       setShowKillConfirmation(false)
     } catch (error) {
-      console.error("Failed to stop agent session:", error)
+      const stopPath = progress?.sessionId ? "stopAgentSession" : "emergencyStopAgent"
+      console.error(`Failed to stop agent (via ${stopPath}):`, error)
     } finally {
       setIsKilling(false)
     }

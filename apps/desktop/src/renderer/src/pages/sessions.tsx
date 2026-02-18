@@ -289,10 +289,14 @@ export function Component() {
   useEffect(() => {
     if (!pendingConversationId) return
 
-    // Check if any real session exists for this conversationId
+    // Check if any active (non-complete) real session exists for this conversationId.
+    // Completed sessions should not dismiss the pending tile because we want to
+    // reload completed history from disk for freshness and remote-sync correctness.
     const hasRealSession = Array.from(agentProgressById.entries()).some(
       ([sessionId, progress]) =>
-        !sessionId.startsWith("pending-") && progress?.conversationId === pendingConversationId
+        !sessionId.startsWith("pending-") &&
+        progress?.conversationId === pendingConversationId &&
+        !progress?.isComplete
     )
 
     if (hasRealSession) {

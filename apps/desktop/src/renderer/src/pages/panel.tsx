@@ -25,6 +25,9 @@ const MAX_VISUALIZER_BAR_COUNT = 240
 const WAVEFORM_BAR_WIDTH_PX = 2
 const WAVEFORM_BAR_GAP_PX = 2
 const WAVEFORM_HORIZONTAL_PADDING_PX = 16
+const MIN_WAVEFORM_WIDTH =
+  DEFAULT_VISUALIZER_BAR_COUNT * (WAVEFORM_BAR_WIDTH_PX + WAVEFORM_BAR_GAP_PX) +
+  WAVEFORM_HORIZONTAL_PADDING_PX * 2
 const WAVEFORM_MIN_HEIGHT = 150
 const WAVEFORM_WITH_PREVIEW_HEIGHT = 160
 const TEXT_INPUT_MIN_HEIGHT = 160
@@ -402,12 +405,27 @@ export function Component() {
       tipcClient.recordEvent({ type: "end" })
 
       if (!isConfirmedRef.current) {
+        // Clear context from aborted runs so follow-up recordings start clean.
+        mcpConversationIdRef.current = undefined
+        mcpSessionIdRef.current = undefined
+        fromTileRef.current = false
+        setMcpMode(false)
+        mcpModeRef.current = false
+        setFromButtonClick(false)
+        setContinueConversationTitle(null)
         return
       }
 
       // Check if blob is empty - silently ignore (likely accidental press)
       if (blob.size === 0) {
         console.warn("[Panel] Recording blob is empty, ignoring (likely accidental press)")
+        mcpConversationIdRef.current = undefined
+        mcpSessionIdRef.current = undefined
+        fromTileRef.current = false
+        setMcpMode(false)
+        mcpModeRef.current = false
+        setFromButtonClick(false)
+        setContinueConversationTitle(null)
         tipcClient.hidePanelWindow({})
         return
       }
@@ -415,6 +433,13 @@ export function Component() {
       // Check minimum duration (at least 100ms) - silently ignore (likely accidental press)
       if (duration < 100) {
         console.warn("[Panel] Recording duration too short:", duration, "ms - ignoring (likely accidental press)")
+        mcpConversationIdRef.current = undefined
+        mcpSessionIdRef.current = undefined
+        fromTileRef.current = false
+        setMcpMode(false)
+        mcpModeRef.current = false
+        setFromButtonClick(false)
+        setContinueConversationTitle(null)
         tipcClient.hidePanelWindow({})
         return
       }
@@ -428,6 +453,10 @@ export function Component() {
           duration,
         })
       } else {
+        // Ensure MCP context does not leak into future MCP submissions.
+        mcpConversationIdRef.current = undefined
+        mcpSessionIdRef.current = undefined
+        fromTileRef.current = false
         transcribeMutation.mutate({
           blob,
           duration,
@@ -762,6 +791,7 @@ export function Component() {
         // Store the conversationId and sessionId for use when recording ends
         mcpConversationIdRef.current = data?.conversationId
         mcpSessionIdRef.current = data?.sessionId
+        fromTileRef.current = data?.fromTile ?? false
         // Track if recording was triggered via UI button click vs keyboard shortcut
         setFromButtonClick(data?.fromButtonClick ?? false)
         setContinueConversationTitle(null)
@@ -772,6 +802,10 @@ export function Component() {
         tipcClient.clearTextInputState({})
         setMcpMode(true)
         mcpModeRef.current = true
+        // Set recording state immediately to avoid stale progress flashing before mic init.
+        setRecording(true)
+        recordingRef.current = true
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
@@ -990,7 +1024,7 @@ export function Component() {
   return (
     <PanelResizeWrapper
       enableResize={true}
-      minWidth={200}
+      minWidth={MIN_WAVEFORM_WIDTH}
       minHeight={minHeight}
       className={cn(
         "floating-panel modern-text-strong flex h-screen flex-col text-foreground",

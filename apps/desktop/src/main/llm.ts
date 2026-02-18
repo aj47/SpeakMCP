@@ -934,9 +934,24 @@ export async function processTranscriptWithAgentMode(
       relevantMemories, // memories from previous sessions
     )
 
+    // Build message list including finalContent so the LLM has full context.
+    // currentFinalContent is not yet in conversationHistory (added after this call),
+    // so we must inject it manually to prevent the summary LLM from generating
+    // a generic sign-off ("Looks like you're all set!") instead of the actual answer.
+    const historyMessages = mapConversationToMessages(false)
+    if (currentFinalContent.trim().length > 0) {
+      const lastMsg = historyMessages[historyMessages.length - 1]
+      if (!lastMsg || lastMsg.role !== "assistant" || lastMsg.content.trim() !== currentFinalContent.trim()) {
+        historyMessages.push({ role: "assistant" as const, content: currentFinalContent })
+      }
+    }
+    // Ensure the messages end with a user prompt (API requirement)
+    if (historyMessages.length === 0 || historyMessages[historyMessages.length - 1].role === "assistant") {
+      historyMessages.push({ role: "user" as const, content: "Please provide a brief summary of what was accomplished." })
+    }
     const postVerifySummaryMessages = [
       { role: "system" as const, content: postVerifySystemPrompt },
-      ...mapConversationToMessages(true),
+      ...historyMessages,
     ]
 
     const { messages: shrunkMessages, estTokensAfter: verifyEstTokens, maxTokens: verifyMaxTokens } = await shrinkMessagesForLLM({
@@ -995,11 +1010,11 @@ export async function processTranscriptWithAgentMode(
         `You are a completion verifier. Determine if the user's original request has been FULLY DELIVERED to the user.
 
 FIRST, CHECK THESE BLOCKERS (if ANY are true, mark INCOMPLETE):
-- The agent stated intent to do more work (e.g., "Let me...", "I'll...", "Now I'll...", "I'm going to...")
-- The agent's response is a status update rather than a deliverable (e.g., "I've extracted the data" without presenting results)
+- The agent stated intent to do more work WITHOUT actually delivering the content (e.g., "Let me research this..." followed by nothing, "I'll do that now" with no result). NOTE: introductory phrases like "I'll organize this as..." or "Here's what I'll present:" that are immediately followed by the actual answer are NOT blockers.
+- The agent's response is ONLY a status update with no deliverable (e.g., "I've extracted the data" without presenting the actual data)
 - The user asked for information/analysis that was NOT directly provided in the agent's response
 - Tool results exist but the agent hasn't synthesized/presented them to the user
-- The response is empty or just acknowledges the request
+- The response is empty or just acknowledges the request without providing content
 
 ONLY IF NO BLOCKERS, mark COMPLETE if:
 1. The agent directly answered the user's question or fulfilled their request

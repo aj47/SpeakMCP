@@ -414,6 +414,11 @@ async function withRetry<T>(
       // Don't retry aborts or stopped sessions
       if ((error as any)?.name === "AbortError") {
         clearRetryStatus()
+        // Check if the abort was caused by the kill switch — if so, surface the cleaner stop reason
+        const abortStopReason = getStopReason()
+        if (abortStopReason) {
+          throw new Error(abortStopReason)
+        }
         throw error
       }
 

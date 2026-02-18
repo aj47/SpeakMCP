@@ -41,6 +41,7 @@ export default function SessionListScreen({ navigation }: Props) {
   const rfSrSubsRef = useRef<any[]>([]);
   const rfGrantTimeRef = useRef(0);
   const rfUserReleasedRef = useRef(false);
+  const rfWebRecRef = useRef<any>(null);
   const rfMinHoldMs = 200;
   const sessionStoreRef = useRef<SessionStore | null>(null);
   const rfStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -140,6 +141,45 @@ export default function SessionListScreen({ navigation }: Props) {
           return;
         }
       }
+      // Web fallback – use Web Speech API
+      if (Platform.OS === 'web') {
+        const SRClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SRClass) {
+          const rec = new SRClass();
+          rec.lang = 'en-US';
+          rec.interimResults = true;
+          rec.continuous = true;
+          rec.onresult = (ev: any) => {
+            let interim = '';
+            let finalText = '';
+            for (let i = ev.resultIndex; i < ev.results.length; i++) {
+              const res = ev.results[i];
+              const txt = res[0]?.transcript || '';
+              if (res.isFinal) finalText += txt;
+              else interim += txt;
+            }
+            if (interim) { rfLiveRef.current = interim; setRfTranscript(interim); }
+            if (finalText) {
+              rfFinalRef.current = rfFinalRef.current ? `${rfFinalRef.current} ${finalText}` : finalText;
+            }
+          };
+          rec.onerror = (ev: any) => {
+            console.error('[RapidFire] Web SR error:', ev?.error || ev);
+            rfSetTransientStatus('error');
+          };
+          rec.onend = () => {
+            // If user hasn't released, SR ended spuriously – try to restart
+            if (!rfUserReleasedRef.current && !rfStoppingRef.current && rfWebRecRef.current) {
+              try { rfWebRecRef.current.start(); return; } catch {}
+            }
+            rfSetListening(false);
+          };
+          rfWebRecRef.current = rec;
+          rec.start();
+          rfStartingRef.current = false;
+          return;
+        }
+      }
     } catch (err) {
       console.warn('[RapidFire] SR unavailable:', (err as any)?.message || err);
       rfSetTransientStatus('unavailable', 4000);
@@ -156,6 +196,10 @@ export default function SessionListScreen({ navigation }: Props) {
       if (Platform.OS !== 'web') {
         const SR: any = await import('expo-speech-recognition');
         if (SR?.ExpoSpeechRecognitionModule?.stop) SR.ExpoSpeechRecognitionModule.stop();
+      }
+      if (Platform.OS === 'web' && rfWebRecRef.current) {
+        try { rfWebRecRef.current.stop(); } catch {}
+        rfWebRecRef.current = null;
       }
     } catch {}
     rfCleanupSubs();
@@ -190,6 +234,10 @@ export default function SessionListScreen({ navigation }: Props) {
   useLayoutEffect(() => {
     return () => {
       rfCleanupSubs();
+      if (rfWebRecRef.current) {
+        try { rfWebRecRef.current.stop(); } catch {}
+        rfWebRecRef.current = null;
+      }
       if (rfStatusTimeoutRef.current) {
         clearTimeout(rfStatusTimeoutRef.current);
       }
@@ -348,6 +396,8 @@ export default function SessionListScreen({ navigation }: Props) {
         style={[styles.sessionItem, isActive && styles.sessionItemActive]}
         onPress={() => handleSelectSession(item.id)}
         onLongPress={() => handleDeleteSession(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title}, ${item.messageCount} message${item.messageCount !== 1 ? 's' : ''}`}
       >
         <View style={styles.sessionHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
@@ -399,7 +449,7 @@ export default function SessionListScreen({ navigation }: Props) {
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.newButton} onPress={handleCreateSession}>
+        <TouchableOpacity style={styles.newButton} onPress={handleCreateSession} accessibilityRole="button" accessibilityLabel="New Chat">
           <Text style={styles.newButtonText}>+ New Chat</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -411,7 +461,7 @@ export default function SessionListScreen({ navigation }: Props) {
             />
           )}
           {sessions.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={handleClearAll}>
+            <TouchableOpacity style={styles.clearButton} onPress={handleClearAll} accessibilityRole="button" accessibilityLabel="Clear All">
               <Text style={styles.clearButtonText}>Clear All</Text>
             </TouchableOpacity>
           )}
@@ -435,6 +485,8 @@ export default function SessionListScreen({ navigation }: Props) {
           {rfHintText}
         </Text>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={rfListening ? 'Release to send' : 'Hold to talk, Rapid Fire'}
           style={({ pressed }) => [
             styles.rfButton,
             rfListening && styles.rfButtonOn,

@@ -638,6 +638,8 @@ export default function SettingsScreen({ navigation }: any) {
           style={[styles.primaryButton, isCheckingConnection && styles.primaryButtonDisabled]}
           onPress={onSave}
           disabled={isCheckingConnection}
+          accessibilityRole="button"
+          accessibilityLabel={isCheckingConnection ? 'Checking connection' : 'Connect'}
         >
           {isCheckingConnection ? (
             <View style={styles.loadingContainer}>
@@ -672,7 +674,7 @@ export default function SettingsScreen({ navigation }: any) {
 
         <Text style={styles.sectionTitle}>API Configuration</Text>
 
-        <TouchableOpacity style={styles.scanButton} onPress={handleScanQR}>
+        <TouchableOpacity style={styles.scanButton} onPress={handleScanQR} accessibilityRole="button" accessibilityLabel="Scan QR Code">
           <Text style={styles.scanButtonText}>📷 Scan QR Code</Text>
         </TouchableOpacity>
 
@@ -773,7 +775,7 @@ export default function SettingsScreen({ navigation }: any) {
             {remoteError && (
               <View style={styles.warningContainer}>
                 <Text style={styles.warningText}>⚠️ {remoteError}</Text>
-                <TouchableOpacity onPress={fetchRemoteSettings}>
+                <TouchableOpacity onPress={fetchRemoteSettings} accessibilityRole="button" accessibilityLabel="Retry">
                   <Text style={styles.retryText}>Retry</Text>
                 </TouchableOpacity>
               </View>

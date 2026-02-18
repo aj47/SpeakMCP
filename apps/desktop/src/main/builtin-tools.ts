@@ -44,8 +44,37 @@ import { BUILTIN_SERVER_NAME, builtinToolDefinitions } from "./builtin-tool-defi
 // Tool execution handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>
 
+const isValidInternalLoop = (value: unknown): value is InternalLoop => {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const loop = value as Partial<InternalLoop>
+
+  return (
+    typeof loop.id === "string"
+    && loop.id.trim() !== ""
+    && typeof loop.name === "string"
+    && loop.name.trim() !== ""
+    && typeof loop.prompt === "string"
+    && loop.prompt.trim() !== ""
+    && typeof loop.intervalMinutes === "number"
+    && Number.isInteger(loop.intervalMinutes)
+    && loop.intervalMinutes > 0
+    && typeof loop.enabled === "boolean"
+    && typeof loop.createdAt === "number"
+    && Number.isFinite(loop.createdAt)
+    && typeof loop.updatedAt === "number"
+    && Number.isFinite(loop.updatedAt)
+  )
+}
+
 const getInternalLoops = (config: ReturnType<typeof configStore.get>): InternalLoop[] => {
-  return Array.isArray(config.internalLoops) ? config.internalLoops : []
+  if (!Array.isArray(config.internalLoops)) {
+    return []
+  }
+
+  return config.internalLoops.filter(isValidInternalLoop)
 }
 
 const toolHandlers: Record<string, ToolHandler> = {

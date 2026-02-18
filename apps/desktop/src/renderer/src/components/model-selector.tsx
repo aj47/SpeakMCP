@@ -267,8 +267,6 @@ export function ModelSelector({
             </div>
           }
         >
-          {/* Scrollable content area with fixed height */}
-          <div className="max-h-[300px] min-h-[200px] overflow-y-auto">
             {isLoading && (
               <div className="flex items-center justify-center py-8">
                 <span className="text-sm text-muted-foreground">
@@ -315,7 +313,6 @@ export function ModelSelector({
                 </div>
               </SelectItem>
             ))}
-          </div>
         </SelectContent>
       </Select>
       )}

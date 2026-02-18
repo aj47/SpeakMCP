@@ -43,6 +43,10 @@ import { BUILTIN_SERVER_NAME, builtinToolDefinitions } from "./builtin-tool-defi
 // Tool execution handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>
 
+const getInternalLoops = (config: ReturnType<typeof configStore.get>): InternalLoop[] => {
+  return Array.isArray(config.internalLoops) ? config.internalLoops : []
+}
+
 const toolHandlers: Record<string, ToolHandler> = {
   list_mcp_servers: async (): Promise<MCPToolResult> => {
     const config = configStore.get()
@@ -956,7 +960,7 @@ const toolHandlers: Record<string, ToolHandler> = {
 
   list_loops: async (): Promise<MCPToolResult> => {
     const config = configStore.get()
-    const loops = config.internalLoops || []
+    const loops = getInternalLoops(config)
 
     return {
       content: [
@@ -1003,7 +1007,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     const config = configStore.get()
-    const loops = config.internalLoops || []
+    const loops = getInternalLoops(config)
     const name = args.name.trim()
     const prompt = args.prompt.trim()
 
@@ -1105,7 +1109,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     const enabled = args.enabled as boolean | undefined
 
     const config = configStore.get()
-    const loops = config.internalLoops || []
+    const loops = getInternalLoops(config)
     const loopIndex = loops.findIndex((loop) => loop.id === loopId)
 
     if (loopIndex === -1) {

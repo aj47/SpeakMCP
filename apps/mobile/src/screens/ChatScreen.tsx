@@ -359,6 +359,8 @@ export default function ChatScreen({ route, navigation }: any) {
 		setListening(v);
 	}, []);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [sttPreview, setSttPreview] = useState('');
+  const sttPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
   // Track which individual tool calls are fully expanded to show all input/output details
@@ -378,6 +380,27 @@ export default function ChatScreen({ route, navigation }: any) {
   const isUserDraggingRef = useRef(false);
   // Track drag end timeout to prevent flaky behavior with rapid re-drags
   const dragEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setSttPreviewWithExpiry = useCallback((text: string, clearAfterMs = 6000) => {
+    const next = text.trim();
+    if (!next) return;
+    setSttPreview(next);
+    if (sttPreviewTimeoutRef.current) {
+      clearTimeout(sttPreviewTimeoutRef.current);
+    }
+    sttPreviewTimeoutRef.current = setTimeout(() => {
+      setSttPreview('');
+      sttPreviewTimeoutRef.current = null;
+    }, clearAfterMs);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sttPreviewTimeoutRef.current) {
+        clearTimeout(sttPreviewTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -1512,7 +1535,10 @@ export default function ChatScreen({ route, navigation }: any) {
 					final: finalText?.trim(),
 					handsFree: handsFreeRef.current,
 				});
-	        if (interim) setLiveTranscriptValue(interim);
+        if (interim) {
+          setLiveTranscriptValue(interim);
+          setSttPreviewWithExpiry(interim);
+        }
         if (finalText) {
           if (handsFreeRef.current) {
             if (handsFreeDebounceRef.current) {
@@ -1528,7 +1554,10 @@ export default function ChatScreen({ route, navigation }: any) {
                 pendingHandsFreeFinalRef.current = '';
                 webFinalRef.current = '';
 	                setLiveTranscriptValue('');
-	                if (toSend) void sendRef.current(toSend);
+	                if (toSend) {
+	                  setSttPreviewWithExpiry(toSend);
+	                  void sendRef.current(toSend);
+	                }
               }, handsFreeDebounceMs);
             }
           } else {
@@ -1565,9 +1594,10 @@ export default function ChatScreen({ route, navigation }: any) {
 	            // updates the ref synchronously and would cause mergeVoiceText to use stale value
 	            const accumulatedText = mergeVoiceText(webFinalRef.current, liveTranscriptRef.current);
 	            setLiveTranscriptValue('');
-            if (accumulatedText) {
-              setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
-            }
+	            if (accumulatedText) {
+	              setSttPreviewWithExpiry(accumulatedText);
+	              setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
+	            }
 	            // Treat as finalized for this push-to-talk gesture to prevent duplicate sends.
 	            voiceGestureFinalizedIdRef.current = voiceGestureIdRef.current;
             webFinalRef.current = '';
@@ -1594,17 +1624,20 @@ export default function ChatScreen({ route, navigation }: any) {
         const willEdit = willCancelRef.current;
 	        if (!handsFreeRef.current && finalText && !alreadyFinalizedPushToTalk) {
 	          voiceGestureFinalizedIdRef.current = gestureId;
-					if (willEdit) {
-						voiceLog('web:onend -> willEdit=true (append to input)', { gestureId, finalText });
-						setInput((t) => (t ? `${t} ${finalText}` : finalText));
-					} else {
-						voiceLog('web:onend -> sending', { gestureId, finalText });
-						void sendRef.current(finalText);
-					}
-        } else if (handsFreeRef.current && finalText) {
-					voiceLog('web:onend -> handsFree send', { gestureId, finalText });
-	          void sendRef.current(finalText);
-        }
+						if (willEdit) {
+							voiceLog('web:onend -> willEdit=true (append to input)', { gestureId, finalText });
+							setSttPreviewWithExpiry(finalText);
+							setInput((t) => (t ? `${t} ${finalText}` : finalText));
+						} else {
+							voiceLog('web:onend -> sending', { gestureId, finalText });
+							setSttPreviewWithExpiry(finalText);
+							void sendRef.current(finalText);
+						}
+	        } else if (handsFreeRef.current && finalText) {
+						voiceLog('web:onend -> handsFree send', { gestureId, finalText });
+		          setSttPreviewWithExpiry(finalText);
+		          void sendRef.current(finalText);
+	        }
         webFinalRef.current = '';
       };
       webRecognitionRef.current = rec;
@@ -1661,7 +1694,10 @@ export default function ChatScreen({ route, navigation }: any) {
 								isFinal: event?.isFinal,
 								transcript: t,
 							});
-	                  if (t) setLiveTranscriptValue(t);
+	                  if (t) {
+	                    setLiveTranscriptValue(t);
+	                    setSttPreviewWithExpiry(t);
+	                  }
               if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
                   if (handsFreeDebounceRef.current) {
@@ -1677,7 +1713,10 @@ export default function ChatScreen({ route, navigation }: any) {
                       pendingHandsFreeFinalRef.current = '';
                       nativeFinalRef.current = '';
 	                          setLiveTranscriptValue('');
-	                          if (toSend) void sendRef.current(toSend);
+	                          if (toSend) {
+	                            setSttPreviewWithExpiry(toSend);
+	                            void sendRef.current(toSend);
+	                          }
                     }, handsFreeDebounceMs);
                   }
                 } else {
@@ -1728,9 +1767,10 @@ export default function ChatScreen({ route, navigation }: any) {
 	                  // updates the ref synchronously and would cause mergeVoiceText to use stale value
 	                  const accumulatedText = mergeVoiceText(nativeFinalRef.current, liveTranscriptRef.current);
 	                  setLiveTranscriptValue('');
-                  if (accumulatedText) {
-                    setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
-                  }
+	                  if (accumulatedText) {
+	                    setSttPreviewWithExpiry(accumulatedText);
+	                    setInput((t) => (t ? `${t} ${accumulatedText}` : accumulatedText));
+	                  }
 	                  // Treat as finalized for this push-to-talk gesture to prevent duplicate sends.
 	                  voiceGestureFinalizedIdRef.current = voiceGestureIdRef.current;
                   nativeFinalRef.current = '';
@@ -1757,17 +1797,20 @@ export default function ChatScreen({ route, navigation }: any) {
               const willEdit = willCancelRef.current;
 	              if (!handsFreeRef.current && finalText && !alreadyFinalizedPushToTalk) {
 	                voiceGestureFinalizedIdRef.current = gestureId;
-								if (willEdit) {
-									voiceLog('native:end -> willEdit=true (append to input)', { gestureId, finalText });
-									setInput((t) => (t ? `${t} ${finalText}` : finalText));
-								} else {
-									voiceLog('native:end -> sending', { gestureId, finalText });
-									void sendRef.current(finalText);
-								}
-              } else if (handsFreeRef.current && finalText) {
-								voiceLog('native:end -> handsFree send', { gestureId, finalText });
-	                void sendRef.current(finalText);
-              }
+									if (willEdit) {
+										voiceLog('native:end -> willEdit=true (append to input)', { gestureId, finalText });
+										setSttPreviewWithExpiry(finalText);
+										setInput((t) => (t ? `${t} ${finalText}` : finalText));
+									} else {
+										voiceLog('native:end -> sending', { gestureId, finalText });
+										setSttPreviewWithExpiry(finalText);
+										void sendRef.current(finalText);
+									}
+	              } else if (handsFreeRef.current && finalText) {
+									voiceLog('native:end -> handsFree send', { gestureId, finalText });
+		                setSttPreviewWithExpiry(finalText);
+		                void sendRef.current(finalText);
+	              }
               nativeFinalRef.current = '';
             });
             srSubsRef.current.push(subResult, subError, subEnd);
@@ -2385,9 +2428,15 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
-        <View style={[styles.inputArea, { paddingBottom: 12 + insets.bottom }]}>
-          {/* Top row: TTS toggle, text input, send button */}
-          <View style={styles.inputRow}>
+	        <View style={[styles.inputArea, { paddingBottom: 12 + insets.bottom }]}>
+	          {!!sttPreview && (
+	            <View style={styles.sttPreviewBox}>
+	              <Text style={styles.sttPreviewLabel}>STT preview</Text>
+	              <Text style={styles.sttPreviewText} numberOfLines={2}>{sttPreview}</Text>
+	            </View>
+	          )}
+	          {/* Top row: TTS toggle, text input, send button */}
+	          <View style={styles.inputRow}>
             <TouchableOpacity
               style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
               onPress={toggleTts}
@@ -2521,6 +2570,26 @@ function createStyles(theme: Theme, screenHeight: number) {
       borderTopWidth: theme.hairline,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
+    },
+    sttPreviewBox: {
+      marginHorizontal: spacing.sm,
+      marginTop: spacing.xs,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    sttPreviewLabel: {
+      ...theme.typography.caption,
+      color: theme.colors.mutedForeground,
+      marginBottom: 2,
+      fontWeight: '600',
+    },
+    sttPreviewText: {
+      ...theme.typography.body,
+      color: theme.colors.foreground,
     },
     inputRow: {
       flexDirection: 'row',

@@ -161,6 +161,11 @@ export const agentSessionStateManager = {
     return session?.profileSnapshot
   },
 
+  // Check if session is registered in the state manager
+  isSessionRegistered(sessionId: string): boolean {
+    return state.agentSessions.has(sessionId)
+  },
+
   // Check if session should stop
   shouldStopSession(sessionId: string): boolean {
     const session = state.agentSessions.get(sessionId)

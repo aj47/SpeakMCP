@@ -4,7 +4,8 @@ import { Button } from "@renderer/components/ui/button"
 import { Send, Mic, OctagonX } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useConfigQuery } from "@renderer/lib/queries"
+import { queryClient, useConfigQuery } from "@renderer/lib/queries"
+import { useAgentStore } from "@renderer/stores"
 import { PredefinedPromptsMenu } from "./predefined-prompts-menu"
 
 interface TileFollowUpInputProps {
@@ -54,8 +55,18 @@ export function TileFollowUpInput({
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       setText("")
+      // Optimistically append user message to the session's conversation history
+      // so it appears immediately in the session tile without waiting for agent progress updates
+      if (sessionId) {
+        useAgentStore.getState().appendUserMessageToSession(sessionId, variables)
+      }
+      // Also invalidate React Query caches so other views (e.g., panel) stay in sync
+      if (conversationId) {
+        queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] })
+        queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+      }
       onMessageSent?.()
     },
   })
@@ -91,7 +102,7 @@ export function TileFollowUpInput({
   // Handle stop session - kill switch functionality
   const handleStopSession = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (isStoppingSession || !sessionId) return
+    if (isStoppingSession) return
 
     // Use custom handler if provided, otherwise call stopAgentSession directly
     if (onStopSession) {
@@ -106,8 +117,19 @@ export function TileFollowUpInput({
       return
     }
 
-    // Don't try to stop fake "pending-*" sessions
-    if (sessionId.startsWith('pending-')) return
+    // For undefined or fake "pending-*" sessions, fall back to global emergency stop
+    // so the kill switch always works regardless of session state
+    if (!sessionId || sessionId.startsWith('pending-')) {
+      setIsStoppingSession(true)
+      try {
+        await tipcClient.emergencyStopAgent()
+      } catch (error) {
+        console.error("Failed to emergency stop agent:", error)
+      } finally {
+        setIsStoppingSession(false)
+      }
+      return
+    }
 
     setIsStoppingSession(true)
     try {

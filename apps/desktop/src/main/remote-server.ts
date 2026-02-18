@@ -41,15 +41,21 @@ function notifyConversationHistoryChanged(): void {
     notifiedWebContentsIds.add(win.webContents.id)
     try {
       getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
-    } catch {
-      diagnosticsService.logWarning("remote-server", `Failed to notify ${windowId} window about conversation history changes`)
+    } catch (err) {
+      diagnosticsService.logWarning("remote-server", `Failed to notify ${windowId} window about conversation history changes: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 }
 
+// Reserved filenames that must not be used as conversation IDs to avoid colliding with
+// internal storage files (e.g. index.json, metadata.json).
+const RESERVED_CONVERSATION_IDS = new Set(["index", "metadata"])
+
 /**
  * Validate conversation IDs sent over remote HTTP endpoints.
- * Mirrors conversation-service ID safety checks to prevent traversal and null-byte attacks.
+ * Performs path-traversal and character checks. Note: this is a subset of
+ * ConversationService.validateConversationId(), which additionally sanitizes characters
+ * and performs a path.resolve containment check.
  */
 function getConversationIdValidationError(conversationId: string): string | null {
   if (conversationId.includes("\0")) {
@@ -60,6 +66,9 @@ function getConversationIdValidationError(conversationId: string): string | null
   }
   if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
     return "Invalid conversation ID format"
+  }
+  if (RESERVED_CONVERSATION_IDS.has(conversationId)) {
+    return "Invalid conversation ID: reserved name"
   }
   return null
 }
@@ -465,6 +474,10 @@ async function runAgent(options: RunAgentOptions): Promise<{
     // Mark session as errored
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     agentSessionTracker.errorSession(sessionId, errorMessage)
+
+    // Conversation was already created/updated before agent execution started.
+    // Refresh renderer history even on failure so UI reflects the latest persisted state.
+    notifyConversationHistoryChanged()
 
     throw error
   } finally {

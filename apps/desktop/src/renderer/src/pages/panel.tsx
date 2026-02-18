@@ -601,7 +601,12 @@ export function Component() {
       setRecording(true)
       recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
-      recorderRef.current?.startRecording()
+      recorderRef.current?.startRecording().catch((err: unknown) => {
+        console.error('[panel] startRecording failed, resetting recording state:', err)
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+      })
     })
 
     return unlisten
@@ -646,7 +651,12 @@ export function Component() {
         recordingRef.current = true
         setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         tipcClient.showPanelWindow({})
-        recorderRef.current?.startRecording()
+        recorderRef.current?.startRecording().catch((err: unknown) => {
+          console.error('[panel] startRecording failed, resetting recording state:', err)
+          setRecording(false)
+          recordingRef.current = false
+          setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+        })
       }
     })
 
@@ -765,7 +775,12 @@ export function Component() {
       setRecording(true)
       recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
-      recorderRef.current?.startRecording()
+      recorderRef.current?.startRecording().catch((err: unknown) => {
+        console.error('[panel] startRecording failed, resetting recording state:', err)
+        setRecording(false)
+        recordingRef.current = false
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+      })
     })
 
     return unlisten
@@ -808,7 +823,12 @@ export function Component() {
         setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
-        recorderRef.current?.startRecording()
+        recorderRef.current?.startRecording().catch((err: unknown) => {
+          console.error('[panel] startRecording failed, resetting recording state:', err)
+          setRecording(false)
+          recordingRef.current = false
+          setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+        })
       }
     })
 

@@ -586,7 +586,15 @@ export function useSessions(): SessionStore {
       const result = await fetchFullConversation(client, session.serverConversationId);
       if (!result) return null;
 
+      // Re-check the latest session state after the async fetch; if local messages
+      // were added while the request was in-flight (e.g. user sent a message or a
+      // sync updated the session), bail out to avoid clobbering newer local data.
       const currentSessions = sessionsRef.current;
+      const latestSession = currentSessions.find(s => s.id === sessionId);
+      if (latestSession && latestSession.messages.length > 0) {
+        return latestSession.messages;
+      }
+
       const sessionsToSave = currentSessions.map(s => {
         if (s.id !== sessionId) return s;
         return {

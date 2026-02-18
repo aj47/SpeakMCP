@@ -167,15 +167,19 @@ export class ConversationService {
     return normalized > 0 ? normalized : DEFAULT_MAX_CONVERSATIONS_TO_KEEP
   }
 
-  private applyConversationRetention(index: ConversationHistoryItem[]): ConversationHistoryItem[] {
+  private applyConversationRetention(index: ConversationHistoryItem[]): {
+    kept: ConversationHistoryItem[]
+    removed: ConversationHistoryItem[]
+  } {
     const maxToKeep = this.getConversationRetentionLimit()
     if (index.length <= maxToKeep) {
-      return index
+      return { kept: index, removed: [] }
     }
 
-    const kept = index.slice(0, maxToKeep)
-    const removed = index.slice(maxToKeep)
+    return { kept: index.slice(0, maxToKeep), removed: index.slice(maxToKeep) }
+  }
 
+  private deleteRetainedOverflowFiles(removed: ConversationHistoryItem[]): void {
     for (const item of removed) {
       const conversationPath = this.getConversationPath(item.id)
       if (!fs.existsSync(conversationPath)) {
@@ -187,11 +191,13 @@ export class ConversationService {
         logApp(`[ConversationService] Failed to delete retained-overflow conversation ${item.id}:`, error)
       }
     }
-
-    return kept
   }
 
-  private normalizeIndex(index: ConversationHistoryItem[]): { index: ConversationHistoryItem[]; changed: boolean } {
+  private normalizeIndex(index: ConversationHistoryItem[]): {
+    index: ConversationHistoryItem[]
+    removed: ConversationHistoryItem[]
+    changed: boolean
+  } {
     let changed = false
 
     const normalized = index.map((item) => {
@@ -205,12 +211,12 @@ export class ConversationService {
       }
     })
 
-    const retained = this.applyConversationRetention(normalized)
-    if (retained.length !== normalized.length) {
+    const { kept: retained, removed } = this.applyConversationRetention(normalized)
+    if (removed.length > 0) {
       changed = true
     }
 
-    return { index: retained, changed }
+    return { index: retained, removed, changed }
   }
 
   private updateConversationIndex(conversation: Conversation) {
@@ -241,10 +247,12 @@ export class ConversationService {
 
       // Add to beginning of array (most recent first)
       index.unshift(indexItem)
-      index = this.applyConversationRetention(index)
+      const { kept, removed } = this.applyConversationRetention(index)
 
-      // Save updated index
-      fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
+      // Write the updated index first; only delete overflow files after a
+      // successful write to avoid orphaning the index if the write fails.
+      fs.writeFileSync(indexPath, JSON.stringify(kept, null, 2))
+      this.deleteRetainedOverflowFiles(removed)
     } catch (error) {}
 
   }
@@ -340,9 +348,12 @@ export class ConversationService {
       const indexData = fs.readFileSync(indexPath, "utf8")
 
       const history: ConversationHistoryItem[] = JSON.parse(indexData)
-      const { index: normalizedHistory, changed } = this.normalizeIndex(history)
+      const { index: normalizedHistory, removed, changed } = this.normalizeIndex(history)
       if (changed) {
+        // Write the updated index first; delete overflow files only after a
+        // successful write to avoid a stale index referencing deleted files.
         fs.writeFileSync(indexPath, JSON.stringify(normalizedHistory, null, 2))
+        this.deleteRetainedOverflowFiles(removed)
       }
 
       // Sort by updatedAt descending (most recent first)

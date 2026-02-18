@@ -242,7 +242,7 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
         },
         maxOutputChars: {
           type: "number",
-          description: "Maximum characters to return per stream (stdout/stderr). Default 20000, capped at 200000.",
+          description: "Maximum characters to return per stream (stdout/stderr). Default 20000, minimum 1000, capped at 200000. Values below 1000 are raised to 1000.",
         },
       },
       required: ["command"],

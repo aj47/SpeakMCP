@@ -498,21 +498,20 @@ export async function processTranscriptWithAgentMode(
     }
 
     try {
-      // Avoid persisting duplicate payloads for tool messages.
-      // Tool message content already contains the rendered result text.
-      // Persisting full toolResults again can double disk usage for large outputs.
-      const shouldPersistToolResults = role !== "tool"
-      const convertedToolResults = shouldPersistToolResults
-        ? toolResults?.map(tr => ({
-            success: !tr.isError,
-            content: Array.isArray(tr.content)
-              ? tr.content.map(c => c.text).join("\n")
-              : String(tr.content || ""),
-            error: tr.isError
-              ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
-              : undefined
-          }))
-        : undefined
+      // Convert toolResults from MCPToolResult format to stored format.
+      // Always persist toolResults (including for tool-role messages) so that
+      // downstream consumers (e.g. tipc.ts / remote-server.ts) can pair tool
+      // calls with their structured results when reconstructing prior history.
+      // Storage-level truncation in conversation-service handles size limits.
+      const convertedToolResults = toolResults?.map(tr => ({
+        success: !tr.isError,
+        content: Array.isArray(tr.content)
+          ? tr.content.map(c => c.text).join("\n")
+          : String(tr.content || ""),
+        error: tr.isError
+          ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
+          : undefined
+      }))
 
       await conversationService.addMessageToConversation(
         currentConversationId,

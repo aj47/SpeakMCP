@@ -40,7 +40,7 @@ export interface SessionStore {
   lastSyncResult: SyncResult | null;
 
   // Lazy loading
-  loadSessionMessages: (sessionId: string, client: SettingsApiClient) => Promise<boolean>;
+  loadSessionMessages: (sessionId: string, client: SettingsApiClient) => Promise<ChatMessage[] | null>;
   isLoadingMessages: boolean;
 }
 
@@ -575,18 +575,17 @@ export function useSessions(): SessionStore {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   // Lazy-load messages for a stub session from server
-  const loadSessionMessages = useCallback(async (sessionId: string, client: SettingsApiClient): Promise<boolean> => {
+  const loadSessionMessages = useCallback(async (sessionId: string, client: SettingsApiClient): Promise<ChatMessage[] | null> => {
     const session = sessionsRef.current.find(s => s.id === sessionId);
-    if (!session?.serverConversationId) return false;
+    if (!session?.serverConversationId) return null;
     // Already has messages - no need to fetch
-    if (session.messages.length > 0) return true;
+    if (session.messages.length > 0) return session.messages;
 
     setIsLoadingMessages(true);
     try {
       const result = await fetchFullConversation(client, session.serverConversationId);
-      if (!result) return false;
+      if (!result) return null;
 
-      const now = Date.now();
       const currentSessions = sessionsRef.current;
       const sessionsToSave = currentSessions.map(s => {
         if (s.id !== sessionId) return s;
@@ -607,10 +606,10 @@ export function useSessions(): SessionStore {
         await saveSessions(sessionsToSave);
       });
 
-      return true;
+      return result.messages;
     } catch (err: any) {
       console.error('[sessions] Failed to load session messages:', err);
-      return false;
+      return null;
     } finally {
       setIsLoadingMessages(false);
     }
@@ -650,4 +649,3 @@ export function useSessionContext(): SessionStore {
   if (!ctx) throw new Error('SessionContext missing');
   return ctx;
 }
-

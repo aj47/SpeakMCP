@@ -23,6 +23,7 @@ import { useEffect, useMemo, useCallback, useRef } from 'react';
 const speakMCPIcon = require('./assets/speakmcp-icon.png');
 const darkSpinner = require('./assets/loading-spinner.gif');
 const lightSpinner = require('./assets/light-spinner.gif');
+const SESSION_SYNC_POLL_INTERVAL_MS = 15000;
 
 const Stack = createNativeStackNavigator();
 
@@ -203,24 +204,69 @@ function Navigation() {
     if (!cfg.config.baseUrl || !cfg.config.apiKey) return;
 
     const client = new SettingsApiClient(cfg.config.baseUrl, cfg.config.apiKey);
+    let appState: AppStateStatus = AppState.currentState;
+    let pollIntervalId: ReturnType<typeof setInterval> | null = null;
+    let isSyncInFlight = false;
+    let isCancelled = false;
 
-    // Sync on initial load
-    sessionStore.syncWithServer(client).catch((err) => {
-      console.warn('[App] Initial session sync failed:', err);
-    });
+    const runSync = async (source: 'initial' | 'foreground' | 'poll') => {
+      if (isCancelled || isSyncInFlight) return;
+      isSyncInFlight = true;
+      try {
+        const result = await sessionStore.syncWithServer(client);
+        const actionableErrors = result.errors.filter((error) => error !== 'Sync already in progress');
+        if (actionableErrors.length > 0 && source !== 'poll') {
+          console.warn(`[App] ${source} session sync had errors:`, actionableErrors.join('; '));
+        }
+      } catch (err) {
+        if (source !== 'poll') {
+          console.warn(`[App] ${source} session sync failed:`, err);
+        }
+      } finally {
+        isSyncInFlight = false;
+      }
+    };
+
+    const stopPolling = () => {
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        pollIntervalId = null;
+      }
+    };
+
+    const startPolling = () => {
+      if (pollIntervalId) return;
+      pollIntervalId = setInterval(() => {
+        if (appState === 'active') {
+          void runSync('poll');
+        }
+      }, SESSION_SYNC_POLL_INTERVAL_MS);
+    };
+
+    // Sync immediately, then keep polling while app is active.
+    void runSync('initial');
+    if (appState === 'active') {
+      startPolling();
+    }
 
     // Sync when app returns to foreground
     const handleAppStateForSync = (nextAppState: AppStateStatus) => {
+      appState = nextAppState;
       if (nextAppState === 'active') {
-        sessionStore.syncWithServer(client).catch((err) => {
-          console.warn('[App] Foreground session sync failed:', err);
-        });
+        void runSync('foreground');
+        startPolling();
+      } else {
+        stopPolling();
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateForSync);
-    return () => subscription.remove();
-  }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey, sessionStore.ready]);
+    return () => {
+      isCancelled = true;
+      stopPolling();
+      subscription.remove();
+    };
+  }, [cfg.ready, cfg.config.baseUrl, cfg.config.apiKey, sessionStore.ready, sessionStore.syncWithServer]);
 
   if (!cfg.ready || !sessionStore.ready) {
     return (

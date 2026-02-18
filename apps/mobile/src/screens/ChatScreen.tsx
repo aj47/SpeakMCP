@@ -524,9 +524,24 @@ export default function ChatScreen({ route, navigation }: any) {
       } else if (currentSession.serverConversationId && config.baseUrl && config.apiKey) {
         // Stub session — lazy-load messages from server
         setMessages([]);
+        const stubSessionId = currentSession.id;
         const client = new SettingsApiClient(config.baseUrl, config.apiKey);
-        sessionStore.loadSessionMessages(currentSession.id, client);
-        // Messages will be populated by the store update, triggering a re-render
+        sessionStore.loadSessionMessages(stubSessionId, client)
+          .then((loadedMessages) => {
+            if (!loadedMessages) return;
+            // Ignore late results if the user switched sessions while loading.
+            if (currentSessionIdRef.current !== stubSessionId) return;
+            setMessages(loadedMessages.map(m => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              toolCalls: m.toolCalls,
+              toolResults: m.toolResults,
+            })));
+          })
+          .catch((err) => {
+            console.warn('[ChatScreen] Failed to lazy-load session messages:', err);
+          });
       } else {
         setMessages([]);
       }

@@ -23,10 +23,16 @@ import type { RendererHandlers } from "./renderer-handlers"
 let server: FastifyInstance | null = null
 let lastError: string | undefined
 
+// Track webContents IDs that already have a pending did-finish-load notification queued,
+// to avoid registering multiple once-listeners if notifyConversationHistoryChanged() is
+// called several times while a window is still loading.
+const pendingNotificationWebContentsIds = new Set<number>()
+
 /**
  * Notify all renderer windows that conversation history has changed.
  * Used after remote server creates or modifies conversations (e.g. from mobile).
  * Defers the notification if the window's renderer is still loading to avoid dropped events.
+ * Uses pendingNotificationWebContentsIds to deduplicate deferred listeners.
  */
 function notifyConversationHistoryChanged(): void {
   const notifiedWebContentsIds = new Set<number>()
@@ -41,6 +47,7 @@ function notifyConversationHistoryChanged(): void {
 
     notifiedWebContentsIds.add(win.webContents.id)
     const sendNotification = () => {
+      pendingNotificationWebContentsIds.delete(win.webContents.id)
       try {
         getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
       } catch (err) {
@@ -49,7 +56,12 @@ function notifyConversationHistoryChanged(): void {
     }
 
     if (win.webContents.isLoading()) {
-      win.webContents.once("did-finish-load", sendNotification)
+      // Only register a did-finish-load listener if one isn't already pending for this webContents,
+      // to avoid listener buildup when called multiple times during window load.
+      if (!pendingNotificationWebContentsIds.has(win.webContents.id)) {
+        pendingNotificationWebContentsIds.add(win.webContents.id)
+        win.webContents.once("did-finish-load", sendNotification)
+      }
     } else {
       sendNotification()
     }
@@ -57,14 +69,43 @@ function notifyConversationHistoryChanged(): void {
 }
 
 // Reserved filenames that must not be used as conversation IDs to avoid colliding with
-// internal storage files (e.g. index.json, metadata.json).
-const RESERVED_CONVERSATION_IDS = new Set(["index", "metadata"])
+// internal storage files (e.g. index.json, metadata.json) or Windows device names
+// (CON, NUL, COM1–COM9, LPT1–LPT9, etc.) that cause failures on case-insensitive filesystems.
+const RESERVED_CONVERSATION_IDS = new Set([
+  "index",
+  "metadata",
+  // Windows reserved device names (case-insensitive check is applied before lookup)
+  "con",
+  "prn",
+  "aux",
+  "nul",
+  "com0",
+  "com1",
+  "com2",
+  "com3",
+  "com4",
+  "com5",
+  "com6",
+  "com7",
+  "com8",
+  "com9",
+  "lpt0",
+  "lpt1",
+  "lpt2",
+  "lpt3",
+  "lpt4",
+  "lpt5",
+  "lpt6",
+  "lpt7",
+  "lpt8",
+  "lpt9",
+])
 
 /**
  * Validate conversation IDs sent over remote HTTP endpoints.
- * Performs path-traversal and character checks. Note: this is a subset of
- * ConversationService.validateConversationId(), which additionally sanitizes characters
- * and performs a path.resolve containment check.
+ * Performs null-byte, path-traversal, character-allowlist, and reserved-name checks.
+ * This is NOT equivalent to ConversationService.validateConversationId(), which also
+ * sanitizes disallowed characters and performs a path.resolve containment check.
  */
 function getConversationIdValidationError(conversationId: string): string | null {
   if (conversationId.includes("\0")) {

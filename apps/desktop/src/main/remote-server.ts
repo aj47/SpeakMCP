@@ -16,9 +16,28 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
+import { getRendererHandlers } from "@egoist/tipc/main"
+import { WINDOWS } from "./window"
+import type { RendererHandlers } from "./renderer-handlers"
 
 let server: FastifyInstance | null = null
 let lastError: string | undefined
+
+/**
+ * Notify all renderer windows that conversation history has changed.
+ * Used after remote server creates or modifies conversations (e.g. from mobile).
+ */
+function notifyConversationHistoryChanged(): void {
+  for (const win of [WINDOWS.get("main"), WINDOWS.get("panel")]) {
+    if (win) {
+      try {
+        getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
+      } catch {
+        // Window may not be ready yet, ignore
+      }
+    }
+  }
+}
 
 /**
  * Detects if we're running in a headless/terminal environment
@@ -412,6 +431,9 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
     // Format conversation history for API response (convert MCPToolResult to ToolResult format)
     const formattedHistory = formatConversationHistoryForApi(agentResult.conversationHistory)
+
+    // Notify renderer that conversation history has changed (for sidebar refresh)
+    notifyConversationHistoryChanged()
 
     return { content: agentResult.content, conversationId, conversationHistory: formattedHistory }
   } catch (error) {
@@ -1009,11 +1031,11 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Validate conversation ID format to prevent path traversal attacks
-      // Valid IDs match pattern: conv_${timestamp}_${random} where random is alphanumeric
+      // Allow characters consistent with validateConversationId: alphanumeric, underscore, hyphen, @, dot
       if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
         return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
       }
-      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+      if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
         return reply.code(400).send({ error: "Invalid conversation ID format" })
       }
 
@@ -1258,6 +1280,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       await conversationService.saveConversation(conversation, true)
       diagnosticsService.logInfo("remote-server", `Created conversation ${conversationId} with ${messages.length} messages`)
 
+      // Notify renderer that conversation history has changed (for sidebar refresh)
+      notifyConversationHistoryChanged()
+
       return reply.code(201).send({
         id: conversation.id,
         title: conversation.title,
@@ -1289,10 +1314,11 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Validate conversation ID format to prevent path traversal attacks
+      // Allow characters consistent with validateConversationId: alphanumeric, underscore, hyphen, @, dot
       if (conversationId.includes("..") || conversationId.includes("/") || conversationId.includes("\\")) {
         return reply.code(400).send({ error: "Invalid conversation ID: path traversal characters not allowed" })
       }
-      if (!/^conv_[a-zA-Z0-9_]+$/.test(conversationId)) {
+      if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
         return reply.code(400).send({ error: "Invalid conversation ID format" })
       }
 
@@ -1384,6 +1410,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         await conversationService.saveConversation(conversation, true)
         diagnosticsService.logInfo("remote-server", `Updated conversation ${conversationId}`)
       }
+
+      // Notify renderer that conversation history has changed (for sidebar refresh)
+      notifyConversationHistoryChanged()
 
       return reply.send({
         id: conversation.id,

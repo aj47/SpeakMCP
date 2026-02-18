@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { rendererHandlers, tipcClient } from '@renderer/lib/tipc-client'
 import { useAgentStore, useConversationStore } from '@renderer/stores'
 import { AgentProgressUpdate, Conversation, ConversationMessage, QueuedMessage } from '@shared/types'
-import { useSaveConversationMutation } from '@renderer/lib/queries'
+import { useSaveConversationMutation, queryClient } from '@renderer/lib/queries'
 import { logUI } from '@renderer/lib/debug'
 
 export function useStoreSync() {
@@ -89,5 +89,14 @@ export function useStoreSync() {
     }).catch(() => {
       // Silently ignore hydration failures
     })
+  }, [])
+
+  // Listen for conversation history changes from remote server (mobile sync)
+  // This ensures the sidebar refreshes when conversations are created/updated remotely
+  useEffect(() => {
+    const unlisten = rendererHandlers.conversationHistoryChanged.listen(() => {
+      queryClient.invalidateQueries({ queryKey: ["conversation-history"] })
+    })
+    return unlisten
   }, [])
 }

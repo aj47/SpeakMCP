@@ -31,6 +31,9 @@ interface AgentState {
   getMessageQueue: (conversationId: string) => QueuedMessage[]
   isQueuePaused: (conversationId: string) => boolean
 
+  // Optimistic UI update: append a user message to a session's conversation history
+  appendUserMessageToSession: (sessionId: string, message: string) => void
+
   setViewMode: (mode: SessionViewMode) => void
   setFilter: (filter: SessionFilter) => void
   setSortBy: (sortBy: SessionSortBy) => void
@@ -241,6 +244,24 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const state = get()
     if (!state.focusedSessionId) return null
     return state.agentProgressById.get(state.focusedSessionId) ?? null
+  },
+
+  appendUserMessageToSession: (sessionId: string, message: string) => {
+    set((state) => {
+      const existingProgress = state.agentProgressById.get(sessionId)
+      if (!existingProgress) return state
+
+      const newMap = new Map(state.agentProgressById)
+      const existingHistory = existingProgress.conversationHistory || []
+      newMap.set(sessionId, {
+        ...existingProgress,
+        conversationHistory: [
+          ...existingHistory,
+          { role: "user" as const, content: message, timestamp: Date.now() },
+        ],
+      })
+      return { agentProgressById: newMap }
+    })
   },
 
   // Message queue actions

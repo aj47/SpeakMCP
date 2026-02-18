@@ -553,7 +553,12 @@ export default function ChatScreen({ route, navigation }: any) {
             if (currentSessionIdRef.current !== stubSessionId) return;
             // Messages are already persisted by loadSessionMessages; skip the
             // persistence effect so we don't regenerate IDs/updatedAt.
-            skipNextPersistRef.current = true;
+            // Only skip if there are actual messages; if the array is empty,
+            // setting the flag would leave it stuck and cause the next real
+            // message to be skipped (never persisted).
+            if (loadedMessages.length > 0) {
+              skipNextPersistRef.current = true;
+            }
             setMessages(loadedMessages.map(m => ({
               id: m.id,
               role: m.role,

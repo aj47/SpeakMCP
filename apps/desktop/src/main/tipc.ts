@@ -578,7 +578,22 @@ const cleanupRecordingFiles = (history: RecordingHistoryItem[]) => {
       const historyItem = historyById.get(recordingId)
 
       // Remove orphan files (no matching history entry).
+      // Apply a grace period before deleting orphans: recording files are written
+      // to disk before the history entry is saved (async processing window), so
+      // a recently-created file may not yet appear in history.
       if (!historyItem) {
+        const ORPHAN_GRACE_PERIOD_MS = 5 * 60 * 1000 // 5 minutes
+        let fileMtimeMs = 0
+        try {
+          fileMtimeMs = fs.statSync(filePath).mtimeMs
+        } catch {
+          // If we can't stat the file, skip deletion to be safe
+          continue
+        }
+        if (now - fileMtimeMs < ORPHAN_GRACE_PERIOD_MS) {
+          // File is recent enough that it may still be in-flight; skip.
+          continue
+        }
         try {
           fs.unlinkSync(filePath)
         } catch {

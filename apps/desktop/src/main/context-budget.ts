@@ -634,6 +634,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
   // Tier 0: Aggressive truncation of very large tool responses (>5000 chars)
   // This happens BEFORE summarization to avoid expensive LLM calls on huge payloads
   const AGGRESSIVE_TRUNCATE_THRESHOLD = 5000
+  const tokensBeforeAggressiveTruncate = tokens
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
     if (!msg.content || msg.content.length <= AGGRESSIVE_TRUNCATE_THRESHOLD) {
@@ -659,7 +660,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
       tokens = estimateTokensFromMessages(messages)
       if (tokens <= targetTokens) {
         if (isDebugLLM()) logLLM("ContextBudget: after aggressive_truncate", { estTokens: tokens })
-        return { messages, appliedStrategies: applied, estTokensBefore: tokens, estTokensAfter: tokens, maxTokens }
+        return { messages, appliedStrategies: applied, estTokensBefore: tokensBeforeAggressiveTruncate, estTokensAfter: tokens, maxTokens }
       }
     }
   }

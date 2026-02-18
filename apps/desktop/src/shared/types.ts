@@ -1359,6 +1359,7 @@ export type Config = {
 	  remoteServerLogLevel?: "error" | "info" | "debug"
 	  remoteServerCorsOrigins?: string[]
 	  remoteServerAutoShowPanel?: boolean // Auto-show floating panel when receiving remote messages
+	  remoteServerTerminalQrEnabled?: boolean // Print QR code to terminal for mobile app pairing (auto-enabled in headless mode)
 
   // Cloudflare Tunnel Configuration
   // Tunnel mode: "quick" for random URLs (no account required), "named" for persistent URLs (requires account)

@@ -154,6 +154,15 @@ export function Component() {
                 />
               </Control>
 
+              <Control label={<ControlLabel label="Terminal QR Code" tooltip="Print QR code to terminal on server start (auto-enabled in headless environments)" />} className="px-3">
+                <Switch
+                  checked={cfg.remoteServerTerminalQrEnabled ?? false}
+                  onCheckedChange={(value) => {
+                    saveConfig({ remoteServerTerminalQrEnabled: value })
+                  }}
+                />
+              </Control>
+
               <Control label={<ControlLabel label="Port" tooltip="HTTP port to listen on" />} className="px-3">
                 <Input
                   type="number"
@@ -307,11 +316,23 @@ export function Component() {
                           >
                             {streamerMode ? <><EyeOff className="h-3.5 w-3.5 mr-1" />Hidden</> : "Copy Deep Link"}
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={streamerMode}
+                            title={streamerMode ? "Disabled in Streamer Mode" : "Print QR code to terminal (useful for SSH/headless access)"}
+                            onClick={() => {
+                              if (streamerMode) return
+                              tipcClient.printRemoteServerQRCode()
+                            }}
+                          >
+                            Print to Terminal
+                          </Button>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {streamerMode
                             ? "QR code and deep link hidden in Streamer Mode"
-                            : "Scan with the SpeakMCP mobile app to auto-configure. Works on local network only. For internet access, use Cloudflare Tunnel below."}
+                            : "Scan with the SpeakMCP mobile app to auto-configure. Works on local network only. Use 'Print to Terminal' for SSH/headless access. For internet access, use Cloudflare Tunnel below."}
                         </div>
                       </div>
                     </Control>

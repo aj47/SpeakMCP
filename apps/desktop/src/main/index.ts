@@ -20,7 +20,7 @@ import { initializeDeepLinkHandling } from "./oauth-deeplink-handler"
 import { diagnosticsService } from "./diagnostics"
 
 import { configStore } from "./config"
-import { startRemoteServer } from "./remote-server"
+import { startRemoteServer, printQRCodeToTerminal, startRemoteServerForced } from "./remote-server"
 import { acpService } from "./acp-service"
 import { agentProfileService } from "./agent-profile-service"
 import { initializeBundledSkills, skillsService, startSkillsFolderWatcher } from "./skills-service"
@@ -31,6 +31,9 @@ import {
 } from "./cloudflare-tunnel"
 import { initModelsDevService } from "./models-dev-service"
 import { loopService } from "./loop-service"
+
+// Check for --qr flag (headless mode with QR code)
+const isQRMode = process.argv.includes("--qr")
 
 // Enable CDP remote debugging port if REMOTE_DEBUGGING_PORT env variable is set
 // This must be called before app.whenReady()
@@ -53,9 +56,87 @@ if (process.platform === 'linux') {
 
 registerServeSchema()
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   initDebugFlags(process.argv)
   logApp("SpeakMCP starting up...")
+
+  // Handle --qr mode: start remote server, start tunnel, print QR code, run headlessly
+  if (isQRMode) {
+    logApp("Running in --qr mode (headless with QR code)")
+
+    // Hide dock icon on macOS for headless mode
+    if (process.platform === "darwin" && app.dock) {
+      app.dock.hide()
+    }
+
+    try {
+      // Start remote server (force enabled for --qr mode, bypassing config check)
+      const serverResult = await startRemoteServerForced()
+      if (!serverResult.running) {
+        console.error("[QR Mode] Failed to start remote server:", serverResult.error || "Unknown error")
+        process.exit(1)
+      }
+      logApp("Remote server started in --qr mode")
+
+      // Start Cloudflare tunnel for remote access
+      const cfg = configStore.get()
+      let tunnelUrl: string | undefined
+
+      // Check if cloudflared is installed
+      const cloudflaredInstalled = await checkCloudflaredInstalled()
+      if (!cloudflaredInstalled) {
+        console.log("[QR Mode] cloudflared not installed - QR code will use local address")
+        console.log("[QR Mode] Install cloudflared for remote access: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+      } else {
+        // Prefer named tunnel if configured, otherwise use quick tunnel
+        const tunnelMode = cfg.cloudflareTunnelMode || "quick"
+
+        if (tunnelMode === "named" && cfg.cloudflareTunnelId && cfg.cloudflareTunnelHostname) {
+          console.log("[QR Mode] Starting named Cloudflare tunnel...")
+          const result = await startNamedCloudflareTunnel({
+            tunnelId: cfg.cloudflareTunnelId,
+            hostname: cfg.cloudflareTunnelHostname,
+            credentialsPath: cfg.cloudflareTunnelCredentialsPath || undefined,
+          })
+          if (result.success && result.url) {
+            tunnelUrl = result.url
+            logApp(`Named tunnel started: ${tunnelUrl}`)
+          } else {
+            console.error(`[QR Mode] Named tunnel failed: ${result.error}`)
+            console.log("[QR Mode] Falling back to quick tunnel...")
+          }
+        }
+
+        // If named tunnel wasn't used or failed, try quick tunnel
+        if (!tunnelUrl) {
+          console.log("[QR Mode] Starting Cloudflare quick tunnel...")
+          const result = await startCloudflareTunnel()
+          if (result.success && result.url) {
+            tunnelUrl = result.url
+            logApp(`Quick tunnel started: ${tunnelUrl}`)
+          } else {
+            console.error(`[QR Mode] Quick tunnel failed: ${result.error}`)
+            console.log("[QR Mode] QR code will use local address instead")
+          }
+        }
+      }
+
+      // Print QR code to terminal (with tunnel URL if available)
+      const printed = await printQRCodeToTerminal(tunnelUrl)
+      if (!printed) {
+        console.error("[QR Mode] Failed to print QR code. Ensure remoteServerApiKey is configured.")
+        console.log("[QR Mode] You can set an API key in the config or run the app normally first.")
+      }
+
+      console.log("[QR Mode] Server running. Press Ctrl+C to exit.")
+    } catch (err) {
+      console.error("[QR Mode] Failed to start remote server:", err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+
+    // Keep the process running - don't create any windows
+    return
+  }
 
   initializeDeepLinkHandling()
   logApp("Deep link handling initialized")
@@ -354,6 +435,10 @@ app.whenReady().then(() => {
 })
 
 app.on("window-all-closed", () => {
+  // Don't quit in --qr mode (headless server)
+  if (isQRMode) {
+    return
+  }
   if (process.platform !== "darwin") {
     app.quit()
   }

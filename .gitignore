@@ -70,3 +70,4 @@ apps/desktop/tmp/
 
 # Node compile cache
 node-compile-cache/
+tmp/

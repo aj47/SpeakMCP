@@ -80,7 +80,7 @@ export function ConnectionStatusIndicator({
   };
 
   return (
-    <View style={[styles.container, compact && styles.containerCompact]}>
+    <View style={[styles.container, compact && styles.containerCompact]} accessibilityLabel={getStatusText()} accessibilityRole="text">
       <View style={styles.dotContainer}>
         <View
           style={[

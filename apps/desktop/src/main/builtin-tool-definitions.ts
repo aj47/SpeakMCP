@@ -245,6 +245,71 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:list_loops`,
+    description: "List all internal loops. Use this to discover loop IDs before updating a loop.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:create_loop`,
+    description: "Create an internal loop (recurring task definition) with a name, prompt, and interval in minutes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Unique loop name",
+        },
+        prompt: {
+          type: "string",
+          description: "Task prompt to run for this loop",
+        },
+        intervalMinutes: {
+          type: "number",
+          description: "Loop interval in minutes (must be a positive integer)",
+        },
+        enabled: {
+          type: "boolean",
+          description: "Whether the loop is enabled (default: true)",
+        },
+      },
+      required: ["name", "prompt", "intervalMinutes"],
+    },
+  },
+  {
+    name: `${BUILTIN_SERVER_NAME}:update_loop`,
+    description: "Update an existing internal loop by loop ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        loopId: {
+          type: "string",
+          description: "Loop ID to update (from list_loops or create_loop)",
+        },
+        name: {
+          type: "string",
+          description: "Updated unique loop name (optional)",
+        },
+        prompt: {
+          type: "string",
+          description: "Updated task prompt (optional)",
+        },
+        intervalMinutes: {
+          type: "number",
+          description: "Updated interval in minutes (optional, must be a positive integer)",
+        },
+        enabled: {
+          type: "boolean",
+          description: "Updated enabled state (optional)",
+        },
+      },
+      required: ["loopId"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:create_profile`,
     description: "Create a new profile with specified name and guidelines. New profiles have all MCP servers disabled by default - enable specific servers as needed.",
     inputSchema: {
@@ -445,4 +510,3 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
 export function getBuiltinToolNames(): string[] {
   return builtinToolDefinitions.map((tool) => tool.name)
 }
-

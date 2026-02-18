@@ -24,7 +24,7 @@ import { messageQueueService } from "./message-queue-service"
 import { exec } from "child_process"
 import { promisify } from "util"
 import path from "path"
-import type { AgentMemory } from "../shared/types"
+import type { AgentMemory, InternalLoop } from "../shared/types"
 
 const execAsync = promisify(exec)
 
@@ -951,6 +951,225 @@ const toolHandlers: Record<string, ToolHandler> = {
         ],
         isError: true,
       }
+    }
+  },
+
+  list_loops: async (): Promise<MCPToolResult> => {
+    const config = configStore.get()
+    const loops = config.internalLoops || []
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            loops,
+            count: loops.length,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  create_loop: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    if (typeof args.name !== "string" || args.name.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (typeof args.prompt !== "string" || args.prompt.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "prompt must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (typeof args.intervalMinutes !== "number" || !Number.isInteger(args.intervalMinutes) || args.intervalMinutes <= 0) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "intervalMinutes must be a positive integer" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    const config = configStore.get()
+    const loops = config.internalLoops || []
+    const name = args.name.trim()
+    const prompt = args.prompt.trim()
+
+    const existingLoop = loops.find((loop) => loop.name.toLowerCase() === name.toLowerCase())
+    if (existingLoop) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `A loop named '${name}' already exists. Loop names must be unique (case-insensitive).`,
+          }),
+        }],
+        isError: true,
+      }
+    }
+
+    const now = Date.now()
+    const loop: InternalLoop = {
+      id: `loop_${now}_${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      prompt,
+      intervalMinutes: args.intervalMinutes,
+      enabled: typeof args.enabled === "boolean" ? args.enabled : true,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    configStore.save({
+      ...config,
+      internalLoops: [...loops, loop],
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            loop,
+            message: `Loop '${loop.name}' created successfully.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  update_loop: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    if (typeof args.loopId !== "string" || args.loopId.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "loopId must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.name !== undefined && (typeof args.name !== "string" || args.name.trim() === "")) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "name must be a non-empty string if provided" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.prompt !== undefined && (typeof args.prompt !== "string" || args.prompt.trim() === "")) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "prompt must be a non-empty string if provided" }) }],
+        isError: true,
+      }
+    }
+
+    if (
+      args.intervalMinutes !== undefined &&
+      (typeof args.intervalMinutes !== "number" || !Number.isInteger(args.intervalMinutes) || args.intervalMinutes <= 0)
+    ) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "intervalMinutes must be a positive integer if provided" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.name === undefined && args.prompt === undefined && args.intervalMinutes === undefined && args.enabled === undefined) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "At least one of name, prompt, intervalMinutes, or enabled must be provided" }) }],
+        isError: true,
+      }
+    }
+
+    const loopId = (args.loopId as string).trim()
+    const name = args.name as string | undefined
+    const prompt = args.prompt as string | undefined
+    const intervalMinutes = args.intervalMinutes as number | undefined
+    const enabled = args.enabled as boolean | undefined
+
+    const config = configStore.get()
+    const loops = config.internalLoops || []
+    const loopIndex = loops.findIndex((loop) => loop.id === loopId)
+
+    if (loopIndex === -1) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `Loop '${loopId}' not found.`,
+          }),
+        }],
+        isError: true,
+      }
+    }
+
+    if (name !== undefined) {
+      const trimmedName = name.trim()
+      const existingLoop = loops.find(
+        (loop, index) => index !== loopIndex && loop.name.toLowerCase() === trimmedName.toLowerCase()
+      )
+      if (existingLoop) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: false,
+              error: `A loop named '${trimmedName}' already exists. Loop names must be unique (case-insensitive).`,
+            }),
+          }],
+          isError: true,
+        }
+      }
+    }
+
+    const currentLoop = loops[loopIndex]
+    const updatedLoop: InternalLoop = {
+      ...currentLoop,
+      ...(name !== undefined && { name: name.trim() }),
+      ...(prompt !== undefined && { prompt: prompt.trim() }),
+      ...(intervalMinutes !== undefined && { intervalMinutes }),
+      ...(enabled !== undefined && { enabled }),
+      updatedAt: Date.now(),
+    }
+
+    const updatedLoops = [...loops]
+    updatedLoops[loopIndex] = updatedLoop
+
+    configStore.save({
+      ...config,
+      internalLoops: updatedLoops,
+    })
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            loop: updatedLoop,
+            message: `Loop '${updatedLoop.name}' updated successfully.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
     }
   },
 

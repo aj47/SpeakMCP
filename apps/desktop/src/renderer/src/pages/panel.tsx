@@ -19,14 +19,31 @@ import { ttsManager } from "@renderer/lib/tts-manager"
 import { formatKeyComboForDisplay } from "@shared/key-utils"
 import { Send } from "lucide-react"
 
-const VISUALIZER_BUFFER_LENGTH = 70
+const DEFAULT_VISUALIZER_BAR_COUNT = 70
+const MIN_VISUALIZER_BAR_COUNT = 24
+const MAX_VISUALIZER_BAR_COUNT = 240
+const WAVEFORM_BAR_WIDTH_PX = 2
+const WAVEFORM_BAR_GAP_PX = 2
+const WAVEFORM_HORIZONTAL_PADDING_PX = 16
 const WAVEFORM_MIN_HEIGHT = 150
 const WAVEFORM_WITH_PREVIEW_HEIGHT = 160
 const TEXT_INPUT_MIN_HEIGHT = 160
 const PROGRESS_MIN_HEIGHT = 200
 
-const getInitialVisualizerData = () =>
-  Array<number>(VISUALIZER_BUFFER_LENGTH).fill(-1000)
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value))
+
+const getInitialVisualizerData = (length = DEFAULT_VISUALIZER_BAR_COUNT) =>
+  Array<number>(length).fill(-1000)
+
+const resizeVisualizerData = (data: number[], targetLength: number): number[] => {
+  if (targetLength <= 0) return []
+  if (data.length === targetLength) return data
+  if (data.length > targetLength) {
+    return data.slice(data.length - targetLength)
+  }
+  return [...Array<number>(targetLength - data.length).fill(-1000), ...data]
+}
 
 export function Component() {
   const [visualizerData, setVisualizerData] = useState(() =>
@@ -46,6 +63,9 @@ export function Component() {
   const [fromButtonClick, setFromButtonClick] = useState(false)
   const [previewText, setPreviewText] = useState("")
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const recordingViewportRef = useRef<HTMLDivElement | null>(null)
+  const [recordingViewportSize, setRecordingViewportSize] = useState({ width: 0, height: 0 })
+  const visualizerBarCountRef = useRef(DEFAULT_VISUALIZER_BAR_COUNT)
   const { isDark } = useTheme()
   const lastRequestedModeRef = useRef<"normal" | "agent" | "textInput">("normal")
 
@@ -114,6 +134,10 @@ export function Component() {
 
   const configQuery = useConfigQuery()
   const isDragEnabled = (configQuery.data as any)?.panelDragEnabled ?? true
+  // Disable transcription preview for Parakeet since live chunk PCM conversion is expensive.
+  const isPreviewEnabled =
+    (configQuery.data?.transcriptionPreviewEnabled ?? false) &&
+    configQuery.data?.sttProviderId !== "parakeet"
 
   const getSubmitShortcutText = useMemo(() => {
     const config = configQuery.data
@@ -360,9 +384,10 @@ export function Component() {
     recorder.on("visualizer-data", (rms) => {
       setVisualizerData((prev) => {
         const data = [...prev, rms]
+        const targetLength = visualizerBarCountRef.current
 
-        if (data.length > VISUALIZER_BUFFER_LENGTH) {
-          data.shift()
+        if (data.length > targetLength) {
+          data.splice(0, data.length - targetLength)
         }
 
         return data
@@ -373,7 +398,7 @@ export function Component() {
       const currentMcpMode = mcpModeRef.current
       setRecording(false)
       recordingRef.current = false
-      setVisualizerData(() => getInitialVisualizerData())
+      setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
       tipcClient.recordEvent({ type: "end" })
 
       if (!isConfirmedRef.current) {
@@ -417,11 +442,30 @@ export function Component() {
     })
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
+  useEffect(() => {
+    if (!recording) return undefined
+
+    const viewport = recordingViewportRef.current
+    if (!viewport || typeof ResizeObserver === "undefined") {
+      return undefined
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const width = Math.round(entry.contentRect.width)
+      const height = Math.round(entry.contentRect.height)
+      setRecordingViewportSize((prev) => {
+        if (prev.width === width && prev.height === height) return prev
+        return { width, height }
+      })
+    })
+    observer.observe(viewport)
+
+    return () => observer.disconnect()
+  }, [recording])
+
   // Transcription preview: periodically send audio chunks for live transcription
-  // Disable transcription preview for Parakeet since it requires PCM decoding which is
-  // expensive to do for live preview chunks. Groq/OpenAI can transcribe WebM directly.
-  const isPreviewEnabled = (configQuery.data?.transcriptionPreviewEnabled ?? false) &&
-    configQuery.data?.sttProviderId !== "parakeet"
   useEffect(() => {
     if (!recording || !isPreviewEnabled) {
       // Clear preview state when not recording
@@ -432,7 +476,7 @@ export function Component() {
       if (!recording) {
         setPreviewText("")
       }
-      return
+      return undefined
     }
 
     // Groq bills a minimum of 10 seconds per request, so use 10s intervals
@@ -514,7 +558,7 @@ export function Component() {
       // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
       setRecording(true)
       recordingRef.current = true
-      setVisualizerData(() => getInitialVisualizerData())
+      setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
       recorderRef.current?.startRecording()
     })
 
@@ -558,7 +602,7 @@ export function Component() {
         // This prevents flash of stale UI during the ~280ms mic initialization (fixes #974)
         setRecording(true)
         recordingRef.current = true
-        setVisualizerData(() => getInitialVisualizerData())
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         tipcClient.showPanelWindow({})
         recorderRef.current?.startRecording()
       }
@@ -678,7 +722,7 @@ export function Component() {
       // This prevents flash of stale progress UI during the ~280ms mic initialization
       setRecording(true)
       recordingRef.current = true
-      setVisualizerData(() => getInitialVisualizerData())
+      setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
       recorderRef.current?.startRecording()
     })
 
@@ -743,7 +787,7 @@ export function Component() {
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false
-        setVisualizerData(() => getInitialVisualizerData())
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         recorderRef.current?.stopRecording()
       }
     } else if (isTextSubmissionPending) {
@@ -782,7 +826,7 @@ export function Component() {
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false
-        setVisualizerData(() => getInitialVisualizerData())
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         recorderRef.current?.stopRecording()
       }
 
@@ -814,7 +858,7 @@ export function Component() {
         isConfirmedRef.current = false
         setRecording(false)
         recordingRef.current = false
-        setVisualizerData(() => getInitialVisualizerData())
+        setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         recorderRef.current?.stopRecording()
       }
 
@@ -892,6 +936,41 @@ export function Component() {
 
   // Use appropriate minimum height based on current mode
   const hasPreviewVisible = recording && isPreviewEnabled && previewText.length > 0
+  const availableWaveformWidth = Math.max(
+    0,
+    recordingViewportSize.width - WAVEFORM_HORIZONTAL_PADDING_PX * 2,
+  )
+  const visualizerBarCount = useMemo(() => {
+    if (availableWaveformWidth <= 0) return DEFAULT_VISUALIZER_BAR_COUNT
+    const estimatedCount = Math.floor(
+      (availableWaveformWidth + WAVEFORM_BAR_GAP_PX) /
+        (WAVEFORM_BAR_WIDTH_PX + WAVEFORM_BAR_GAP_PX),
+    )
+    return clamp(
+      estimatedCount,
+      MIN_VISUALIZER_BAR_COUNT,
+      MAX_VISUALIZER_BAR_COUNT,
+    )
+  }, [availableWaveformWidth])
+  const waveformContainerHeightPx = useMemo(() => {
+    const availableHeight =
+      recordingViewportSize.height > 0
+        ? recordingViewportSize.height
+        : hasPreviewVisible
+          ? WAVEFORM_WITH_PREVIEW_HEIGHT
+          : WAVEFORM_MIN_HEIGHT
+
+    if (hasPreviewVisible) {
+      return Math.round(clamp(availableHeight * 0.24, 40, 88))
+    }
+    return Math.round(clamp(availableHeight * 0.34, 56, 120))
+  }, [hasPreviewVisible, recordingViewportSize.height])
+
+  useEffect(() => {
+    visualizerBarCountRef.current = visualizerBarCount
+    setVisualizerData((prev) => resizeVisualizerData(prev, visualizerBarCount))
+  }, [visualizerBarCount])
+
   const waveformHeight = hasPreviewVisible ? WAVEFORM_WITH_PREVIEW_HEIGHT : WAVEFORM_MIN_HEIGHT
   const minHeight = showTextInput ? TEXT_INPUT_MIN_HEIGHT : (anyVisibleSessions && !recording ? PROGRESS_MIN_HEIGHT : waveformHeight)
 
@@ -955,7 +1034,10 @@ export function Component() {
 
               {/* Waveform visualization and submit controls - show when recording is active */}
               {recording && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
+                <div
+                  ref={recordingViewportRef}
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center"
+                >
                   {/* Continue conversation indicator */}
                   {continueConversationTitle && (
                     <div className="flex items-center gap-1 px-2 py-0.5 mb-1 rounded bg-blue-500/10 dark:bg-blue-400/10 text-blue-600 dark:text-blue-400 text-xs">
@@ -963,20 +1045,15 @@ export function Component() {
                       <span className="font-medium truncate max-w-[200px]">{continueConversationTitle}</span>
                     </div>
                   )}
-                  {/* Waveform - shrinks slightly when preview text is showing */}
+                  {/* Waveform scales with panel size while preserving stable min/max bounds */}
                   <div
-                    className={cn(
-                      "flex items-center justify-center transition-all duration-300 px-4 pointer-events-none",
-                      isPreviewEnabled && previewText ? "h-10" : "h-16",
-                      "opacity-100",
-                    )}
+                    className="pointer-events-none flex w-full items-center justify-center px-4 opacity-100 transition-all duration-300"
+                    style={{ height: `${waveformContainerHeightPx}px` }}
                   >
-                    <div className={cn(
-                      "flex items-center gap-0.5",
-                      isPreviewEnabled && previewText ? "h-10" : "h-16",
-                    )}>
+                    <div className="flex h-full w-full items-center justify-center gap-0.5 overflow-hidden">
                       {visualizerData
                         .slice()
+                        .slice(-visualizerBarCount)
                         .map((rms, index) => {
                           return (
                             <div

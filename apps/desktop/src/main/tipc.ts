@@ -17,6 +17,8 @@ import {
   showPanelWindowAndShowTextInput,
   showPanelWindowAndStartMcpRecording,
   WAVEFORM_MIN_HEIGHT,
+  TEXT_INPUT_MIN_HEIGHT,
+  PROGRESS_MIN_HEIGHT,
   MIN_WAVEFORM_WIDTH,
   clearPanelOpenedWithMain,
   resizePanelForWaveformPreview,
@@ -2850,7 +2852,13 @@ export const router = {
 
       // Apply minimum size constraints (use MIN_WAVEFORM_WIDTH to ensure visualizer bars aren't clipped)
       const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
-      const minHeight = WAVEFORM_MIN_HEIGHT
+      const mode = getCurrentPanelMode()
+      const minHeight =
+        mode === "agent"
+          ? PROGRESS_MIN_HEIGHT
+          : mode === "textInput"
+            ? TEXT_INPUT_MIN_HEIGHT
+            : WAVEFORM_MIN_HEIGHT
       const finalWidth = Math.max(minWidth, input.width)
       const finalHeight = Math.max(minHeight, input.height)
 
@@ -2877,15 +2885,18 @@ export const router = {
       return updatedConfig.panelCustomSize
     }),
 
-  // Save panel size (unified across all modes)
+  // Save panel size with mode-specific persistence
   savePanelModeSize: t.procedure
     .input<{ mode: "normal" | "agent" | "textInput"; width: number; height: number }>()
     .action(async ({ input }) => {
       const config = configStore.get()
       const updatedConfig = { ...config }
 
-      // Save to unified panelCustomSize regardless of mode
-      updatedConfig.panelCustomSize = { width: input.width, height: input.height }
+      if (input.mode === "agent") {
+        updatedConfig.panelProgressSize = { width: input.width, height: input.height }
+      } else {
+        updatedConfig.panelCustomSize = { width: input.width, height: input.height }
+      }
 
       configStore.save(updatedConfig)
       return { mode: input.mode, size: { width: input.width, height: input.height } }

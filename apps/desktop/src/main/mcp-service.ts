@@ -1322,6 +1322,44 @@ export class MCPService {
     return combined
   }
 
+  private async processToolResultContent(
+    serverName: string,
+    toolName: string,
+    result: MCPToolResult,
+    onProgress?: (message: string) => void,
+  ): Promise<MCPToolResult> {
+    const rawContent = Array.isArray(result.content)
+      ? (result.content as Array<{ type?: string; text?: string } | string>)
+      : []
+    const normalizedContent = rawContent.length > 0
+      ? rawContent.map((item) => {
+          if (typeof item === "string") {
+            return { type: "text" as const, text: item }
+          }
+          if (typeof item?.text === "string") {
+            return { type: "text" as const, text: item.text }
+          }
+          return { type: "text" as const, text: JSON.stringify(item ?? {}) }
+        })
+      : [{ type: "text" as const, text: "Tool executed successfully" }]
+
+    const filteredContent = this.filterToolResponse(serverName, toolName, normalizedContent)
+    const processedContent = await this.processLargeToolResponse(
+      serverName,
+      toolName,
+      filteredContent,
+      onProgress,
+    )
+
+    return {
+      ...result,
+      content: processedContent.map((item) => ({
+        type: "text" as const,
+        text: item.text,
+      })),
+    }
+  }
+
   private async executeServerTool(
     serverName: string,
     toolName: string,
@@ -1446,40 +1484,15 @@ export class MCPService {
         }
       }
 
-      // Ensure content is properly formatted
-      const content = Array.isArray(result.content)
-        ? result.content.map((item) => ({
-            type: "text" as const,
-            text:
-              typeof item === "string"
-                ? item
-                : item.text || JSON.stringify(item),
-          }))
-        : [
-            {
-              type: "text" as const,
-              text: "Tool executed successfully",
-            },
-          ]
-
-      // Apply response filtering to reduce context size
-      const filteredContent = this.filterToolResponse(serverName, toolName, content)
-
-      // Check if response needs further processing for context management
-      const processedContent = await this.processLargeToolResponse(
+      const finalResult = await this.processToolResultContent(
         serverName,
         toolName,
-        filteredContent,
-        onProgress
+        {
+          content: Array.isArray(result.content) ? result.content : [{ type: "text", text: "Tool executed successfully" }],
+          isError: Boolean(result.isError),
+        },
+        onProgress,
       )
-
-      const finalResult: MCPToolResult = {
-        content: processedContent.map(item => ({
-          type: "text" as const,
-          text: item.text
-        })),
-        isError: Boolean(result.isError),
-      }
 
       if (isDebugTools()) {
         logTools("Normalized tool result", finalResult)
@@ -2524,10 +2537,20 @@ export class MCPService {
         }
         const result = await executeBuiltinTool(toolCall.name, toolCall.arguments || {}, sessionId)
         if (result) {
+          const builtInToolName = toolCall.name.includes(":")
+            ? toolCall.name.split(":", 2)[1]
+            : toolCall.name
+          const processedResult = await this.processToolResultContent(
+            BUILTIN_SERVER_NAME,
+            builtInToolName,
+            result,
+            onProgress,
+          )
+
           if (isDebugTools()) {
-            logTools("Built-in tool result", { name: toolCall.name, result })
+            logTools("Built-in tool result", { name: toolCall.name, result: processedResult })
           }
-          return endSpanAndReturn(result)
+          return endSpanAndReturn(processedResult)
         }
       }
 
@@ -2637,7 +2660,16 @@ export class MCPService {
         if (isBuiltinTool(matchingTool.name)) {
           const result = await executeBuiltinTool(matchingTool.name, toolCall.arguments || {})
           if (result) {
-            return endSpanAndReturn(result)
+            const builtInToolName = matchingTool.name.includes(":")
+              ? matchingTool.name.split(":", 2)[1]
+              : matchingTool.name
+            const processedResult = await this.processToolResultContent(
+              BUILTIN_SERVER_NAME,
+              builtInToolName,
+              result,
+              onProgress,
+            )
+            return endSpanAndReturn(processedResult)
           }
         }
 

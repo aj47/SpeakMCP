@@ -240,6 +240,10 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
           type: "number",
           description: "Command timeout in milliseconds (default: 30000). Set to 0 for no timeout.",
         },
+        maxOutputChars: {
+          type: "number",
+          description: "Maximum characters to return per stream (stdout/stderr). Default 20000, minimum 1000, capped at 200000. Values below 1000 are raised to 1000.",
+        },
       },
       required: ["command"],
     },
@@ -445,4 +449,3 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
 export function getBuiltinToolNames(): string[] {
   return builtinToolDefinitions.map((tool) => tool.name)
 }
-

@@ -497,24 +497,178 @@ import { preprocessTextForTTSWithLLM } from "./tts-llm-preprocessing"
 
 const t = tipc.create()
 
+const RECORDING_FILE_EXTENSIONS = ["webm", "wav"] as const
+
+// Track recording IDs that have been written to disk but not yet committed to
+// history.json (i.e. agent processing is still in progress). The orphan cleanup
+// routine excludes these IDs so it cannot delete a just-created file.
+const inFlightRecordingIds = new Set<string>()
+
+const getRecordingsHistoryPath = (): string => path.join(recordingsFolder, "history.json")
+
+const getRecordingCleanupConfig = () => {
+  const config = configStore.get()
+  const toPositiveInt = (value: unknown, fallback: number): number => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+    const normalized = Math.floor(value)
+    return normalized > 0 ? normalized : fallback
+  }
+
+  return {
+    enabled: config.recordingsCleanupEnabled !== false,
+    historyMaxItems: toPositiveInt(config.recordingHistoryMaxItems, 2000),
+    historyRetentionMs: toPositiveInt(config.recordingHistoryRetentionDays, 90) * 24 * 60 * 60 * 1000,
+    fileRetentionMs: toPositiveInt(config.recordingFileRetentionDays, 90) * 24 * 60 * 60 * 1000,
+    orphanGracePeriodMs: toPositiveInt(config.recordingOrphanGracePeriodMinutes, 5) * 60 * 1000,
+  }
+}
+
+const isValidRecordingHistoryItem = (item: unknown): item is RecordingHistoryItem => {
+  if (typeof item !== "object" || item === null) return false
+  const entry = item as Partial<RecordingHistoryItem>
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.createdAt === "number" &&
+    Number.isFinite(entry.createdAt) &&
+    typeof entry.duration === "number" &&
+    Number.isFinite(entry.duration) &&
+    typeof entry.transcript === "string"
+  )
+}
+
+const normalizeRecordingHistory = (history: RecordingHistoryItem[]): RecordingHistoryItem[] => {
+  // Sort newest first and dedupe by ID (keep latest instance).
+  const sorted = [...history].sort((a, b) => b.createdAt - a.createdAt)
+  const seen = new Set<string>()
+  const deduped: RecordingHistoryItem[] = []
+
+  for (const item of sorted) {
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    deduped.push(item)
+  }
+
+  return deduped
+}
+
+const removeRecordingFilesById = (recordingId: string) => {
+  for (const ext of RECORDING_FILE_EXTENSIONS) {
+    const filePath = path.join(recordingsFolder, `${recordingId}.${ext}`)
+    if (!fs.existsSync(filePath)) continue
+    try {
+      fs.unlinkSync(filePath)
+    } catch {
+      // Best effort; orphan cleanup runs again during subsequent history reads/writes.
+    }
+  }
+}
+
+const cleanupRecordingFiles = (history: RecordingHistoryItem[]) => {
+  const cleanupConfig = getRecordingCleanupConfig()
+  if (!cleanupConfig.enabled) {
+    return
+  }
+
+  const now = Date.now()
+  const retentionCutoff = now - cleanupConfig.fileRetentionMs
+  const historyById = new Map(history.map((item) => [item.id, item]))
+
+  try {
+    fs.mkdirSync(recordingsFolder, { recursive: true })
+    const files = fs.readdirSync(recordingsFolder)
+    for (const fileName of files) {
+      if (fileName === "history.json") continue
+      const match = fileName.match(/^(.+)\.(webm|wav)$/)
+      if (!match) continue
+
+      const recordingId = match[1]
+      const filePath = path.join(recordingsFolder, fileName)
+      const historyItem = historyById.get(recordingId)
+
+      // Remove orphan files (no matching history entry).
+      // Skip files whose recording ID is currently being processed (in-flight):
+      // the file was written before the history entry is appended, so cleaning
+      // it up now would delete a valid recording mid-flight.
+      // Fall back to a time-based grace period for files written before the
+      // process started (e.g. after a crash) where in-flight state is lost.
+      if (!historyItem) {
+        if (inFlightRecordingIds.has(recordingId)) {
+          // Recording is actively being processed; never treat as orphan.
+          continue
+        }
+        const orphanGracePeriodMs = cleanupConfig.orphanGracePeriodMs
+        let fileMtimeMs = 0
+        try {
+          fileMtimeMs = fs.statSync(filePath).mtimeMs
+        } catch {
+          // If we can't stat the file, skip deletion to be safe
+          continue
+        }
+        if (now - fileMtimeMs < orphanGracePeriodMs) {
+          // File is recent enough that it may still be in-flight; skip.
+          continue
+        }
+        try {
+          fs.unlinkSync(filePath)
+        } catch {
+          // Best effort
+        }
+        continue
+      }
+
+      // Remove old recording files while keeping transcript history.
+      if (historyItem.createdAt < retentionCutoff) {
+        try {
+          fs.unlinkSync(filePath)
+        } catch {
+          // Best effort
+        }
+      }
+    }
+  } catch {
+    // Best effort only
+  }
+}
+
+const reconcileRecordingHistory = (
+  inputHistory: RecordingHistoryItem[],
+  persist: boolean,
+): RecordingHistoryItem[] => {
+  let history = normalizeRecordingHistory(inputHistory)
+  const cleanupConfig = getRecordingCleanupConfig()
+
+  if (cleanupConfig.enabled) {
+    const now = Date.now()
+    const historyCutoff = now - cleanupConfig.historyRetentionMs
+    history = history.filter((item) => item.createdAt >= historyCutoff)
+    if (history.length > cleanupConfig.historyMaxItems) {
+      history = history.slice(0, cleanupConfig.historyMaxItems)
+    }
+  }
+
+  if (persist) {
+    fs.mkdirSync(recordingsFolder, { recursive: true })
+    fs.writeFileSync(getRecordingsHistoryPath(), JSON.stringify(history))
+  }
+
+  cleanupRecordingFiles(history)
+  return history
+}
+
 const getRecordingHistory = () => {
   try {
-    const history = JSON.parse(
-      fs.readFileSync(path.join(recordingsFolder, "history.json"), "utf8"),
-    ) as RecordingHistoryItem[]
-
-    // sort desc by createdAt
-    return history.sort((a, b) => b.createdAt - a.createdAt)
+    const raw = JSON.parse(
+      fs.readFileSync(getRecordingsHistoryPath(), "utf8"),
+    ) as unknown
+    const history = Array.isArray(raw) ? raw.filter(isValidRecordingHistoryItem) : []
+    return reconcileRecordingHistory(history, true)
   } catch {
     return []
   }
 }
 
 const saveRecordingsHitory = (history: RecordingHistoryItem[]) => {
-  fs.writeFileSync(
-    path.join(recordingsFolder, "history.json"),
-    JSON.stringify(history),
-  )
+  reconcileRecordingHistory(history, true)
 }
 
 /**
@@ -1623,16 +1777,38 @@ export const router = {
               transcript = json.text
             }
 
-            // Save the recording file
+            // Save the recording file and immediately mark it as in-flight so
+            // orphan cleanup won't delete it before the history entry is written.
             const recordingId = Date.now().toString()
             fs.writeFileSync(
               path.join(recordingsFolder, `${recordingId}.webm`),
               Buffer.from(input.recording),
             )
+            inFlightRecordingIds.add(recordingId)
 
             // Queue the transcript instead of processing immediately
             const queuedMessage = messageQueueService.enqueue(input.conversationId, transcript)
             logApp(`[createMcpRecording] Queued voice transcript ${queuedMessage.id} for active session ${activeSessionId}`)
+
+            // Save a history entry so the recording file is never treated as an
+            // orphan.  We do this after queueing so the entry is persisted even
+            // if the active session errors out.
+            try {
+              const history = getRecordingHistory()
+              const item: RecordingHistoryItem = {
+                id: recordingId,
+                createdAt: Date.now(),
+                duration: input.duration,
+                transcript,
+              }
+              history.push(item)
+              saveRecordingsHitory(history)
+            } catch (histErr) {
+              logApp(`[createMcpRecording] Failed to save queued recording history entry, removing file:`, histErr)
+              removeRecordingFilesById(recordingId)
+            } finally {
+              inFlightRecordingIds.delete(recordingId)
+            }
 
             return { conversationId: input.conversationId, queued: true, queuedMessageId: queuedMessage.id }
           }
@@ -1853,6 +2029,9 @@ export const router = {
         path.join(recordingsFolder, `${recordingId}.webm`),
         Buffer.from(input.recording),
       )
+      // Mark as in-flight so orphan cleanup won't delete the file before
+      // the history entry is written (agent processing is asynchronous).
+      inFlightRecordingIds.add(recordingId)
 
         // Fire-and-forget: Start agent processing without blocking
         // This allows multiple sessions to run concurrently
@@ -1879,8 +2058,12 @@ export const router = {
         })
           .catch((error) => {
             logLLM("[createMcpRecording] Agent processing error:", error)
+            // Recording file was already persisted; remove it to avoid orphan buildup
+            removeRecordingFilesById(recordingId)
           })
           .finally(() => {
+            // Recording is no longer in-flight regardless of outcome.
+            inFlightRecordingIds.delete(recordingId)
             // Process queued messages after this session completes (success or error)
             processQueuedMessages(conversationId!).catch((err) => {
               logLLM("[createMcpRecording] Error processing queued messages:", err)
@@ -1932,7 +2115,7 @@ export const router = {
         (item) => item.id !== input.id,
       )
       saveRecordingsHitory(recordings)
-      fs.unlinkSync(path.join(recordingsFolder, `${input.id}.webm`))
+      removeRecordingFilesById(input.id)
     }),
 
   deleteRecordingHistory: t.procedure.action(async () => {

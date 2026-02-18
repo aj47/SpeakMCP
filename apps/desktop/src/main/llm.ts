@@ -498,7 +498,11 @@ export async function processTranscriptWithAgentMode(
     }
 
     try {
-      // Convert toolResults from MCPToolResult format to stored format
+      // Convert toolResults from MCPToolResult format to stored format.
+      // Always persist toolResults (including for tool-role messages) so that
+      // downstream consumers (e.g. tipc.ts / remote-server.ts) can pair tool
+      // calls with their structured results when reconstructing prior history.
+      // Storage-level truncation in conversation-service handles size limits.
       const convertedToolResults = toolResults?.map(tr => ({
         success: !tr.isError,
         content: Array.isArray(tr.content)

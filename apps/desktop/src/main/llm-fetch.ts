@@ -216,12 +216,18 @@ function calculateBackoffDelay(
 
 /**
  * Sleep for the specified delay while allowing the kill switch to interrupt.
- * Checks state.shouldStopAgent immediately and roughly every 100ms during the wait.
+ * Checks both the global stop flag and session-specific stop flag immediately
+ * and roughly every 100ms during the wait.
  * Throws an error if the emergency stop is triggered.
  */
-async function interruptibleDelay(delay: number): Promise<void> {
+async function interruptibleDelay(delay: number, sessionId?: string): Promise<void> {
+  // Helper to check both global and session-specific stop flags
+  const shouldStop = () =>
+    state.shouldStopAgent ||
+    (sessionId != null && agentSessionStateManager.shouldStopSession(sessionId))
+
   // Immediate check (also covers delay === 0 case semantics)
-  if (state.shouldStopAgent) {
+  if (shouldStop()) {
     throw new Error("Aborted by emergency stop")
   }
 
@@ -231,7 +237,7 @@ async function interruptibleDelay(delay: number): Promise<void> {
 
   const startTime = Date.now()
   while (Date.now() - startTime < delay) {
-    if (state.shouldStopAgent) {
+    if (shouldStop()) {
       throw new Error("Aborted by emergency stop")
     }
     const remaining = delay - (Date.now() - startTime)
@@ -391,8 +397,12 @@ async function withRetry<T>(
     } catch (error) {
       lastError = error
 
-      // Don't retry aborts
-      if ((error as any)?.name === "AbortError" || state.shouldStopAgent) {
+      // Don't retry aborts or stopped sessions
+      if (
+        (error as any)?.name === "AbortError" ||
+        state.shouldStopAgent ||
+        (options.sessionId && agentSessionStateManager.shouldStopSession(options.sessionId))
+      ) {
         clearRetryStatus()
         throw error
       }
@@ -481,7 +491,7 @@ async function withRetry<T>(
       // Wait before retrying with interruptible delay
       // Wrap in try-catch to ensure clearRetryStatus is called on emergency stop
       try {
-        await interruptibleDelay(delay)
+        await interruptibleDelay(delay, options.sessionId)
       } catch (abortError) {
         clearRetryStatus()
         throw abortError

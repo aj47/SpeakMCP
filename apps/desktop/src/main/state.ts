@@ -173,6 +173,13 @@ export const agentSessionStateManager = {
     if (session) {
       session.shouldStop = true
 
+      // Also set the global flag so code paths that only check the global flag
+      // (e.g. interruptibleDelay) will also respond to per-session stops.
+      // This is safe because shouldStopSession() checks session.shouldStop first,
+      // so other active sessions with shouldStop=false won't be affected.
+      // The flag is reset when a new session is created via createSession().
+      state.shouldStopAgent = true
+
       // Abort all controllers for this session
       for (const controller of session.abortControllers) {
         try {

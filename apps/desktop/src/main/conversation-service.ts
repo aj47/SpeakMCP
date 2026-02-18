@@ -170,12 +170,14 @@ export class ConversationService {
     if (this.indexWriteTimer) {
       clearTimeout(this.indexWriteTimer)
       this.indexWriteTimer = null
-      await this.writeIndexToDisk()
     }
     // If a write is already in-flight, wait for it
     if (this.indexWritePromise) {
       await this.indexWritePromise
     }
+    // Persist the latest cache snapshot after waiting so stale writes
+    // cannot overwrite destructive operations (delete/reset).
+    await this.writeIndexToDisk()
   }
 
   private generatePreview(messages: ConversationMessage[]): string {
@@ -282,7 +284,7 @@ export class ConversationService {
     this.indexCache = index
 
     // Flush to disk immediately for deletes (important for consistency)
-    await this.writeIndexToDisk()
+    await this.flushIndexWrite()
   }
 
   async createConversation(
@@ -506,11 +508,8 @@ export class ConversationService {
   }
 
   async deleteAllConversations(): Promise<void> {
-    // Cancel any pending debounced writes
-    if (this.indexWriteTimer) {
-      clearTimeout(this.indexWriteTimer)
-      this.indexWriteTimer = null
-    }
+    // Ensure pending/in-flight index writes are settled before deleting files.
+    await this.flushIndexWrite()
 
     if (fs.existsSync(conversationsFolder)) {
       fs.rmSync(conversationsFolder, { recursive: true, force: true })

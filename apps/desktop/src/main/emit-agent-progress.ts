@@ -76,6 +76,11 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
   if (update.sessionId && !update.isComplete) {
     const shouldStop = agentSessionStateManager.shouldStopSession(update.sessionId)
     if (shouldStop) {
+      const state = sessionThrottleState.get(update.sessionId)
+      if (state?.timer) {
+        clearTimeout(state.timer)
+      }
+      sessionThrottleState.delete(update.sessionId)
       return
     }
   }
@@ -136,6 +141,16 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
       state.timer = setTimeout(() => {
         const s = sessionThrottleState.get(sessionId)
         if (s?.pendingUpdate) {
+          if (
+            s.pendingUpdate.sessionId &&
+            !s.pendingUpdate.isComplete &&
+            agentSessionStateManager.shouldStopSession(s.pendingUpdate.sessionId)
+          ) {
+            s.pendingUpdate = null
+            s.timer = null
+            sessionThrottleState.delete(sessionId)
+            return
+          }
           s.lastSendTime = Date.now()
           sendToWindows(s.pendingUpdate)
           s.pendingUpdate = null
@@ -145,4 +160,3 @@ export async function emitAgentProgress(update: AgentProgressUpdate): Promise<vo
     }
   }
 }
-

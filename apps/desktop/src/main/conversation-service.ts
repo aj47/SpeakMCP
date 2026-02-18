@@ -1,4 +1,5 @@
 import fs from "fs"
+import fsPromises from "fs/promises"
 import path from "path"
 import { conversationsFolder } from "./config"
 import { logApp } from "./debug"
@@ -15,8 +16,18 @@ const COMPACTION_MESSAGE_THRESHOLD = 20
 // Number of recent messages to keep intact after compaction
 const COMPACTION_KEEP_LAST = 10
 
+// Debounce delay for writing the conversation index to disk (ms)
+const INDEX_WRITE_DEBOUNCE_MS = 500
+
 export class ConversationService {
   private static instance: ConversationService | null = null
+
+  // In-memory cache of the conversation index to avoid re-reading from disk
+  private indexCache: ConversationHistoryItem[] | null = null
+  // Debounce timer for writing the index to disk
+  private indexWriteTimer: ReturnType<typeof setTimeout> | null = null
+  // Promise that resolves when the current index write completes (for flush)
+  private indexWritePromise: Promise<void> | null = null
 
   static getInstance(): ConversationService {
     if (!ConversationService.instance) {
@@ -65,15 +76,33 @@ export class ConversationService {
     return title.length < firstMessage.trim().length ? `${title}...` : title
   }
 
-  private updateConversationIndex(conversation: Conversation) {
+  /**
+   * Load the conversation index into memory if not already cached.
+   */
+  private async ensureIndexLoaded(): Promise<ConversationHistoryItem[]> {
+    if (this.indexCache !== null) {
+      return this.indexCache
+    }
     try {
       const indexPath = this.getConversationIndexPath()
-      let index: ConversationHistoryItem[] = []
+      const data = await fsPromises.readFile(indexPath, "utf8")
+      this.indexCache = JSON.parse(data)
+    } catch {
+      // File doesn't exist or is corrupted — start fresh
+      this.indexCache = []
+    }
+    return this.indexCache!
+  }
 
-      if (fs.existsSync(indexPath)) {
-        const indexData = fs.readFileSync(indexPath, "utf8")
-        index = JSON.parse(indexData)
-      }
+  /**
+   * Update the in-memory index and schedule a debounced write to disk.
+   * The in-memory cache is updated immediately so subsequent reads are consistent.
+   * The disk write is debounced so rapid successive calls (e.g. during agent sessions)
+   * collapse into a single I/O operation.
+   */
+  private async updateConversationIndex(conversation: Conversation): Promise<void> {
+    try {
+      let index = await this.ensureIndexLoaded()
 
       // Remove existing entry if it exists
       index = index.filter((item) => item.id !== conversation.id)
@@ -94,10 +123,59 @@ export class ConversationService {
       // Add to beginning of array (most recent first)
       index.unshift(indexItem)
 
-      // Save updated index
-      fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    } catch (error) {}
+      // Update in-memory cache immediately
+      this.indexCache = index
 
+      // Schedule debounced disk write
+      this.scheduleDiskWrite()
+    } catch (error) {
+      logApp("[ConversationService] Error updating conversation index:", error)
+    }
+  }
+
+  /**
+   * Schedule (or reschedule) a debounced write of the in-memory index to disk.
+   */
+  private scheduleDiskWrite(): void {
+    if (this.indexWriteTimer) {
+      clearTimeout(this.indexWriteTimer)
+    }
+    this.indexWriteTimer = setTimeout(() => {
+      this.indexWriteTimer = null
+      this.indexWritePromise = this.writeIndexToDisk()
+      this.indexWritePromise.finally(() => {
+        this.indexWritePromise = null
+      })
+    }, INDEX_WRITE_DEBOUNCE_MS)
+  }
+
+  /**
+   * Write the in-memory index cache to disk asynchronously.
+   */
+  private async writeIndexToDisk(): Promise<void> {
+    if (!this.indexCache) return
+    try {
+      const indexPath = this.getConversationIndexPath()
+      await fsPromises.writeFile(indexPath, JSON.stringify(this.indexCache, null, 2))
+    } catch (error) {
+      logApp("[ConversationService] Error writing index to disk:", error)
+    }
+  }
+
+  /**
+   * Flush any pending debounced index write to disk immediately.
+   * Called before operations that need a consistent on-disk state (e.g. delete).
+   */
+  private async flushIndexWrite(): Promise<void> {
+    if (this.indexWriteTimer) {
+      clearTimeout(this.indexWriteTimer)
+      this.indexWriteTimer = null
+      await this.writeIndexToDisk()
+    }
+    // If a write is already in-flight, wait for it
+    if (this.indexWritePromise) {
+      await this.indexWritePromise
+    }
   }
 
   private generatePreview(messages: ConversationMessage[]): string {
@@ -129,26 +207,23 @@ export class ConversationService {
       conversation.updatedAt = Date.now()
     }
 
-    // Save conversation to file
-    fs.writeFileSync(conversationPath, JSON.stringify(conversation, null, 2))
+    // Save conversation to file asynchronously to avoid blocking the main process
+    await fsPromises.writeFile(conversationPath, JSON.stringify(conversation, null, 2))
 
-    // Update the index
-    this.updateConversationIndex(conversation)
+    // Update the index (in-memory immediately, disk write debounced)
+    await this.updateConversationIndex(conversation)
   }
 
   async loadConversation(conversationId: string): Promise<Conversation | null> {
     try {
       const conversationPath = this.getConversationPath(conversationId)
 
-      if (!fs.existsSync(conversationPath)) {
-        return null
-      }
-
-      const conversationData = fs.readFileSync(conversationPath, "utf8")
+      const conversationData = await fsPromises.readFile(conversationPath, "utf8")
       const conversation: Conversation = JSON.parse(conversationData)
 
       return conversation
-    } catch (error) {
+    } catch {
+      // File doesn't exist or is corrupted
       return null
     }
   }
@@ -180,18 +255,10 @@ export class ConversationService {
 
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
     try {
-      const indexPath = this.getConversationIndexPath()
-
-      if (!fs.existsSync(indexPath)) {
-        return []
-      }
-
-      const indexData = fs.readFileSync(indexPath, "utf8")
-
-      const history: ConversationHistoryItem[] = JSON.parse(indexData)
+      const index = await this.ensureIndexLoaded()
 
       // Sort by updatedAt descending (most recent first)
-      const sorted = history.sort((a, b) => b.updatedAt - a.updatedAt)
+      const sorted = [...index].sort((a, b) => b.updatedAt - a.updatedAt)
       return sorted
     } catch (error) {
       logApp("[ConversationService] Error loading conversation history:", error)
@@ -203,18 +270,19 @@ export class ConversationService {
     const conversationPath = this.getConversationPath(conversationId)
 
     // Delete conversation file
-    if (fs.existsSync(conversationPath)) {
-      fs.unlinkSync(conversationPath)
+    try {
+      await fsPromises.unlink(conversationPath)
+    } catch {
+      // File may not exist — ignore
     }
 
-    // Update index
-    const indexPath = this.getConversationIndexPath()
-    if (fs.existsSync(indexPath)) {
-      const indexData = fs.readFileSync(indexPath, "utf8")
-      let index: ConversationHistoryItem[] = JSON.parse(indexData)
-      index = index.filter((item) => item.id !== conversationId)
-      fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
-    }
+    // Update in-memory index cache
+    let index = await this.ensureIndexLoaded()
+    index = index.filter((item) => item.id !== conversationId)
+    this.indexCache = index
+
+    // Flush to disk immediately for deletes (important for consistency)
+    await this.writeIndexToDisk()
   }
 
   async createConversation(
@@ -438,10 +506,19 @@ export class ConversationService {
   }
 
   async deleteAllConversations(): Promise<void> {
+    // Cancel any pending debounced writes
+    if (this.indexWriteTimer) {
+      clearTimeout(this.indexWriteTimer)
+      this.indexWriteTimer = null
+    }
+
     if (fs.existsSync(conversationsFolder)) {
       fs.rmSync(conversationsFolder, { recursive: true, force: true })
     }
     this.ensureConversationsFolder()
+
+    // Clear the in-memory cache
+    this.indexCache = []
   }
 }
 

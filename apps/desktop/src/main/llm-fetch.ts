@@ -225,7 +225,7 @@ async function interruptibleDelay(delay: number, sessionId?: string): Promise<vo
   const getStopReason = (): string | null => {
     // Check session-specific stop first (only when session ID is known and registered)
     if (sessionId != null && agentSessionStateManager.isSessionRegistered(sessionId) && agentSessionStateManager.shouldStopSession(sessionId)) {
-      return "Aborted by session stop"
+      return "Session stopped by kill switch"
     }
     if (state.shouldStopAgent) {
       return "Aborted by emergency stop"

@@ -3,7 +3,10 @@ import { ResizeHandle } from "@renderer/components/resize-handle"
 import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 
 // Minimum height for waveform panel - matches WAVEFORM_MIN_HEIGHT in main/window.ts
-const WAVEFORM_MIN_HEIGHT = 110
+const WAVEFORM_MIN_HEIGHT = 150
+type PanelMode = "normal" | "agent" | "textInput"
+const isPanelMode = (value: unknown): value is PanelMode =>
+  value === "normal" || value === "agent" || value === "textInput"
 
 interface PanelResizeWrapperProps {
   children: React.ReactNode
@@ -81,16 +84,28 @@ export function PanelResizeWrapper({
   const handleResizeEnd = useCallback(async (size: { width: number; height: number }) => {
     if (!enableResize) return
 
-    // Save the final size (unified across all modes)
+    // Save the final size by mode so waveform and progress views don't override each other.
     try {
       const finalWidth = Math.max(minWidth, size.width)
       const finalHeight = Math.max(minHeight, size.height)
-
-      // Save to unified panelCustomSize
-      await tipcClient.savePanelCustomSize({ width: finalWidth, height: finalHeight })
+      const rawMode = await tipcClient.getPanelMode()
+      const mode: PanelMode = isPanelMode(rawMode) ? rawMode : "normal"
+      await tipcClient.savePanelModeSize({
+        mode,
+        width: finalWidth,
+        height: finalHeight,
+      })
       setCurrentSize({ width: finalWidth, height: finalHeight })
     } catch (error) {
-      console.error("Failed to save panel size:", error)
+      try {
+        // Fallback for older router builds that may not have mode-aware persistence.
+        const finalWidth = Math.max(minWidth, size.width)
+        const finalHeight = Math.max(minHeight, size.height)
+        await tipcClient.savePanelCustomSize({ width: finalWidth, height: finalHeight })
+        setCurrentSize({ width: finalWidth, height: finalHeight })
+      } catch (fallbackError) {
+        console.error("Failed to save panel size:", error, fallbackError)
+      }
     }
   }, [enableResize, minWidth, minHeight])
 

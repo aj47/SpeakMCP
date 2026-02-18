@@ -288,20 +288,20 @@ export const MIN_WAVEFORM_WIDTH = calculateMinWaveformWidth() // ~312px
 
 // Minimum height for waveform panel:
 // - Drag bar: 24px
-// - Waveform: 24px
+// - Waveform: 64px (h-16)
 // - Submit button + hint: 36px
 // - Padding: ~26px
-// Total: ~110px
-export const WAVEFORM_MIN_HEIGHT = 110
+// Total: ~150px
+export const WAVEFORM_MIN_HEIGHT = 150
 
 // Minimum height for waveform panel with transcription preview:
 // - Drag bar: 24px
-// - Waveform (shrunk): 12px
+// - Waveform (shrunk): 40px (h-10)
 // - Preview text: ~32px (2 lines)
 // - Submit button + hint: 36px
-// - Padding/margins: ~26px
-// Total: ~150px
-export const WAVEFORM_WITH_PREVIEW_HEIGHT = 150
+// - Padding/margins: ~28px
+// Total: ~160px
+export const WAVEFORM_WITH_PREVIEW_HEIGHT = 160
 
 // Minimum height for text input panel:
 // - Hint text row: ~20px
@@ -340,43 +340,64 @@ const getSavedPanelSize = (mode?: "waveform" | "progress") => {
 
   logApp(`[window.ts] getSavedPanelSize - checking config for mode: ${mode || 'default'}...`)
 
-  const validateSize = (savedSize: { width: number; height: number }, minHeight: number) => {
+  const validateSize = (
+    savedSize: { width: number; height: number },
+    minHeight: number,
+    fallbackSize: { width: number; height: number } = panelWindowSize,
+    minWidth: number = Math.max(200, MIN_WAVEFORM_WIDTH),
+  ) => {
     const maxWidth = 3000
     const maxHeight = 2000
-    const minWidth = 200
 
     if (savedSize.width > maxWidth || savedSize.height > maxHeight) {
-      logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
-      return panelWindowSize
+      logApp(`[window.ts] Saved size too large (${savedSize.width}x${savedSize.height}), using default:`, fallbackSize)
+      return fallbackSize
     }
 
     if (savedSize.width < minWidth || savedSize.height < minHeight) {
-      logApp(`[window.ts] Saved size too small (${savedSize.width}x${savedSize.height}), using default:`, panelWindowSize)
-      return panelWindowSize
+      logApp(`[window.ts] Saved size too small (${savedSize.width}x${savedSize.height}), using default:`, fallbackSize)
+      return fallbackSize
     }
 
     return savedSize
   }
 
-  // For progress mode, check panelProgressSize first
-  if (mode === "progress" && config.panelProgressSize) {
-    logApp(`[window.ts] Found saved progress size:`, config.panelProgressSize)
-    return validateSize(config.panelProgressSize, PROGRESS_MIN_HEIGHT)
+  if (mode === "progress") {
+    if (config.panelProgressSize) {
+      logApp(`[window.ts] Found saved progress size:`, config.panelProgressSize)
+      return validateSize(config.panelProgressSize, PROGRESS_MIN_HEIGHT, agentPanelWindowSize)
+    }
+
+    if (config.panelCustomSize) {
+      // Migration fallback for users that had a single shared panel size before
+      // progress-mode persistence existed.
+      const migratedProgressSize = {
+        width: config.panelCustomSize.width,
+        height: Math.max(config.panelCustomSize.height, PROGRESS_MIN_HEIGHT),
+      }
+      logApp(`[window.ts] No saved progress size; using migrated panel size:`, migratedProgressSize)
+      return validateSize(migratedProgressSize, PROGRESS_MIN_HEIGHT, agentPanelWindowSize)
+    }
+
+    logApp(`[window.ts] No saved progress size, using agent default:`, agentPanelWindowSize)
+    return agentPanelWindowSize
   }
 
-  // Fall back to panelCustomSize for all modes
+  // Waveform/text-input mode uses panelCustomSize
   if (config.panelCustomSize) {
     logApp(`[window.ts] Found saved panel size:`, config.panelCustomSize)
-    return validateSize(config.panelCustomSize, WAVEFORM_MIN_HEIGHT)
+    return validateSize(config.panelCustomSize, WAVEFORM_MIN_HEIGHT, panelWindowSize)
   }
 
   logApp(`[window.ts] No saved panel size, using default:`, panelWindowSize)
   return panelWindowSize
 }
 
-// Unified size getter - mode parameter kept for API compatibility but ignored
-const getSavedSizeForMode = (_mode: "normal" | "agent" | "textInput") => {
-  return getSavedPanelSize()
+const getSavedSizeForMode = (mode: "normal" | "agent" | "textInput") => {
+  if (mode === "agent") {
+    return getSavedPanelSize("progress")
+  }
+  return getSavedPanelSize("waveform")
 }
 
 const getPanelWindowPosition = (
@@ -459,17 +480,17 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
   const win = WINDOWS.get("panel")
   if (!win) return
 
-  // Panel size is now unified across all modes
-  // Mode switching primarily affects focus behavior and z-order
-  // Note: setPanelMode() may conditionally resize the panel when switching to
-  // agent mode if the panel is too small (see below). This ensures the progress
-  // pane has enough space after transitioning from waveform recording.
   const now = Date.now()
 
-  // Ensure minimum size is enforced (prevents OS-level resize below waveform requirements)
   const minWidth = Math.max(200, MIN_WAVEFORM_WIDTH)
+  const minHeight =
+    mode === "agent"
+      ? PROGRESS_MIN_HEIGHT
+      : mode === "textInput"
+        ? TEXT_INPUT_MIN_HEIGHT
+        : WAVEFORM_MIN_HEIGHT
   try {
-    win.setMinimumSize(minWidth, WAVEFORM_MIN_HEIGHT)
+    win.setMinimumSize(minWidth, minHeight)
   } catch {}
 
   // Update focus behavior for the mode
@@ -487,24 +508,22 @@ function applyPanelMode(mode: "normal" | "agent" | "textInput") {
 }
 
 export function setPanelMode(mode: "normal" | "agent" | "textInput") {
+  const previousMode = _currentPanelMode
   _currentPanelMode = mode
   applyPanelMode(mode)
 
-  // When switching to agent mode, ensure panel is resized appropriately
-  // This fixes the issue where panel stays at waveform size (110px) when
-  // transitioning from voice input to progress pane (needs 200px+)
-  // See: https://github.com/aj47/SpeakMCP/issues/913
-  if (mode === "agent") {
+  // When entering agent mode, restore progress-mode dimensions so waveform
+  // resizes cannot leak into the progress layout.
+  if (mode === "agent" && previousMode !== "agent") {
     const win = WINDOWS.get("panel")
     if (win) {
       try {
         const [currentWidth, currentHeight] = win.getSize()
-        // Only resize if panel is too small for agent mode
-        if (currentHeight < PROGRESS_MIN_HEIGHT) {
-          const savedSize = getSavedPanelSize("progress")
-          const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
-          const targetWidth = Math.max(savedSize.width, currentWidth, MIN_WAVEFORM_WIDTH)
-          logApp(`[setPanelMode] Panel too small for agent mode (${currentWidth}x${currentHeight}), resizing to ${targetWidth}x${targetHeight}`)
+        const savedSize = getSavedPanelSize("progress")
+        const targetHeight = Math.max(savedSize.height, PROGRESS_MIN_HEIGHT)
+        const targetWidth = Math.max(savedSize.width, MIN_WAVEFORM_WIDTH)
+        if (currentHeight !== targetHeight || currentWidth !== targetWidth) {
+          logApp(`[setPanelMode] Restoring progress size from ${currentWidth}x${currentHeight} to ${targetWidth}x${targetHeight}`)
           win.setSize(targetWidth, targetHeight)
           notifyPanelSizeChanged(targetWidth, targetHeight)
           // Reposition to maintain the panel's anchor point
@@ -816,7 +835,7 @@ export function resizePanelForAgentMode() {
   setPanelMode("agent")
 
   // Resize panel back to saved size for agent mode
-  // This is needed after resizePanelForWaveform() shrinks it to 80px
+  // This is needed after resizePanelForWaveform() shrinks it for recording mode.
   const win = WINDOWS.get("panel")
   if (!win) return
 
@@ -928,6 +947,12 @@ export function resizePanelForWaveform() {
 export function resizePanelForWaveformPreview(showPreview: boolean) {
   const win = WINDOWS.get("panel")
   if (!win) return
+
+  // Waveform preview resizing is only valid while recording in normal mode.
+  // Ignore stale calls so progress/text-input layouts remain unaffected.
+  if (_currentPanelMode !== "normal") {
+    return
+  }
 
   try {
     const [currentWidth, currentHeight] = win.getSize()

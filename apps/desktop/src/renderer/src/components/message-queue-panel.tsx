@@ -267,6 +267,14 @@ export function MessageQueuePanel({
   compact = false,
   isPaused = false,
 }: MessageQueuePanelProps) {
+  const [isListCollapsed, setIsListCollapsed] = useState(false)
+  const messageListId = `message-queue-list-${conversationId}`
+
+  // Reset collapse state when switching to a different conversation.
+  useEffect(() => {
+    setIsListCollapsed(false)
+  }, [conversationId])
+
   const clearMutation = useMutation({
     mutationFn: async () => {
       await tipcClient.clearMessageQueue({ conversationId })
@@ -351,7 +359,8 @@ export function MessageQueuePanel({
     >
       {/* Header */}
       <div className={cn(
-        "flex items-center justify-between px-3 py-2 border-b",
+        "flex items-center justify-between px-3 py-2",
+        !isListCollapsed && "border-b",
         isPaused
           ? "border-orange-200 dark:border-orange-800 bg-orange-100/50 dark:bg-orange-900/30"
           : "border-amber-200 dark:border-amber-800 bg-amber-100/50 dark:bg-amber-900/30"
@@ -383,42 +392,66 @@ export function MessageQueuePanel({
               Resume
             </Button>
           )}
+          {!isListCollapsed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-6 text-xs",
+                isPaused
+                  ? "text-orange-700 dark:text-orange-300 hover:text-orange-900 dark:hover:text-orange-100 hover:bg-orange-200/50 dark:hover:bg-orange-800/50"
+                  : "text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
+              )}
+              onClick={() => clearMutation.mutate()}
+              disabled={clearMutation.isPending || hasProcessingMessage}
+              title={hasProcessingMessage ? "Cannot clear while processing" : undefined}
+            >
+              Clear All
+            </Button>
+          )}
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             className={cn(
-              "h-6 text-xs",
+              "h-6 w-6",
               isPaused
                 ? "text-orange-700 dark:text-orange-300 hover:text-orange-900 dark:hover:text-orange-100 hover:bg-orange-200/50 dark:hover:bg-orange-800/50"
                 : "text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
             )}
-            onClick={() => clearMutation.mutate()}
-            disabled={clearMutation.isPending || hasProcessingMessage}
-            title={hasProcessingMessage ? "Cannot clear while processing" : undefined}
+            onClick={() => setIsListCollapsed((prev) => !prev)}
+            aria-expanded={!isListCollapsed}
+            aria-controls={!isListCollapsed ? messageListId : undefined}
+            aria-label={isListCollapsed ? "Expand queue" : "Collapse queue"}
+            title={isListCollapsed ? "Expand queue" : "Collapse queue"}
           >
-            Clear All
+            {isListCollapsed ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronUp className="h-3 w-3" />
+            )}
           </Button>
         </div>
       </div>
 
       {/* Paused notice */}
-      {isPaused && (
+      {isPaused && !isListCollapsed && (
         <div className="px-3 py-2 text-xs text-orange-700 dark:text-orange-300 bg-orange-100/30 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800">
           Queue was stopped. Click Resume to continue processing queued messages.
         </div>
       )}
 
       {/* Message List */}
-      <div className="divide-y max-h-60 overflow-y-auto">
-        {messages.map((msg) => (
-          <QueuedMessageItem
-            key={msg.id}
-            message={msg}
-            conversationId={conversationId}
-          />
-        ))}
-      </div>
+      {!isListCollapsed && (
+        <div id={messageListId} className="divide-y max-h-60 overflow-y-auto">
+          {messages.map((msg) => (
+            <QueuedMessageItem
+              key={msg.id}
+              message={msg}
+              conversationId={conversationId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
-

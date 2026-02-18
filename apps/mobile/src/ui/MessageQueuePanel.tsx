@@ -291,6 +291,11 @@ export function MessageQueuePanel({
   compact = false,
 }: MessageQueuePanelProps) {
   const { theme } = useTheme();
+  const [isListCollapsed, setIsListCollapsed] = useState(false);
+
+  useEffect(() => {
+    setIsListCollapsed(false);
+  }, [conversationId]);
 
   const hasProcessingMessage = messages.some((m) => m.status === 'processing');
 
@@ -380,35 +385,53 @@ export function MessageQueuePanel({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, isListCollapsed && { borderBottomWidth: 0 }]}>
         <View style={styles.headerLeft}>
           <Ionicons name="time-outline" size={16} color={theme.colors.mutedForeground} />
           <Text style={styles.headerTitle}>
             Queued Messages ({messages.length})
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.clearButton}
-          onPress={onClear}
-          disabled={hasProcessingMessage}
-        >
-          <Text style={styles.clearButtonText}>Clear All</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView style={styles.list}>
-        {messages.map((msg, index) => (
-          <React.Fragment key={msg.id}>
-            {index > 0 && <View style={styles.separator} />}
-            <QueuedMessageItem
-              message={msg}
-              onRemove={() => onRemove(msg.id)}
-              onUpdate={(text) => onUpdate(msg.id, text)}
-              onRetry={() => onRetry(msg.id)}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          {!isListCollapsed && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={onClear}
+              disabled={hasProcessingMessage}
+            >
+              <Text style={styles.clearButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => setIsListCollapsed((prev) => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={isListCollapsed ? 'Expand queue' : 'Collapse queue'}
+            accessibilityState={{ expanded: !isListCollapsed }}
+          >
+            <Ionicons
+              name={isListCollapsed ? 'chevron-down' : 'chevron-up'}
+              size={16}
+              color={theme.colors.mutedForeground}
             />
-          </React.Fragment>
-        ))}
-      </ScrollView>
+          </TouchableOpacity>
+        </View>
+      </View>
+      {!isListCollapsed && (
+        <ScrollView style={styles.list}>
+          {messages.map((msg, index) => (
+            <React.Fragment key={msg.id}>
+              {index > 0 && <View style={styles.separator} />}
+              <QueuedMessageItem
+                message={msg}
+                onRemove={() => onRemove(msg.id)}
+                onUpdate={(text) => onUpdate(msg.id, text)}
+                onRetry={() => onRetry(msg.id)}
+              />
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
-

@@ -106,8 +106,19 @@ export function TileFollowUpInput({
       return
     }
 
-    // Don't try to stop fake "pending-*" sessions
-    if (sessionId.startsWith('pending-')) return
+    // For fake "pending-*" sessions, fall back to global emergency stop
+    // so the kill switch always works regardless of session state
+    if (sessionId.startsWith('pending-')) {
+      setIsStoppingSession(true)
+      try {
+        await tipcClient.emergencyStopAgent()
+      } catch (error) {
+        console.error("Failed to emergency stop agent:", error)
+      } finally {
+        setIsStoppingSession(false)
+      }
+      return
+    }
 
     setIsStoppingSession(true)
     try {

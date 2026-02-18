@@ -228,7 +228,10 @@ async function interruptibleDelay(delay: number, sessionId?: string): Promise<vo
 
   // Immediate check (also covers delay === 0 case semantics)
   if (shouldStop()) {
-    throw new Error("Aborted by emergency stop")
+    const reason = sessionId != null && agentSessionStateManager.shouldStopSession(sessionId)
+      ? "Aborted by session stop"
+      : "Aborted by emergency stop"
+    throw new Error(reason)
   }
 
   if (delay <= 0) {
@@ -238,7 +241,10 @@ async function interruptibleDelay(delay: number, sessionId?: string): Promise<vo
   const startTime = Date.now()
   while (Date.now() - startTime < delay) {
     if (shouldStop()) {
-      throw new Error("Aborted by emergency stop")
+      const reason = sessionId != null && agentSessionStateManager.shouldStopSession(sessionId)
+        ? "Aborted by session stop"
+        : "Aborted by emergency stop"
+      throw new Error(reason)
     }
     const remaining = delay - (Date.now() - startTime)
     await new Promise(resolve => setTimeout(resolve, Math.min(100, Math.max(0, remaining))))
@@ -398,13 +404,17 @@ async function withRetry<T>(
       lastError = error
 
       // Don't retry aborts or stopped sessions
-      if (
-        (error as any)?.name === "AbortError" ||
-        state.shouldStopAgent ||
-        (options.sessionId && agentSessionStateManager.shouldStopSession(options.sessionId))
-      ) {
+      if ((error as any)?.name === "AbortError") {
         clearRetryStatus()
         throw error
+      }
+      if (options.sessionId && agentSessionStateManager.shouldStopSession(options.sessionId)) {
+        clearRetryStatus()
+        throw new Error("Session stopped by kill switch")
+      }
+      if (state.shouldStopAgent) {
+        clearRetryStatus()
+        throw new Error("Aborted by emergency stop")
       }
 
       // Check if retryable

@@ -87,6 +87,7 @@ const getConfig = () => {
     recordingHistoryMaxItems: 2000,
     recordingHistoryRetentionDays: 90,
     recordingFileRetentionDays: 90,
+    recordingOrphanGracePeriodMinutes: 5,
     // Settings hotkey defaults
     settingsHotkeyEnabled: true,
     settingsHotkey: "ctrl-shift-s",

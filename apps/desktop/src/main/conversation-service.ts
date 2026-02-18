@@ -79,7 +79,10 @@ export class ConversationService {
     }
 
     const omitted = text.length - maxChars
-    return `${text.slice(0, maxChars)}\n\n[truncated ${omitted} characters]`
+    const footer = `\n\n[truncated ${omitted} characters]`
+    // Ensure the content + footer together never exceed maxChars.
+    const contentChars = Math.max(0, maxChars - footer.length)
+    return `${text.slice(0, contentChars)}${footer}`
   }
 
   private truncateIndexText(text: string): string {
@@ -251,6 +254,10 @@ export class ConversationService {
 
       // Add to beginning of array (most recent first)
       index.unshift(indexItem)
+      // Sort by updatedAt descending before applying retention so that the
+      // most recent conversations are always kept regardless of ordering in
+      // the raw index file.
+      index.sort((a, b) => b.updatedAt - a.updatedAt)
       const { kept, removed } = this.applyConversationRetention(index)
 
       // Write the updated index first; only delete overflow files after a

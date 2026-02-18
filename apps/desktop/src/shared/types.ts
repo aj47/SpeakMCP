@@ -1288,6 +1288,7 @@ export type Config = {
   recordingHistoryMaxItems?: number
   recordingHistoryRetentionDays?: number
   recordingFileRetentionDays?: number
+  recordingOrphanGracePeriodMinutes?: number
 
   // Provider Section Collapse Configuration
   providerSectionCollapsedOpenai?: boolean

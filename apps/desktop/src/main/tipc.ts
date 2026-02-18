@@ -519,6 +519,7 @@ const getRecordingCleanupConfig = () => {
     historyMaxItems: toPositiveInt(config.recordingHistoryMaxItems, 2000),
     historyRetentionMs: toPositiveInt(config.recordingHistoryRetentionDays, 90) * 24 * 60 * 60 * 1000,
     fileRetentionMs: toPositiveInt(config.recordingFileRetentionDays, 90) * 24 * 60 * 60 * 1000,
+    orphanGracePeriodMs: toPositiveInt(config.recordingOrphanGracePeriodMinutes, 5) * 60 * 1000,
   }
 }
 
@@ -528,7 +529,9 @@ const isValidRecordingHistoryItem = (item: unknown): item is RecordingHistoryIte
   return (
     typeof entry.id === "string" &&
     typeof entry.createdAt === "number" &&
+    Number.isFinite(entry.createdAt) &&
     typeof entry.duration === "number" &&
+    Number.isFinite(entry.duration) &&
     typeof entry.transcript === "string"
   )
 }
@@ -593,7 +596,7 @@ const cleanupRecordingFiles = (history: RecordingHistoryItem[]) => {
           // Recording is actively being processed; never treat as orphan.
           continue
         }
-        const ORPHAN_GRACE_PERIOD_MS = 5 * 60 * 1000 // 5 minutes
+        const orphanGracePeriodMs = cleanupConfig.orphanGracePeriodMs
         let fileMtimeMs = 0
         try {
           fileMtimeMs = fs.statSync(filePath).mtimeMs
@@ -601,7 +604,7 @@ const cleanupRecordingFiles = (history: RecordingHistoryItem[]) => {
           // If we can't stat the file, skip deletion to be safe
           continue
         }
-        if (now - fileMtimeMs < ORPHAN_GRACE_PERIOD_MS) {
+        if (now - fileMtimeMs < orphanGracePeriodMs) {
           // File is recent enough that it may still be in-flight; skip.
           continue
         }
@@ -1774,16 +1777,38 @@ export const router = {
               transcript = json.text
             }
 
-            // Save the recording file
+            // Save the recording file and immediately mark it as in-flight so
+            // orphan cleanup won't delete it before the history entry is written.
             const recordingId = Date.now().toString()
             fs.writeFileSync(
               path.join(recordingsFolder, `${recordingId}.webm`),
               Buffer.from(input.recording),
             )
+            inFlightRecordingIds.add(recordingId)
 
             // Queue the transcript instead of processing immediately
             const queuedMessage = messageQueueService.enqueue(input.conversationId, transcript)
             logApp(`[createMcpRecording] Queued voice transcript ${queuedMessage.id} for active session ${activeSessionId}`)
+
+            // Save a history entry so the recording file is never treated as an
+            // orphan.  We do this after queueing so the entry is persisted even
+            // if the active session errors out.
+            try {
+              const history = getRecordingHistory()
+              const item: RecordingHistoryItem = {
+                id: recordingId,
+                createdAt: Date.now(),
+                duration: input.duration,
+                transcript,
+              }
+              history.push(item)
+              saveRecordingsHitory(history)
+            } catch (histErr) {
+              logApp(`[createMcpRecording] Failed to save queued recording history entry, removing file:`, histErr)
+              removeRecordingFilesById(recordingId)
+            } finally {
+              inFlightRecordingIds.delete(recordingId)
+            }
 
             return { conversationId: input.conversationId, queued: true, queuedMessageId: queuedMessage.id }
           }

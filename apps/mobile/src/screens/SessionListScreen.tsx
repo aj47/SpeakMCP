@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform, Image, GestureResponderEvent, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Pressable, StyleSheet, Alert, Platform, Image, GestureResponderEvent, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventEmitter } from 'expo-modules-core';
 import { useTheme } from '../ui/ThemeProvider';
@@ -40,6 +40,7 @@ export default function SessionListScreen({ navigation }: Props) {
   const rfSrEmitterRef = useRef<any>(null);
   const rfSrSubsRef = useRef<any[]>([]);
   const rfGrantTimeRef = useRef(0);
+  const rfUserReleasedRef = useRef(false);
   const rfMinHoldMs = 200;
   const sessionStoreRef = useRef<SessionStore | null>(null);
   const rfStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,6 +76,7 @@ export default function SessionListScreen({ navigation }: Props) {
     if (rfStartingRef.current || rfListeningRef.current) return;
     rfStartingRef.current = true;
     rfStoppingRef.current = false;
+    rfUserReleasedRef.current = false;
     rfFinalRef.current = '';
     rfLiveRef.current = '';
     setRfTranscript('');
@@ -98,8 +100,20 @@ export default function SessionListScreen({ navigation }: Props) {
             console.error('[RapidFire] SR error:', JSON.stringify(event));
             rfSetTransientStatus('error');
           });
-          const subEnd = rfSrEmitterRef.current.addListener('end', () => {
-            if (!rfStoppingRef.current) return; // still holding - ignore spurious end
+          const subEnd = rfSrEmitterRef.current.addListener('end', async () => {
+            // If user hasn't released, SR ended spuriously – try to restart
+            if (!rfUserReleasedRef.current && !rfStoppingRef.current) {
+              try {
+                const SRInner: any = await import('expo-speech-recognition');
+                if (SRInner?.ExpoSpeechRecognitionModule?.start) {
+                  SRInner.ExpoSpeechRecognitionModule.start({
+                    lang: 'en-US', interimResults: true, continuous: true,
+                    volumeChangeEventOptions: { enabled: false, intervalMillis: 250 },
+                  });
+                  return; // restarted – stay in listening state
+                }
+              } catch {}
+            }
             rfSetListening(false);
           });
           rfSrSubsRef.current.push(subResult, subError, subEnd);
@@ -137,6 +151,7 @@ export default function SessionListScreen({ navigation }: Props) {
   const rfStopAndFire = useCallback(async () => {
     if (rfStoppingRef.current) return;
     rfStoppingRef.current = true;
+    rfUserReleasedRef.current = true;
     try {
       if (Platform.OS !== 'web') {
         const SR: any = await import('expo-speech-recognition');
@@ -419,10 +434,12 @@ export default function SessionListScreen({ navigation }: Props) {
         <Text style={styles.rfHint}>
           {rfHintText}
         </Text>
-        <TouchableOpacity
-          style={[styles.rfButton, rfListening && styles.rfButtonOn]}
-          activeOpacity={0.8}
-          delayPressIn={0}
+        <Pressable
+          style={({ pressed }) => [
+            styles.rfButton,
+            rfListening && styles.rfButtonOn,
+            pressed && !rfListening && { opacity: 0.8 },
+          ]}
           onPressIn={(e: GestureResponderEvent) => {
             rfGrantTimeRef.current = Date.now();
             if (!rfListeningRef.current) { void rfStartRecording(e); }
@@ -441,7 +458,7 @@ export default function SessionListScreen({ navigation }: Props) {
           <Text style={styles.rfButtonLabel}>
             {rfListening ? '...' : (rfStatus === 'sending' ? 'Sending' : 'Hold')}
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );

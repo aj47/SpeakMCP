@@ -67,7 +67,7 @@ function getConversationIdValidationError(conversationId: string): string | null
   if (!/^[a-zA-Z0-9_\-@.]+$/.test(conversationId)) {
     return "Invalid conversation ID format"
   }
-  if (RESERVED_CONVERSATION_IDS.has(conversationId)) {
+  if (RESERVED_CONVERSATION_IDS.has(conversationId.toLowerCase())) {
     return "Invalid conversation ID: reserved name"
   }
   return null

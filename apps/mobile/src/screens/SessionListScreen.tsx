@@ -214,7 +214,15 @@ export default function SessionListScreen({ navigation }: Props) {
       const ss = sessionStoreRef.current;
       if (ss) {
         try {
+          // Save previous currentSessionId — createNewSession() will switch it,
+          // but we need to restore it so the (possibly mounted) ChatScreen doesn't
+          // race-load the new session while it still has 0 messages.
+          const prevSessionId = ss.currentSessionId;
           const newSession = ss.createNewSession();
+          // Restore immediately so ChatScreen's useEffect doesn't prematurely load
+          // the new empty session. When the user later taps the session,
+          // setCurrentSession(newId) will properly trigger the load with messages.
+          ss.setCurrentSession(prevSessionId);
           await ss.setMessagesForSession(newSession.id, [{ role: 'user', content: finalText }]);
           setRfTranscript(finalText);
           rfSetTransientStatus('sent');

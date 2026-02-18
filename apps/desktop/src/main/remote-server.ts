@@ -26,6 +26,7 @@ let lastError: string | undefined
 /**
  * Notify all renderer windows that conversation history has changed.
  * Used after remote server creates or modifies conversations (e.g. from mobile).
+ * Defers the notification if the window's renderer is still loading to avoid dropped events.
  */
 function notifyConversationHistoryChanged(): void {
   const notifiedWebContentsIds = new Set<number>()
@@ -39,10 +40,18 @@ function notifyConversationHistoryChanged(): void {
     }
 
     notifiedWebContentsIds.add(win.webContents.id)
-    try {
-      getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
-    } catch (err) {
-      diagnosticsService.logWarning("remote-server", `Failed to notify ${windowId} window about conversation history changes: ${err instanceof Error ? err.message : String(err)}`)
+    const sendNotification = () => {
+      try {
+        getRendererHandlers<RendererHandlers>(win.webContents).conversationHistoryChanged?.send()
+      } catch (err) {
+        diagnosticsService.logWarning("remote-server", `Failed to notify ${windowId} window about conversation history changes: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+
+    if (win.webContents.isLoading()) {
+      win.webContents.once("did-finish-load", sendNotification)
+    } else {
+      sendNotification()
     }
   }
 }
@@ -606,7 +615,9 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
 
       // Extract conversationId from request body (custom extension to OpenAI API)
-      const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      // Use undefined for absent/non-string values; treat empty string as absent
+      const rawConversationId = typeof body.conversation_id === "string" ? body.conversation_id : undefined
+      const conversationId = rawConversationId !== "" ? rawConversationId : undefined
       if (conversationId) {
         const conversationIdError = getConversationIdValidationError(conversationId)
         if (conversationIdError) {

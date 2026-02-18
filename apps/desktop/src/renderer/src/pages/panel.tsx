@@ -651,11 +651,12 @@ export function Component() {
         recordingRef.current = true
         setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         tipcClient.showPanelWindow({})
-        recorderRef.current?.startRecording()?.catch((err: unknown) => {
+        recorderRef.current?.startRecording()?.catch?.((err: unknown) => {
           console.error('[panel] startRecording failed, resetting recording state:', err)
           setRecording(false)
           recordingRef.current = false
           setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
+          fromTileRef.current = false
         })
       }
     })
@@ -775,7 +776,7 @@ export function Component() {
       setRecording(true)
       recordingRef.current = true
       setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
-      recorderRef.current?.startRecording()?.catch((err: unknown) => {
+      recorderRef.current?.startRecording()?.catch?.((err: unknown) => {
         console.error('[panel] startRecording failed, resetting recording state:', err)
         setRecording(false)
         recordingRef.current = false
@@ -786,6 +787,7 @@ export function Component() {
         mcpModeRef.current = false
         mcpConversationIdRef.current = undefined
         mcpSessionIdRef.current = undefined
+        fromTileRef.current = false
       })
     })
 
@@ -829,7 +831,7 @@ export function Component() {
         setVisualizerData(() => getInitialVisualizerData(visualizerBarCountRef.current))
         requestPanelMode("normal") // Ensure panel is normal size for recording
         tipcClient.showPanelWindow({})
-        recorderRef.current?.startRecording()?.catch((err: unknown) => {
+        recorderRef.current?.startRecording()?.catch?.((err: unknown) => {
           console.error('[panel] startRecording failed, resetting recording state:', err)
           setRecording(false)
           recordingRef.current = false
@@ -840,6 +842,7 @@ export function Component() {
           mcpModeRef.current = false
           mcpConversationIdRef.current = undefined
           mcpSessionIdRef.current = undefined
+          fromTileRef.current = false
         })
       }
     })

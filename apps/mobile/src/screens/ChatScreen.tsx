@@ -554,11 +554,11 @@ export default function ChatScreen({ route, navigation }: any) {
             if (!result) return;
             // Ignore late results if the user switched sessions while loading.
             if (currentSessionIdRef.current !== stubSessionId) return;
-            // Only skip persistence when messages were freshly fetched and already
-            // saved by loadSessionMessages. If loadSessionMessages returned existing
-            // local messages (e.g., added in-flight), don't skip — those changes
-            // still need the persistence effect to run correctly.
-            if (result.freshlyFetched && result.messages.length > 0) {
+            // Skip persistence whenever loadSessionMessages returned messages that are
+            // already in the store (both freshly fetched and in-flight bail-out cases)
+            // to avoid ID/updatedAt regeneration. The flag is always cleared by the
+            // persistence effect on the next render (or immediately if length is unchanged).
+            if (result.messages.length > 0) {
               skipNextPersistRef.current = true;
             }
             setMessages(result.messages.map(m => ({
@@ -648,6 +648,11 @@ export default function ChatScreen({ route, navigation }: any) {
       } else {
         sessionStore.setMessages(messages);
       }
+    } else if (skipNextPersistRef.current) {
+      // Length didn't change (or is 0), so the effect above won't fire — clear
+      // the flag now to prevent it from accidentally skipping the next real
+      // message persistence (e.g., lazy-load returned same count as before).
+      skipNextPersistRef.current = false;
     }
     prevMessagesLengthRef.current = messages.length;
   }, [messages, sessionStore, sessionStore.currentSessionId, sessionStore.deletingSessionIds]);

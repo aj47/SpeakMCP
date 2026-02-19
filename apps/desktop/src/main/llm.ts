@@ -2086,7 +2086,11 @@ Return ONLY JSON per schema.`,
           completionSignalHintCount++
         }
 
-        noOpCount = 0
+        // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
+        // completion in a tool-driven task is still a no-op from a progress standpoint.
+        // Keeping noOpCount incrementing ensures the nudge/fallback thresholds can
+        // eventually trigger if the model keeps returning text without making progress.
+        noOpCount++
         continue
       }
 

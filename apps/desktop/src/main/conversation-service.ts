@@ -19,7 +19,11 @@ const COMPACTION_KEEP_LAST = 10
 // Debounce delay for writing the conversation index to disk (ms)
 const INDEX_WRITE_DEBOUNCE_MS = 500
 // On parse failures, try a bounded number of prefix candidates to recover a valid JSON object.
-const CONVERSATION_REPAIR_MAX_PARSE_ATTEMPTS = 5000
+// Keep low to avoid blocking the Electron main process on large/corrupted files.
+const CONVERSATION_REPAIR_MAX_PARSE_ATTEMPTS = 50
+// Skip repair entirely for files larger than this (bytes). Large corrupted files would
+// cause too many JSON.parse calls scanning for '}' characters (including inside strings).
+const CONVERSATION_REPAIR_MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 
 export class ConversationService {
   private static instance: ConversationService | null = null
@@ -270,6 +274,11 @@ export class ConversationService {
    * This is only used when the file failed normal JSON.parse().
    */
   private tryRepairConversationFromCorruptedData(raw: string): Conversation | null {
+    if (raw.length > CONVERSATION_REPAIR_MAX_FILE_SIZE) {
+      logApp(`[ConversationService] Skipping repair: file too large (${raw.length} bytes)`)
+      return null
+    }
+
     const trimmed = raw.trim()
     if (!trimmed.startsWith("{")) {
       return null

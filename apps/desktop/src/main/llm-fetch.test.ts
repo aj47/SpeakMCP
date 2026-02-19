@@ -505,6 +505,51 @@ describe('LLM Fetch with AI SDK', () => {
     )
   })
 
+  it('should preserve raw tool markers in response content', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    const markerText = '<|tool_calls_section_begin|><|tool_call_begin|>search<|tool_call_end|><|tool_calls_section_end|>'
+    generateTextMock.mockResolvedValue({
+      text: markerText,
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    // When tool markers are detected, the raw text (with markers) should be
+    // returned so the caller's own marker detection can trigger recovery.
+    expect(result.content).toBe(markerText)
+  })
+
+  it('should preserve tool markers even when mixed with regular text', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    const mixedText = 'Here is a response <|tool_call_begin|>search<|tool_call_end|> with markers'
+    generateTextMock.mockResolvedValue({
+      text: mixedText,
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    // Raw text should be returned with markers intact
+    expect(result.content).toBe(mixedText)
+  })
+
   it('should retry on AI SDK rate limit errors (statusCode 429)', async () => {
     const { generateText } = await import('ai')
     const generateTextMock = vi.mocked(generateText)

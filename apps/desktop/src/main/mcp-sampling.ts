@@ -100,12 +100,17 @@ export async function executeSampling(
     // Execute the LLM call
     const result = await makeLLMCallWithFetch(messages, providerId)
 
+    // Strip any raw tool-marker tokens (e.g. <|tool_call_begin|>) that
+    // makeLLMCallWithFetch now preserves for the agent loop's recovery path.
+    // Sampling responses go back to MCP servers and should never contain them.
+    const cleanContent = (result.content || "").replace(/<\|[^|]*\|>/g, "").trim()
+
     return {
       approved: true,
       model,
       content: {
         type: "text",
-        text: result.content || "",
+        text: cleanContent,
       },
       stopReason: "endTurn",
     }

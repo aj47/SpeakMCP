@@ -732,7 +732,6 @@ export async function makeLLMCallWithFetch(
           return {
             content: text || undefined,
             toolCalls,
-            needsMoreWork: true, // Tool calls always need more work
           }
         }
 
@@ -757,16 +756,12 @@ export async function makeLLMCallWithFetch(
         // Try to parse JSON from the response (fallback for models that respond with JSON)
         const jsonObject = extractJsonObject(text)
         if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-          const response = jsonObject as LLMToolCallResponse
-          // Don't force needsMoreWork - let llm.ts heuristics decide
-          // This matches plain text behavior and prevents simple JSON responses
-          // like {"content": "Hello"} from forcing unnecessary iterations
-          // (see issue: JSON vs plain text asymmetry in debugging-agents-langfuse.md)
-
-          // Ensure tool calls always continue (matches native AI SDK behavior)
-          if (response.toolCalls && response.toolCalls.length > 0) {
-            response.needsMoreWork = true
-          }
+          const response = {
+            content: typeof jsonObject.content === "string" ? jsonObject.content : undefined,
+            toolCalls: Array.isArray(jsonObject.toolCalls)
+              ? jsonObject.toolCalls
+              : undefined,
+          } as LLMToolCallResponse
           // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement
           if (response.toolCalls) {
             response.toolCalls = response.toolCalls.map(tc => ({
@@ -798,15 +793,11 @@ export async function makeLLMCallWithFetch(
         }
 
         if (hasToolMarkers) {
-          return { content: cleaned, needsMoreWork: true }
+          return { content: cleaned }
         }
 
-        // Return as plain text with needsMoreWork undefined
-        // This allows the agent loop to decide whether to continue or nudge for proper format
-        // (see llm.ts handling around issue #443)
         return {
           content: cleaned || text,
-          needsMoreWork: undefined,
         }
       } finally {
         unregisterSessionAbortController(abortController, sessionId)
@@ -890,7 +881,6 @@ export async function makeLLMCallWithStreaming(
 
     return {
       content: accumulated,
-      needsMoreWork: undefined,
       toolCalls: undefined,
     }
   } catch (error: any) {

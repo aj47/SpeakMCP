@@ -82,7 +82,7 @@ describe('LLM Fetch with AI SDK', () => {
     const generateTextMock = vi.mocked(generateText)
     
     generateTextMock.mockResolvedValue({
-      text: '{"content": "Hello, world!", "needsMoreWork": false}',
+      text: '{"content": "Hello, world!"}',
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
     } as any)
@@ -95,7 +95,6 @@ describe('LLM Fetch with AI SDK', () => {
     )
 
     expect(result.content).toBe('Hello, world!')
-    expect(result.needsMoreWork).toBe(false)
   })
 
   it('should return plain text when JSON parsing fails', async () => {
@@ -116,9 +115,7 @@ describe('LLM Fetch with AI SDK', () => {
     )
 
     expect(result.content).toBe('This is a plain text response without JSON')
-    // When there are no tool calls and no JSON, needsMoreWork is undefined
-    // to let the agent loop decide whether to continue or nudge for proper format
-    expect(result.needsMoreWork).toBeUndefined()
+    expect(result.toolCalls).toBeUndefined()
   })
 
   it('should extract toolCalls from JSON response', async () => {
@@ -130,8 +127,7 @@ describe('LLM Fetch with AI SDK', () => {
         toolCalls: [
           { name: 'search', arguments: { query: 'test' } }
         ],
-        content: 'Searching...',
-        needsMoreWork: true
+        content: 'Searching...'
       }),
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
@@ -147,7 +143,6 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.toolCalls).toHaveLength(1)
     expect(result.toolCalls?.[0].name).toBe('search')
     expect(result.content).toBe('Searching...')
-    expect(result.needsMoreWork).toBe(true)
   })
 
   it('should throw on empty response', async () => {
@@ -257,7 +252,6 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.toolCalls).toHaveLength(1)
     expect(result.toolCalls![0].name).toBe('play_wordle')
     expect(result.toolCalls![0].arguments).toEqual({ word: 'hello' })
-    expect(result.needsMoreWork).toBe(true)
   })
 
   it('should correctly restore tool names with colons from MCP server prefixes', async () => {
@@ -451,7 +445,7 @@ describe('LLM Fetch with AI SDK', () => {
     const generateTextMock = vi.mocked(generateText)
 
     generateTextMock.mockResolvedValue({
-      text: '{"content": "Continuing the work.", "needsMoreWork": false}',
+      text: '{"content": "Continuing the work."}',
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
     } as any)
@@ -485,7 +479,7 @@ describe('LLM Fetch with AI SDK', () => {
     const generateTextMock = vi.mocked(generateText)
 
     generateTextMock.mockResolvedValue({
-      text: '{"content": "Here is the result.", "needsMoreWork": false}',
+      text: '{"content": "Here is the result."}',
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
     } as any)

@@ -1595,19 +1595,14 @@ Return ONLY JSON per schema.`,
       throw error
     }
 
-    // Validate response is not null/empty
+    // Validate response is not null/empty.
     // A response is valid if it has either:
     // 1. Non-empty content, OR
-    // 2. Valid toolCalls (tool-only responses have empty content), OR
-    // 3. Empty content with needsMoreWork=false AND no toolCalls (LLM intentionally completed with finish_reason='stop')
+    // 2. Valid toolCalls (tool-only responses can have empty content).
     const hasValidContent = llmResponse?.content && llmResponse.content.trim().length > 0
     const hasValidToolCalls = llmResponse?.toolCalls && Array.isArray(llmResponse.toolCalls) && llmResponse.toolCalls.length > 0
-    // Check for intentional empty completion (finish_reason='stop' in llm-fetch.ts returns this)
-    // IMPORTANT: If there are toolCalls, they take precedence over intentional-empty completion
-    // to ensure tool execution is not skipped
-    const isIntentionalEmptyCompletion = llmResponse?.needsMoreWork === false && llmResponse?.content === "" && !hasValidToolCalls
 
-    if (!llmResponse || (!hasValidContent && !hasValidToolCalls && !isIntentionalEmptyCompletion)) {
+    if (!llmResponse || (!hasValidContent && !hasValidToolCalls)) {
       emptyResponseRetryCount++
       logLLM(`❌ LLM null/empty response on iteration ${iteration} (retry ${emptyResponseRetryCount}/${MAX_EMPTY_RESPONSE_RETRIES})`)
       logLLM("Response details:", {
@@ -1618,7 +1613,6 @@ Return ONLY JSON per schema.`,
         contentType: typeof llmResponse?.content,
         hasToolCalls: !!llmResponse?.toolCalls,
         toolCallsCount: llmResponse?.toolCalls?.length || 0,
-        needsMoreWork: llmResponse?.needsMoreWork,
         fullResponse: JSON.stringify(llmResponse, null, 2)
       })
       diagnosticsService.logError("llm", "Null/empty LLM response in agent mode", {
@@ -1670,112 +1664,6 @@ Return ONLY JSON per schema.`,
     // Reset empty response counter on successful response
     emptyResponseRetryCount = 0
 
-    // Handle intentional empty completion from LLM (finish_reason='stop')
-    // This is unusual - the model chose to complete without any content
-    // We should verify this is actually complete before accepting it
-    if (isIntentionalEmptyCompletion) {
-      logLLM("⚠️ LLM intentionally completed with empty response (finish_reason=stop)")
-      diagnosticsService.logWarning("llm", "LLM completed with empty response in agent mode", {
-        iteration,
-        needsMoreWork: llmResponse.needsMoreWork,
-        message: "Model completed intentionally without content - will verify before accepting"
-      })
-
-      // Run verifier to check if task is actually complete before accepting empty completion
-      if (config.mcpVerifyCompletionEnabled) {
-        const verifyStep = createProgressStep(
-          "thinking",
-          "Verifying empty completion",
-          "Checking if task was actually completed despite empty response",
-          "in_progress",
-        )
-        progressSteps.push(verifyStep)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-
-        // Build verification context from last assistant message with content
-        const lastAssistantContent = conversationHistory
-          .filter(m => m.role === "assistant" && m.content && m.content.trim().length > 0)
-          .pop()?.content || ""
-
-        const result = await runVerificationAndHandleResult(
-          lastAssistantContent,
-          verifyStep,
-          verificationFailCount
-        )
-        verificationFailCount = result.newFailCount
-
-        if (result.shouldContinue) {
-          logLLM("⚠️ Empty completion rejected by verifier - nudging LLM to continue")
-          continue
-        }
-
-        if (result.forcedByLimit) {
-          const incompleteContent = buildIncompleteTaskFallback(lastAssistantContent, result.incompleteDetails)
-          addMessage("assistant", incompleteContent)
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: true,
-            finalContent: incompleteContent,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-          return {
-            content: incompleteContent,
-            conversationHistory,
-            totalIterations: iteration,
-          }
-        }
-
-        logLLM("✅ Empty completion verified - task is complete")
-      }
-
-      // Mark thinking step as completed
-      thinkingStep.status = "completed"
-      thinkingStep.title = "Agent completed"
-      thinkingStep.description = "Model completed without additional content"
-
-      // Add completion step
-      const completionStep = createProgressStep(
-        "completion",
-        "Task completed",
-        "The model completed without additional content",
-        "completed",
-      )
-      progressSteps.push(completionStep)
-
-      // Emit final progress with empty content
-      emit({
-        currentIteration: iteration,
-        maxIterations,
-        steps: progressSteps.slice(-3),
-        isComplete: true,
-        finalContent: "",
-        conversationHistory: formatConversationForProgress(conversationHistory),
-      })
-
-      // End Langfuse trace for early completion
-      if (isLangfuseEnabled()) {
-        endAgentTrace(currentSessionId, {
-          output: "",
-          metadata: { totalIterations: iteration, earlyCompletion: true },
-        })
-        flushLangfuse().catch(() => {})
-      }
-
-      return {
-        content: "",
-        conversationHistory,
-        totalIterations: iteration,
-      }
-    }
-
     // Update thinking step with actual LLM content and mark as completed
     thinkingStep.status = "completed"
     thinkingStep.llmContent = llmResponse.content || ""
@@ -1816,219 +1704,34 @@ Return ONLY JSON per schema.`,
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
     const completionToolCalled = toolCallsArray.some((toolCall) => toolCall.name === MARK_WORK_COMPLETE_TOOL)
-    // Don't set needsMoreWork=false here — defer until after tool execution confirms success.
-    // Setting it pre-execution could cause premature termination if the tool call (or
-    // another tool in the same batch) returns an error.
+    // Don't treat mark_work_complete as confirmed completion yet.
+    // We defer completion until after tool execution confirms the whole batch succeeded.
     const hasToolCalls = toolCallsArray.length > 0
-    const explicitlyComplete = llmResponse.needsMoreWork === false
 
-    if (explicitlyComplete && !hasToolCalls) {
-      // Agent claims completion but provided no toolCalls.
-      // If the content still contains tool-call markers, treat as not complete and nudge for structured toolCalls.
-      const contentText = (llmResponse.content || "")
-      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
-      if (hasToolMarkers) {
-        conversationHistory.push({ role: "assistant", content: contentText.replace(/<\|[^|]*\|>/g, "").trim(), timestamp: Date.now() })
-        conversationHistory.push({ role: "user", content: "Please use the native tool-calling interface to call the tools directly, rather than describing them in text.", timestamp: Date.now() })
-        continue
-      }
-
-      // Check if there are actionable tools for this request
-      // Use activeTools (filtered for failures) to avoid nudging for tools that are excluded
-      const hasActionableTools = activeTools.length > 0
-      // Scope to current turn using currentPromptIndex to avoid treating a new request
-      // as having tools executed based on tool results from previous conversation turns
-      const hasToolResultsSoFar = toolsExecutedInSession || conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
-
-      // Check if the response contains substantive content (a real answer, not a placeholder)
-      // If the LLM explicitly sets needsMoreWork=false and provides a real answer,
-      // we should trust it - even if there are tools that could theoretically be used.
-      // This allows the agent to respond directly to simple questions without forcing tool calls.
-      const hasSubstantiveContent = isDeliverableResponse(contentText)
-
-      // Only apply aggressive heuristics if:
-      // 1. There are actually relevant tools for this request
-      // 2. No tools have been used yet
-      // 3. The agent's response doesn't contain substantive content (i.e., it's just a placeholder)
-      if (hasActionableTools && !hasToolResultsSoFar && !hasSubstantiveContent) {
-        // If there are actionable tools and no tool results yet, and no real answer provided,
-        // nudge the model to produce structured toolCalls to actually perform the work.
-        // Only add assistant message if non-empty to avoid blank entries
-        if (contentText.trim().length > 0) {
-          conversationHistory.push({ role: "assistant", content: contentText.trim(), timestamp: Date.now() })
-        }
-        conversationHistory.push({
-          role: "user",
-          content:
-            "Before marking complete: please use the available tools to actually perform the steps. Call the tools directly using the native function calling interface.",
-          timestamp: Date.now(),
-        })
-        noOpCount = 0
-        continue
-      }
-
-      // Agent explicitly indicated completion and one of the following:
-      // - No actionable tools exist for this request (simple Q&A), OR
-      // - Tools were used and work is complete, OR
-      // - Agent provided a substantive direct response (allows direct answers without tool calls)
-      const assistantContent = llmResponse.content || ""
-
-      finalContent = assistantContent
-      // Note: Don't add message here - it will be added in the post-verify section
-      // to avoid duplicate messages (the post-verify section handles all cases:
-      // summary success, summary failure, and skip summary)
-
-      // Optional verification before completing
-      // Track if we should skip post-verify summary
-      // Skip summary when:
-      // 1. Final summary is disabled in config
-      // 2. No tools were called (simple Q&A - nothing to summarize)
-      const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
-      let skipPostVerifySummary = (config.mcpFinalSummaryEnabled === false) || (noToolsCalledYet && isDeliverableResponse(finalContent))
-      let completionForcedByVerificationLimit = false
-      let completionForcedIncompleteDetails: IncompleteTaskDetails | undefined
-
-      if (config.mcpVerifyCompletionEnabled) {
-        const verifyStep = createProgressStep(
-          "thinking",
-          "Verifying completion",
-          "Checking that the user's request has been achieved",
-          "in_progress",
-        )
-        progressSteps.push(verifyStep)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-
-        const result = await runVerificationAndHandleResult(
-          finalContent,
-          verifyStep,
-          verificationFailCount,
-          {
-            nudgeForToolUsage: true, // This path needs tool usage nudges
-            currentPromptIndex, // Scope tool result checks to current turn
-          }
-        )
-        verificationFailCount = result.newFailCount
-        completionForcedByVerificationLimit = result.forcedByLimit
-        completionForcedIncompleteDetails = result.incompleteDetails
-        if (result.skipPostVerifySummary) {
-          skipPostVerifySummary = true
-        }
-
-        if (result.shouldContinue) {
-          // Add the last attempted deliverable to history so the next iteration
-          // can see what the agent tried (helps it address the verifier's missingItems/reason)
-          if (finalContent.trim().length > 0) {
-            addMessage("assistant", finalContent)
-          }
-          noOpCount = 0
-          continue
-        }
-      }
-
-        // Post-verify: produce a concise final summary for the user
-        // Skip when forced incomplete - the fallback message below will be the only assistant message
-        if (!skipPostVerifySummary && !completionForcedByVerificationLimit) {
-          try {
-            const result = await generatePostVerifySummary(finalContent, false, activeTools)
-            finalContent = result.content
-            if (finalContent.trim().length > 0) {
-              addMessage("assistant", finalContent)
-            }
-          } catch (e) {
-            // If summary generation fails, still add the existing finalContent to history
-            if (finalContent.trim().length > 0) {
-              addMessage("assistant", finalContent)
-            }
-          }
-        } else if (!completionForcedByVerificationLimit) {
-          // Even when skipping post-verify summary, ensure the final content is in history
-          if (finalContent.trim().length > 0) {
-            addMessage("assistant", finalContent)
-          }
-        }
-
-      if (completionForcedByVerificationLimit) {
-        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails)
-        addMessage("assistant", finalContent)
-      }
-
-      // Add completion step
-      const completionStep = createProgressStep(
-        "completion",
-        completionForcedByVerificationLimit ? "Task incomplete" : "Task completed",
-        completionForcedByVerificationLimit
-          ? "Verification did not confirm completion before retry limit"
-          : "Successfully completed the requested task",
-        completionForcedByVerificationLimit ? "error" : "completed",
-      )
-      progressSteps.push(completionStep)
-
-      // Emit final progress immediately for UI feedback
-      emit({
-        currentIteration: iteration,
-        maxIterations,
-        steps: progressSteps.slice(-3),
-        isComplete: true,
-        finalContent,
-        conversationHistory: formatConversationForProgress(conversationHistory),
-      })
-
-      // Generate final completion summary (if dual-model enabled)
-      // Await and emit follow-up to ensure the final summary is included
-      if (isSummarizationEnabled()) {
-        const lastToolCalls = conversationHistory
-          .filter(m => m.toolCalls && m.toolCalls.length > 0)
-          .flatMap(m => m.toolCalls || [])
-          .slice(-5)
-        const lastToolResults = conversationHistory
-          .filter(m => m.toolResults && m.toolResults.length > 0)
-          .flatMap(m => m.toolResults || [])
-          .slice(-5)
-
-        try {
-          const completionSummary = await generateStepSummary(
-            iteration,
-            lastToolCalls,
-            lastToolResults,
-            finalContent,
-            true, // isCompletion: this is the final completion step
-          )
-
-          // If a summary was generated, emit a follow-up progress update
-          // to ensure the UI receives the completion summary
-          if (completionSummary) {
-            emit({
-              currentIteration: iteration,
-              maxIterations,
-              steps: progressSteps.slice(-3),
-              isComplete: true,
-              finalContent,
-              conversationHistory: formatConversationForProgress(conversationHistory),
-            })
-          }
-        } catch (err) {
-          if (isDebugLLM()) {
-            logLLM("[Dual-Model] Completion summarization error:", err)
-          }
-        }
-      }
-
-      break
-    }
-
-    // Handle no-op iterations (no tool calls and no explicit completion)
-    if (!hasToolCalls && !explicitlyComplete) {
+    // Handle no-op iterations (no tool calls).
+    if (!hasToolCalls) {
       noOpCount++
 
       const hasToolsAvailable = activeTools.length > 0
+      const hasCompletionSignalTool = activeTools.some(
+        (tool) => tool.name === MARK_WORK_COMPLETE_TOOL,
+      )
       const contentText = llmResponse.content || ""
       const trimmedContent = contentText.trim()
+      const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(contentText)
+
+      if (hasToolMarkers) {
+        const cleaned = contentText.replace(/<\|[^|]*\|>/g, "").trim()
+        if (cleaned.length > 0) {
+          addMessage("assistant", cleaned)
+        }
+        addMessage(
+          "user",
+          "Please use the native tool-calling interface to call the tools directly, rather than describing them in text.",
+        )
+        noOpCount = 0
+        continue
+      }
 
       // Scope tool evidence to this user prompt (current turn)
       const hasToolResultsInCurrentTurn =
@@ -2039,22 +1742,11 @@ Return ONLY JSON per schema.`,
         ? isDeliverableResponse(contentText)
         : isDeliverableResponse(contentText, 10)
 
-      // Respect explicit continuation signal from the model.
-      if (llmResponse.needsMoreWork === true) {
-        if (trimmedContent.length > 0 && !isToolCallPlaceholder(contentText)) {
-          addMessage("assistant", contentText)
-        }
-        noOpCount = 0
-        totalNudgeCount = 0
-        completionSignalHintCount = 0
-        continue
-      }
-
       // Unified completion candidate handling:
-      // Any substantive response that does not explicitly request more work is either:
+      // Any substantive response is either:
       // - accepted directly for no-tool/simple flows, or
       // - treated as in-progress status for tool-driven flows until explicit completion.
-      if (hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
+      if (hasSubstantiveResponse) {
         const canBypassVerification = !config.mcpVerifyCompletionEnabled || !hasToolsAvailable
 
         if (canBypassVerification) {
@@ -2071,27 +1763,160 @@ Return ONLY JSON per schema.`,
           break
         }
 
-        // In tool-driven tasks, substantive text without explicit completion is usually
-        // a progress/status update. Keep iterating and reserve verifier calls for explicit
-        // completion signals (needsMoreWork=false or mark_work_complete).
-        if (trimmedContent.length > 0) {
-          addMessage("assistant", contentText)
+        if (hasCompletionSignalTool) {
+          // In tool-driven tasks, substantive text without explicit completion is usually
+          // a progress/status update. Keep iterating and reserve verifier calls for explicit
+          // completion signals from mark_work_complete.
+          if (trimmedContent.length > 0) {
+            addMessage("assistant", contentText)
+          }
+
+          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS) {
+            addMessage(
+              "user",
+              `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`,
+            )
+            completionSignalHintCount++
+          }
+
+          // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
+          // completion in a tool-driven task is still a no-op from a progress standpoint.
+          // Keeping noOpCount incrementing ensures the nudge/fallback thresholds can
+          // eventually trigger if the model keeps returning text without making progress.
+          noOpCount++
+          continue
         }
 
-        if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS) {
-          addMessage(
-            "user",
-            `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`
+        // Fallback path: completion signal tool is unavailable for this session/profile.
+        // Treat substantive text as a completion candidate and verify before finalizing.
+        finalContent = contentText
+        const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
+        let skipPostVerifySummary =
+          (config.mcpFinalSummaryEnabled === false) ||
+          (noToolsCalledYet && isDeliverableResponse(finalContent))
+        let completionForcedByVerificationLimit = false
+        let completionForcedIncompleteDetails: IncompleteTaskDetails | undefined
+
+        if (config.mcpVerifyCompletionEnabled) {
+          const verifyStep = createProgressStep(
+            "thinking",
+            "Verifying completion",
+            "Checking that the user's request has been achieved",
+            "in_progress",
           )
-          completionSignalHintCount++
+          progressSteps.push(verifyStep)
+          emit({
+            currentIteration: iteration,
+            maxIterations,
+            steps: progressSteps.slice(-3),
+            isComplete: false,
+            conversationHistory: formatConversationForProgress(conversationHistory),
+          })
+
+          const result = await runVerificationAndHandleResult(
+            finalContent,
+            verifyStep,
+            verificationFailCount,
+            {
+              nudgeForToolUsage: true,
+              currentPromptIndex,
+            },
+          )
+          verificationFailCount = result.newFailCount
+          completionForcedByVerificationLimit = result.forcedByLimit
+          completionForcedIncompleteDetails = result.incompleteDetails
+          if (result.skipPostVerifySummary) {
+            skipPostVerifySummary = true
+          }
+
+          if (result.shouldContinue) {
+            if (finalContent.trim().length > 0) {
+              addMessage("assistant", finalContent)
+            }
+            noOpCount = 0
+            continue
+          }
         }
 
-        // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
-        // completion in a tool-driven task is still a no-op from a progress standpoint.
-        // Keeping noOpCount incrementing ensures the nudge/fallback thresholds can
-        // eventually trigger if the model keeps returning text without making progress.
-        noOpCount++
-        continue
+        if (!skipPostVerifySummary && !completionForcedByVerificationLimit) {
+          try {
+            const result = await generatePostVerifySummary(finalContent, false, activeTools)
+            finalContent = result.content
+            if (finalContent.trim().length > 0) {
+              addMessage("assistant", finalContent)
+            }
+          } catch (e) {
+            if (finalContent.trim().length > 0) {
+              addMessage("assistant", finalContent)
+            }
+          }
+        } else if (!completionForcedByVerificationLimit) {
+          if (finalContent.trim().length > 0) {
+            addMessage("assistant", finalContent)
+          }
+        }
+
+        if (completionForcedByVerificationLimit) {
+          finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails)
+          addMessage("assistant", finalContent)
+        }
+
+        const completionStep = createProgressStep(
+          "completion",
+          completionForcedByVerificationLimit ? "Task incomplete" : "Task completed",
+          completionForcedByVerificationLimit
+            ? "Verification did not confirm completion before retry limit"
+            : "Successfully completed the requested task",
+          completionForcedByVerificationLimit ? "error" : "completed",
+        )
+        progressSteps.push(completionStep)
+
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+
+        if (isSummarizationEnabled()) {
+          const lastToolCalls = conversationHistory
+            .filter(m => m.toolCalls && m.toolCalls.length > 0)
+            .flatMap(m => m.toolCalls || [])
+            .slice(-5)
+          const lastToolResults = conversationHistory
+            .filter(m => m.toolResults && m.toolResults.length > 0)
+            .flatMap(m => m.toolResults || [])
+            .slice(-5)
+
+          try {
+            const completionSummary = await generateStepSummary(
+              iteration,
+              lastToolCalls,
+              lastToolResults,
+              finalContent,
+              true,
+            )
+
+            if (completionSummary) {
+              emit({
+                currentIteration: iteration,
+                maxIterations,
+                steps: progressSteps.slice(-3),
+                isComplete: true,
+                finalContent,
+                conversationHistory: formatConversationForProgress(conversationHistory),
+              })
+            }
+          } catch (err) {
+            if (isDebugLLM()) {
+              logLLM("[Dual-Model] Completion summarization error:", err)
+            }
+          }
+        }
+
+        break
       }
 
       // Nudge path for non-deliverable/no-progress responses.
@@ -2538,9 +2363,7 @@ Return ONLY JSON per schema.`,
     // Deferred completion signal: only treat mark_work_complete as a completion signal
     // after all tools in the batch have executed successfully. If any tool (including
     // mark_work_complete itself) returned an error, keep iterating so the agent can recover.
-    if (completionToolCalled && allToolsSuccessful) {
-      llmResponse.needsMoreWork = false
-    }
+    const completionSignalConfirmed = completionToolCalled && allToolsSuccessful
 
     if (hasErrors) {
       // Enhanced error analysis and recovery suggestions
@@ -2612,10 +2435,8 @@ Return ONLY JSON per schema.`,
       })
     }
 
-    // Check if agent indicated it was done after executing tools
-    const agentIndicatedDone = llmResponse.needsMoreWork === false
-
-    if (agentIndicatedDone && allToolsSuccessful) {
+    // Check if agent indicated completion after executing tools.
+    if (completionSignalConfirmed) {
       // Agent indicated completion, but we need to ensure we have a proper summary
       // If the last assistant content was just tool calls, prompt for a summary
       const lastAssistantContent = llmResponse.content || ""
@@ -2862,219 +2683,6 @@ Return ONLY JSON per schema.`,
       progressSteps.push(completionStep)
 
       // Emit final progress
-      emit({
-        currentIteration: iteration,
-        maxIterations,
-        steps: progressSteps.slice(-3),
-        isComplete: true,
-        finalContent,
-        conversationHistory: formatConversationForProgress(conversationHistory),
-      })
-
-      break
-    }
-
-    // Continue iterating if needsMoreWork is true (explicitly set) or undefined (default behavior)
-    // Only stop if needsMoreWork is explicitly false or we hit max iterations
-    const shouldContinue = llmResponse.needsMoreWork !== false
-    if (!shouldContinue) {
-      // Agent explicitly indicated no more work needed
-      const assistantContent = llmResponse.content || ""
-
-      // Check if we just executed tools and need a summary
-      const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
-      const hasMinimalContent = assistantContent.trim().length < 50
-
-      if (hasToolCalls && (hasMinimalContent || !assistantContent.trim())) {
-        // The agent just made tool calls without providing a summary
-        // Prompt the agent to provide a concise summary of what was accomplished
-        const summaryPrompt = "Please provide a concise summary of what you just accomplished with the tool calls. Focus on the key results and outcomes for the user."
-
-        conversationHistory.push({
-          role: "user",
-          content: summaryPrompt,
-          timestamp: Date.now(),
-        })
-
-        // Create a summary request step
-        const summaryStep = createProgressStep(
-          "thinking",
-          "Generating summary",
-          "Requesting final summary of completed actions",
-          "in_progress",
-        )
-        progressSteps.push(summaryStep)
-
-        // Emit progress update for summary request
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-
-        // Get the summary from the agent
-        const contextAwarePrompt = constructSystemPrompt(
-          uniqueAvailableTools,
-          agentModeGuidelines, // Use session-bound guidelines
-          true, // isAgentMode
-          undefined, // relevantTools
-          customSystemPrompt, // Use session-bound custom system prompt
-          skillsInstructions, // agent skills instructions
-          personaProperties, // dynamic persona properties
-          relevantMemories, // memories from previous sessions
-        )
-
-        const summaryMessages = [
-          { role: "system" as const, content: contextAwarePrompt },
-          ...mapConversationToMessages(),
-        ]
-
-        const { messages: shrunkSummaryMessages, estTokensAfter: summaryEstTokens2, maxTokens: summaryMaxTokens2 } = await shrinkMessagesForLLM({
-          messages: summaryMessages as any,
-          availableTools: uniqueAvailableTools,
-          relevantTools: undefined,
-          isAgentMode: true,
-          sessionId: currentSessionId,
-          onSummarizationProgress: (current, total) => {
-            summaryStep.description = `Summarizing for summary generation (${current}/${total})`
-            emit({
-              currentIteration: iteration,
-              maxIterations,
-              steps: progressSteps.slice(-3),
-              isComplete: false,
-              conversationHistory: formatConversationForProgress(conversationHistory),
-            })
-          },
-        })
-        // Update context info for progress display
-        contextInfoRef = { estTokens: summaryEstTokens2, maxTokens: summaryMaxTokens2 }
-
-
-        try {
-          const summaryResponse = await makeLLMCall(shrunkSummaryMessages, config, onRetryProgress, undefined, currentSessionId)
-
-          // Update summary step with the response
-          summaryStep.status = "completed"
-          summaryStep.llmContent = summaryResponse.content || ""
-          summaryStep.title = "Summary provided"
-          summaryStep.description = summaryResponse.content && summaryResponse.content.length > 100
-            ? summaryResponse.content.substring(0, 100) + "..."
-            : summaryResponse.content || "Summary generated"
-
-          // Use the summary as final content
-          finalContent = summaryResponse.content || assistantContent
-
-          // Add the summary to conversation history
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-            timestamp: Date.now(),
-          })
-        } catch (error) {
-          // If summary generation fails, fall back to the original content
-          logLLM("Failed to generate summary:", error)
-          finalContent = assistantContent || "Task completed successfully."
-          summaryStep.status = "error"
-          summaryStep.description = "Failed to generate summary, using fallback"
-
-          conversationHistory.push({
-            role: "assistant",
-            content: finalContent,
-            timestamp: Date.now(),
-          })
-        }
-
-        // NOTE: Removed duplicate "Post-verify summary" block that was causing empty content issues.
-        // The summary was already generated above - making another LLM call here would cause
-        // the model to return empty content since it already provided a complete response.
-
-        // If there are actionable tools and we haven't executed any tools yet,
-        // skip verification and force the model to produce structured toolCalls instead of intent-only text.
-        const hasAnyToolResultsSoFar = conversationHistory.some((e) => e.role === "tool")
-        // Use activeTools (filtered for failures) to avoid nudging for excluded tools
-        const hasActionableTools = activeTools.length > 0
-        if (hasActionableTools && !hasAnyToolResultsSoFar) {
-          conversationHistory.push({
-            role: "user",
-            content:
-              "Before verifying or completing: please use the available tools to actually perform the steps. Call them directly using the native function calling interface.",
-            timestamp: Date.now(),
-          })
-          noOpCount = 0
-          continue
-        }
-      } else {
-        // Agent provided sufficient content, use it as final content
-        finalContent = assistantContent
-        conversationHistory.push({
-          role: "assistant",
-          content: finalContent,
-          timestamp: Date.now(),
-        })
-      }
-
-
-	      // Optional verification before completing (general stop condition)
-	      let completionForcedByVerificationLimit3 = false
-	      let completionForcedIncompleteDetails3: IncompleteTaskDetails | undefined
-	      if (config.mcpVerifyCompletionEnabled) {
-	        const verifyStep = createProgressStep(
-	          "thinking",
-	          "Verifying completion",
-	          "Checking that the user's request has been achieved",
-	          "in_progress",
-	        )
-	        progressSteps.push(verifyStep)
-	        emit({
-	          currentIteration: iteration,
-	          isComplete: false,
-	          maxIterations,
-	          steps: progressSteps.slice(-3),
-	          conversationHistory: formatConversationForProgress(conversationHistory),
-	        })
-
-	        const result = await runVerificationAndHandleResult(
-	          finalContent,
-	          verifyStep,
-	          verificationFailCount
-	        )
-	        verificationFailCount = result.newFailCount
-	        completionForcedByVerificationLimit3 = result.forcedByLimit
-	        completionForcedIncompleteDetails3 = result.incompleteDetails
-
-	        if (result.shouldContinue) {
-	          noOpCount = 0
-	          continue
-	        }
-	      }
-
-	      if (completionForcedByVerificationLimit3) {
-	        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails3)
-	        // Replace the last assistant message rather than appending a duplicate
-	        const lastEntry = conversationHistory[conversationHistory.length - 1]
-	        if (lastEntry?.role === "assistant") {
-	          lastEntry.content = finalContent
-	        } else {
-	          conversationHistory.push({
-	            role: "assistant",
-	            content: finalContent,
-	            timestamp: Date.now(),
-	          })
-	        }
-	      }
-
-	      const completionStep = createProgressStep(
-	        "completion",
-	        completionForcedByVerificationLimit3 ? "Task incomplete" : "Task completed",
-	        completionForcedByVerificationLimit3
-	          ? "Verification did not confirm completion before retry limit"
-	          : "Agent indicated no more work needed",
-	        completionForcedByVerificationLimit3 ? "error" : "completed",
-	      )
-      progressSteps.push(completionStep)
-
       emit({
         currentIteration: iteration,
         maxIterations,

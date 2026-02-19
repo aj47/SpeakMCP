@@ -13,7 +13,6 @@ const LLMToolCallSchema = z.object({
     )
     .optional(),
   content: z.string().optional(),
-  needsMoreWork: z.boolean().optional(),
 })
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
@@ -48,10 +47,6 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       content: {
         type: "string",
         description: "Text content of the response",
-      },
-      needsMoreWork: {
-        type: "boolean",
-        description: "Whether more work is needed after this response",
       },
     },
     additionalProperties: false,
@@ -214,7 +209,7 @@ export async function makeStructuredToolCall(
           // If parsing fails completely, try to extract any meaningful content
           const textContent = content.replace(/<\|[^|]*\|>/g, '').trim()
           if (textContent) {
-            return { content: textContent, needsMoreWork: true }
+            return { content: textContent }
           }
         }
       }

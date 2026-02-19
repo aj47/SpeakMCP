@@ -209,6 +209,24 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:mark_work_complete`,
+    description: "Signal explicit completion for the current task. Call this only when all requested work is actually finished and ready for final delivery.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description: "Concise summary of what was completed for the user.",
+        },
+        confidence: {
+          type: "number",
+          description: "Optional confidence from 0 to 1 that the task is fully complete.",
+        },
+      },
+      required: ["summary"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:toggle_whatsapp`,
     description: "Enable or disable WhatsApp integration. When enabled, allows sending and receiving WhatsApp messages through SpeakMCP.",
     inputSchema: {
@@ -445,4 +463,3 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
 export function getBuiltinToolNames(): string[] {
   return builtinToolDefinitions.map((tool) => tool.name)
 }
-

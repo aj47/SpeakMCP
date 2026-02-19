@@ -790,6 +790,43 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
+  mark_work_complete: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    if (typeof args.summary !== "string" || args.summary.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "summary must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (args.confidence !== undefined && (typeof args.confidence !== "number" || Number.isNaN(args.confidence))) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "confidence must be a number if provided" }) }],
+        isError: true,
+      }
+    }
+
+    const summary = args.summary.trim()
+    const confidence = typeof args.confidence === "number"
+      ? Math.max(0, Math.min(1, args.confidence))
+      : undefined
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            markedComplete: true,
+            summary,
+            confidence,
+            message: "Completion signal recorded. Provide the final user-facing response next.",
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
   toggle_whatsapp: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     const config = configStore.get()
     const currentValue = config.whatsappEnabled ?? false

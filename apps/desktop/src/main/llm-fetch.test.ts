@@ -82,7 +82,7 @@ describe('LLM Fetch with AI SDK', () => {
     const generateTextMock = vi.mocked(generateText)
     
     generateTextMock.mockResolvedValue({
-      text: '{"content": "Hello, world!", "needsMoreWork": false}',
+      text: '{"content": "Hello, world!"}',
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
     } as any)
@@ -95,7 +95,6 @@ describe('LLM Fetch with AI SDK', () => {
     )
 
     expect(result.content).toBe('Hello, world!')
-    expect(result.needsMoreWork).toBe(false)
   })
 
   it('should return plain text when JSON parsing fails', async () => {
@@ -116,9 +115,82 @@ describe('LLM Fetch with AI SDK', () => {
     )
 
     expect(result.content).toBe('This is a plain text response without JSON')
-    // When there are no tool calls and no JSON, needsMoreWork is undefined
-    // to let the agent loop decide whether to continue or nudge for proper format
-    expect(result.needsMoreWork).toBeUndefined()
+    expect(result.toolCalls).toBeUndefined()
+  })
+
+  it('should preserve raw tool markers in response for caller detection', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    const markerText = '<|tool_calls_section_begin|><|tool_call_begin|>search<|tool_call_end|><|tool_calls_section_end|>'
+    generateTextMock.mockResolvedValue({
+      text: markerText,
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    // When tool markers are present, raw text (with markers) should be returned
+    // so the caller's marker detection can trigger the recovery path.
+    expect(result.content).toBe(markerText)
+    expect(result.toolCalls).toBeUndefined()
+  })
+
+  it('should preserve tool markers mixed with normal text', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    const mixedText = 'Here is the result <|tool_call_begin|>search<|tool_call_end|> done.'
+    generateTextMock.mockResolvedValue({
+      text: mixedText,
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    expect(result.content).toBe(mixedText)
+  })
+
+  it('should filter out malformed toolCall items from JSON response', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: JSON.stringify({
+        toolCalls: [
+          { name: 'search', arguments: { query: 'test' } },
+          { arguments: { query: 'no-name' } },
+          { name: '', arguments: {} },
+          { name: 42, arguments: {} },
+        ],
+        content: 'Searching...'
+      }),
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    // Only the valid tool call (with a non-empty string name) should survive
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls?.[0].name).toBe('search')
   })
 
   it('should extract toolCalls from JSON response', async () => {
@@ -130,8 +202,7 @@ describe('LLM Fetch with AI SDK', () => {
         toolCalls: [
           { name: 'search', arguments: { query: 'test' } }
         ],
-        content: 'Searching...',
-        needsMoreWork: true
+        content: 'Searching...'
       }),
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
@@ -147,7 +218,6 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.toolCalls).toHaveLength(1)
     expect(result.toolCalls?.[0].name).toBe('search')
     expect(result.content).toBe('Searching...')
-    expect(result.needsMoreWork).toBe(true)
   })
 
   it('should throw on empty response', async () => {
@@ -257,7 +327,6 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.toolCalls).toHaveLength(1)
     expect(result.toolCalls![0].name).toBe('play_wordle')
     expect(result.toolCalls![0].arguments).toEqual({ word: 'hello' })
-    expect(result.needsMoreWork).toBe(true)
   })
 
   it('should correctly restore tool names with colons from MCP server prefixes', async () => {
@@ -451,7 +520,7 @@ describe('LLM Fetch with AI SDK', () => {
     const generateTextMock = vi.mocked(generateText)
 
     generateTextMock.mockResolvedValue({
-      text: '{"content": "Continuing the work.", "needsMoreWork": false}',
+      text: '{"content": "Continuing the work."}',
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
     } as any)
@@ -468,13 +537,13 @@ describe('LLM Fetch with AI SDK', () => {
       'openai'
     )
 
-    // Verify that generateText was called with a "Please continue." user message appended
+    // Verify that generateText was called with a continuation user message appended
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: [
           { role: 'user', content: 'Summarize X feed' },
           { role: 'assistant', content: 'I will start working on that.' },
-          { role: 'user', content: 'Please continue.' },
+          { role: 'user', content: 'Continue from your most recent step using the existing context. Do not restart.' },
         ],
       })
     )
@@ -485,7 +554,7 @@ describe('LLM Fetch with AI SDK', () => {
     const generateTextMock = vi.mocked(generateText)
 
     generateTextMock.mockResolvedValue({
-      text: '{"content": "Here is the result.", "needsMoreWork": false}',
+      text: '{"content": "Here is the result."}',
       finishReason: 'stop',
       usage: { promptTokens: 10, completionTokens: 20 },
     } as any)
@@ -509,6 +578,51 @@ describe('LLM Fetch with AI SDK', () => {
         ],
       })
     )
+  })
+
+  it('should preserve raw tool markers in response content', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    const markerText = '<|tool_calls_section_begin|><|tool_call_begin|>search<|tool_call_end|><|tool_calls_section_end|>'
+    generateTextMock.mockResolvedValue({
+      text: markerText,
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    // When tool markers are detected, the raw text (with markers) should be
+    // returned so the caller's own marker detection can trigger recovery.
+    expect(result.content).toBe(markerText)
+  })
+
+  it('should preserve tool markers even when mixed with regular text', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    const mixedText = 'Here is a response <|tool_call_begin|>search<|tool_call_end|> with markers'
+    generateTextMock.mockResolvedValue({
+      text: mixedText,
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20 },
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'test' }],
+      'openai'
+    )
+
+    // Raw text should be returned with markers intact
+    expect(result.content).toBe(mixedText)
   })
 
   it('should retry on AI SDK rate limit errors (statusCode 429)', async () => {
@@ -651,4 +765,3 @@ describe('LLM Fetch with AI SDK', () => {
     shouldStopSpy.mockRestore()
   })
 })
-

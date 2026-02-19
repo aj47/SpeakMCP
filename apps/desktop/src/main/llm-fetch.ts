@@ -558,7 +558,7 @@ function convertMessages(messages: Array<{ role: string; content: string }>): {
   if (otherMessages.length > 0 && otherMessages[otherMessages.length - 1].role === "assistant") {
     otherMessages.push({
       role: "user",
-      content: "Please continue.",
+      content: "Continue from your most recent step using the existing context. Do not restart.",
     })
   }
 
@@ -732,7 +732,6 @@ export async function makeLLMCallWithFetch(
           return {
             content: text || undefined,
             toolCalls,
-            needsMoreWork: true, // Tool calls always need more work
           }
         }
 
@@ -754,25 +753,27 @@ export async function makeLLMCallWithFetch(
           })
         }
 
-        // Try to parse JSON from the response (fallback for models that respond with JSON)
+        // Try to parse JSON from the response (fallback for models that respond with JSON).
+        // Use `in` operator so that `{"content":""}` (empty string) is still recognised as
+        // a structured response rather than falling through as raw text.
         const jsonObject = extractJsonObject(text)
-        if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
-          const response = jsonObject as LLMToolCallResponse
-          // Don't force needsMoreWork - let llm.ts heuristics decide
-          // This matches plain text behavior and prevents simple JSON responses
-          // like {"content": "Hello"} from forcing unnecessary iterations
-          // (see issue: JSON vs plain text asymmetry in debugging-agents-langfuse.md)
-
-          // Ensure tool calls always continue (matches native AI SDK behavior)
-          if (response.toolCalls && response.toolCalls.length > 0) {
-            response.needsMoreWork = true
-          }
-          // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement
+        if (jsonObject && ("toolCalls" in jsonObject || "content" in jsonObject)) {
+          const response = {
+            content: typeof jsonObject.content === "string" ? jsonObject.content : undefined,
+            toolCalls: Array.isArray(jsonObject.toolCalls)
+              ? jsonObject.toolCalls
+              : undefined,
+          } as LLMToolCallResponse
+          // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement.
+          // Filter out malformed items (missing/non-string name) so a bad model JSON response
+          // can't crash the fetch layer.
           if (response.toolCalls) {
-            response.toolCalls = response.toolCalls.map(tc => ({
-              ...tc,
-              name: restoreToolName(tc.name, convertedTools?.nameMap),
-            }))
+            response.toolCalls = response.toolCalls
+              .filter(tc => tc && typeof tc.name === "string" && tc.name.length > 0)
+              .map(tc => ({
+                ...tc,
+                name: restoreToolName(tc.name, convertedTools?.nameMap),
+              }))
           }
           // End Langfuse generation with JSON response
           if (generationId) {
@@ -789,24 +790,26 @@ export async function makeLLMCallWithFetch(
           /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(text)
         const cleaned = text.replace(/<\|[^|]*\|>/g, "").trim()
 
-        // End Langfuse generation with text response
+        // End Langfuse generation with text response.
+        // When tool markers are present, log the raw text so traces accurately
+        // reflect what triggered the marker-recovery path.
         if (generationId) {
           endLLMGeneration(generationId, {
-            output: cleaned || text,
+            output: hasToolMarkers ? text : (cleaned || text),
             usage: buildTokenUsage(result.usage),
           })
         }
 
         if (hasToolMarkers) {
-          return { content: cleaned, needsMoreWork: true }
+          // Return raw text (with markers) so the caller's own marker detection
+          // can trigger the tool-marker recovery path. If we return `cleaned`
+          // (markers stripped), it may be empty and the caller won't know
+          // markers were present, treating it as a null/empty response instead.
+          return { content: text }
         }
 
-        // Return as plain text with needsMoreWork undefined
-        // This allows the agent loop to decide whether to continue or nudge for proper format
-        // (see llm.ts handling around issue #443)
         return {
           content: cleaned || text,
-          needsMoreWork: undefined,
         }
       } finally {
         unregisterSessionAbortController(abortController, sessionId)
@@ -890,7 +893,6 @@ export async function makeLLMCallWithStreaming(
 
     return {
       content: accumulated,
-      needsMoreWork: undefined,
       toolCalls: undefined,
     }
   } catch (error: any) {

@@ -133,7 +133,12 @@ function buildSummarizationPrompt(input: SummarizationInput): string {
     contextSection += `\n## Tool Results:\n`
     for (const tr of input.toolResults) {
       const status = tr.success ? "✓" : "✗"
-      const content = tr.content.slice(0, 500) + (tr.content.length > 500 ? "..." : "")
+      // Include both head+tail when large so we don't miss key facts buried in the middle.
+      const maxPreviewChars = 1500
+      const content =
+        tr.content.length > maxPreviewChars
+          ? `${tr.content.slice(0, 750)}\n...\n${tr.content.slice(-750)}`
+          : tr.content
       contextSection += `- ${status} ${content}\n`
     }
   }
@@ -159,8 +164,21 @@ Respond in this exact JSON format:
   "keyFindings": ["Finding 1", "Finding 2"],
   "nextSteps": "What the agent plans to do next (if apparent)",
   "decisionsMade": ["Decision 1"],
+  "memoryCandidates": [
+    "preference: ...",
+    "constraint: ...",
+    "decision: ...",
+    "fact: ...",
+    "insight: ..."
+  ],
   "importance": "low|medium|high|critical"
 }
+Rules for memoryCandidates:
+- Only include durable, reusable items that will still matter in future sessions.
+- Good candidates: user preferences, constraints/safety rules, important decisions, repo/environment facts, key insights.
+- Bad candidates: step telemetry ("ran tool X"), temporary state, long excerpts, or anything sensitive (secrets, API keys, personal data).
+- Each item must be a single line and start with one of: preference/constraint/decision/fact/insight.
+- Prefer 0-3 items; maximum 5.
 
 Guidelines for importance:
 - "low": Routine operations, simple queries
@@ -174,7 +192,7 @@ Respond ONLY with valid JSON, no other text.`
 /**
  * Parse the LLM response into a structured summary
  */
-function parseSummaryResponse(response: string, input: SummarizationInput): AgentStepSummary {
+export function parseSummaryResponse(response: string, input: SummarizationInput): AgentStepSummary {
   const id = `summary_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
   try {
@@ -186,12 +204,22 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
 
     const parsed = JSON.parse(jsonMatch[0])
 
+    const memoryCandidates = Array.isArray(parsed.memoryCandidates)
+      ? parsed.memoryCandidates
+          .filter((c: unknown): c is string => typeof c === "string")
+          .map(c => c.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .map(c => (c.length > 240 ? c.slice(0, 240) : c))
+          .slice(0, 5)
+      : []
+
     return {
       id,
       sessionId: input.sessionId,
       stepNumber: input.stepNumber,
       timestamp: Date.now(),
       actionSummary: parsed.actionSummary || "Agent executed a step",
+      memoryCandidates,
       keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings : [],
       nextSteps: parsed.nextSteps || undefined,
       decisionsMade: Array.isArray(parsed.decisionsMade) ? parsed.decisionsMade : undefined,
@@ -211,6 +239,7 @@ function parseSummaryResponse(response: string, input: SummarizationInput): Agen
       stepNumber: input.stepNumber,
       timestamp: Date.now(),
       actionSummary: input.assistantResponse?.slice(0, 100) || "Agent step completed",
+      memoryCandidates: [],
       keyFindings: [],
       importance: "medium",
     }

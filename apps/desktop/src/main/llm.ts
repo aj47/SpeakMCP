@@ -584,7 +584,7 @@ export async function processTranscriptWithAgentMode(
         // Associate memory with the session's profile for profile-scoped memories
         if (config.memoriesEnabled !== false && config.dualModelAutoSaveImportant) {
           const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
-          const memory = memoryService.createMemoryFromSummary(
+	          const memory = memoryService.createMemoryFromSummary(
             summary,
             undefined, // title
             undefined, // userNotes
@@ -593,11 +593,13 @@ export async function processTranscriptWithAgentMode(
             currentConversationId,
             profileIdForMemory,
           )
-          memoryService.saveMemory(memory).catch(err => {
-            if (isDebugLLM()) {
-              logLLM("[Dual-Model] Error auto-saving summary:", err)
-            }
-          })
+	          if (memory) {
+	            memoryService.saveMemory(memory).catch(err => {
+	              if (isDebugLLM()) {
+	                logLLM("[Dual-Model] Error auto-saving summary:", err)
+	              }
+	            })
+	          }
         }
 
         if (isDebugLLM()) {

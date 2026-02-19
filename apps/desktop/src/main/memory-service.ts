@@ -10,6 +10,18 @@ import * as path from "path"
 import { logLLM, isDebugLLM } from "./debug"
 import type { AgentMemory, AgentStepSummary } from "../shared/types"
 
+function normalizeSingleLine(text: string): string {
+  return text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
+}
+
+const MEMORY_CANDIDATE_TYPES = new Set([
+  "preference",
+  "constraint",
+  "decision",
+  "fact",
+  "insight",
+])
+
 function getMemoriesFilePath(): string {
   return path.join(app.getPath("userData"), "memories.json")
 }
@@ -134,8 +146,51 @@ class MemoryService {
     conversationTitle?: string,
     conversationId?: string,
     profileId?: string,
-  ): AgentMemory {
+  ): AgentMemory | null {
     const now = Date.now()
+
+    // Prefer durable memory candidates (preferences/constraints/decisions/facts/insights)
+    // over step telemetry (actionSummary).
+    const memoryCandidates = (summary.memoryCandidates || [])
+      .filter((c): c is string => typeof c === "string")
+      .map(normalizeSingleLine)
+      .filter(Boolean)
+
+    const selectedCandidates = memoryCandidates.slice(0, 3)
+    const derivedTags = selectedCandidates
+      .map(c => c.split(":")[0]?.toLowerCase().trim())
+      .filter((t): t is string => !!t && MEMORY_CANDIDATE_TYPES.has(t))
+
+    const decisionsMade = Array.isArray(summary.decisionsMade)
+      ? summary.decisionsMade.filter((d): d is string => typeof d === "string")
+      : []
+    const keyFindings = Array.isArray(summary.keyFindings)
+      ? summary.keyFindings.filter((f): f is string => typeof f === "string")
+      : []
+
+    const contentFromCandidates =
+      selectedCandidates.length > 0 ? selectedCandidates.join(" | ") : undefined
+    const contentFromDecisions =
+      decisionsMade.length > 0
+        ? decisionsMade.map(normalizeSingleLine).filter(Boolean).slice(0, 3).join(" | ")
+        : undefined
+    const contentFromFindings =
+      keyFindings.length > 0
+        ? keyFindings.map(normalizeSingleLine).filter(Boolean).slice(0, 3).join(" | ")
+        : undefined
+
+    // If there are no durable items, don't create a memory.
+    const chosenContent = normalizeSingleLine(
+      contentFromCandidates || contentFromDecisions || contentFromFindings || "",
+    )
+    if (!chosenContent) {
+      return null
+    }
+
+    const baseTags = [...(summary.tags ?? []), ...(tags ?? [])]
+    const mergedTags = Array.from(new Set([...baseTags, ...derivedTags])).filter(Boolean)
+    const resolvedTitle = normalizeSingleLine(title || chosenContent).slice(0, 100)
+
     return {
       id: `memory_${now}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: now,
@@ -144,10 +199,10 @@ class MemoryService {
       sessionId: summary.sessionId,
       conversationId,
       conversationTitle,
-      title: title || summary.actionSummary.slice(0, 100),
-      content: summary.actionSummary,
-      keyFindings: summary.keyFindings,
-      tags: tags || summary.tags || [],
+      title: resolvedTitle,
+      content: chosenContent,
+      keyFindings,
+      tags: mergedTags,
       importance: summary.importance,
       userNotes,
     }

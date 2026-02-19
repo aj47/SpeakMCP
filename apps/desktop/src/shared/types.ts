@@ -284,6 +284,13 @@ export interface AgentStepSummary {
   // Summary content - single line, ultra compact
   actionSummary: string      // What the agent just did (single line)
 
+  /**
+   * Durable memory candidates extracted from this step.
+   * These should be reusable in future sessions (preferences, constraints, decisions, facts, insights),
+   * NOT step-by-step telemetry.
+   */
+  memoryCandidates?: string[]
+
   // Metadata
   importance: "low" | "medium" | "high" | "critical"
   savedToMemory?: boolean

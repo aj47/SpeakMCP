@@ -860,14 +860,48 @@ export async function processTranscriptWithAgentMode(
     return true
   }
 
-  const buildIncompleteTaskFallback = (lastResponse: string): string => {
-    const trimmed = lastResponse.trim()
-    if (!trimmed) {
+  interface IncompleteTaskDetails {
+    missingItems?: string[]
+    reason?: string
+  }
+
+  const normalizeMissingItems = (items?: string[]): string[] =>
+    Array.isArray(items)
+      ? items
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
+          .filter((item) => item.length > 0)
+      : []
+
+  const buildIncompleteTaskFallback = (
+    _lastResponse: string,
+    details?: IncompleteTaskDetails
+  ): string => {
+    const missingItems = normalizeMissingItems(details?.missingItems)
+    const reason = typeof details?.reason === "string" ? details.reason.trim() : ""
+
+    if (!reason && missingItems.length === 0) {
       return "I couldn't complete the request after multiple attempts. Please try again with a narrower scope or additional guidance."
     }
 
-    const preview = trimmed.length > 160 ? `${trimmed.substring(0, 157)}...` : trimmed
-    return `I couldn't complete the request after multiple attempts. Last status update: "${preview}". Please try again with a narrower scope or additional guidance.`
+    const parts: string[] = ["I couldn't complete the request after multiple attempts."]
+
+    if (reason) {
+      parts.push(`Reason: ${reason}`)
+    }
+
+    if (missingItems.length > 0) {
+      const shownItems = missingItems.slice(0, 3)
+      const remainingCount = missingItems.length - shownItems.length
+      const summary = shownItems.join("; ")
+      parts.push(
+        remainingCount > 0
+          ? `Missing items: ${summary}; and ${remainingCount} more.`
+          : `Missing items: ${summary}.`
+      )
+    }
+
+    parts.push("Please try again with a narrower scope or additional guidance.")
+    return parts.join(" ")
   }
 
   // Helper to map conversation history to LLM messages format (filters empty content)
@@ -1073,6 +1107,8 @@ Return ONLY JSON per schema.`,
     skipPostVerifySummary: boolean
     /** Whether completion was forced due verification limit */
     forcedByLimit: boolean
+    /** Optional details about missing deliverables when forced incomplete */
+    incompleteDetails?: IncompleteTaskDetails
   }
 
   /**
@@ -1131,6 +1167,9 @@ Return ONLY JSON per schema.`,
           newFailCount,
           skipPostVerifySummary: true,
           forcedByLimit: true,
+          incompleteDetails: {
+            reason: "No final deliverable was produced.",
+          },
         }
       }
 
@@ -1184,6 +1223,12 @@ Return ONLY JSON per schema.`,
 
     // Gate 3: verification failed; either continue with nudge or force incomplete.
     const newFailCount = currentFailCount + 1
+    const missingItems = normalizeMissingItems(verification?.missingItems)
+    const verificationReason =
+      typeof verification?.reason === "string" && verification.reason.trim().length > 0
+        ? verification.reason.trim()
+        : ""
+
     if (newFailCount >= VERIFICATION_FAIL_LIMIT) {
       verifyStep.status = "completed"
       verifyStep.description = "Verification budget exhausted - ending as incomplete"
@@ -1193,16 +1238,21 @@ Return ONLY JSON per schema.`,
         newFailCount,
         skipPostVerifySummary: true,
         forcedByLimit: true,
+        incompleteDetails: {
+          reason: verificationReason || "Completion criteria were not met before verification retry limit.",
+          missingItems,
+        },
       }
     }
 
     verifyStep.status = "error"
     verifyStep.description = "Verification failed - continue iteration"
-    const missing = (verification?.missingItems || [])
-      .filter((s: string) => s && s.trim())
+    const missing = missingItems
       .map((s: string) => `- ${s}`)
       .join("\n")
-    const reason = verification?.reason ? `Reason: ${verification.reason}` : "Reason: Completion criteria not met."
+    const reason = verificationReason
+      ? `Reason: ${verificationReason}`
+      : "Reason: Completion criteria not met."
     const userNudge = `${reason}\n${missing ? `Missing items:\n${missing}` : ""}\nContinue and finish remaining work.`
     conversationHistory.push({ role: "user", content: userNudge, timestamp: Date.now() })
     maybeNudgeToolUsage(newFailCount)
@@ -1655,7 +1705,7 @@ Return ONLY JSON per schema.`,
         }
 
         if (result.forcedByLimit) {
-          const incompleteContent = buildIncompleteTaskFallback(lastAssistantContent)
+          const incompleteContent = buildIncompleteTaskFallback(lastAssistantContent, result.incompleteDetails)
           addMessage("assistant", incompleteContent)
           emit({
             currentIteration: iteration,
@@ -1821,6 +1871,7 @@ Return ONLY JSON per schema.`,
       const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
       let skipPostVerifySummary = (config.mcpFinalSummaryEnabled === false) || (noToolsCalledYet && isDeliverableResponse(finalContent))
       let completionForcedByVerificationLimit = false
+      let completionForcedIncompleteDetails: IncompleteTaskDetails | undefined
 
       if (config.mcpVerifyCompletionEnabled) {
         const verifyStep = createProgressStep(
@@ -1849,6 +1900,7 @@ Return ONLY JSON per schema.`,
         )
         verificationFailCount = result.newFailCount
         completionForcedByVerificationLimit = result.forcedByLimit
+        completionForcedIncompleteDetails = result.incompleteDetails
         if (result.skipPostVerifySummary) {
           skipPostVerifySummary = true
         }
@@ -1881,16 +1933,18 @@ Return ONLY JSON per schema.`,
         }
 
       if (completionForcedByVerificationLimit) {
-        finalContent = buildIncompleteTaskFallback(finalContent)
+        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails)
         addMessage("assistant", finalContent)
       }
 
       // Add completion step
       const completionStep = createProgressStep(
         "completion",
-        "Task completed",
-        "Successfully completed the requested task",
-        "completed",
+        completionForcedByVerificationLimit ? "Task incomplete" : "Task completed",
+        completionForcedByVerificationLimit
+          ? "Verification did not confirm completion before retry limit"
+          : "Successfully completed the requested task",
+        completionForcedByVerificationLimit ? "error" : "completed",
       )
       progressSteps.push(completionStep)
 
@@ -2021,7 +2075,7 @@ Return ONLY JSON per schema.`,
 
         if (!result.shouldContinue) {
           finalContent = result.forcedByLimit
-            ? buildIncompleteTaskFallback(contentText)
+            ? buildIncompleteTaskFallback(contentText, result.incompleteDetails)
             : contentText
           addMessage("assistant", finalContent)
           emit({
@@ -2692,6 +2746,7 @@ Return ONLY JSON per schema.`,
 	      // Track if we should skip post-verify summary (when agent is repeating itself or disabled)
 	      let skipPostVerifySummary2 = config.mcpFinalSummaryEnabled === false
 	      let completionForcedByVerificationLimit2 = false
+	      let completionForcedIncompleteDetails2: IncompleteTaskDetails | undefined
 
 	      if (config.mcpVerifyCompletionEnabled) {
 	        const verifyStep = createProgressStep(
@@ -2716,6 +2771,7 @@ Return ONLY JSON per schema.`,
 	        )
 	        verificationFailCount = result.newFailCount
 	        completionForcedByVerificationLimit2 = result.forcedByLimit
+	        completionForcedIncompleteDetails2 = result.incompleteDetails
 	        if (result.skipPostVerifySummary) {
 	          skipPostVerifySummary2 = true
 	        }
@@ -2782,18 +2838,20 @@ Return ONLY JSON per schema.`,
 	        }
 
 	      if (completionForcedByVerificationLimit2) {
-	        finalContent = buildIncompleteTaskFallback(finalContent)
+	        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails2)
 	        conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
 	      }
 
 
 	      // Add completion step
-      const completionStep = createProgressStep(
-        "completion",
-        "Task completed",
-        "Successfully completed the requested task with summary",
-        "completed",
-      )
+	      const completionStep = createProgressStep(
+	        "completion",
+	        completionForcedByVerificationLimit2 ? "Task incomplete" : "Task completed",
+	        completionForcedByVerificationLimit2
+	          ? "Verification did not confirm completion before retry limit"
+	          : "Successfully completed the requested task with summary",
+	        completionForcedByVerificationLimit2 ? "error" : "completed",
+	      )
       progressSteps.push(completionStep)
 
       // Emit final progress
@@ -2953,6 +3011,7 @@ Return ONLY JSON per schema.`,
 
 	      // Optional verification before completing (general stop condition)
 	      let completionForcedByVerificationLimit3 = false
+	      let completionForcedIncompleteDetails3: IncompleteTaskDetails | undefined
 	      if (config.mcpVerifyCompletionEnabled) {
 	        const verifyStep = createProgressStep(
 	          "thinking",
@@ -2976,6 +3035,7 @@ Return ONLY JSON per schema.`,
 	        )
 	        verificationFailCount = result.newFailCount
 	        completionForcedByVerificationLimit3 = result.forcedByLimit
+	        completionForcedIncompleteDetails3 = result.incompleteDetails
 
 	        if (result.shouldContinue) {
 	          noOpCount = 0
@@ -2984,7 +3044,7 @@ Return ONLY JSON per schema.`,
 	      }
 
 	      if (completionForcedByVerificationLimit3) {
-	        finalContent = buildIncompleteTaskFallback(finalContent)
+	        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails3)
 	        conversationHistory.push({
 	          role: "assistant",
 	          content: finalContent,
@@ -2992,12 +3052,14 @@ Return ONLY JSON per schema.`,
 	        })
 	      }
 
-      const completionStep = createProgressStep(
-        "completion",
-        "Task completed",
-        "Agent indicated no more work needed",
-        "completed",
-      )
+	      const completionStep = createProgressStep(
+	        "completion",
+	        completionForcedByVerificationLimit3 ? "Task incomplete" : "Task completed",
+	        completionForcedByVerificationLimit3
+	          ? "Verification did not confirm completion before retry limit"
+	          : "Agent indicated no more work needed",
+	        completionForcedByVerificationLimit3 ? "error" : "completed",
+	      )
       progressSteps.push(completionStep)
 
       emit({

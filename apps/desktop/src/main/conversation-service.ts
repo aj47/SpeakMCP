@@ -18,6 +18,8 @@ const COMPACTION_KEEP_LAST = 10
 
 // Debounce delay for writing the conversation index to disk (ms)
 const INDEX_WRITE_DEBOUNCE_MS = 500
+// On parse failures, try a bounded number of prefix candidates to recover a valid JSON object.
+const CONVERSATION_REPAIR_MAX_PARSE_ATTEMPTS = 5000
 
 export class ConversationService {
   private static instance: ConversationService | null = null
@@ -28,6 +30,8 @@ export class ConversationService {
   private indexWriteTimer: ReturnType<typeof setTimeout> | null = null
   // Promise that resolves when the current index write completes (for flush)
   private indexWritePromise: Promise<void> | null = null
+  // Queue that serializes mutations per-conversation to prevent concurrent writes/corruption.
+  private conversationMutationQueues = new Map<string, Promise<void>>()
   // Queue that serializes index cache mutations to prevent lost updates under concurrent saves.
   private indexMutationQueue: Promise<void> = Promise.resolve()
 
@@ -177,6 +181,170 @@ export class ConversationService {
   }
 
   /**
+   * Serialize mutations for a single conversation to avoid concurrent read-modify-write races.
+   */
+  private enqueueConversationMutation<T>(
+    conversationId: string,
+    mutation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.conversationMutationQueues.get(conversationId) ?? Promise.resolve()
+    const run = previous.then(mutation)
+    const settled = run.then(() => undefined, () => undefined)
+
+    this.conversationMutationQueues.set(conversationId, settled)
+    settled.finally(() => {
+      if (this.conversationMutationQueues.get(conversationId) === settled) {
+        this.conversationMutationQueues.delete(conversationId)
+      }
+    })
+
+    return run
+  }
+
+  /**
+   * Await the latest queued mutation for a conversation, if any.
+   */
+  private async waitForConversationMutation(conversationId: string): Promise<void> {
+    const pending = this.conversationMutationQueues.get(conversationId)
+    if (pending) {
+      await pending
+    }
+  }
+
+  /**
+   * Await all in-flight conversation mutations (used before destructive global deletes).
+   */
+  private async waitForAllConversationMutations(): Promise<void> {
+    const pending = [...this.conversationMutationQueues.values()]
+    if (pending.length === 0) return
+    await Promise.allSettled(pending)
+  }
+
+  /**
+   * Persist a conversation file atomically to avoid partially-written/corrupted JSON files.
+   */
+  private async writeConversationFileAtomic(conversationPath: string, payload: string): Promise<void> {
+    const tempPath = `${conversationPath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
+    try {
+      await fsPromises.writeFile(tempPath, payload)
+      await fsPromises.rename(tempPath, conversationPath)
+    } catch (error) {
+      try {
+        await fsPromises.unlink(tempPath)
+      } catch {
+        // Best-effort cleanup
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Validate minimal shape before accepting parsed JSON as a conversation.
+   */
+  private isValidConversationShape(value: unknown): value is Conversation {
+    if (!value || typeof value !== "object") return false
+    const maybe = value as Partial<Conversation>
+    return (
+      typeof maybe.id === "string" &&
+      typeof maybe.title === "string" &&
+      typeof maybe.createdAt === "number" &&
+      typeof maybe.updatedAt === "number" &&
+      Array.isArray(maybe.messages)
+    )
+  }
+
+  /**
+   * Attempt to recover a valid conversation JSON by trimming trailing garbage and reparsing.
+   * This is only used when the file failed normal JSON.parse().
+   */
+  private tryRepairConversationFromCorruptedData(raw: string): Conversation | null {
+    const trimmed = raw.trim()
+    if (!trimmed.startsWith("{")) {
+      return null
+    }
+
+    let attempts = 0
+    for (let i = trimmed.length - 1; i >= 0; i--) {
+      if (trimmed[i] !== "}") {
+        continue
+      }
+      attempts++
+      if (attempts > CONVERSATION_REPAIR_MAX_PARSE_ATTEMPTS) {
+        break
+      }
+
+      const candidate = trimmed.slice(0, i + 1)
+      try {
+        const parsed = JSON.parse(candidate) as unknown
+        if (this.isValidConversationShape(parsed)) {
+          return parsed
+        }
+      } catch {
+        // Keep scanning earlier object boundaries.
+      }
+    }
+
+    return null
+  }
+
+  private async loadConversationFromDisk(conversationId: string): Promise<Conversation | null> {
+    const conversationPath = this.getConversationPath(conversationId)
+
+    let conversationData: string
+    try {
+      conversationData = await fsPromises.readFile(conversationPath, "utf8")
+    } catch (error) {
+      // File doesn't exist or is unreadable.
+      return null
+    }
+
+    try {
+      const conversation = JSON.parse(conversationData) as unknown
+      if (!this.isValidConversationShape(conversation)) {
+        logApp(`[ConversationService] Invalid conversation shape for ${conversationId}`)
+        return null
+      }
+      return conversation
+    } catch (error) {
+      const repairedConversation = this.tryRepairConversationFromCorruptedData(conversationData)
+      if (!repairedConversation) {
+        logApp(`[ConversationService] Failed to parse conversation ${conversationId}; unable to repair.`, error)
+        return null
+      }
+
+      try {
+        await this.saveConversationUnlocked(repairedConversation, true)
+        logApp(`[ConversationService] Repaired corrupted conversation file: ${conversationId}`)
+      } catch (repairSaveError) {
+        logApp(`[ConversationService] Recovered conversation ${conversationId} in-memory, but failed to persist repaired file.`, repairSaveError)
+      }
+
+      return repairedConversation
+    }
+  }
+
+  private async saveConversationUnlocked(
+    conversation: Conversation,
+    preserveTimestamp: boolean = false,
+  ): Promise<void> {
+    this.ensureConversationsFolder()
+    const conversationPath = this.getConversationPath(conversation.id)
+
+    // Update the updatedAt timestamp unless preserving client-supplied value
+    if (!preserveTimestamp) {
+      conversation.updatedAt = Date.now()
+    }
+
+    await this.writeConversationFileAtomic(
+      conversationPath,
+      JSON.stringify(conversation, null, 2),
+    )
+
+    // Update the index (in-memory immediately, disk write debounced)
+    await this.updateConversationIndex(conversation)
+  }
+
+  /**
    * Flush any pending debounced index write to disk immediately.
    * Called before operations that need a consistent on-disk state (e.g. delete).
    */
@@ -215,33 +383,15 @@ export class ConversationService {
 
 
   async saveConversation(conversation: Conversation, preserveTimestamp: boolean = false): Promise<void> {
-    this.ensureConversationsFolder()
-    const conversationPath = this.getConversationPath(conversation.id)
-
-    // Update the updatedAt timestamp unless preserving client-supplied value
-    if (!preserveTimestamp) {
-      conversation.updatedAt = Date.now()
-    }
-
-    // Save conversation to file asynchronously to avoid blocking the main process
-    await fsPromises.writeFile(conversationPath, JSON.stringify(conversation, null, 2))
-
-    // Update the index (in-memory immediately, disk write debounced)
-    await this.updateConversationIndex(conversation)
+    await this.enqueueConversationMutation(conversation.id, async () => {
+      await this.saveConversationUnlocked(conversation, preserveTimestamp)
+    })
   }
 
   async loadConversation(conversationId: string): Promise<Conversation | null> {
-    try {
-      const conversationPath = this.getConversationPath(conversationId)
-
-      const conversationData = await fsPromises.readFile(conversationPath, "utf8")
-      const conversation: Conversation = JSON.parse(conversationData)
-
-      return conversation
-    } catch {
-      // File doesn't exist or is corrupted
-      return null
-    }
+    // Ensure we don't read stale data while a mutation for this conversation is in-flight.
+    await this.waitForConversationMutation(conversationId)
+    return this.loadConversationFromDisk(conversationId)
   }
 
   /**
@@ -283,23 +433,25 @@ export class ConversationService {
   }
 
   async deleteConversation(conversationId: string): Promise<void> {
-    const conversationPath = this.getConversationPath(conversationId)
+    await this.enqueueConversationMutation(conversationId, async () => {
+      const conversationPath = this.getConversationPath(conversationId)
 
-    // Delete conversation file
-    try {
-      await fsPromises.unlink(conversationPath)
-    } catch {
-      // File may not exist — ignore
-    }
+      // Delete conversation file
+      try {
+        await fsPromises.unlink(conversationPath)
+      } catch {
+        // File may not exist — ignore
+      }
 
-    await this.enqueueIndexMutation(async () => {
-      // Update in-memory index cache
-      let index = await this.ensureIndexLoaded()
-      index = index.filter((item) => item.id !== conversationId)
-      this.indexCache = index
+      await this.enqueueIndexMutation(async () => {
+        // Update in-memory index cache
+        let index = await this.ensureIndexLoaded()
+        index = index.filter((item) => item.id !== conversationId)
+        this.indexCache = index
 
-      // Flush to disk immediately for deletes (important for consistency)
-      await this.flushIndexWrite()
+        // Flush to disk immediately for deletes (important for consistency)
+        await this.flushIndexWrite()
+      })
     })
   }
 
@@ -364,7 +516,9 @@ export class ConversationService {
       messages: [message],
     }
 
-    await this.saveConversation(conversation)
+    await this.enqueueConversationMutation(validatedId, async () => {
+      await this.saveConversationUnlocked(conversation)
+    })
     return conversation
   }
 
@@ -375,37 +529,39 @@ export class ConversationService {
     toolCalls?: Array<{ name: string; arguments: any }>,
     toolResults?: Array<{ success: boolean; content: string; error?: string }>,
   ): Promise<Conversation | null> {
-    try {
-      const conversation = await this.loadConversation(conversationId)
-      if (!conversation) {
+    return this.enqueueConversationMutation(conversationId, async () => {
+      try {
+        const conversation = await this.loadConversationFromDisk(conversationId)
+        if (!conversation) {
+          return null
+        }
+
+        // Idempotency guard: avoid pushing consecutive duplicate messages
+        const last = conversation.messages[conversation.messages.length - 1]
+        if (this.isConsecutiveDuplicate(last, role, content)) {
+          conversation.updatedAt = Date.now()
+          await this.saveConversationUnlocked(conversation)
+          return conversation
+        }
+
+        const messageId = this.generateMessageId()
+        const message: ConversationMessage = {
+          id: messageId,
+          role,
+          content,
+          timestamp: Date.now(),
+          toolCalls,
+          toolResults,
+        }
+
+        conversation.messages.push(message)
+        await this.saveConversationUnlocked(conversation)
+
+        return conversation
+      } catch (error) {
         return null
       }
-
-      // Idempotency guard: avoid pushing consecutive duplicate messages
-      const last = conversation.messages[conversation.messages.length - 1]
-      if (this.isConsecutiveDuplicate(last, role, content)) {
-        conversation.updatedAt = Date.now()
-        await this.saveConversation(conversation)
-        return conversation
-      }
-
-      const messageId = this.generateMessageId()
-      const message: ConversationMessage = {
-        id: messageId,
-        role,
-        content,
-        timestamp: Date.now(),
-        toolCalls,
-        toolResults,
-      }
-
-      conversation.messages.push(message)
-      await this.saveConversation(conversation)
-
-      return conversation
-    } catch (error) {
-      return null
-    }
+    })
   }
 
   /**
@@ -524,6 +680,8 @@ export class ConversationService {
   }
 
   async deleteAllConversations(): Promise<void> {
+    await this.waitForAllConversationMutations()
+
     await this.enqueueIndexMutation(async () => {
       // Ensure pending/in-flight index writes are settled before deleting files.
       await this.flushIndexWrite()

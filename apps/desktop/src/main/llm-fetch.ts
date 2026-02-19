@@ -762,12 +762,16 @@ export async function makeLLMCallWithFetch(
               ? jsonObject.toolCalls
               : undefined,
           } as LLMToolCallResponse
-          // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement
+          // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement.
+          // Filter out malformed items (missing/non-string name) so a bad model JSON response
+          // can't crash the fetch layer.
           if (response.toolCalls) {
-            response.toolCalls = response.toolCalls.map(tc => ({
-              ...tc,
-              name: restoreToolName(tc.name, convertedTools?.nameMap),
-            }))
+            response.toolCalls = response.toolCalls
+              .filter(tc => tc && typeof tc.name === "string" && tc.name.length > 0)
+              .map(tc => ({
+                ...tc,
+                name: restoreToolName(tc.name, convertedTools?.nameMap),
+              }))
           }
           // End Langfuse generation with JSON response
           if (generationId) {
@@ -784,10 +788,12 @@ export async function makeLLMCallWithFetch(
           /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(text)
         const cleaned = text.replace(/<\|[^|]*\|>/g, "").trim()
 
-        // End Langfuse generation with text response
+        // End Langfuse generation with text response.
+        // When tool markers are present, log the raw text so traces accurately
+        // reflect what triggered the marker-recovery path.
         if (generationId) {
           endLLMGeneration(generationId, {
-            output: cleaned || text,
+            output: hasToolMarkers ? text : (cleaned || text),
             usage: buildTokenUsage(result.usage),
           })
         }

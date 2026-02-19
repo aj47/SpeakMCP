@@ -1770,7 +1770,11 @@ Return ONLY JSON per schema.`,
         }
 
         if (hasCompletionSignalTool) {
-          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS) {
+          // Safety: also fall through when noOpCount exceeds the nudge threshold
+          // (noOpCount >= 2), so we don't churn until maxIterations when the model
+          // keeps returning substantive text but never calls mark_work_complete.
+          const noOpThresholdReached = noOpCount >= 2
+          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS && !noOpThresholdReached) {
             // In tool-driven tasks, substantive text without explicit completion is usually
             // a progress/status update. Keep iterating and reserve verifier calls for explicit
             // completion signals from mark_work_complete.
@@ -1784,16 +1788,18 @@ Return ONLY JSON per schema.`,
             completionSignalHintCount++
             // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
             // completion in a tool-driven task is still a no-op from a progress standpoint.
-            // The increment at the top of the !hasToolCalls block already counted this
-            // iteration, so the nudge/fallback thresholds will trigger naturally.
+            // The single increment at the top of the !hasToolCalls block already counted
+            // this iteration (there is no second increment), so the noOpThresholdReached
+            // check above will trigger the fallthrough naturally.
             continue
           }
 
-          // Hints exhausted and model still hasn't called mark_work_complete.
-          // Intentionally fall through to the verification/fallback path below
-          // so we don't spin until maxIterations with no new guidance. This is
-          // a safety valve: the fallback path will add contentText to history
-          // and run verification, which may either continue the loop or finalize.
+          // Hints exhausted (or noOpCount threshold reached) and model still hasn't
+          // called mark_work_complete. Intentionally fall through to the verification/
+          // fallback path below so we don't spin until maxIterations with no new
+          // guidance. This is a safety valve — the fallback path will treat the
+          // substantive text as a completion candidate and run verification, which
+          // may either continue the loop or finalize.
         }
 
         // Fallback/verification path: reached when either (a) the completion signal

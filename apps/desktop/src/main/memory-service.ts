@@ -172,9 +172,9 @@ class MemoryService {
       ? summary.keyFindings.filter((f): f is string => typeof f === "string")
       : []
 
-    const contentFromCandidates =
-      selectedCandidates.length > 0 ? selectedCandidates.join(" | ") : undefined
     const MAX_ITEM_LENGTH = 240
+    const contentFromCandidates =
+      selectedCandidates.length > 0 ? selectedCandidates.map(s => s.slice(0, MAX_ITEM_LENGTH)).join(" | ") : undefined
     const contentFromDecisions =
       decisionsMade.length > 0
         ? decisionsMade.map(normalizeSingleLine).filter(Boolean).map(s => s.slice(0, MAX_ITEM_LENGTH)).slice(0, 3).join(" | ")

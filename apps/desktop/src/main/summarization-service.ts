@@ -133,12 +133,7 @@ function buildSummarizationPrompt(input: SummarizationInput): string {
     contextSection += `\n## Tool Results:\n`
     for (const tr of input.toolResults) {
       const status = tr.success ? "✓" : "✗"
-      // Include both head+tail when large so we don't miss key facts buried in the middle.
-      const maxPreviewChars = 1500
-      const content =
-        tr.content.length > maxPreviewChars
-          ? `${tr.content.slice(0, 750)}\n...\n${tr.content.slice(-750)}`
-          : tr.content
+      const content = tr.content.slice(0, 500) + (tr.content.length > 500 ? "..." : "")
       contextSection += `- ${status} ${content}\n`
     }
   }

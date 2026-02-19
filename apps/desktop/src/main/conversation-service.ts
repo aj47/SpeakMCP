@@ -34,6 +34,8 @@ export class ConversationService {
   private conversationMutationQueues = new Map<string, Promise<void>>()
   // Queue that serializes index cache mutations to prevent lost updates under concurrent saves.
   private indexMutationQueue: Promise<void> = Promise.resolve()
+  // Flag to block new per-conversation mutations during deleteAllConversations.
+  private deletingAll = false
 
   static getInstance(): ConversationService {
     if (!ConversationService.instance) {
@@ -53,7 +55,12 @@ export class ConversationService {
   }
 
   private getConversationPath(conversationId: string): string {
-    return path.join(conversationsFolder, `${conversationId}.json`)
+    const resolved = path.resolve(conversationsFolder, `${conversationId}.json`)
+    const resolvedFolder = path.resolve(conversationsFolder)
+    if (!resolved.startsWith(resolvedFolder + path.sep)) {
+      throw new Error(`Invalid conversation ID: path traversal detected`)
+    }
+    return resolved
   }
 
   private getConversationIndexPath(): string {
@@ -187,6 +194,9 @@ export class ConversationService {
     conversationId: string,
     mutation: () => Promise<T>,
   ): Promise<T> {
+    if (this.deletingAll) {
+      return Promise.reject(new Error("Cannot mutate conversations while delete-all is in progress"))
+    }
     const previous = this.conversationMutationQueues.get(conversationId) ?? Promise.resolve()
     const run = previous.then(mutation)
     const settled = run.then(() => undefined, () => undefined)
@@ -389,9 +399,11 @@ export class ConversationService {
   }
 
   async loadConversation(conversationId: string): Promise<Conversation | null> {
-    // Ensure we don't read stale data while a mutation for this conversation is in-flight.
-    await this.waitForConversationMutation(conversationId)
-    return this.loadConversationFromDisk(conversationId)
+    // Enqueue as a mutation so that any repair save inside loadConversationFromDisk()
+    // is serialized with other writes, preventing lost-update races.
+    return this.enqueueConversationMutation(conversationId, async () => {
+      return this.loadConversationFromDisk(conversationId)
+    })
   }
 
   /**
@@ -680,20 +692,26 @@ export class ConversationService {
   }
 
   async deleteAllConversations(): Promise<void> {
-    await this.waitForAllConversationMutations()
+    // Block new per-conversation mutations from being enqueued during delete-all.
+    this.deletingAll = true
+    try {
+      await this.waitForAllConversationMutations()
 
-    await this.enqueueIndexMutation(async () => {
-      // Ensure pending/in-flight index writes are settled before deleting files.
-      await this.flushIndexWrite()
+      await this.enqueueIndexMutation(async () => {
+        // Ensure pending/in-flight index writes are settled before deleting files.
+        await this.flushIndexWrite()
 
-      if (fs.existsSync(conversationsFolder)) {
-        fs.rmSync(conversationsFolder, { recursive: true, force: true })
-      }
-      this.ensureConversationsFolder()
+        if (fs.existsSync(conversationsFolder)) {
+          fs.rmSync(conversationsFolder, { recursive: true, force: true })
+        }
+        this.ensureConversationsFolder()
 
-      // Clear the in-memory cache
-      this.indexCache = []
-    })
+        // Clear the in-memory cache
+        this.indexCache = []
+      })
+    } finally {
+      this.deletingAll = false
+    }
   }
 }
 

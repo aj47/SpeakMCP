@@ -1764,14 +1764,13 @@ Return ONLY JSON per schema.`,
         }
 
         if (hasCompletionSignalTool) {
-          // In tool-driven tasks, substantive text without explicit completion is usually
-          // a progress/status update. Keep iterating and reserve verifier calls for explicit
-          // completion signals from mark_work_complete.
-          if (trimmedContent.length > 0) {
-            addMessage("assistant", contentText)
-          }
-
           if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS) {
+            // In tool-driven tasks, substantive text without explicit completion is usually
+            // a progress/status update. Keep iterating and reserve verifier calls for explicit
+            // completion signals from mark_work_complete.
+            if (trimmedContent.length > 0) {
+              addMessage("assistant", contentText)
+            }
             addMessage(
               "user",
               `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`,
@@ -1785,8 +1784,10 @@ Return ONLY JSON per schema.`,
           }
 
           // Hints exhausted and model still hasn't called mark_work_complete.
-          // Fall through to the nudge/fallback path below so we don't spin
-          // until maxIterations with no new guidance.
+          // Intentionally fall through to the verification/fallback path below
+          // so we don't spin until maxIterations with no new guidance. This is
+          // a safety valve: the fallback path will add contentText to history
+          // and run verification, which may either continue the loop or finalize.
         }
 
         // Fallback path: completion signal tool is unavailable for this session/profile.

@@ -67,6 +67,14 @@ export const WHATSAPP_DEFAULT_ENABLED_TOOLS = [
   "whatsapp_send_typing",
 ]
 
+const ESSENTIAL_BUILTIN_TOOL_NAMES = new Set<string>([
+  `${BUILTIN_SERVER_NAME}:mark_work_complete`,
+])
+
+function isEssentialBuiltinTool(toolName: string): boolean {
+  return ESSENTIAL_BUILTIN_TOOL_NAMES.has(toolName)
+}
+
 /**
  * Get paths for the internal WhatsApp MCP server
  * Returns both the script path and node_modules path needed to run the server
@@ -188,7 +196,9 @@ export class MCPService {
       const persistedTools = config?.mcpDisabledTools
       if (Array.isArray(persistedTools)) {
         for (const toolName of persistedTools) {
-          this.disabledTools.add(toolName)
+          if (!isEssentialBuiltinTool(toolName)) {
+            this.disabledTools.add(toolName)
+          }
         }
       }
 
@@ -977,7 +987,9 @@ export class MCPService {
 
     if (disabledTools && disabledTools.length > 0) {
       for (const toolName of disabledTools) {
-        this.disabledTools.add(toolName)
+        if (!isEssentialBuiltinTool(toolName)) {
+          this.disabledTools.add(toolName)
+        }
       }
     }
 
@@ -1641,7 +1653,7 @@ export class MCPService {
     // Combine external MCP tools with built-in tools
     const allTools = [...enabledExternalTools, ...builtinTools]
     const enabledTools = allTools.filter(
-      (tool) => !this.disabledTools.has(tool.name),
+      (tool) => isEssentialBuiltinTool(tool.name) || !this.disabledTools.has(tool.name),
     )
     return enabledTools
   }
@@ -1659,7 +1671,7 @@ export class MCPService {
     if (!profileMcpConfig) {
       // Return all tools without profile-specific filtering
       const allTools = [...this.availableTools, ...builtinTools]
-      return allTools.filter((tool) => !this.disabledTools.has(tool.name))
+      return allTools.filter((tool) => isEssentialBuiltinTool(tool.name) || !this.disabledTools.has(tool.name))
     }
 
     const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools, enabledBuiltinTools } = profileMcpConfig
@@ -1698,13 +1710,15 @@ export class MCPService {
     // Filter builtin tools based on enabledBuiltinTools whitelist (if specified)
     // When enabledBuiltinTools is set, only those builtin tools are available
     // When undefined, all builtin tools are available (default behavior)
-    const filteredBuiltinTools = enabledBuiltinTools
-      ? builtinTools.filter((tool) => enabledBuiltinTools.includes(tool.name))
-      : builtinTools
+    const filteredBuiltinTools = builtinTools.filter((tool) =>
+      isEssentialBuiltinTool(tool.name) ||
+      !enabledBuiltinTools ||
+      enabledBuiltinTools.includes(tool.name),
+    )
 
     // Combine with filtered built-in tools and filter by disabled tools
     const allTools = [...enabledExternalTools, ...filteredBuiltinTools]
-    return allTools.filter((tool) => !profileDisabledTools.has(tool.name))
+    return allTools.filter((tool) => isEssentialBuiltinTool(tool.name) || !profileDisabledTools.has(tool.name))
   }
 
   getDetailedToolList(): Array<{
@@ -1763,7 +1777,7 @@ export class MCPService {
       name: tool.name,
       description: tool.description,
       serverName: BUILTIN_SERVER_NAME,
-      enabled: !this.disabledTools.has(tool.name),
+      enabled: isEssentialBuiltinTool(tool.name) || !this.disabledTools.has(tool.name),
       serverEnabled: true,
       inputSchema: tool.inputSchema,
     }))
@@ -1864,7 +1878,7 @@ export class MCPService {
       return false
     }
 
-    if (enabled) {
+    if (enabled || isEssentialBuiltinTool(toolName)) {
       this.disabledTools.delete(toolName)
     } else {
       this.disabledTools.add(toolName)
@@ -2506,7 +2520,7 @@ export class MCPService {
       if (isBuiltinTool(toolCall.name)) {
         // Guard against executing built-in tools that are disabled in the profile config
         // This ensures built-in tools (like execute_command) respect the same disabled tools rules as external tools
-        if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
+        if (profileMcpConfig?.disabledTools?.includes(toolCall.name) && !isEssentialBuiltinTool(toolCall.name)) {
           return endSpanAndReturn({
             content: [
               {
@@ -2567,7 +2581,7 @@ export class MCPService {
 
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
-        if (profileMcpConfig?.disabledTools?.includes(toolCall.name)) {
+        if (profileMcpConfig?.disabledTools?.includes(toolCall.name) && !isEssentialBuiltinTool(toolCall.name)) {
           return endSpanAndReturn({
             content: [
               {
@@ -2620,7 +2634,7 @@ export class MCPService {
         // Guard against executing tools that are disabled in the profile config
         // This ensures "disabled" consistently means non-executable, not just hidden from the tool list
         // This check applies to BOTH built-in tools and external tools
-        if (profileMcpConfig?.disabledTools?.includes(matchingTool.name)) {
+        if (profileMcpConfig?.disabledTools?.includes(matchingTool.name) && !isEssentialBuiltinTool(matchingTool.name)) {
           return endSpanAndReturn({
             content: [
               {

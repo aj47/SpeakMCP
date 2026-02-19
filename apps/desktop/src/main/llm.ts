@@ -1790,8 +1790,12 @@ Return ONLY JSON per schema.`,
           // and run verification, which may either continue the loop or finalize.
         }
 
-        // Fallback path: completion signal tool is unavailable for this session/profile.
-        // Treat substantive text as a completion candidate and verify before finalizing.
+        // Fallback/verification path: reached when either (a) the completion signal
+        // tool is unavailable for this session/profile, or (b) the tool is available
+        // but all completion-signal hints have been exhausted without the model calling
+        // mark_work_complete. In case (b) this acts as a safety valve so we don't spin
+        // until maxIterations — we treat the substantive text as a completion candidate
+        // and run verification, which may either continue the loop or finalize.
         finalContent = contentText
         const noToolsCalledYet = !conversationHistory.some((e) => e.role === "tool")
         let skipPostVerifySummary =

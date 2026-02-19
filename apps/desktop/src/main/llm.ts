@@ -792,7 +792,12 @@ export async function processTranscriptWithAgentMode(
       content.includes("You have relevant tools available for this request") ||
       content.includes("Your previous response was empty") ||
       content.includes("Verifier indicates the task is not complete") ||
-      content.includes("Please respond with a valid JSON object")
+      content.includes("Please respond with a valid JSON object") ||
+      content.includes("Use available tools directly via native function-calling") ||
+      content.includes("Provide a complete final answer") ||
+      content.includes("Your last response was not a final deliverable") ||
+      content.includes("Your last response was empty or non-deliverable") ||
+      content.includes("Continue and finish remaining work")
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
@@ -1099,7 +1104,7 @@ Return ONLY JSON per schema.`,
   interface VerificationHandlerResult {
     /** Whether the loop should continue (verification failed and we should retry) */
     shouldContinue: boolean
-    /** Whether verification passed (true) or the loop is stopping (false = forced incomplete due to budget exhaustion or non-deliverable response; caller must check forcedByLimit) */
+    /** Whether verification passed. false can mean either CONTINUE (shouldContinue=true) or FORCE_INCOMPLETE (forcedByLimit=true); callers must check forcedByLimit to distinguish a real incomplete from a retry. */
     isComplete: boolean
     /** Updated verification failure count */
     newFailCount: number
@@ -1141,9 +1146,11 @@ Return ONLY JSON per schema.`,
     const maybeNudgeToolUsage = (newFailCount: number) => {
       if (!nudgeForToolUsage || newFailCount < 2) return
 
-      // Scope to current turn if promptIndex is provided, otherwise check entire conversation
+      // Scope to current turn if promptIndex is provided, otherwise check entire conversation.
+      // When promptIndex is provided, only check the slice for that turn (not the session-wide flag)
+      // to avoid suppressing nudges for later turns that haven't used tools yet.
       const hasToolResultsSoFar = promptIndex !== undefined
-        ? toolsExecutedInSession || conversationHistory.slice(promptIndex + 1).some((e) => e.role === "tool")
+        ? conversationHistory.slice(promptIndex + 1).some((e) => e.role === "tool")
         : toolsExecutedInSession || conversationHistory.some((e) => e.role === "tool")
 
       if (!hasToolResultsSoFar) {
@@ -1159,7 +1166,7 @@ Return ONLY JSON per schema.`,
     if (!isDeliverableResponse(finalContent)) {
       const newFailCount = currentFailCount + 1
       if (newFailCount >= VERIFICATION_FAIL_LIMIT) {
-        verifyStep.status = "completed"
+        verifyStep.status = "error"
         verifyStep.description = "Verification budget exhausted - ending as incomplete"
         return {
           shouldContinue: false,
@@ -1230,7 +1237,7 @@ Return ONLY JSON per schema.`,
         : ""
 
     if (newFailCount >= VERIFICATION_FAIL_LIMIT) {
-      verifyStep.status = "completed"
+      verifyStep.status = "error"
       verifyStep.description = "Verification budget exhausted - ending as incomplete"
       return {
         shouldContinue: false,
@@ -1906,6 +1913,11 @@ Return ONLY JSON per schema.`,
         }
 
         if (result.shouldContinue) {
+          // Add the last attempted deliverable to history so the next iteration
+          // can see what the agent tried (helps it address the verifier's missingItems/reason)
+          if (finalContent.trim().length > 0) {
+            addMessage("assistant", finalContent)
+          }
           noOpCount = 0
           continue
         }
@@ -2063,6 +2075,13 @@ Return ONLY JSON per schema.`,
           conversationHistory: formatConversationForProgress(conversationHistory),
         })
 
+        // Add assistant content to history BEFORE running verification so that
+        // any nudge messages appended by the verifier come after the assistant turn.
+        // This keeps the conversation properly ordered (assistant → user nudge).
+        if (trimmedContent.length > 0) {
+          addMessage("assistant", contentText)
+        }
+
         const result = await runVerificationAndHandleResult(
           contentText,
           verifyStep,
@@ -2078,7 +2097,9 @@ Return ONLY JSON per schema.`,
           finalContent = result.forcedByLimit
             ? buildIncompleteTaskFallback(contentText, result.incompleteDetails)
             : contentText
-          addMessage("assistant", finalContent)
+          if (result.forcedByLimit) {
+            addMessage("assistant", finalContent)
+          }
           emit({
             currentIteration: iteration,
             maxIterations,
@@ -2090,9 +2111,6 @@ Return ONLY JSON per schema.`,
           break
         }
 
-        if (trimmedContent.length > 0) {
-          addMessage("assistant", contentText)
-        }
         noOpCount = 0
         continue
       }

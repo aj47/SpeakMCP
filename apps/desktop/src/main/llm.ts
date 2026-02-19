@@ -208,7 +208,11 @@ export async function processTranscriptWithTools(
     // makeLLMCallWithFetch preserves for the agent loop's recovery path.
     // This non-agent flow returns content directly to the renderer.
     if (result.content) {
-      result.content = result.content.replace(/<\|[^|]*\|>/g, "").trim() || result.content
+      const stripped = result.content.replace(/<\|[^|]*\|>/g, "").trim()
+      // Only update if stripping produced non-empty content; if the response
+      // was marker-only, replace with empty string rather than falling back
+      // to the raw marker text (which would leak special tokens to the renderer).
+      result.content = stripped || ""
     }
     return result
   } catch (error) {

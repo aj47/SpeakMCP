@@ -1781,9 +1781,8 @@ Return ONLY JSON per schema.`,
 
           // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
           // completion in a tool-driven task is still a no-op from a progress standpoint.
-          // Keeping noOpCount incrementing ensures the nudge/fallback thresholds can
-          // eventually trigger if the model keeps returning text without making progress.
-          noOpCount++
+          // The increment at the top of the !hasToolCalls block already counted this
+          // iteration, so the nudge/fallback thresholds will trigger naturally.
           continue
         }
 

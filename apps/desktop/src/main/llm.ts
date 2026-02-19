@@ -1674,16 +1674,19 @@ Return ONLY JSON per schema.`,
     // Reset empty response counter on successful response
     emptyResponseRetryCount = 0
 
-    // Update thinking step with actual LLM content and mark as completed
+    // Update thinking step with actual LLM content and mark as completed.
+    // Strip any raw tool-marker tokens (e.g. <|tool_call_begin|>) so they
+    // don't leak into the progress UI before the marker-recovery branch runs.
+    const displayContent = (llmResponse.content || "").replace(/<\|[^|]*\|>/g, "").trim()
     thinkingStep.status = "completed"
-    thinkingStep.llmContent = llmResponse.content || ""
-    if (llmResponse.content) {
+    thinkingStep.llmContent = displayContent
+    if (displayContent) {
       // Update title and description to be more meaningful
       thinkingStep.title = "Agent response"
       thinkingStep.description =
-        llmResponse.content.length > 100
-          ? llmResponse.content.substring(0, 100) + "..."
-          : llmResponse.content
+        displayContent.length > 100
+          ? displayContent.substring(0, 100) + "..."
+          : displayContent
     }
 
     // Emit progress update with the LLM content immediately after setting it
@@ -1748,9 +1751,11 @@ Return ONLY JSON per schema.`,
         toolsExecutedInSession || conversationHistory.slice(currentPromptIndex + 1).some((e) => e.role === "tool")
 
       // For no-tool responses, require a bit more substance before treating as completion candidate.
+      // Use a low threshold (2 chars) to avoid rejecting legitimate short answers like "Yes." or "42"
+      // while still filtering truly empty/whitespace-only responses.
       const hasSubstantiveResponse = hasToolResultsInCurrentTurn
         ? isDeliverableResponse(contentText)
-        : isDeliverableResponse(contentText, 10)
+        : isDeliverableResponse(contentText, 2)
 
       // Unified completion candidate handling:
       // Any substantive response is either:

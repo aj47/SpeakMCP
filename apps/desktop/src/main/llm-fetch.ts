@@ -753,9 +753,11 @@ export async function makeLLMCallWithFetch(
           })
         }
 
-        // Try to parse JSON from the response (fallback for models that respond with JSON)
+        // Try to parse JSON from the response (fallback for models that respond with JSON).
+        // Use `in` operator so that `{"content":""}` (empty string) is still recognised as
+        // a structured response rather than falling through as raw text.
         const jsonObject = extractJsonObject(text)
-        if (jsonObject && (jsonObject.toolCalls || jsonObject.content)) {
+        if (jsonObject && ("toolCalls" in jsonObject || "content" in jsonObject)) {
           const response = {
             content: typeof jsonObject.content === "string" ? jsonObject.content : undefined,
             toolCalls: Array.isArray(jsonObject.toolCalls)

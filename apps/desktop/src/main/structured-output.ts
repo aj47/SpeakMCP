@@ -13,7 +13,6 @@ const LLMToolCallSchema = z.object({
     )
     .optional(),
   content: z.string().optional(),
-  needsMoreWork: z.boolean().optional(),
 })
 
 export type LLMToolCallResponse = z.infer<typeof LLMToolCallSchema>
@@ -48,10 +47,6 @@ const toolCallResponseSchema: OpenAI.ResponseFormatJSONSchema["json_schema"] = {
       content: {
         type: "string",
         description: "Text content of the response",
-      },
-      needsMoreWork: {
-        type: "boolean",
-        description: "Whether more work is needed after this response",
       },
     },
     additionalProperties: false,
@@ -211,10 +206,16 @@ export async function makeStructuredToolCall(
           const parsed = JSON.parse(cleanContent)
           return LLMToolCallSchema.parse(parsed)
         } catch (parseError) {
-          // If parsing fails completely, try to extract any meaningful content
+          // If parsing fails completely, try to extract any meaningful content.
+          // If tool markers are present, return raw content so the caller's
+          // marker detection can trigger the recovery path.
+          const hasToolMarkers = /<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>/i.test(content)
+          if (hasToolMarkers) {
+            return { content }
+          }
           const textContent = content.replace(/<\|[^|]*\|>/g, '').trim()
           if (textContent) {
-            return { content: textContent, needsMoreWork: true }
+            return { content: textContent }
           }
         }
       }

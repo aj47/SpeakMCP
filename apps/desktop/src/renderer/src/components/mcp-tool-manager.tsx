@@ -179,7 +179,11 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
 
     try {
       const results = await Promise.allSettled(promises)
-      const successful = results.filter((r) => r.status === "fulfilled").length
+      // A fulfilled promise with { success: false } (e.g. essential tool that
+      // cannot be disabled) should also be treated as a failure.
+      const successful = results.filter(
+        (r) => r.status === "fulfilled" && (r.value as any)?.success,
+      ).length
       const failed = results.length - successful
 
       if (failed === 0) {
@@ -187,9 +191,12 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
           `All ${serverTools.length} tools for ${serverName} ${enable ? "enabled" : "disabled"}`,
         )
       } else {
-        // Revert local state for failed calls
+        // Revert local state for failed calls (rejected OR success:false)
         const failedTools = serverTools.filter(
-          (_, index) => results[index].status === "rejected",
+          (_, index) => {
+            const r = results[index]
+            return r.status === "rejected" || !(r.value as any)?.success
+          },
         )
         const revertedTools = tools.map((tool) => {
           if (tool.serverName === serverName && failedTools.includes(tool)) {

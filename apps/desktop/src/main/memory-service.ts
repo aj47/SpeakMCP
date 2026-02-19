@@ -195,7 +195,9 @@ class MemoryService {
       return null
     }
 
-    const baseTags = [...(summary.tags ?? []), ...(tags ?? [])]
+    const safeSummaryTags = Array.isArray(summary.tags) ? summary.tags.filter((t): t is string => typeof t === "string") : []
+    const safeInputTags = Array.isArray(tags) ? tags.filter((t): t is string => typeof t === "string") : []
+    const baseTags = [...safeSummaryTags, ...safeInputTags]
     const mergedTags = Array.from(new Set([...baseTags, ...derivedTags])).filter(Boolean)
     const resolvedTitle = normalizeSingleLine(title || chosenContent).slice(0, 100)
 

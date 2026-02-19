@@ -1816,9 +1816,9 @@ Return ONLY JSON per schema.`,
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
     const completionToolCalled = toolCallsArray.some((toolCall) => toolCall.name === MARK_WORK_COMPLETE_TOOL)
-    if (completionToolCalled) {
-      llmResponse.needsMoreWork = false
-    }
+    // Don't set needsMoreWork=false here — defer until after tool execution confirms success.
+    // Setting it pre-execution could cause premature termination if the tool call (or
+    // another tool in the same batch) returns an error.
     const hasToolCalls = toolCallsArray.length > 0
     const explicitlyComplete = llmResponse.needsMoreWork === false
 
@@ -2530,6 +2530,13 @@ Return ONLY JSON per schema.`,
     // Enhanced completion detection with better error handling
     const hasErrors = toolResults.some((result) => result.isError)
     const allToolsSuccessful = toolResults.length > 0 && !hasErrors
+
+    // Deferred completion signal: only treat mark_work_complete as a completion signal
+    // after all tools in the batch have executed successfully. If any tool (including
+    // mark_work_complete itself) returned an error, keep iterating so the agent can recover.
+    if (completionToolCalled && allToolsSuccessful) {
+      llmResponse.needsMoreWork = false
+    }
 
     if (hasErrors) {
       // Enhanced error analysis and recovery suggestions

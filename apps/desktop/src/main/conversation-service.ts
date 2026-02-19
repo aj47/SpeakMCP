@@ -193,9 +193,11 @@ export class ConversationService {
   private enqueueConversationMutation<T>(
     conversationId: string,
     mutation: () => Promise<T>,
-  ): Promise<T> {
+  ): Promise<T | null> {
     if (this.deletingAll) {
-      return Promise.reject(new Error("Cannot mutate conversations while delete-all is in progress"))
+      // Return null instead of rejecting so callers (loadConversation, addMessageToConversation)
+      // that expect null-on-failure don't surface unhandled errors to the UI during delete-all.
+      return Promise.resolve(null)
     }
     const previous = this.conversationMutationQueues.get(conversationId) ?? Promise.resolve()
     const run = previous.then(mutation)
@@ -323,7 +325,12 @@ export class ConversationService {
       }
 
       try {
-        await this.saveConversationUnlocked(repairedConversation, true)
+        // Write the repaired file directly using atomic write instead of saveConversationUnlocked.
+        // This method is always called from within enqueueConversationMutation, so the write is
+        // already serialized. Using writeConversationFileAtomic directly avoids re-entering the
+        // index update path and keeps the repair minimal (just fix the corrupted file on disk).
+        const repairPath = this.getConversationPath(conversationId)
+        await this.writeConversationFileAtomic(repairPath, JSON.stringify(repairedConversation, null, 2))
         logApp(`[ConversationService] Repaired corrupted conversation file: ${conversationId}`)
       } catch (repairSaveError) {
         logApp(`[ConversationService] Recovered conversation ${conversationId} in-memory, but failed to persist repaired file.`, repairSaveError)
@@ -338,6 +345,10 @@ export class ConversationService {
     preserveTimestamp: boolean = false,
   ): Promise<void> {
     this.ensureConversationsFolder()
+    // Validate the conversation ID before building the path (defense-in-depth).
+    // getConversationPath checks for path traversal via resolved-path comparison;
+    // this adds character-level rejection so untrusted IDs are caught early.
+    this.assertSafeConversationId(conversation.id)
     const conversationPath = this.getConversationPath(conversation.id)
 
     // Update the updatedAt timestamp unless preserving client-supplied value
@@ -473,6 +484,20 @@ export class ConversationService {
   ): Promise<Conversation> {
     const conversationId = this.generateConversationId()
     return this.createConversationWithId(conversationId, firstMessage, role)
+  }
+
+  /**
+   * Validate that a conversation ID is safe for use as a filename.
+   * Throws on dangerous characters but does NOT sanitize (no silent mutations).
+   * Used as a guard in write paths where the ID is already established.
+   */
+  private assertSafeConversationId(conversationId: string): void {
+    if (conversationId.includes("/") || conversationId.includes("\\") || conversationId.includes("..")) {
+      throw new Error(`Invalid conversation ID: contains path separators or traversal sequences`)
+    }
+    if (conversationId.includes("\0")) {
+      throw new Error(`Invalid conversation ID: contains null bytes`)
+    }
   }
 
   /**
@@ -695,7 +720,16 @@ export class ConversationService {
     // Block new per-conversation mutations from being enqueued during delete-all.
     this.deletingAll = true
     try {
+      // Drain: wait for all in-flight mutations, then verify no new ones snuck in.
+      // Because deletingAll is set synchronously above, no NEW mutations can be enqueued
+      // via enqueueConversationMutation after this point. However, a mutation that was
+      // already running might have spawned a follow-up promise before we set the flag.
+      // Drain twice to handle that edge case.
       await this.waitForAllConversationMutations()
+      await this.waitForAllConversationMutations()
+
+      // Clear the mutation queue map so stale entries don't reference deleted files.
+      this.conversationMutationQueues.clear()
 
       await this.enqueueIndexMutation(async () => {
         // Ensure pending/in-flight index writes are settled before deleting files.

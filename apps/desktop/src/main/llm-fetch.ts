@@ -793,7 +793,11 @@ export async function makeLLMCallWithFetch(
         }
 
         if (hasToolMarkers) {
-          return { content: cleaned }
+          // Return raw text (with markers) so the caller's own marker detection
+          // can trigger the tool-marker recovery path. If we return `cleaned`
+          // (markers stripped), it may be empty and the caller won't know
+          // markers were present, treating it as a null/empty response instead.
+          return { content: text }
         }
 
         return {

@@ -151,7 +151,7 @@ class MemoryService {
 
     // Prefer durable memory candidates (preferences/constraints/decisions/facts/insights)
     // over step telemetry (actionSummary).
-    const memoryCandidates = (summary.memoryCandidates || [])
+    const memoryCandidates = (Array.isArray(summary.memoryCandidates) ? summary.memoryCandidates : [])
       .filter((c): c is string => typeof c === "string")
       .map(normalizeSingleLine)
       .filter(Boolean)

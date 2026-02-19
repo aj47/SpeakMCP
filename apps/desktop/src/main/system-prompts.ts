@@ -70,6 +70,10 @@ export const AGENT_MODE_ADDITIONS = `
 
 AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.
 
+COMPLETION SIGNAL:
+- When all requested work is fully complete, call speakmcp-settings:mark_work_complete with a concise summary
+- Do not call mark_work_complete while work is still in progress or partially done
+
 AGENT FILE & COMMAND EXECUTION:
 - Use speakmcp-settings:execute_command as your primary tool for shell commands, file I/O, and automation
 - Read files: execute_command with "cat path/to/file"

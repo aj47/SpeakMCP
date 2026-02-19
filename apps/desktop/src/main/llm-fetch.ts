@@ -558,7 +558,7 @@ function convertMessages(messages: Array<{ role: string; content: string }>): {
   if (otherMessages.length > 0 && otherMessages[otherMessages.length - 1].role === "assistant") {
     otherMessages.push({
       role: "user",
-      content: "Please continue.",
+      content: "Continue from your most recent step using the existing context. Do not restart.",
     })
   }
 

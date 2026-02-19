@@ -32,6 +32,8 @@ import {
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
 
+const MARK_WORK_COMPLETE_TOOL = "speakmcp-settings:mark_work_complete"
+
 /**
  * Clean error message by removing stack traces and noise
  */
@@ -1285,6 +1287,8 @@ Return ONLY JSON per schema.`,
   let noOpCount = 0 // Track iterations without meaningful progress
   let totalNudgeCount = 0 // Track total nudges to prevent infinite nudge loops
   const MAX_NUDGES = 3 // Max nudges before forcing an incomplete fallback
+  let completionSignalHintCount = 0 // Avoid repeatedly injecting explicit-completion hints
+  const MAX_COMPLETION_SIGNAL_HINTS = 2
   let verificationFailCount = 0 // Count consecutive verification failures to avoid loops
   const toolFailureCount = new Map<string, number>() // Track failures per tool name
   const MAX_TOOL_FAILURES = 3 // Max times a tool can fail before being excluded
@@ -1811,6 +1815,10 @@ Return ONLY JSON per schema.`,
       }
       logTools("Planned tool calls from LLM", toolCallsArray)
     }
+    const completionToolCalled = toolCallsArray.some((toolCall) => toolCall.name === MARK_WORK_COMPLETE_TOOL)
+    if (completionToolCalled) {
+      llmResponse.needsMoreWork = false
+    }
     const hasToolCalls = toolCallsArray.length > 0
     const explicitlyComplete = llmResponse.needsMoreWork === false
 
@@ -2038,13 +2046,16 @@ Return ONLY JSON per schema.`,
         }
         noOpCount = 0
         totalNudgeCount = 0
+        completionSignalHintCount = 0
         continue
       }
 
       // Unified completion candidate handling:
-      // Any substantive response that does not explicitly request more work is checked for completion.
+      // Any substantive response that does not explicitly request more work is either:
+      // - accepted directly for no-tool/simple flows, or
+      // - treated as in-progress status for tool-driven flows until explicit completion.
       if (hasSubstantiveResponse && llmResponse.needsMoreWork !== true) {
-        const canBypassVerification = !config.mcpVerifyCompletionEnabled || (!hasToolsAvailable && !hasToolResultsInCurrentTurn)
+        const canBypassVerification = !config.mcpVerifyCompletionEnabled || !hasToolsAvailable
 
         if (canBypassVerification) {
           finalContent = contentText
@@ -2060,55 +2071,19 @@ Return ONLY JSON per schema.`,
           break
         }
 
-        const verifyStep = createProgressStep(
-          "thinking",
-          "Verifying completion",
-          "Checking that the user's request has been achieved",
-          "in_progress",
-        )
-        progressSteps.push(verifyStep)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: false,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-
-        // Add assistant content to history BEFORE running verification so that
-        // any nudge messages appended by the verifier come after the assistant turn.
-        // This keeps the conversation properly ordered (assistant → user nudge).
+        // In tool-driven tasks, substantive text without explicit completion is usually
+        // a progress/status update. Keep iterating and reserve verifier calls for explicit
+        // completion signals (needsMoreWork=false or mark_work_complete).
         if (trimmedContent.length > 0) {
           addMessage("assistant", contentText)
         }
 
-        const result = await runVerificationAndHandleResult(
-          contentText,
-          verifyStep,
-          verificationFailCount,
-          {
-            nudgeForToolUsage: hasToolsAvailable,
-            currentPromptIndex,
-          }
-        )
-        verificationFailCount = result.newFailCount
-
-        if (!result.shouldContinue) {
-          finalContent = result.forcedByLimit
-            ? buildIncompleteTaskFallback(contentText, result.incompleteDetails)
-            : contentText
-          if (result.forcedByLimit) {
-            addMessage("assistant", finalContent)
-          }
-          emit({
-            currentIteration: iteration,
-            maxIterations,
-            steps: progressSteps.slice(-3),
-            isComplete: true,
-            finalContent,
-            conversationHistory: formatConversationForProgress(conversationHistory),
-          })
-          break
+        if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS) {
+          addMessage(
+            "user",
+            `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`
+          )
+          completionSignalHintCount++
         }
 
         noOpCount = 0
@@ -2166,6 +2141,7 @@ Return ONLY JSON per schema.`,
       // nudging to work per "stuck segment" rather than globally across the run.
       // If the agent gets stuck again later, it should have a fresh nudge budget.
       totalNudgeCount = 0
+      completionSignalHintCount = 0
     }
 
     // Execute tool calls with enhanced error handling

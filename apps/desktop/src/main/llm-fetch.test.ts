@@ -468,13 +468,13 @@ describe('LLM Fetch with AI SDK', () => {
       'openai'
     )
 
-    // Verify that generateText was called with a "Please continue." user message appended
+    // Verify that generateText was called with a continuation user message appended
     expect(generateTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: [
           { role: 'user', content: 'Summarize X feed' },
           { role: 'assistant', content: 'I will start working on that.' },
-          { role: 'user', content: 'Please continue.' },
+          { role: 'user', content: 'Continue from your most recent step using the existing context. Do not restart.' },
         ],
       })
     )
@@ -651,4 +651,3 @@ describe('LLM Fetch with AI SDK', () => {
     shouldStopSpy.mockRestore()
   })
 })
-

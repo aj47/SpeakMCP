@@ -172,7 +172,7 @@ Rules for memoryCandidates:
 - Only include durable, reusable items that will still matter in future sessions.
 - Good candidates: user preferences, constraints/safety rules, important decisions, repo/environment facts, key insights.
 - Bad candidates: step telemetry ("ran tool X"), temporary state, long excerpts, or anything sensitive (secrets, API keys, personal data).
-- Each item must be a single line and start with one of: preference/constraint/decision/fact/insight.
+- Each item must be a single line and start with one of: preference:/constraint:/decision:/fact:/insight: (include the colon).
 - Prefer 0-3 items; maximum 5.
 
 Guidelines for importance:

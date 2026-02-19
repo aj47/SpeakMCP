@@ -142,6 +142,9 @@ describe("MemoryService.createMemoryFromSummary", () => {
         "preference: use pnpm",
         "telemetry: ran 5 tools",
         "random noise without colon",
+        "fact:",
+        "constraint",
+        "insight:   ",
         "fact: repo uses vitest",
       ],
     }

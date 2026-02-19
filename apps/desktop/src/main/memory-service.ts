@@ -156,8 +156,11 @@ class MemoryService {
       .map(normalizeSingleLine)
       .filter(Boolean)
       .filter(c => {
-        const prefix = c.split(":")[0]?.toLowerCase().trim()
-        return !!prefix && MEMORY_CANDIDATE_TYPES.has(prefix)
+        const colonIdx = c.indexOf(":")
+        if (colonIdx < 0) return false
+        const prefix = c.slice(0, colonIdx).toLowerCase().trim()
+        const payload = c.slice(colonIdx + 1).trim()
+        return !!prefix && MEMORY_CANDIDATE_TYPES.has(prefix) && payload.length > 0
       })
 
     const selectedCandidates = memoryCandidates.slice(0, 3)

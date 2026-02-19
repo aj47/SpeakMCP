@@ -72,7 +72,7 @@ function SummaryCard({
         conversationId,
       })
       
-      if (result.success) {
+      if (result.success && result.memory) {
         setIsSaved(true)
         onSaved?.(summary)
       }

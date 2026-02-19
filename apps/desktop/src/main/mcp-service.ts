@@ -1707,9 +1707,8 @@ export class MCPService {
       return !profileDisabledServers.has(serverName)
     })
 
-    // Filter builtin tools based on enabledBuiltinTools whitelist (if specified)
-    // When enabledBuiltinTools is set, only those builtin tools are available
-    // When undefined, all builtin tools are available (default behavior)
+    // Filter builtin tools based on enabledBuiltinTools whitelist (if specified).
+    // Essential builtins are always available regardless of whitelist/disabled settings.
     const filteredBuiltinTools = builtinTools.filter((tool) =>
       isEssentialBuiltinTool(tool.name) ||
       !enabledBuiltinTools ||

@@ -1777,13 +1777,16 @@ Return ONLY JSON per schema.`,
               `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`,
             )
             completionSignalHintCount++
+            // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
+            // completion in a tool-driven task is still a no-op from a progress standpoint.
+            // The increment at the top of the !hasToolCalls block already counted this
+            // iteration, so the nudge/fallback thresholds will trigger naturally.
+            continue
           }
 
-          // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
-          // completion in a tool-driven task is still a no-op from a progress standpoint.
-          // The increment at the top of the !hasToolCalls block already counted this
-          // iteration, so the nudge/fallback thresholds will trigger naturally.
-          continue
+          // Hints exhausted and model still hasn't called mark_work_complete.
+          // Fall through to the nudge/fallback path below so we don't spin
+          // until maxIterations with no new guidance.
         }
 
         // Fallback path: completion signal tool is unavailable for this session/profile.

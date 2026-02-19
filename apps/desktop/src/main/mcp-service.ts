@@ -1877,7 +1877,13 @@ export class MCPService {
       return false
     }
 
-    if (enabled || isEssentialBuiltinTool(toolName)) {
+    if (!enabled && isEssentialBuiltinTool(toolName)) {
+      // Essential tools cannot be disabled; return false so the UI
+      // knows the toggle was not applied (prevents UI/backend mismatch).
+      return false
+    }
+
+    if (enabled) {
       this.disabledTools.delete(toolName)
     } else {
       this.disabledTools.add(toolName)

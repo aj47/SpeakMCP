@@ -128,6 +128,48 @@ describe("MemoryService.createMemoryFromSummary", () => {
     expect(memoryService.createMemoryFromSummary(summary)).toBeNull()
   })
 
+  it("filters out candidates without allowed type prefixes", async () => {
+    const { memoryService } = await import("./memory-service")
+
+    const summary: AgentStepSummary = {
+      id: "summary_prefix",
+      sessionId: "sess",
+      stepNumber: 3,
+      timestamp: Date.now(),
+      actionSummary: "ran tools",
+      importance: "medium",
+      memoryCandidates: [
+        "preference: use pnpm",
+        "telemetry: ran 5 tools",
+        "random noise without colon",
+        "fact: repo uses vitest",
+      ],
+    }
+
+    const memory = memoryService.createMemoryFromSummary(summary)
+    expect(memory).not.toBeNull()
+    expect(memory?.content).toBe("preference: use pnpm | fact: repo uses vitest")
+  })
+
+  it("truncates fallback decisionsMade/keyFindings to 240 chars per item", async () => {
+    const { memoryService } = await import("./memory-service")
+
+    const longDecision = "a".repeat(500)
+    const summary: AgentStepSummary = {
+      id: "summary_trunc",
+      sessionId: "sess",
+      stepNumber: 4,
+      timestamp: Date.now(),
+      actionSummary: "ran tools",
+      importance: "medium",
+      decisionsMade: [longDecision],
+    }
+
+    const memory = memoryService.createMemoryFromSummary(summary)
+    expect(memory).not.toBeNull()
+    expect(memory?.content).toHaveLength(240)
+  })
+
   it("prefers memoryCandidates and derives tags", async () => {
     const { memoryService } = await import("./memory-service")
 

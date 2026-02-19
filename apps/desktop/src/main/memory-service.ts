@@ -155,6 +155,10 @@ class MemoryService {
       .filter((c): c is string => typeof c === "string")
       .map(normalizeSingleLine)
       .filter(Boolean)
+      .filter(c => {
+        const prefix = c.split(":")[0]?.toLowerCase().trim()
+        return !!prefix && MEMORY_CANDIDATE_TYPES.has(prefix)
+      })
 
     const selectedCandidates = memoryCandidates.slice(0, 3)
     const derivedTags = selectedCandidates
@@ -170,13 +174,14 @@ class MemoryService {
 
     const contentFromCandidates =
       selectedCandidates.length > 0 ? selectedCandidates.join(" | ") : undefined
+    const MAX_ITEM_LENGTH = 240
     const contentFromDecisions =
       decisionsMade.length > 0
-        ? decisionsMade.map(normalizeSingleLine).filter(Boolean).slice(0, 3).join(" | ")
+        ? decisionsMade.map(normalizeSingleLine).filter(Boolean).map(s => s.slice(0, MAX_ITEM_LENGTH)).slice(0, 3).join(" | ")
         : undefined
     const contentFromFindings =
       keyFindings.length > 0
-        ? keyFindings.map(normalizeSingleLine).filter(Boolean).slice(0, 3).join(" | ")
+        ? keyFindings.map(normalizeSingleLine).filter(Boolean).map(s => s.slice(0, MAX_ITEM_LENGTH)).slice(0, 3).join(" | ")
         : undefined
 
     // If there are no durable items, don't create a memory.

@@ -3971,7 +3971,7 @@ export const router = {
         profileId,
       )
       if (!memory) {
-        return { success: false, memory: null }
+        return { success: true, memory: null, reason: "no_durable_content" as const }
       }
       const success = await memoryService.saveMemory(memory)
       return { success, memory: success ? memory : null }

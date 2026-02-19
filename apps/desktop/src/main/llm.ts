@@ -204,6 +204,12 @@ export async function processTranscriptWithTools(
   try {
     // Pass tools for native AI SDK tool calling
     const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId, undefined, undefined, uniqueAvailableTools)
+    // Strip any raw tool-marker tokens (e.g. <|tool_call_begin|>) that
+    // makeLLMCallWithFetch preserves for the agent loop's recovery path.
+    // This non-agent flow returns content directly to the renderer.
+    if (result.content) {
+      result.content = result.content.replace(/<\|[^|]*\|>/g, "").trim() || result.content
+    }
     return result
   } catch (error) {
     throw error

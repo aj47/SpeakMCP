@@ -3970,6 +3970,9 @@ export const router = {
         input.conversationId,
         profileId,
       )
+      if (!memory) {
+        return { success: true, memory: null, reason: "no_durable_content" as const }
+      }
       const success = await memoryService.saveMemory(memory)
       return { success, memory: success ? memory : null }
     }),

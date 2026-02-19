@@ -1099,7 +1099,7 @@ Return ONLY JSON per schema.`,
   interface VerificationHandlerResult {
     /** Whether the loop should continue (verification failed and we should retry) */
     shouldContinue: boolean
-    /** Whether verification passed or we hit the limit (task is done either way) */
+    /** Whether verification passed (true) or the loop is stopping (false = forced incomplete due to budget exhaustion or non-deliverable response; caller must check forcedByLimit) */
     isComplete: boolean
     /** Updated verification failure count */
     newFailCount: number
@@ -1912,7 +1912,8 @@ Return ONLY JSON per schema.`,
       }
 
         // Post-verify: produce a concise final summary for the user
-        if (!skipPostVerifySummary) {
+        // Skip when forced incomplete - the fallback message below will be the only assistant message
+        if (!skipPostVerifySummary && !completionForcedByVerificationLimit) {
           try {
             const result = await generatePostVerifySummary(finalContent, false, activeTools)
             finalContent = result.content
@@ -1925,7 +1926,7 @@ Return ONLY JSON per schema.`,
               addMessage("assistant", finalContent)
             }
           }
-        } else {
+        } else if (!completionForcedByVerificationLimit) {
           // Even when skipping post-verify summary, ensure the final content is in history
           if (finalContent.trim().length > 0) {
             addMessage("assistant", finalContent)
@@ -2801,7 +2802,8 @@ Return ONLY JSON per schema.`,
 	      }
 
         // Post-verify: produce a concise final summary for the user
-        if (!skipPostVerifySummary2) {
+        // Skip when forced incomplete - the fallback message below will be the only assistant message
+        if (!skipPostVerifySummary2 && !completionForcedByVerificationLimit2) {
           try {
             const result = await generatePostVerifySummary(finalContent, true, activeTools)
             if (result.stopped) {
@@ -2829,7 +2831,7 @@ Return ONLY JSON per schema.`,
               conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
             }
           }
-	        } else {
+	        } else if (!completionForcedByVerificationLimit2) {
 	          // Even when skipping post-verify summary, ensure the final content is in history
 	          // This prevents intermediate messages from disappearing on mobile
 	          if (finalContent.trim().length > 0) {
@@ -3045,11 +3047,17 @@ Return ONLY JSON per schema.`,
 
 	      if (completionForcedByVerificationLimit3) {
 	        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails3)
-	        conversationHistory.push({
-	          role: "assistant",
-	          content: finalContent,
-	          timestamp: Date.now(),
-	        })
+	        // Replace the last assistant message rather than appending a duplicate
+	        const lastEntry = conversationHistory[conversationHistory.length - 1]
+	        if (lastEntry?.role === "assistant") {
+	          lastEntry.content = finalContent
+	        } else {
+	          conversationHistory.push({
+	            role: "assistant",
+	            content: finalContent,
+	            timestamp: Date.now(),
+	          })
+	        }
 	      }
 
 	      const completionStep = createProgressStep(

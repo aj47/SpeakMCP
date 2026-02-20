@@ -6,7 +6,7 @@ import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, RotateCcw, Keyboard } from "lucide-react"
+import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, Keyboard } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
@@ -456,10 +456,17 @@ export function Component() {
               <Button
                 variant={viewMode === "grid" ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setViewMode("grid")}
+                onClick={() => {
+                  if (viewMode === "grid") {
+                    // Already in grid view - reset tile layout
+                    handleResetTileLayout()
+                  } else {
+                    setViewMode("grid")
+                  }
+                }}
                 className="rounded-none h-7 px-2"
-                title="Grid view"
-                aria-label="Grid view"
+                title={viewMode === "grid" ? "Reset tile sizes to default" : "Grid view"}
+                aria-label={viewMode === "grid" ? "Reset tile layout" : "Grid view"}
                 aria-pressed={viewMode === "grid"}
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -476,18 +483,6 @@ export function Component() {
                 <Kanban className="h-4 w-4" />
               </Button>
             </div>
-            {viewMode === "grid" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleResetTileLayout}
-                className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                title="Reset all tile sizes to default dimensions"
-                aria-label="Reset layout"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            )}
             {inactiveSessionCount > 0 && (
               <Button
                 variant="ghost"

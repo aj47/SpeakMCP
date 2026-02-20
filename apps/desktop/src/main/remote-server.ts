@@ -1226,7 +1226,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       if (typeof body.langfusePublicKey === "string") {
         updates.langfusePublicKey = body.langfusePublicKey
       }
-      if (typeof body.langfuseSecretKey === "string") {
+      if (typeof body.langfuseSecretKey === "string" && body.langfuseSecretKey !== "••••••••") {
         updates.langfuseSecretKey = body.langfuseSecretKey
       }
       if (typeof body.langfuseBaseUrl === "string") {

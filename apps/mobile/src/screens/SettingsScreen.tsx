@@ -515,7 +515,7 @@ export default function SettingsScreen({ navigation }: any) {
 
   useEffect(() => {
     setDraft(config);
-  }, [ready]);
+  }, [ready, config]);
 
   // Sync input drafts with remoteSettings when they change
   useEffect(() => {
@@ -526,7 +526,7 @@ export default function SettingsScreen({ navigation }: any) {
         mcpMaxIterations: String(remoteSettings.mcpMaxIterations ?? 10),
         whatsappAllowFrom: (remoteSettings.whatsappAllowFrom || []).join(', '),
         langfusePublicKey: remoteSettings.langfusePublicKey || '',
-        langfuseSecretKey: remoteSettings.langfuseSecretKey || '',
+        langfuseSecretKey: remoteSettings.langfuseSecretKey === '••••••••' ? '' : (remoteSettings.langfuseSecretKey || ''),
         langfuseBaseUrl: remoteSettings.langfuseBaseUrl || '',
       });
     }
@@ -1137,7 +1137,7 @@ export default function SettingsScreen({ navigation }: any) {
                   value={inputDrafts.mcpMaxIterations ?? '10'}
                   onChangeText={(v) => {
                     const num = parseInt(v, 10);
-                    if (!isNaN(num) && num > 0) {
+                    if (!isNaN(num) && num >= 1 && num <= 100) {
                       handleRemoteSettingUpdate('mcpMaxIterations', num);
                     } else {
                       setInputDrafts(prev => ({ ...prev, mcpMaxIterations: v }));

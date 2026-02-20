@@ -470,13 +470,14 @@ export function Component() {
               <Button
                 variant="destructive"
                 size="sm"
+                className="gap-2"
                 onClick={() => setBulkDeleteConfirm(true)}
                 disabled={deleteMultipleMutation.isPending}
               >
                 {deleteMultipleMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 className="h-4 w-4" />
                 )}
                 Delete Selected ({selectedIds.size})
               </Button>
@@ -486,9 +487,9 @@ export function Component() {
                 variant="outline"
                 size="sm"
                 onClick={() => setDeleteAllConfirm(true)}
-                className="text-destructive hover:text-destructive"
+                className="gap-2 text-destructive hover:text-destructive"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
+                <Trash2 className="h-4 w-4" />
                 Delete All
               </Button>
             )}
@@ -558,8 +559,8 @@ export function Component() {
             <Button variant="outline" onClick={() => setEditingMemory(null)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button className="gap-2" onClick={handleSaveEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Save
             </Button>
           </DialogFooter>
@@ -584,10 +585,11 @@ export function Component() {
             </Button>
             <Button
               variant="destructive"
+              className="gap-2"
               onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Delete
             </Button>
           </DialogFooter>
@@ -612,10 +614,11 @@ export function Component() {
             </Button>
             <Button
               variant="destructive"
+              className="gap-2"
               onClick={() => deleteMultipleMutation.mutate([...selectedIds].filter(id => filteredIds.has(id)))}
               disabled={deleteMultipleMutation.isPending}
             >
-              {deleteMultipleMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {deleteMultipleMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Delete {visibleSelectedCount} Memories
             </Button>
           </DialogFooter>
@@ -640,10 +643,11 @@ export function Component() {
             </Button>
             <Button
               variant="destructive"
+              className="gap-2"
               onClick={() => deleteAllMutation.mutate()}
               disabled={deleteAllMutation.isPending}
             >
-              {deleteAllMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {deleteAllMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Delete All Memories
             </Button>
           </DialogFooter>

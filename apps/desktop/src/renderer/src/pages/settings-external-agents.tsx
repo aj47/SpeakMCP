@@ -202,8 +202,8 @@ export function SettingsExternalAgents() {
             )}
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={handleCancel}><X className="h-4 w-4 mr-2" />Cancel</Button>
-            <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" />Save</Button>
+            <Button variant="outline" className="gap-2" onClick={handleCancel}><X className="h-4 w-4" />Cancel</Button>
+            <Button className="gap-2" onClick={handleSave}><Save className="h-4 w-4" />Save</Button>
           </div>
         </CardContent>
       </Card>
@@ -217,7 +217,7 @@ export function SettingsExternalAgents() {
           <h1 className="text-2xl font-bold">External Agents</h1>
           <p className="text-muted-foreground">Configure external AI agents (ACP, Stdio, Remote) for delegation</p>
         </div>
-        <Button onClick={handleCreate}><Plus className="h-4 w-4 mr-2" />Add External Agent</Button>
+        <Button className="gap-2" onClick={handleCreate}><Plus className="h-4 w-4" />Add External Agent</Button>
       </div>
       {editing ? renderEditForm() : renderProfileList(externalAgents)}
     </div>

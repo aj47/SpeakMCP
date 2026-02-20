@@ -353,12 +353,12 @@ export function SettingsAgentPersonas() {
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={handleCancel}>
-              <X className="h-4 w-4 mr-2" />
+            <Button variant="outline" className="gap-2" onClick={handleCancel}>
+              <X className="h-4 w-4" />
               Cancel
             </Button>
-            <Button onClick={handleSave}>
-              <Save className="h-4 w-4 mr-2" />
+            <Button className="gap-2" onClick={handleSave}>
+              <Save className="h-4 w-4" />
               Save
             </Button>
           </div>
@@ -376,8 +376,8 @@ export function SettingsAgentPersonas() {
             Configure personas that can be delegated to for specialized tasks
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
+        <Button className="gap-2" onClick={handleCreate}>
+          <Plus className="h-4 w-4" />
           Add Persona
         </Button>
       </div>

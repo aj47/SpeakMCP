@@ -136,7 +136,7 @@ function SummaryCard({
           variant={isSaved ? "ghost" : "outline"}
           size="sm"
           className={cn(
-            "shrink-0",
+            "shrink-0 gap-2",
             isSaved && "text-green-600 dark:text-green-400"
           )}
           onClick={(e) => {
@@ -149,12 +149,12 @@ function SummaryCard({
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : isSaved ? (
             <>
-              <CheckCircle className="h-4 w-4 mr-1" />
+              <CheckCircle className="h-4 w-4" />
               Saved
             </>
           ) : (
             <>
-              <Save className="h-4 w-4 mr-1" />
+              <Save className="h-4 w-4" />
               Save
             </>
           )}

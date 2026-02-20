@@ -376,10 +376,10 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
             <Button
               variant={activeTab === 'file' ? 'default' : 'outline'}
               onClick={() => setActiveTab('file')}
-              className="flex-1"
+              className="flex-1 gap-1"
               size="sm"
             >
-              <Upload className="mr-1 h-3 w-3" />
+              <Upload className="h-3 w-3" />
               From File
             </Button>
           )}
@@ -387,10 +387,10 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
             <Button
               variant={activeTab === 'paste' ? 'default' : 'outline'}
               onClick={() => setActiveTab('paste')}
-              className="flex-1"
+              className="flex-1 gap-1"
               size="sm"
             >
-              <FileText className="mr-1 h-3 w-3" />
+              <FileText className="h-3 w-3" />
               Paste JSON
             </Button>
           )}
@@ -693,11 +693,11 @@ function ServerDialog({ server, onSave, onCancel, onImportFromFile, onImportFrom
                 }
               }}
               disabled={isValidatingJson || !jsonInputText.trim()}
-              className="w-full"
+              className="w-full gap-2"
             >
               {isValidatingJson ? (
                 <>
-                  <Spinner className="mr-2 h-4 w-4" />
+                  <Spinner className="h-4 w-4" />
                   Validating...
                 </>
               ) : (
@@ -1947,24 +1947,24 @@ export function MCPConfigManager({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
               <div className="flex flex-1 items-center gap-3">
                 <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search tools..."
                     value={toolSearchQuery}
                     onChange={(e) => setToolSearchQuery(e.target.value)}
-                    className="pl-8 h-9"
+                    className="pl-9"
                   />
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowDisabledTools(!showDisabledTools)}
-                  className="shrink-0"
+                  className="shrink-0 gap-2"
                 >
                   {showDisabledTools ? (
-                    <EyeOff className="mr-2 h-4 w-4" />
+                    <EyeOff className="h-4 w-4" />
                   ) : (
-                    <Eye className="mr-2 h-4 w-4" />
+                    <Eye className="h-4 w-4" />
                   )}
                   {showDisabledTools ? "Hide Disabled" : "Show All"}
                 </Button>
@@ -1974,18 +1974,18 @@ export function MCPConfigManager({
                   variant="outline"
                   size="sm"
                   onClick={() => handleToggleAllTools(true)}
-                  className="shrink-0"
+                  className="shrink-0 gap-1"
                 >
-                  <Power className="mr-1 h-3 w-3" />
+                  <Power className="h-3 w-3" />
                   All ON
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleToggleAllTools(false)}
-                  className="shrink-0"
+                  className="shrink-0 gap-1"
                 >
-                  <PowerOff className="mr-1 h-3 w-3" />
+                  <PowerOff className="h-3 w-3" />
                   All OFF
                 </Button>
               </div>
@@ -2078,18 +2078,18 @@ export function MCPConfigManager({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleAllToolsForServer(serverName, true)}
-                          className="h-6 px-2 text-xs"
+                          className="h-6 gap-1 px-2 text-xs"
                         >
-                          <Power className="mr-1 h-3 w-3" />
+                          <Power className="h-3 w-3" />
                           ON
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleAllToolsForServer(serverName, false)}
-                          className="h-6 px-2 text-xs"
+                          className="h-6 gap-1 px-2 text-xs"
                         >
-                          <PowerOff className="mr-1 h-3 w-3" />
+                          <PowerOff className="h-3 w-3" />
                           OFF
                         </Button>
                       </div>
@@ -2189,12 +2189,12 @@ export function MCPConfigManager({
                                           <Badge
                                             key={profile.id}
                                             variant={isEnabled ? "default" : "secondary"}
-                                            className={`text-xs ${isCurrent ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                                            className={`gap-1 text-xs ${isCurrent ? "ring-2 ring-primary ring-offset-1" : ""}`}
                                           >
                                             {isEnabled ? (
-                                              <CheckCircle className="mr-1 h-3 w-3" />
+                                              <CheckCircle className="h-3 w-3" />
                                             ) : (
-                                              <XCircle className="mr-1 h-3 w-3" />
+                                              <XCircle className="h-3 w-3" />
                                             )}
                                             {profile.name}
                                             {isCurrent && " (current)"}
@@ -2257,14 +2257,14 @@ export function MCPConfigManager({
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <Button variant="outline" size="sm" onClick={handleExportConfig}>
-              <Download className="mr-2 h-4 w-4" />
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportConfig}>
+              <Download className="h-4 w-4" />
               Export
             </Button>
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
               <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
                   Add Server
                 </Button>
               </DialogTrigger>

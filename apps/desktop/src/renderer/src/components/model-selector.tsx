@@ -221,10 +221,10 @@ export function ModelSelector({
           }}
           header={
             <div
-              className="flex items-center border-b px-3 py-2"
+              className="flex items-center gap-2 border-b px-3 py-2"
               onMouseDown={(e) => e.preventDefault()}
             >
-              <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
                 placeholder="Search models..."
@@ -276,8 +276,8 @@ export function ModelSelector({
             )}
 
             {hasError && (
-              <div className="flex items-center justify-center py-8 text-destructive">
-                <AlertCircle className="mr-2 h-4 w-4" />
+              <div className="flex items-center justify-center gap-2 py-8 text-destructive">
+                <AlertCircle className="h-4 w-4" />
                 <span className="text-sm">Failed to load models</span>
               </div>
             )}

@@ -265,8 +265,8 @@ export function SettingsLoops() {
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleRunNow(loop)}>
-                  <Play className="h-4 w-4 mr-1" />Run Now
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => handleRunNow(loop)}>
+                  <Play className="h-4 w-4" />Run Now
                 </Button>
                 <Button variant="ghost" size="icon" onClick={() => handleEdit(loop)}>
                   <Edit2 className="h-4 w-4" />
@@ -407,11 +407,11 @@ export function SettingsLoops() {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={handleCancel}>
-              <X className="h-4 w-4 mr-2" />Cancel
+            <Button variant="outline" className="gap-2" onClick={handleCancel}>
+              <X className="h-4 w-4" />Cancel
             </Button>
-            <Button onClick={handleSave}>
-              <Save className="h-4 w-4 mr-2" />Save
+            <Button className="gap-2" onClick={handleSave}>
+              <Save className="h-4 w-4" />Save
             </Button>
           </div>
         </CardContent>
@@ -428,8 +428,8 @@ export function SettingsLoops() {
             Configure agents to run automatically at regular intervals
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />Add Loop
+        <Button className="gap-2" onClick={handleCreate}>
+          <Plus className="h-4 w-4" />Add Loop
         </Button>
       </div>
       {editing ? renderEditForm() : renderLoopList()}

@@ -1306,10 +1306,25 @@ export default function SettingsScreen({ navigation }: any) {
                       style={styles.input}
                       value={inputDrafts.whatsappAllowFrom ?? ''}
                       onChangeText={(v) => {
+                        // Update the text draft immediately for responsive UI
                         setInputDrafts(prev => ({ ...prev, whatsappAllowFrom: v }));
-                        // Parse comma-separated numbers and debounce update
+                        // Parse comma-separated numbers and debounce the API update
+                        // without overwriting the user's raw text input
                         const numbers = v.split(',').map(n => n.trim()).filter(n => n);
-                        handleRemoteSettingUpdate('whatsappAllowFrom', numbers);
+                        setRemoteSettings(prev => prev ? { ...prev, whatsappAllowFrom: numbers } : null);
+                        if (inputTimeoutRefs.current.whatsappAllowFrom) {
+                          clearTimeout(inputTimeoutRefs.current.whatsappAllowFrom);
+                        }
+                        inputTimeoutRefs.current.whatsappAllowFrom = setTimeout(async () => {
+                          if (!settingsClient) return;
+                          try {
+                            await settingsClient.updateSettings({ whatsappAllowFrom: numbers });
+                          } catch (error: any) {
+                            console.error('[Settings] Failed to update whatsappAllowFrom:', error);
+                            setRemoteError(error.message || 'Failed to update whatsappAllowFrom');
+                            fetchRemoteSettings();
+                          }
+                        }, 1000);
                       }}
                       placeholder="1234567890, 0987654321"
                       placeholderTextColor={theme.colors.mutedForeground}

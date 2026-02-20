@@ -39,13 +39,14 @@ export default function ConnectionSettingsScreen({ navigation }: any) {
   const [scanned, setScanned] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
   const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   useEffect(() => {
     setDraft(config);
-  }, [ready]);
+  }, [ready, config]);
 
   // Clear connection error when draft changes
   useEffect(() => {
@@ -213,7 +214,12 @@ export default function ConnectionSettingsScreen({ navigation }: any) {
           Scan the QR code from your SpeakMCP desktop app to connect
         </Text>
 
-        <Text style={styles.label}>API Key</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>API Key</Text>
+          <TouchableOpacity onPress={() => setShowApiKey(!showApiKey)}>
+            <Text style={styles.resetText}>{showApiKey ? 'Hide' : 'Show'}</Text>
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={styles.input}
           value={draft.apiKey}
@@ -221,7 +227,7 @@ export default function ConnectionSettingsScreen({ navigation }: any) {
           placeholder="sk-..."
           placeholderTextColor={theme.colors.mutedForeground}
           autoCapitalize='none'
-          secureTextEntry={false}
+          secureTextEntry={!showApiKey}
         />
 
         <View style={styles.labelRow}>

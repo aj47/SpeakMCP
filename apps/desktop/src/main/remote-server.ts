@@ -1071,13 +1071,13 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         mcpToolResponseProcessingEnabled: cfg.mcpToolResponseProcessingEnabled ?? true,
         mcpParallelToolExecution: cfg.mcpParallelToolExecution ?? false,
         // WhatsApp (extended)
-        whatsappAllowedNumbers: cfg.whatsappAllowedNumbers ?? "",
-        whatsappAutoReplyEnabled: cfg.whatsappAutoReplyEnabled ?? false,
-        whatsappLogMessagesEnabled: cfg.whatsappLogMessagesEnabled ?? false,
+        whatsappAllowFrom: cfg.whatsappAllowFrom ?? [],
+        whatsappAutoReply: cfg.whatsappAutoReply ?? false,
+        whatsappLogMessages: cfg.whatsappLogMessages ?? false,
         // Langfuse
         langfuseEnabled: cfg.langfuseEnabled ?? false,
         langfusePublicKey: cfg.langfusePublicKey ?? "",
-        langfuseSecretKey: cfg.langfuseSecretKey ?? "",
+        langfuseSecretKey: cfg.langfuseSecretKey ? "••••••••" : "",
         langfuseBaseUrl: cfg.langfuseBaseUrl ?? "",
       })
     } catch (error: any) {
@@ -1210,14 +1210,14 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         updates.mcpParallelToolExecution = body.mcpParallelToolExecution
       }
       // WhatsApp (extended)
-      if (typeof body.whatsappAllowedNumbers === "string") {
-        updates.whatsappAllowedNumbers = body.whatsappAllowedNumbers
+      if (Array.isArray(body.whatsappAllowFrom)) {
+        updates.whatsappAllowFrom = body.whatsappAllowFrom.filter((n: unknown) => typeof n === "string")
       }
-      if (typeof body.whatsappAutoReplyEnabled === "boolean") {
-        updates.whatsappAutoReplyEnabled = body.whatsappAutoReplyEnabled
+      if (typeof body.whatsappAutoReply === "boolean") {
+        updates.whatsappAutoReply = body.whatsappAutoReply
       }
-      if (typeof body.whatsappLogMessagesEnabled === "boolean") {
-        updates.whatsappLogMessagesEnabled = body.whatsappLogMessagesEnabled
+      if (typeof body.whatsappLogMessages === "boolean") {
+        updates.whatsappLogMessages = body.whatsappLogMessages
       }
       // Langfuse
       if (typeof body.langfuseEnabled === "boolean") {

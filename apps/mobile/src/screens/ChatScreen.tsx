@@ -696,6 +696,9 @@ export default function ChatScreen({ route, navigation }: any) {
   const [willCancel, setWillCancel] = useState(false);
   const startYRef = useRef<number | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
   const nativeSRUnavailableShownRef = useRef(false);
 
   const webRecognitionRef = useRef<any>(null);
@@ -703,7 +706,11 @@ export default function ChatScreen({ route, navigation }: any) {
   const liveTranscriptRef = useRef<string>('');
   const willCancelRef = useRef<boolean>(false);
   useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
-  useEffect(() => { willCancelRef.current = willCancel; }, [willCancel]);
+  // willCancelRef is kept in sync via setWillCancelValue below (no useEffect needed).
+	const setWillCancelValue = useCallback((v: boolean) => {
+		willCancelRef.current = v;
+		setWillCancel(v);
+	}, []);
 	const setLiveTranscriptValue = useCallback((t: string) => {
 		liveTranscriptRef.current = t;
 		setLiveTranscript(t);
@@ -1713,7 +1720,7 @@ export default function ChatScreen({ route, navigation }: any) {
 							voiceLog('web:onend -> willEdit=true (append to input)', { gestureId, finalText });
 							setSttPreviewWithExpiry(finalText);
 							setInput((t) => (t ? `${t} ${finalText}` : finalText));
-								setTimeout(() => inputRef.current?.focus(), 0);
+								setTimeout(() => { if (mountedRef.current) inputRef.current?.focus(); }, 0);
 						} else {
 							voiceLog('web:onend -> sending', { gestureId, finalText });
 							setSttPreviewWithExpiry(finalText);
@@ -1893,7 +1900,7 @@ export default function ChatScreen({ route, navigation }: any) {
 										voiceLog('native:end -> willEdit=true (append to input)', { gestureId, finalText });
 										setSttPreviewWithExpiry(finalText);
 										setInput((t) => (t ? `${t} ${finalText}` : finalText));
-										setTimeout(() => inputRef.current?.focus(), 0);
+										setTimeout(() => { if (mountedRef.current) inputRef.current?.focus(); }, 0);
 									} else {
 										voiceLog('native:end -> sending', { gestureId, finalText });
 										setSttPreviewWithExpiry(finalText);
@@ -2539,7 +2546,7 @@ export default function ChatScreen({ route, navigation }: any) {
 	            {!handsFree && (
 	              <TouchableOpacity
 	                style={[styles.ttsToggle, willCancel && styles.ttsToggleOn]}
-	                onPress={() => setWillCancel((v) => !v)}
+	                onPress={() => setWillCancelValue(!willCancel)}
 	                activeOpacity={0.7}
 	                accessibilityRole="switch"
 	                accessibilityState={{ checked: willCancel }}

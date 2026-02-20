@@ -17,6 +17,7 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
+import { MARK_WORK_COMPLETE_TOOL } from "../shared/builtin-tool-names"
 import {
   createAgentTrace,
   endAgentTrace,
@@ -31,8 +32,6 @@ import {
   type SummarizationInput,
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
-
-const MARK_WORK_COMPLETE_TOOL = "speakmcp-settings:mark_work_complete"
 
 // Internal completion nudge message: include in the LLM context, but hide from the progress UI.
 // Keep this as a single canonical string so we can filter it via exact match (no false positives).

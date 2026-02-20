@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
+import { MARK_WORK_COMPLETE_TOOL } from "../../../shared/builtin-tool-names"
 import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
@@ -1728,7 +1729,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
       c.includes("Please either take action using available tools") ||
       c.includes("You have relevant tools available for this request") ||
       (c.includes("If all requested work is complete, call") &&
-        c.includes("speakmcp-settings:mark_work_complete"))
+        c.includes(MARK_WORK_COMPLETE_TOOL))
 
     messages = historyForSession
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))

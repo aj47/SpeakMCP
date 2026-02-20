@@ -2513,6 +2513,7 @@ Return ONLY JSON per schema.`,
 
       // Skip summary generation if respond_to_user already provided a response (#1084)
       const existingUserResponse = getSessionUserResponse(currentSessionId)
+      let respondToUserAlreadyInHistory = false
       if (existingUserResponse?.trim().length) {
         finalContent = existingUserResponse
         conversationHistory.push({
@@ -2520,6 +2521,7 @@ Return ONLY JSON per schema.`,
           content: finalContent,
           timestamp: Date.now(),
         })
+        respondToUserAlreadyInHistory = true
       } else if (hasToolCalls && (hasMinimalContent || !lastAssistantContent.trim())) {
         // The agent just made tool calls without providing a summary
         // Prompt the agent to provide a concise summary of what was accomplished
@@ -2705,12 +2707,15 @@ Return ONLY JSON per schema.`,
         // Post-verify: produce a concise final summary for the user
         // Skip when forced incomplete - the fallback message below will be the only assistant message
         // Skip summary generation if respond_to_user already provided a response (#1084)
+        // Also skip if respond_to_user response was already added to history above
         const existingUserResponse2 = getSessionUserResponse(currentSessionId)
-        if (existingUserResponse2?.trim().length) {
+        if (existingUserResponse2?.trim().length && !respondToUserAlreadyInHistory) {
           finalContent = existingUserResponse2
           if (finalContent.trim().length > 0) {
             conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
           }
+        } else if (respondToUserAlreadyInHistory) {
+          // Already handled above — skip post-verify summary entirely
         } else if (!skipPostVerifySummary2 && !completionForcedByVerificationLimit2) {
           try {
             const result = await generatePostVerifySummary(finalContent, true, activeTools)

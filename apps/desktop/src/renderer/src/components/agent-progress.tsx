@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain, Volume2 } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -379,7 +379,7 @@ const CompactMessage: React.FC<{
           )}
 
           {/* TTS Audio Player - show for all completed assistant messages with content */}
-          {shouldShowTTSButton && isLast && (
+          {shouldShowTTSButton && (
             <div className="mt-2">
               <AudioPlayer
                 audioData={audioData || undefined}
@@ -388,7 +388,7 @@ const CompactMessage: React.FC<{
                 isGenerating={isGeneratingAudio}
                 error={ttsError}
                 compact={true}
-                autoPlay={configQuery.data?.ttsAutoPlay ?? true}
+                autoPlay={isLast ? (configQuery.data?.ttsAutoPlay ?? true) : false}
               />
               {ttsError && (
                 <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -431,22 +431,6 @@ const CompactMessage: React.FC<{
                 <CheckCheck className="h-3 w-3 text-green-500" />
               ) : (
                 <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
-              )}
-            </button>
-          )}
-          {/* Read Aloud button for non-last completed assistant messages with TTS enabled */}
-          {shouldShowTTSButton && !isLast && (
-            <button
-              onClick={() => generateAudio().catch(() => {})}
-              className="p-1 rounded hover:bg-muted/30 transition-colors"
-              title={isGeneratingAudio ? "Generating audio..." : "Read aloud"}
-              aria-label="Read aloud"
-              disabled={isGeneratingAudio}
-            >
-              {isGeneratingAudio ? (
-                <Loader2 className="h-3 w-3 opacity-60 animate-spin" />
-              ) : (
-                <Volume2 className="h-3 w-3 opacity-60 hover:opacity-100" />
               )}
             </button>
           )}

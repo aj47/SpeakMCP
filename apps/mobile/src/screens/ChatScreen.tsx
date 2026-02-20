@@ -375,26 +375,46 @@ export default function ChatScreen({ route, navigation }: any) {
 
   // Per-message TTS: track which message index is currently being spoken (#1078)
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
+  // Ref to track the intended speaking index, preventing race conditions
+  // when Speech.stop()'s onStopped fires after a new Speech.speak() starts
+  const intendedSpeakingIndexRef = useRef<number | null>(null);
 
   const speakMessage = useCallback((index: number, content: string) => {
     if (speakingMessageIndex === index) {
       // Toggle off - stop speaking
+      intendedSpeakingIndexRef.current = null;
       Speech.stop();
       setSpeakingMessageIndex(null);
       return;
     }
     // Stop any current speech first
+    intendedSpeakingIndexRef.current = index;
     Speech.stop();
     const processedText = preprocessTextForTTS(content);
-    if (!processedText) return;
+    if (!processedText) {
+      intendedSpeakingIndexRef.current = null;
+      return;
+    }
     setSpeakingMessageIndex(index);
     const speechOptions: Speech.SpeechOptions = {
       language: 'en-US',
       rate: config.ttsRate ?? 1.0,
       pitch: config.ttsPitch ?? 1.0,
-      onDone: () => setSpeakingMessageIndex(null),
-      onError: () => setSpeakingMessageIndex(null),
-      onStopped: () => setSpeakingMessageIndex(null),
+      onDone: () => {
+        intendedSpeakingIndexRef.current = null;
+        setSpeakingMessageIndex(null);
+      },
+      onError: () => {
+        intendedSpeakingIndexRef.current = null;
+        setSpeakingMessageIndex(null);
+      },
+      onStopped: () => {
+        // Only clear if this callback is for the current intended message,
+        // not a stale callback from a previously stopped utterance
+        if (intendedSpeakingIndexRef.current === null) {
+          setSpeakingMessageIndex(null);
+        }
+      },
     };
     if (config.ttsVoiceId) {
       speechOptions.voice = config.ttsVoiceId;

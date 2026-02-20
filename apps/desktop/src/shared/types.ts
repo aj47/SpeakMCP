@@ -206,6 +206,7 @@ export interface AgentProgressUpdate {
   isComplete: boolean
   isSnoozed?: boolean
   finalContent?: string
+  spokenContent?: string
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
     content: string

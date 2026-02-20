@@ -279,9 +279,11 @@ export default function SettingsScreen({ navigation }: any) {
       if (selectedProfile) {
         setProfileContext(selectedProfile);
       }
-      // Refresh MCP servers as they may have changed with the profile
+      // Refresh MCP servers and skills as they may have changed with the profile
       const serversRes = await settingsClient.getMCPServers();
       setMcpServers(serversRes.servers);
+      // Skills enabledForProfile is profile-specific, so refetch after switch
+      fetchSkills();
     } catch (error: any) {
       console.error('[Settings] Failed to switch profile:', error);
       setRemoteError(error.message || 'Failed to switch profile');

@@ -1803,6 +1803,14 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   fastify.post("/v1/skills/:id/toggle-profile", async (req, reply) => {
     try {
       const params = req.params as { id: string }
+
+      // Validate the skill exists
+      const skills = skillsService.getSkills()
+      const skillExists = skills.some(s => s.id === params.id)
+      if (!skillExists) {
+        return reply.code(404).send({ error: "Skill not found" })
+      }
+
       const currentProfile = profileService.getCurrentProfile()
       if (!currentProfile) {
         return reply.code(400).send({ error: "No current profile set" })
@@ -1863,10 +1871,16 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   fastify.delete("/v1/memories/:id", async (req, reply) => {
     try {
       const params = req.params as { id: string }
-      const success = await memoryService.deleteMemory(params.id)
 
-      if (!success) {
+      // Check if memory exists before attempting deletion
+      const memory = await memoryService.getMemory(params.id)
+      if (!memory) {
         return reply.code(404).send({ error: "Memory not found" })
+      }
+
+      const success = await memoryService.deleteMemory(params.id)
+      if (!success) {
+        return reply.code(500).send({ error: "Failed to persist memory deletion" })
       }
 
       return reply.send({ success: true, id: params.id })
@@ -2000,6 +2014,19 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
 
       configStore.save({ ...cfg, loops: updatedLoops })
 
+      // Start or stop the loop scheduling to match the new enabled state
+      try {
+        const { loopService } = await import("./loop-service")
+        const newEnabled = updatedLoops[loopIndex].enabled
+        if (newEnabled) {
+          loopService.startLoop(params.id)
+        } else {
+          loopService.stopLoop(params.id)
+        }
+      } catch {
+        // Loop service might not be initialized
+      }
+
       return reply.send({
         success: true,
         id: params.id,
@@ -2015,11 +2042,20 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   fastify.post("/v1/loops/:id/run", async (req, reply) => {
     try {
       const params = req.params as { id: string }
+
+      // First check if the loop exists in config
+      const cfg = configStore.get()
+      const loops = cfg.loops || []
+      const loopExists = loops.some(l => l.id === params.id)
+      if (!loopExists) {
+        return reply.code(404).send({ error: "Loop not found" })
+      }
+
       const { loopService } = await import("./loop-service")
       const triggered = await loopService.triggerLoop(params.id)
 
       if (!triggered) {
-        return reply.code(404).send({ error: "Loop not found" })
+        return reply.code(409).send({ error: "Loop is already running" })
       }
 
       return reply.send({ success: true, id: params.id })

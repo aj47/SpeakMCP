@@ -179,14 +179,10 @@ export const Component = () => {
           {/* Header with collapse toggle */}
           <header
             className={cn(
-              "flex items-center",
+              "flex items-center shrink-0",
               isCollapsed ? "justify-center" : "justify-end",
-              // On macOS, add extra top margin when collapsed to avoid traffic light buttons
-              process.env.IS_MAC
-                ? isCollapsed
-                  ? "mt-6 h-16"
-                  : "h-10 pt-6"
-                : "h-8 pt-2",
+              // On macOS, add top padding to clear the traffic-light window controls
+              process.env.IS_MAC ? "pt-7 pb-1" : "pt-2 pb-1",
               isCollapsed ? "px-1" : "px-2",
             )}
           >
@@ -245,6 +241,9 @@ export const Component = () => {
           ) : (
             /* Expanded: Settings and Sessions share one scrollable container */
             <div className="scrollbar-none mt-2 min-h-0 flex-1 overflow-y-auto">
+              {/* Sessions Section - shows sessions list */}
+              <ActiveAgentsSidebar onOpenPastSessionsDialog={() => setPastSessionsDialogOpen(true)} />
+
               {/* Settings Section - Collapsible, collapsed by default */}
               <div className="px-2">
                 <button
@@ -272,9 +271,6 @@ export const Component = () => {
                   </div>
                 )}
               </div>
-
-              {/* Sessions Section - shows sessions list */}
-              <ActiveAgentsSidebar onOpenPastSessionsDialog={() => setPastSessionsDialogOpen(true)} />
             </div>
           )}
 
@@ -357,7 +353,7 @@ export const Component = () => {
 
           {/* Scrollable content area */}
           <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-            <Outlet />
+            <Outlet context={{ onOpenPastSessionsDialog: () => setPastSessionsDialogOpen(true) }} />
           </div>
         </div>
       </div>

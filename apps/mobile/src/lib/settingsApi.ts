@@ -41,7 +41,7 @@ export interface ModelPreset {
 
 export interface Settings {
   // MCP Tools Model Configuration
-  mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
+  mcpToolsProviderId: 'openai' | 'groq' | 'gemini';
   mcpToolsOpenaiModel?: string;
   mcpToolsGroqModel?: string;
   mcpToolsGeminiModel?: string;

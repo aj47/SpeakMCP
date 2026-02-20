@@ -1061,15 +1061,15 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         mcpMessageQueueEnabled: cfg.mcpMessageQueueEnabled ?? true,
         mcpVerifyCompletionEnabled: cfg.mcpVerifyCompletionEnabled ?? true,
         mcpFinalSummaryEnabled: cfg.mcpFinalSummaryEnabled ?? false,
-        memoriesEnabled: cfg.memoriesEnabled ?? false,
-        dualModelInjectMemories: cfg.dualModelInjectMemories ?? true,
+        memoriesEnabled: cfg.memoriesEnabled ?? true,
+        dualModelInjectMemories: cfg.dualModelInjectMemories ?? false,
         dualModelEnabled: cfg.dualModelEnabled ?? false,
         dualModelAutoSaveImportant: cfg.dualModelAutoSaveImportant ?? false,
         mcpUnlimitedIterations: cfg.mcpUnlimitedIterations ?? false,
         // Tool Execution
         mcpContextReductionEnabled: cfg.mcpContextReductionEnabled ?? true,
         mcpToolResponseProcessingEnabled: cfg.mcpToolResponseProcessingEnabled ?? true,
-        mcpParallelToolExecution: cfg.mcpParallelToolExecution ?? false,
+        mcpParallelToolExecution: cfg.mcpParallelToolExecution ?? true,
         // WhatsApp (extended)
         whatsappAllowFrom: cfg.whatsappAllowFrom ?? [],
         whatsappAutoReply: cfg.whatsappAutoReply ?? false,

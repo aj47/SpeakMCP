@@ -1309,9 +1309,9 @@ export default function SettingsScreen({ navigation }: any) {
                         // Update the text draft immediately for responsive UI
                         setInputDrafts(prev => ({ ...prev, whatsappAllowFrom: v }));
                         // Parse comma-separated numbers and debounce the API update
-                        // without overwriting the user's raw text input
+                        // Don't update remoteSettings locally to avoid the sync effect
+                        // rewriting the user's raw text (losing trailing commas/spaces)
                         const numbers = v.split(',').map(n => n.trim()).filter(n => n);
-                        setRemoteSettings(prev => prev ? { ...prev, whatsappAllowFrom: numbers } : null);
                         if (inputTimeoutRefs.current.whatsappAllowFrom) {
                           clearTimeout(inputTimeoutRefs.current.whatsappAllowFrom);
                         }

@@ -17,6 +17,16 @@ const os = require('os');
 
 const isWindows = os.platform() === 'win32';
 
+// Skip postinstall in CI environments where native Electron deps aren't needed
+// This includes Cloudflare Pages, GitHub Actions (unless building desktop), etc.
+const isCI = process.env.CI === 'true' || process.env.CF_PAGES === '1' || process.env.CLOUDFLARE_PAGES === 'true';
+const skipPostinstall = process.env.SKIP_ELECTRON_POSTINSTALL === 'true';
+
+if (isCI || skipPostinstall) {
+  console.log(`[postinstall] Skipping in CI environment (CI=${process.env.CI}, CF_PAGES=${process.env.CF_PAGES})`);
+  process.exit(0);
+}
+
 console.log(`[postinstall] Running on ${os.platform()} (${os.arch()})`);
 
 /**

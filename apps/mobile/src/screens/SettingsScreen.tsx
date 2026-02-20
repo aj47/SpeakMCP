@@ -4,34 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
 import { useTheme, ThemeMode } from '../ui/ThemeProvider';
 import { spacing, radius } from '../ui/theme';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Linking from 'expo-linking';
-import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
-import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
 import { usePushNotifications } from '../lib/pushNotifications';
 import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
 import { TTSSettings } from '../ui/TTSSettings';
-
-function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
-  try {
-    const parsed = Linking.parse(data);
-    // Handle speakmcp://config?baseUrl=...&apiKey=...&model=...
-    if (parsed.scheme === 'speakmcp' && (parsed.path === 'config' || parsed.hostname === 'config')) {
-      const { baseUrl, apiKey, model } = parsed.queryParams || {};
-      if (baseUrl || apiKey || model) {
-        return {
-          baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
-          apiKey: typeof apiKey === 'string' ? apiKey : undefined,
-          model: typeof model === 'string' ? model : undefined,
-        };
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse QR code:', e);
-  }
-  return null;
-}
 
 const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
   { label: '☀️ Light', value: 'light' },
@@ -41,15 +17,9 @@ const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
 
 export default function SettingsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { theme, themeMode, setThemeMode, isDark } = useTheme();
+  const { theme, themeMode, setThemeMode } = useTheme();
   const { config, setConfig, ready } = useConfigContext();
   const [draft, setDraft] = useState<AppConfig>(config);
-  const [showScanner, setShowScanner] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
   const { setCurrentProfile: setProfileContext } = useProfile();
 
   // Push notification state
@@ -485,132 +455,6 @@ export default function SettingsScreen({ navigation }: any) {
     setDraft(config);
   }, [ready]);
 
-  // Clear connection error when draft changes
-  useEffect(() => {
-    if (connectionError) {
-      setConnectionError(null);
-    }
-  }, [draft.baseUrl, draft.apiKey]);
-
-  const onSave = async () => {
-    let normalizedDraft = {
-      ...draft,
-      baseUrl: draft.baseUrl?.trim?.() ?? '',
-      apiKey: draft.apiKey?.trim?.() ?? '',
-    };
-
-    // Clear any previous error
-    setConnectionError(null);
-
-    // Default to OpenAI URL if baseUrl is empty to prevent OpenAIClient from throwing
-    if (!normalizedDraft.baseUrl) {
-      normalizedDraft.baseUrl = 'https://api.openai.com/v1';
-    }
-
-    // Check if we have a base URL to validate
-    // If using default OpenAI URL with no API key, allow pass-through (might be using built-in key)
-    const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl !== 'https://api.openai.com/v1';
-    const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.length > 0;
-
-    // Require API key when using a custom server URL
-    if (hasCustomUrl && !hasApiKey) {
-      setConnectionError('API Key is required when using a custom server URL');
-      return;
-    }
-
-    // Validate: if API key is set, base URL must also be set
-    if (hasApiKey && !normalizedDraft.baseUrl) {
-      setConnectionError('Base URL is required when an API key is provided');
-      return;
-    }
-
-    // Only check connection if we have both a custom URL and API key
-    // Or if we have an API key with the default URL
-    if (hasApiKey && normalizedDraft.baseUrl) {
-      setIsCheckingConnection(true);
-
-      try {
-        const result = await checkServerConnection(
-          normalizedDraft.baseUrl,
-          normalizedDraft.apiKey,
-          10000 // 10 second timeout
-        );
-
-        if (!result.success) {
-          setConnectionError(result.error || 'Connection failed');
-          setIsCheckingConnection(false);
-          return; // Don't proceed if connection fails
-        }
-
-        // Use the normalized URL from the connection check so the saved config
-        // matches what was actually verified (includes scheme, no trailing slashes)
-        if (result.normalizedUrl) {
-          normalizedDraft = {
-            ...normalizedDraft,
-            baseUrl: result.normalizedUrl,
-          };
-        }
-
-        console.log('[Settings] Connection check successful:', result);
-      } catch (error: any) {
-        console.error('[Settings] Connection check error:', error);
-        setConnectionError(error.message || 'Connection check failed');
-        setIsCheckingConnection(false);
-        return;
-      }
-
-      setIsCheckingConnection(false);
-    }
-
-    // Connection successful or no validation needed, proceed
-    setConfig(normalizedDraft);
-    await saveConfig(normalizedDraft);
-
-    // Connect tunnel for persistence (fire and forget - don't block navigation)
-    if (normalizedDraft.baseUrl && normalizedDraft.apiKey) {
-      tunnelConnect(normalizedDraft.baseUrl, normalizedDraft.apiKey).catch((error) => {
-        console.warn('[Settings] Tunnel connect failed (non-blocking):', error);
-      });
-    } else {
-      // Clear tunnel metadata when credentials are removed
-      tunnelDisconnect().catch((error) => {
-        console.warn('[Settings] Tunnel disconnect failed (non-blocking):', error);
-      });
-    }
-
-    navigation.navigate('Sessions');
-  };
-
-  const handleScanQR = async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        return;
-      }
-    }
-    setScanned(false);
-    setShowScanner(true);
-  };
-
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
-    if (scanned) return;
-    setScanned(true);
-
-    const params = parseQRCode(data);
-    if (params) {
-      setDraft(prev => ({
-        ...prev,
-        ...(params.baseUrl && { baseUrl: params.baseUrl }),
-        ...(params.apiKey && { apiKey: params.apiKey }),
-        ...(params.model && { model: params.model }),
-      }));
-      setShowScanner(false);
-    } else {
-      // Invalid QR code, allow scanning again
-      setTimeout(() => setScanned(false), 2000);
-    }
-  };
-
   if (!ready) return null;
 
   return (
@@ -629,27 +473,46 @@ export default function SettingsScreen({ navigation }: any) {
       >
         <Text style={styles.h1}>Settings</Text>
 
-        {connectionError && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>⚠️ {connectionError}</Text>
-          </View>
-        )}
-
+        {/* Connection Card - Tap to navigate to ConnectionSettings */}
         <TouchableOpacity
-          style={[styles.primaryButton, isCheckingConnection && styles.primaryButtonDisabled]}
-          onPress={onSave}
-          disabled={isCheckingConnection}
+          style={styles.connectionCard}
+          onPress={() => navigation.navigate('ConnectionSettings')}
           accessibilityRole="button"
-          accessibilityLabel={isCheckingConnection ? 'Checking connection' : 'Connect'}
+          accessibilityLabel="Connection settings"
         >
-          {isCheckingConnection ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
-              <Text style={styles.primaryButtonText}>  Checking connection...</Text>
+          <View style={styles.connectionCardContent}>
+            <View style={styles.connectionCardLeft}>
+              <View style={styles.connectionStatusRow}>
+                <View style={[
+                  styles.statusDot,
+                  { width: 10, height: 10, borderRadius: 5 },
+                  config.baseUrl && config.apiKey
+                    ? styles.statusConnected
+                    : { backgroundColor: '#ef4444' }
+                ]} />
+                <Text style={styles.connectionCardTitle}>
+                  {config.baseUrl && config.apiKey ? 'Connected' : 'Not connected'}
+                </Text>
+              </View>
+              {config.baseUrl && (
+                <Text style={styles.connectionCardUrl} numberOfLines={1}>
+                  {config.baseUrl}
+                </Text>
+              )}
             </View>
-          ) : (
-            <Text style={styles.primaryButtonText}>Connect</Text>
-          )}
+            <Text style={styles.connectionCardChevron}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Go to Chats button */}
+        <TouchableOpacity
+          style={[styles.primaryButton, !(config.baseUrl && config.apiKey) && styles.primaryButtonDisabled]}
+          onPress={() => navigation.navigate('Sessions')}
+          disabled={!(config.baseUrl && config.apiKey)}
+          accessibilityRole="button"
+          accessibilityLabel="Go to Chats"
+        >
+          <Text style={styles.primaryButtonText}>Go to Chats</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Appearance</Text>
@@ -672,32 +535,6 @@ export default function SettingsScreen({ navigation }: any) {
             </Pressable>
           ))}
         </View>
-
-        <Text style={styles.sectionTitle}>API Configuration</Text>
-
-        <TouchableOpacity style={styles.scanButton} onPress={handleScanQR} accessibilityRole="button" accessibilityLabel="Scan QR Code">
-          <Text style={styles.scanButtonText}>📷 Scan QR Code</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.label}>API Key</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.apiKey}
-          onChangeText={(t) => setDraft({ ...draft, apiKey: t })}
-          placeholder="sk-..."
-          placeholderTextColor={theme.colors.mutedForeground}
-          autoCapitalize='none'
-        />
-
-        <Text style={styles.label}>Base URL</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.baseUrl}
-          onChangeText={(t) => setDraft({ ...draft, baseUrl: t })}
-          placeholder='https://api.openai.com/v1'
-          placeholderTextColor={theme.colors.mutedForeground}
-          autoCapitalize='none'
-        />
 
         <View style={styles.row}>
           <Text style={styles.label}>Hands-free Voice Mode</Text>
@@ -1046,26 +883,6 @@ export default function SettingsScreen({ navigation }: any) {
 
       </ScrollView>
 
-      <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
-        <View style={styles.scannerContainer}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
-          <View style={styles.scannerOverlay}>
-            <View style={styles.scannerFrame} />
-            <Text style={styles.scannerText}>
-              {scanned ? 'Invalid QR code format' : 'Scan a SpeakMCP QR code'}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
-            <Text style={styles.closeButtonText}>✕ Close</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
       {/* Model Picker Modal */}
       <Modal
         visible={showModelPicker}
@@ -1291,6 +1108,42 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       ...theme.typography.h1,
       marginBottom: spacing.sm,
     },
+    // Connection card styles
+    connectionCard: {
+      backgroundColor: theme.colors.card,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    connectionCardContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    connectionCardLeft: {
+      flex: 1,
+    },
+    connectionStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    connectionCardTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    connectionCardUrl: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: spacing.xs,
+    },
+    connectionCardChevron: {
+      fontSize: 24,
+      color: theme.colors.mutedForeground,
+      marginLeft: spacing.sm,
+    },
     sectionTitle: {
       ...theme.typography.label,
       marginTop: spacing.lg,
@@ -1372,19 +1225,6 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
     },
-    scanButton: {
-      backgroundColor: theme.colors.secondary,
-      padding: spacing.md,
-      borderRadius: radius.lg,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    scanButtonText: {
-      color: theme.colors.foreground,
-      fontSize: 16,
-      fontWeight: '500',
-    },
     primaryButton: {
       backgroundColor: theme.colors.primary,
       padding: spacing.md,
@@ -1397,63 +1237,6 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     primaryButtonText: {
       color: theme.colors.primaryForeground,
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    loadingContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    errorContainer: {
-      backgroundColor: theme.colors.destructive + '20',
-      borderWidth: 1,
-      borderColor: theme.colors.destructive,
-      borderRadius: radius.md,
-      padding: spacing.md,
-      marginTop: spacing.md,
-    },
-    errorText: {
-      color: theme.colors.destructive,
-      fontSize: 14,
-      textAlign: 'center',
-    },
-    scannerContainer: {
-      flex: 1,
-      backgroundColor: '#000',
-    },
-    camera: {
-      flex: 1,
-    },
-    scannerOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    scannerFrame: {
-      width: 250,
-      height: 250,
-      borderWidth: 2,
-      borderColor: '#fff',
-      borderRadius: radius.xl,
-      backgroundColor: 'transparent',
-    },
-    scannerText: {
-      color: '#fff',
-      fontSize: 16,
-      marginTop: 20,
-      textAlign: 'center',
-    },
-    closeButton: {
-      position: 'absolute',
-      top: 60,
-      right: 20,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      padding: 12,
-      borderRadius: radius.lg,
-    },
-    closeButtonText: {
-      color: '#fff',
       fontSize: 16,
       fontWeight: '600',
     },

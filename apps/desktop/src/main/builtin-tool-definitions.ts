@@ -147,42 +147,30 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
-    name: `${BUILTIN_SERVER_NAME}:toggle_post_processing`,
-    description: "Enable or disable transcript post-processing. When enabled, transcripts are cleaned up and improved using AI.",
+    name: `${BUILTIN_SERVER_NAME}:update_settings`,
+    description: "Update one or more SpeakMCP settings in a single call. Pass only the settings you want to change. Available settings: postProcessingEnabled (transcript cleanup via AI), ttsEnabled (text-to-speech), toolApprovalEnabled (confirmation before tool execution), verificationEnabled (task completion verification), whatsappEnabled (WhatsApp integration). If a boolean value is omitted, that setting is left unchanged.",
     inputSchema: {
       type: "object",
       properties: {
-        enabled: {
+        postProcessingEnabled: {
           type: "boolean",
-          description: "Whether to enable (true) or disable (false) post-processing. If not provided, toggles to the opposite of the current state.",
+          description: "Enable/disable transcript post-processing. When enabled AND a prompt is configured, transcripts are cleaned up using AI.",
         },
-      },
-      required: [],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:toggle_tts`,
-    description: "Enable or disable text-to-speech (TTS). When enabled, assistant responses are read aloud.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        enabled: {
+        ttsEnabled: {
           type: "boolean",
-          description: "Whether to enable (true) or disable (false) TTS. If not provided, toggles to the opposite of the current state.",
+          description: "Enable/disable text-to-speech. When enabled, assistant responses are read aloud.",
         },
-      },
-      required: [],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:toggle_tool_approval`,
-    description: "Enable or disable tool approval. When enabled, a confirmation dialog appears before any tool executes. Recommended for safety.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        enabled: {
+        toolApprovalEnabled: {
           type: "boolean",
-          description: "Whether to enable (true) or disable (false) tool approval. If not provided, toggles to the opposite of the current state.",
+          description: "Enable/disable tool approval. When enabled, a confirmation dialog appears before any tool executes. Takes effect for new sessions only.",
+        },
+        verificationEnabled: {
+          type: "boolean",
+          description: "Enable/disable task completion verification. When enabled, the agent verifies task completion before finishing.",
+        },
+        whatsappEnabled: {
+          type: "boolean",
+          description: "Enable/disable WhatsApp integration.",
         },
       },
       required: [],
@@ -195,20 +183,6 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
   // purposes (see isBuiltinTool in builtin-tools.ts). For UI grouping, all tools in this
   // array are shown under the "speakmcp-settings" virtual server.
   ...acpRouterToolDefinitions,
-  {
-    name: `${BUILTIN_SERVER_NAME}:toggle_verification`,
-    description: "Enable or disable task completion verification. When enabled (default), the agent verifies whether the user's task has been completed before finishing. Disable for faster responses without verification.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        enabled: {
-          type: "boolean",
-          description: "Whether to enable (true) or disable (false) verification. If not provided, toggles to the opposite of the current state.",
-        },
-      },
-      required: [],
-    },
-  },
   {
     name: `${BUILTIN_SERVER_NAME}:respond_to_user`,
     description:
@@ -258,20 +232,6 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
         },
       },
       required: ["summary"],
-    },
-  },
-  {
-    name: `${BUILTIN_SERVER_NAME}:toggle_whatsapp`,
-    description: "Enable or disable WhatsApp integration. When enabled, allows sending and receiving WhatsApp messages through SpeakMCP.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        enabled: {
-          type: "boolean",
-          description: "Whether to enable (true) or disable (false) WhatsApp integration. If not provided, toggles to the opposite of the current state.",
-        },
-      },
-      required: [],
     },
   },
   {

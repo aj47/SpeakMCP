@@ -198,6 +198,16 @@ const CompactMessage: React.FC<{
     }
   }
 
+  // Invalidate cached audio when the TTS source text changes (e.g. via a later progress merge)
+  // so stale audio from a previous text is never played alongside the new text.
+  const prevTtsTextRef = useRef(ttsText)
+  useEffect(() => {
+    if (prevTtsTextRef.current !== ttsText) {
+      prevTtsTextRef.current = ttsText
+      setAudioData(null)
+    }
+  }, [ttsText])
+
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
 

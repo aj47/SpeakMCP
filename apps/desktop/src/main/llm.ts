@@ -486,7 +486,9 @@ export async function processTranscriptWithAgentMode(
 
     const fullUpdate: AgentProgressUpdate = {
       ...update,
-      spokenContent: spokenContentForUpdate,
+      // Only include spokenContent when it has a value, so undefined doesn't
+      // overwrite a previously-set value during the renderer's spread-merge.
+      ...(spokenContentForUpdate !== undefined ? { spokenContent: spokenContentForUpdate } : {}),
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       conversationTitle,

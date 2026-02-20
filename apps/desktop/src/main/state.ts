@@ -1,5 +1,6 @@
 import { ChildProcess } from "child_process"
 import type { SessionProfileSnapshot } from "../shared/types"
+import { clearSessionSpokenContent } from "./session-spoken-content-store"
 
 export interface AgentSessionState {
   sessionId: string
@@ -284,6 +285,9 @@ export const agentSessionStateManager = {
         }
       }
       session.processes.clear()
+
+      // Clean up spoken content for this session
+      clearSessionSpokenContent(sessionId)
 
       // Remove session
       state.agentSessions.delete(sessionId)

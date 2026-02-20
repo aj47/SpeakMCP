@@ -16,6 +16,9 @@ import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
 import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
+import { skillsService } from "./skills-service"
+import { memoryService } from "./memory-service"
+import { agentProfileService } from "./agent-profile-service"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS } from "./window"
 import type { RendererHandlers } from "./renderer-handlers"
@@ -1763,6 +1766,266 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         content: [{ type: "text", text: error?.message || "Tool execution failed" }],
         isError: true,
       })
+    }
+  })
+
+  // ============================================
+  // Skills Management Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/skills - List all skills
+  fastify.get("/v1/skills", async (_req, reply) => {
+    try {
+      const skills = skillsService.getSkills()
+      const currentProfile = profileService.getCurrentProfile()
+      const enabledSkillIds = currentProfile?.skillsConfig?.enabledSkillIds || []
+
+      return reply.send({
+        skills: skills.map(s => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          enabled: s.enabled,
+          enabledForProfile: enabledSkillIds.includes(s.id),
+          source: s.source,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+        })),
+        currentProfileId: currentProfile?.id,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get skills", error)
+      return reply.code(500).send({ error: "Failed to get skills" })
+    }
+  })
+
+  // POST /v1/skills/:id/toggle-profile - Toggle skill for current profile
+  fastify.post("/v1/skills/:id/toggle-profile", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const currentProfile = profileService.getCurrentProfile()
+      if (!currentProfile) {
+        return reply.code(400).send({ error: "No current profile set" })
+      }
+
+      const enabledSkillIds = currentProfile.skillsConfig?.enabledSkillIds || []
+      const isEnabled = enabledSkillIds.includes(params.id)
+      const newEnabledSkillIds = isEnabled
+        ? enabledSkillIds.filter(id => id !== params.id)
+        : [...enabledSkillIds, params.id]
+
+      profileService.updateProfileSkillsConfig(currentProfile.id, {
+        enabledSkillIds: newEnabledSkillIds,
+      })
+
+      return reply.send({
+        success: true,
+        skillId: params.id,
+        enabledForProfile: !isEnabled,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to toggle skill", error)
+      return reply.code(500).send({ error: error?.message || "Failed to toggle skill" })
+    }
+  })
+
+  // ============================================
+  // Memories Management Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/memories - List all memories
+  fastify.get("/v1/memories", async (req, reply) => {
+    try {
+      const query = req.query as { profileId?: string }
+      const memories = query.profileId
+        ? await memoryService.getMemoriesByProfile(query.profileId)
+        : await memoryService.getAllMemories()
+
+      return reply.send({
+        memories: memories.map(m => ({
+          id: m.id,
+          title: m.title,
+          content: m.content,
+          tags: m.tags,
+          importance: m.importance,
+          profileId: m.profileId,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get memories", error)
+      return reply.code(500).send({ error: "Failed to get memories" })
+    }
+  })
+
+  // DELETE /v1/memories/:id - Delete a memory
+  fastify.delete("/v1/memories/:id", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const success = await memoryService.deleteMemory(params.id)
+
+      if (!success) {
+        return reply.code(404).send({ error: "Memory not found" })
+      }
+
+      return reply.send({ success: true, id: params.id })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to delete memory", error)
+      return reply.code(500).send({ error: error?.message || "Failed to delete memory" })
+    }
+  })
+
+  // ============================================
+  // Agent Personas Management Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/agent-profiles - List all agent profiles (personas)
+  fastify.get("/v1/agent-profiles", async (_req, reply) => {
+    try {
+      const profiles = agentProfileService.getAll()
+
+      return reply.send({
+        profiles: profiles.map(p => ({
+          id: p.id,
+          name: p.name,
+          displayName: p.displayName,
+          description: p.description,
+          enabled: p.enabled,
+          isBuiltIn: p.isBuiltIn,
+          isUserProfile: p.isUserProfile,
+          isAgentTarget: p.isAgentTarget,
+          role: p.role,
+          connectionType: p.connection.type,
+          autoSpawn: p.autoSpawn,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        })),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get agent profiles", error)
+      return reply.code(500).send({ error: "Failed to get agent profiles" })
+    }
+  })
+
+  // POST /v1/agent-profiles/:id/toggle - Toggle agent profile enabled state
+  fastify.post("/v1/agent-profiles/:id/toggle", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const profile = agentProfileService.getById(params.id)
+
+      if (!profile) {
+        return reply.code(404).send({ error: "Agent profile not found" })
+      }
+
+      const updated = agentProfileService.update(params.id, {
+        enabled: !profile.enabled,
+      })
+
+      return reply.send({
+        success: true,
+        id: params.id,
+        enabled: updated?.enabled ?? !profile.enabled,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to toggle agent profile", error)
+      return reply.code(500).send({ error: error?.message || "Failed to toggle agent profile" })
+    }
+  })
+
+  // ============================================
+  // Agent Loops Management Endpoints (for mobile app)
+  // ============================================
+
+  // GET /v1/loops - List all agent loops
+  fastify.get("/v1/loops", async (_req, reply) => {
+    try {
+      const cfg = configStore.get()
+      const loops = cfg.loops || []
+      const profiles = profileService.getProfiles()
+
+      // Get loop runtime statuses if available
+      let statuses: Array<{ id: string; isRunning: boolean; nextRunAt?: number; lastRunAt?: number }> = []
+      try {
+        const { loopService } = await import("./loop-service")
+        statuses = loopService.getLoopStatuses()
+      } catch {
+        // Loop service might not be initialized
+      }
+
+      const statusById = new Map(statuses.map(s => [s.id, s]))
+
+      return reply.send({
+        loops: loops.map(l => {
+          const status = statusById.get(l.id)
+          const profile = l.profileId ? profiles.find(p => p.id === l.profileId) : undefined
+          return {
+            id: l.id,
+            name: l.name,
+            prompt: l.prompt,
+            intervalMinutes: l.intervalMinutes,
+            enabled: l.enabled,
+            profileId: l.profileId,
+            profileName: profile?.name,
+            runOnStartup: l.runOnStartup,
+            lastRunAt: status?.lastRunAt ?? l.lastRunAt,
+            isRunning: status?.isRunning ?? false,
+            nextRunAt: status?.nextRunAt,
+          }
+        }),
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to get loops", error)
+      return reply.code(500).send({ error: "Failed to get loops" })
+    }
+  })
+
+  // POST /v1/loops/:id/toggle - Toggle loop enabled state
+  fastify.post("/v1/loops/:id/toggle", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const cfg = configStore.get()
+      const loops = cfg.loops || []
+      const loopIndex = loops.findIndex(l => l.id === params.id)
+
+      if (loopIndex === -1) {
+        return reply.code(404).send({ error: "Loop not found" })
+      }
+
+      const updatedLoops = [...loops]
+      updatedLoops[loopIndex] = {
+        ...updatedLoops[loopIndex],
+        enabled: !updatedLoops[loopIndex].enabled,
+      }
+
+      configStore.save({ ...cfg, loops: updatedLoops })
+
+      return reply.send({
+        success: true,
+        id: params.id,
+        enabled: updatedLoops[loopIndex].enabled,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to toggle loop", error)
+      return reply.code(500).send({ error: error?.message || "Failed to toggle loop" })
+    }
+  })
+
+  // POST /v1/loops/:id/run - Run a loop immediately
+  fastify.post("/v1/loops/:id/run", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const { loopService } = await import("./loop-service")
+      const triggered = await loopService.triggerLoop(params.id)
+
+      if (!triggered) {
+        return reply.code(404).send({ error: "Loop not found" })
+      }
+
+      return reply.send({ success: true, id: params.id })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to run loop", error)
+      return reply.code(500).send({ error: error?.message || "Failed to run loop" })
     }
   })
 

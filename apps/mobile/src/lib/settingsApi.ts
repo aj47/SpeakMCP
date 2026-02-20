@@ -359,6 +359,79 @@ export interface PushStatusResponse {
   platforms: string[];
 }
 
+// Skills Types
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  enabledForProfile: boolean;
+  source?: 'local' | 'imported';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SkillsResponse {
+  skills: Skill[];
+  currentProfileId?: string;
+}
+
+// Memories Types
+export interface Memory {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  importance: 'low' | 'medium' | 'high' | 'critical';
+  profileId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MemoriesResponse {
+  memories: Memory[];
+}
+
+// Agent Profiles (Personas) Types
+export interface AgentProfile {
+  id: string;
+  name: string;
+  displayName: string;
+  description?: string;
+  enabled: boolean;
+  isBuiltIn?: boolean;
+  isUserProfile?: boolean;
+  isAgentTarget?: boolean;
+  role?: 'user-profile' | 'delegation-target' | 'external-agent';
+  connectionType: 'internal' | 'acp' | 'stdio' | 'remote';
+  autoSpawn?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AgentProfilesResponse {
+  profiles: AgentProfile[];
+}
+
+// Agent Loops Types
+export interface Loop {
+  id: string;
+  name: string;
+  prompt: string;
+  intervalMinutes: number;
+  enabled: boolean;
+  profileId?: string;
+  profileName?: string;
+  runOnStartup?: boolean;
+  lastRunAt?: number;
+  isRunning: boolean;
+  nextRunAt?: number;
+}
+
+export interface LoopsResponse {
+  loops: Loop[];
+}
+
 // Extended client with push notification methods
 export class ExtendedSettingsApiClient extends SettingsApiClient {
   // Register push notification token
@@ -380,6 +453,69 @@ export class ExtendedSettingsApiClient extends SettingsApiClient {
   // Get push notification status
   async getPushStatus(): Promise<PushStatusResponse> {
     return this.request<PushStatusResponse>('/push/status');
+  }
+
+  // ============================================
+  // Skills Management
+  // ============================================
+
+  async getSkills(): Promise<SkillsResponse> {
+    return this.request<SkillsResponse>('/v1/skills');
+  }
+
+  async toggleSkillForProfile(skillId: string): Promise<{ success: boolean; skillId: string; enabledForProfile: boolean }> {
+    return this.request(`/v1/skills/${encodeURIComponent(skillId)}/toggle-profile`, {
+      method: 'POST',
+    });
+  }
+
+  // ============================================
+  // Memories Management
+  // ============================================
+
+  async getMemories(profileId?: string): Promise<MemoriesResponse> {
+    const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
+    return this.request<MemoriesResponse>(`/v1/memories${query}`);
+  }
+
+  async deleteMemory(id: string): Promise<{ success: boolean; id: string }> {
+    return this.request(`/v1/memories/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ============================================
+  // Agent Profiles (Personas) Management
+  // ============================================
+
+  async getAgentProfiles(): Promise<AgentProfilesResponse> {
+    return this.request<AgentProfilesResponse>('/v1/agent-profiles');
+  }
+
+  async toggleAgentProfile(id: string): Promise<{ success: boolean; id: string; enabled: boolean }> {
+    return this.request(`/v1/agent-profiles/${encodeURIComponent(id)}/toggle`, {
+      method: 'POST',
+    });
+  }
+
+  // ============================================
+  // Agent Loops Management
+  // ============================================
+
+  async getLoops(): Promise<LoopsResponse> {
+    return this.request<LoopsResponse>('/v1/loops');
+  }
+
+  async toggleLoop(id: string): Promise<{ success: boolean; id: string; enabled: boolean }> {
+    return this.request(`/v1/loops/${encodeURIComponent(id)}/toggle`, {
+      method: 'POST',
+    });
+  }
+
+  async runLoop(id: string): Promise<{ success: boolean; id: string }> {
+    return this.request(`/v1/loops/${encodeURIComponent(id)}/run`, {
+      method: 'POST',
+    });
   }
 }
 

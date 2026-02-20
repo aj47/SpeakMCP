@@ -287,7 +287,9 @@ export default function SettingsScreen({ navigation }: any) {
       const serversRes = await settingsClient.getMCPServers();
       setMcpServers(serversRes.servers);
       // Skills enabledForProfile is profile-specific, so refetch after switch
-      fetchSkills();
+      if (isSpeakMCPServer) {
+        fetchSkills();
+      }
     } catch (error: any) {
       console.error('[Settings] Failed to switch profile:', error);
       setRemoteError(error.message || 'Failed to switch profile');
@@ -1604,16 +1606,19 @@ export default function SettingsScreen({ navigation }: any) {
                   <Text style={styles.helperText}>No skills configured</Text>
                 ) : (
                   skills.map((skill) => (
-                    <View key={skill.id} style={styles.serverRow}>
+                    <View key={skill.id} style={[styles.serverRow, !skill.enabled && { opacity: 0.5 }]}>
                       <View style={styles.serverInfo}>
                         <Text style={styles.serverName}>{skill.name}</Text>
-                        <Text style={styles.serverMeta}>{skill.description}</Text>
+                        <Text style={styles.serverMeta}>
+                          {!skill.enabled ? '(Globally disabled) ' : ''}{skill.description}
+                        </Text>
                       </View>
                       <Switch
                         value={skill.enabledForProfile}
                         onValueChange={() => handleSkillToggle(skill.id)}
+                        disabled={!skill.enabled}
                         trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-                        thumbColor={skill.enabledForProfile ? theme.colors.primaryForeground : theme.colors.background}
+                        thumbColor={skill.enabledForProfile && skill.enabled ? theme.colors.primaryForeground : theme.colors.background}
                       />
                     </View>
                   ))

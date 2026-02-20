@@ -1816,20 +1816,13 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         return reply.code(400).send({ error: "No current profile set" })
       }
 
-      const enabledSkillIds = currentProfile.skillsConfig?.enabledSkillIds || []
-      const isEnabled = enabledSkillIds.includes(params.id)
-      const newEnabledSkillIds = isEnabled
-        ? enabledSkillIds.filter(id => id !== params.id)
-        : [...enabledSkillIds, params.id]
-
-      profileService.updateProfileSkillsConfig(currentProfile.id, {
-        enabledSkillIds: newEnabledSkillIds,
-      })
+      const updatedProfile = profileService.toggleProfileSkill(currentProfile.id, params.id)
+      const newEnabledSkillIds = updatedProfile.skillsConfig?.enabledSkillIds || []
 
       return reply.send({
         success: true,
         skillId: params.id,
-        enabledForProfile: !isEnabled,
+        enabledForProfile: newEnabledSkillIds.includes(params.id),
       })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to toggle skill", error)

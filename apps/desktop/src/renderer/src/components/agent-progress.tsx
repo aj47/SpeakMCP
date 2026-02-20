@@ -1726,7 +1726,9 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     // Filter internal nudges from the visible history
     const isNudge = (c: string) =>
       c.includes("Please either take action using available tools") ||
-      c.includes("You have relevant tools available for this request")
+      c.includes("You have relevant tools available for this request") ||
+      (c.includes("If all requested work is complete, call") &&
+        c.includes("speakmcp-settings:mark_work_complete"))
 
     messages = historyForSession
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))

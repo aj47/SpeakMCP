@@ -1203,7 +1203,12 @@ export default function ChatScreen({ route, navigation }: any) {
             // If progress had more messages than conversationHistory, keep progress messages
             // and only update/append the final message from history
             let mergedMessages: ChatMessage[];
-            if (progressMsgs.length > newMessages.length && newMessages.length > 0) {
+            if (progressMsgs.length > 0 && newMessages.length === 0) {
+              // Edge case: server returned empty history but we have progress messages
+              // Keep progress messages to prevent intermediate messages from disappearing (#1083)
+              console.log('[ChatScreen] Merging: newMessages empty, keeping progress messages');
+              mergedMessages = [...progressMsgs];
+            } else if (progressMsgs.length > newMessages.length && newMessages.length > 0) {
               console.log('[ChatScreen] Merging: progress had more messages, preserving intermediate');
               mergedMessages = [...progressMsgs];
               // Replace/update the last message with the final one from history

@@ -1922,7 +1922,7 @@ Return ONLY JSON per schema.`,
           }
         }
 
-        if (completionForcedByVerificationLimit) {
+        if (completionForcedByVerificationLimit && !existingUserResponse1?.trim().length) {
           finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails)
           addMessage("assistant", finalContent)
         }
@@ -2752,7 +2752,7 @@ Return ONLY JSON per schema.`,
 	          }
 	        }
 
-	      if (completionForcedByVerificationLimit2) {
+	      if (completionForcedByVerificationLimit2 && !respondToUserAlreadyInHistory && !existingUserResponse2?.trim().length) {
 	        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails2)
 	        conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
 	      }

@@ -225,6 +225,23 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:speak_to_user`,
+    description:
+      "[DEPRECATED] Use respond_to_user instead. This is a backward compatibility alias for existing prompts/clients.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: {
+          type: "string",
+          description:
+            "The response text for the user. Write naturally and conversationally, without markdown or code formatting.",
+        },
+      },
+      required: ["text"],
+    },
+  },
+
+  {
     name: `${BUILTIN_SERVER_NAME}:mark_work_complete`,
     description: "Signal explicit completion for the current task. Call this only when all requested work is actually finished and ready for final delivery.",
     inputSchema: {

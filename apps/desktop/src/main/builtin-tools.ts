@@ -831,6 +831,12 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
+  // Backward compatibility alias for speak_to_user (deprecated, use respond_to_user instead)
+  speak_to_user: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
+    // Delegate to respond_to_user with the same args and context
+    return toolHandlers.respond_to_user(args, context)
+  },
+
   mark_work_complete: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     if (typeof args.summary !== "string" || args.summary.trim() === "") {
       return {

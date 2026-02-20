@@ -481,7 +481,7 @@ export async function processTranscriptWithAgentMode(
     const userResponseForUpdate =
       update.userResponse ??
       (update.isComplete && !isKillSwitchCompletion
-        ? normalizedStoredUserResponse
+        ? normalizedStoredUserResponse ?? update.finalContent
         : undefined)
 
     const fullUpdate: AgentProgressUpdate = {

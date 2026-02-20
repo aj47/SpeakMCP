@@ -179,14 +179,10 @@ export const Component = () => {
           {/* Header with collapse toggle */}
           <header
             className={cn(
-              "flex items-center",
+              "flex items-center shrink-0",
               isCollapsed ? "justify-center" : "justify-end",
-              // On macOS, add extra top margin when collapsed to avoid traffic light buttons
-              process.env.IS_MAC
-                ? isCollapsed
-                  ? "mt-6 h-16"
-                  : "h-10 pt-6"
-                : "h-8 pt-2",
+              // On macOS, add top padding to clear the traffic-light window controls
+              process.env.IS_MAC ? "pt-7 pb-1" : "pt-2 pb-1",
               isCollapsed ? "px-1" : "px-2",
             )}
           >

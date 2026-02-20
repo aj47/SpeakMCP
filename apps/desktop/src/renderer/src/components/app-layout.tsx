@@ -6,9 +6,10 @@ import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
 import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
+import { PastSessionsDialog } from "@renderer/components/past-sessions-dialog"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
 import { useConfigQuery } from "@renderer/lib/query-client"
-import { PanelLeftClose, PanelLeft } from "lucide-react"
+import { Clock, PanelLeftClose, PanelLeft } from "lucide-react"
 
 type NavLinkItem = {
   text: string
@@ -20,11 +21,20 @@ export const Component = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [settingsExpanded, setSettingsExpanded] = useState(true)
-  const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } = useSidebar()
+  const [pastSessionsDialogOpen, setPastSessionsDialogOpen] = useState(false)
+  const { isCollapsed, width, isResizing, toggleCollapse, handleResizeStart } =
+    useSidebar()
   const configQuery = useConfigQuery()
 
+  // Ensure the dialog cannot stay open once the sidebar expands.
+  useEffect(() => {
+    if (!isCollapsed && pastSessionsDialogOpen) {
+      setPastSessionsDialogOpen(false)
+    }
+  }, [isCollapsed, pastSessionsDialogOpen])
+
   const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
-  const memoriesEnabled = configQuery.data?.memoriesEnabled !== false  // default true
+  const memoriesEnabled = configQuery.data?.memoriesEnabled !== false // default true
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -38,11 +48,15 @@ export const Component = () => {
       icon: "i-mingcute-brain-line",
     },
     // Only show Memories when enabled
-    ...(memoriesEnabled ? [{
-      text: "Memories",
-      href: "/memories",
-      icon: "i-mingcute-book-2-line",
-    }] : []),
+    ...(memoriesEnabled
+      ? [
+          {
+            text: "Memories",
+            href: "/memories",
+            icon: "i-mingcute-book-2-line",
+          },
+        ]
+      : []),
     {
       text: "Profile",
       href: "/settings/tools",
@@ -64,11 +78,15 @@ export const Component = () => {
       icon: "i-mingcute-server-line",
     },
     // Only show WhatsApp settings when enabled
-    ...(whatsappEnabled ? [{
-      text: "WhatsApp",
-      href: "/settings/whatsapp",
-      icon: "i-mingcute-message-4-line",
-    }] : []),
+    ...(whatsappEnabled
+      ? [
+          {
+            text: "WhatsApp",
+            href: "/settings/whatsapp",
+            icon: "i-mingcute-message-4-line",
+          },
+        ]
+      : []),
     {
       text: "Agent Personas",
       href: "/settings/agent-personas",
@@ -131,187 +149,225 @@ export const Component = () => {
         }}
       >
         <span className={cn(link.icon, "shrink-0")}></span>
-        {!isCollapsed && <span className="font-medium truncate">{link.text}</span>}
+        {!isCollapsed && (
+          <span className="truncate font-medium">{link.text}</span>
+        )}
       </NavLink>
     )
   }
 
   const sidebarWidth = isCollapsed ? SIDEBAR_DIMENSIONS.width.collapsed : width
 
+  const isSessionsActive =
+    location.pathname === "/" ||
+    (!location.pathname.startsWith("/settings") &&
+      !location.pathname.startsWith("/onboarding") &&
+      !location.pathname.startsWith("/setup") &&
+      !location.pathname.startsWith("/panel") &&
+      !location.pathname.startsWith("/memories"))
+
   return (
-    <div className="flex h-dvh">
-      {/* Sidebar with dynamic width */}
-      <div
-        className={cn(
-          "relative flex shrink-0 flex-col border-r bg-background",
-          !isResizing && "transition-all duration-200",
-          isResizing && "select-none"
-        )}
-        style={{ width: sidebarWidth }}
-      >
-        {/* Header with collapse toggle */}
-        <header
+    <>
+      <PastSessionsDialog
+        open={pastSessionsDialogOpen}
+        onOpenChange={setPastSessionsDialogOpen}
+      />
+
+      <div className="flex h-dvh">
+        {/* Sidebar with dynamic width */}
+        <div
           className={cn(
-            "flex items-center",
-            isCollapsed ? "justify-center" : "justify-end",
-            // On macOS, add extra top margin when collapsed to avoid traffic light buttons
-            process.env.IS_MAC ? (isCollapsed ? "h-16 mt-6" : "h-10 pt-6") : "h-8 pt-2",
-            isCollapsed ? "px-1" : "px-2"
+            "bg-background relative flex shrink-0 flex-col border-r",
+            !isResizing && "transition-all duration-200",
+            isResizing && "select-none",
           )}
+          style={{ width: sidebarWidth }}
         >
-          <button
-            onClick={toggleCollapse}
+          {/* Header with collapse toggle */}
+          <header
             className={cn(
-              "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
-              "text-muted-foreground hover:bg-accent hover:text-foreground"
+              "flex items-center",
+              isCollapsed ? "justify-center" : "justify-end",
+              // On macOS, add extra top margin when collapsed to avoid traffic light buttons
+              process.env.IS_MAC
+                ? isCollapsed
+                  ? "mt-6 h-16"
+                  : "h-10 pt-6"
+                : "h-8 pt-2",
+              isCollapsed ? "px-1" : "px-2",
             )}
-            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isCollapsed ? (
-              <PanelLeft className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </button>
-        </header>
+            <button
+              onClick={toggleCollapse}
+              className={cn(
+                "flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+                "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isCollapsed ? (
+                <PanelLeft className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </button>
+          </header>
 
-        {/* Profile Selector - quick access to switch profiles */}
-        {!isCollapsed && (
-          <div className="px-2 pb-2">
-            <SidebarProfileSelector />
-          </div>
-        )}
-
-        {/* Scrollable area: Settings + Sessions scroll together */}
-        {isCollapsed ? (
-          /* Collapsed: Show settings icons then sessions icon */
-          <div className={cn("px-1")}>
-            {/* Settings Section - Collapsed: Show all settings icons for quick navigation */}
-            <div className="grid gap-1">
-              {settingsNavLinks.map((link) => {
-                const isActive = isNavLinkActive(link.href)
-                return (
-                  <NavLink
-                    key={link.text}
-                    to={link.href}
-                    className={cn(
-                      "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
-                      isActive
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                    )}
-                    title={link.text}
-                    aria-label={link.text}
-                    aria-current={isActive ? "page" : undefined}
-                  >
-                    <span className={link.icon}></span>
-                  </NavLink>
-                )
-              })}
+          {/* Profile Selector - quick access to switch profiles */}
+          {!isCollapsed && (
+            <div className="px-2 pb-2">
+              <SidebarProfileSelector />
             </div>
-          </div>
-        ) : (
-          /* Expanded: Settings and Sessions share one scrollable container */
-          <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-none">
-            {/* Settings Section - Collapsible, collapsed by default */}
-            <div className="px-2">
-              <button
-                onClick={() => setSettingsExpanded(!settingsExpanded)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
-                  "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          )}
+
+          {/* Scrollable area: Settings + Sessions scroll together */}
+          {isCollapsed ? (
+            /* Collapsed: Show settings icons then sessions icon */
+            <div className={cn("px-1")}>
+              {/* Settings Section - Collapsed: Show all settings icons for quick navigation */}
+              <div className="grid gap-1">
+                {settingsNavLinks.map((link) => {
+                  const isActive = isNavLinkActive(link.href)
+                  return (
+                    <NavLink
+                      key={link.text}
+                      to={link.href}
+                      className={cn(
+                        "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                        isActive
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                      )}
+                      title={link.text}
+                      aria-label={link.text}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span className={link.icon}></span>
+                    </NavLink>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Expanded: Settings and Sessions share one scrollable container */
+            <div className="scrollbar-none mt-2 min-h-0 flex-1 overflow-y-auto">
+              {/* Settings Section - Collapsible, collapsed by default */}
+              <div className="px-2">
+                <button
+                  onClick={() => setSettingsExpanded(!settingsExpanded)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-all duration-200",
+                    "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "transition-transform duration-200",
+                      settingsExpanded
+                        ? "i-mingcute-down-line"
+                        : "i-mingcute-right-line",
+                    )}
+                  ></span>
+                  <span className="i-mingcute-settings-3-line"></span>
+                  <span className="truncate">Settings</span>
+                </button>
+
+                {settingsExpanded && (
+                  <div className="mt-1 grid gap-0.5 text-sm">
+                    {settingsNavLinks.map(renderNavLink)}
+                  </div>
                 )}
+              </div>
+
+              {/* Sessions Section - shows sessions list */}
+              <ActiveAgentsSidebar />
+            </div>
+          )}
+
+          {/* Sessions icon when collapsed - navigates to sessions page */}
+          {isCollapsed && (
+            <div className="mt-2 grid gap-1 px-1">
+              <button
+                type="button"
+                onClick={() => setPastSessionsDialogOpen(true)}
+                className={cn(
+                  "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                  pastSessionsDialogOpen
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}
+                title="Past Sessions"
+                aria-label="Past Sessions"
+                aria-pressed={pastSessionsDialogOpen || undefined}
               >
-                <span className={cn(
-                  "transition-transform duration-200",
-                  settingsExpanded ? "i-mingcute-down-line" : "i-mingcute-right-line"
-                )}></span>
-                <span className="i-mingcute-settings-3-line"></span>
-                <span className="truncate">Settings</span>
+                <Clock className="h-4 w-4" />
               </button>
 
-              {settingsExpanded && (
-                <div className="mt-1 grid gap-0.5 text-sm">
-                  {settingsNavLinks.map(renderNavLink)}
-                </div>
+              <NavLink
+                to="/"
+                end
+                className={cn(
+                  "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
+                  isSessionsActive
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}
+                title="Sessions"
+                aria-label="Sessions"
+                aria-current={isSessionsActive ? "page" : undefined}
+              >
+                <span className="i-mingcute-chat-3-line"></span>
+              </NavLink>
+            </div>
+          )}
+
+          {/* Spacer to push footer down when collapsed */}
+          {isCollapsed && <div className="flex-1" />}
+
+          {/* Loading spinner at the bottom of the sidebar */}
+          <div className="shrink-0">
+            <div
+              className={cn(
+                "flex flex-col items-center pb-4 pt-2",
+                isCollapsed ? "space-y-1" : "space-y-2",
+              )}
+            >
+              <LoadingSpinner size={isCollapsed ? "sm" : "lg"} />
+              {!isCollapsed && (
+                <>
+                  <div>SpeakMCP</div>
+                  <div className="text-xs">{process.env.APP_VERSION}</div>
+                </>
               )}
             </div>
-
-            {/* Sessions Section - shows sessions list */}
-            <ActiveAgentsSidebar />
           </div>
-        )}
 
-        {/* Sessions icon when collapsed - navigates to sessions page */}
-        {isCollapsed && (
-          <div className="mt-2 px-1">
-            {(() => {
-              const isSessionsActive = location.pathname === "/" || (!location.pathname.startsWith("/settings") && !location.pathname.startsWith("/onboarding") && !location.pathname.startsWith("/setup") && !location.pathname.startsWith("/panel"))
-              return (
-                <NavLink
-                  to="/"
-                  end
-                  className={cn(
-                    "flex h-8 w-full items-center justify-center rounded-md transition-all duration-200",
-                    isSessionsActive
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  )}
-                  title="Sessions"
-                  aria-label="Sessions"
-                  aria-current={isSessionsActive ? "page" : undefined}
-                >
-                  <span className="i-mingcute-chat-3-line"></span>
-                </NavLink>
-              )
-            })()}
-          </div>
-        )}
-
-        {/* Spacer to push footer down when collapsed */}
-        {isCollapsed && <div className="flex-1" />}
-
-        {/* Loading spinner at the bottom of the sidebar */}
-        <div className="shrink-0">
-          <div className={cn(
-            "flex flex-col items-center pb-4 pt-2",
-            isCollapsed ? "space-y-1" : "space-y-2"
-          )}>
-            <LoadingSpinner size={isCollapsed ? "sm" : "lg"} />
-            {!isCollapsed && (
-              <>
-                <div>SpeakMCP</div>
-                <div className="text-xs">{process.env.APP_VERSION}</div>
-              </>
-            )}
-          </div>
+          {/* Resize handle - only visible when not collapsed */}
+          {!isCollapsed && (
+            <div
+              className={cn(
+                "absolute right-0 top-0 h-full w-1 cursor-col-resize transition-colors",
+                "hover:bg-primary/20",
+                isResizing && "bg-primary/30",
+              )}
+              onMouseDown={handleResizeStart}
+              title="Drag to resize sidebar"
+            />
+          )}
         </div>
 
-        {/* Resize handle - only visible when not collapsed */}
-        {!isCollapsed && (
-          <div
-            className={cn(
-              "absolute right-0 top-0 h-full w-1 cursor-col-resize transition-colors",
-              "hover:bg-primary/20",
-              isResizing && "bg-primary/30"
-            )}
-            onMouseDown={handleResizeStart}
-            title="Drag to resize sidebar"
-          />
-        )}
-      </div>
+        {/* Main content area */}
+        <div className="bg-background flex min-w-0 grow flex-col">
+          {/* Draggable top bar for Mac - allows window dragging while content scrolls */}
+          {process.env.IS_MAC && <SettingsDragBar />}
 
-      {/* Main content area */}
-      <div className="flex min-w-0 grow flex-col bg-background">
-        {/* Draggable top bar for Mac - allows window dragging while content scrolls */}
-        {process.env.IS_MAC && <SettingsDragBar />}
-
-        {/* Scrollable content area */}
-        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          <Outlet />
+          {/* Scrollable content area */}
+          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+            <Outlet />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

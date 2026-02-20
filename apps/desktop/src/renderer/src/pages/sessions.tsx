@@ -145,7 +145,7 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, onPastSessionCl
 export function Component() {
   const queryClient = useQueryClient()
   const { id: routeHistoryItemId } = useParams<{ id: string }>()
-  const { onOpenPastSessionsDialog } = (useOutletContext<LayoutContext>() ?? {}) as LayoutContext
+  const { onOpenPastSessionsDialog } = (useOutletContext<LayoutContext>() ?? {}) as Partial<LayoutContext>
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
@@ -590,7 +590,7 @@ export function Component() {
             onVoiceClick={handleVoiceStart}
             onSelectPrompt={handleSelectPrompt}
             onPastSessionClick={handleContinueConversation}
-            onOpenPastSessionsDialog={onOpenPastSessionsDialog}
+            onOpenPastSessionsDialog={onOpenPastSessionsDialog ?? (() => {})}
             textInputShortcut={textInputShortcut}
             voiceInputShortcut={voiceInputShortcut}
             dictationShortcut={dictationShortcut}

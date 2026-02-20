@@ -195,12 +195,19 @@ export function PastSessionsDialog({
             ) : (
               <>
                 {visiblePastSessions.map((session) => (
-                  <button
+                  <div
                     key={session.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleOpenPastSession(session.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        handleOpenPastSession(session.id)
+                      }
+                    }}
                     className={cn(
-                      "group flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                      "group flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors cursor-pointer",
                       "hover:bg-accent/50",
                     )}
                     title={`${session.preview}\n${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
@@ -231,7 +238,7 @@ export function PastSessionsDialog({
                         </p>
                       )}
                     </div>
-                  </button>
+                  </div>
                 ))}
 
                 {hasMorePastSessions && (

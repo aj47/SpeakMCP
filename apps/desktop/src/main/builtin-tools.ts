@@ -641,159 +641,119 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  toggle_post_processing: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const config = configStore.get()
-    const currentValue = config.transcriptPostProcessingEnabled ?? false
+  update_settings: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
+    // Validate that at least one setting is provided
+    const settingKeys = ["postProcessingEnabled", "ttsEnabled", "toolApprovalEnabled", "verificationEnabled", "whatsappEnabled"] as const
+    const providedSettings = settingKeys.filter((k) => args[k] !== undefined)
 
-    // Validate enabled parameter if provided (optional)
-    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
+    if (providedSettings.length === 0) {
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: `At least one setting must be provided. Available: ${settingKeys.join(", ")}`,
+          }),
+        }],
         isError: true,
       }
     }
 
-    // Determine new value: use provided value or toggle
-    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
-
-    configStore.save({
-      ...config,
-      transcriptPostProcessingEnabled: enabled,
-    })
-
-    // Check if prompt is configured
-    const promptConfigured = !!(config.transcriptPostProcessingPrompt?.trim())
-    let message = `Post-processing has been ${enabled ? "enabled" : "disabled"}.`
-    if (enabled && !promptConfigured) {
-      message += " Note: A post-processing prompt must also be configured in settings for this feature to take effect."
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            success: true,
-            setting: "postProcessingEnabled",
-            previousValue: currentValue,
-            newValue: enabled,
-            promptConfigured: promptConfigured,
-            effectivelyActive: enabled && promptConfigured,
-            message: message,
-          }, null, 2),
-        },
-      ],
-      isError: false,
-    }
-  },
-
-  toggle_tts: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const config = configStore.get()
-    const currentValue = config.ttsEnabled ?? true
-
-    // Validate enabled parameter if provided (optional)
-    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
-        isError: true,
+    // Validate all provided values are booleans
+    for (const key of providedSettings) {
+      if (typeof args[key] !== "boolean") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: `${key} must be a boolean` }) }],
+          isError: true,
+        }
       }
     }
 
-    // Determine new value: use provided value or toggle
-    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
-
-    configStore.save({
-      ...config,
-      ttsEnabled: enabled,
-    })
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            success: true,
-            setting: "ttsEnabled",
-            previousValue: currentValue,
-            newValue: enabled,
-            message: `Text-to-speech has been ${enabled ? "enabled" : "disabled"}`,
-          }, null, 2),
-        },
-      ],
-      isError: false,
-    }
-  },
-
-  toggle_tool_approval: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     const config = configStore.get()
-    const currentValue = config.mcpRequireApprovalBeforeToolCall ?? false
+    const changes: Array<{ setting: string; previousValue: boolean; newValue: boolean; note?: string }> = []
+    const updatedConfig = { ...config }
 
-    // Validate enabled parameter if provided (optional)
-    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
-        isError: true,
+    // Post-processing
+    if (typeof args.postProcessingEnabled === "boolean") {
+      const prev = config.transcriptPostProcessingEnabled ?? false
+      updatedConfig.transcriptPostProcessingEnabled = args.postProcessingEnabled
+      const promptConfigured = !!(config.transcriptPostProcessingPrompt?.trim())
+      changes.push({
+        setting: "postProcessingEnabled",
+        previousValue: prev,
+        newValue: args.postProcessingEnabled,
+        note: args.postProcessingEnabled && !promptConfigured
+          ? "A post-processing prompt must also be configured in settings for this to take effect."
+          : undefined,
+      })
+    }
+
+    // TTS
+    if (typeof args.ttsEnabled === "boolean") {
+      const prev = config.ttsEnabled ?? true
+      updatedConfig.ttsEnabled = args.ttsEnabled
+      changes.push({ setting: "ttsEnabled", previousValue: prev, newValue: args.ttsEnabled })
+    }
+
+    // Tool approval
+    if (typeof args.toolApprovalEnabled === "boolean") {
+      const prev = config.mcpRequireApprovalBeforeToolCall ?? false
+      updatedConfig.mcpRequireApprovalBeforeToolCall = args.toolApprovalEnabled
+      changes.push({
+        setting: "toolApprovalEnabled",
+        previousValue: prev,
+        newValue: args.toolApprovalEnabled,
+        note: "Takes effect for new agent sessions only.",
+      })
+    }
+
+    // Verification
+    if (typeof args.verificationEnabled === "boolean") {
+      const prev = config.mcpVerifyCompletionEnabled ?? true
+      updatedConfig.mcpVerifyCompletionEnabled = args.verificationEnabled
+      changes.push({
+        setting: "verificationEnabled",
+        previousValue: prev,
+        newValue: args.verificationEnabled,
+        note: "Takes effect for new agent sessions only.",
+      })
+    }
+
+    // WhatsApp
+    if (typeof args.whatsappEnabled === "boolean") {
+      const prev = config.whatsappEnabled ?? false
+      updatedConfig.whatsappEnabled = args.whatsappEnabled
+      changes.push({ setting: "whatsappEnabled", previousValue: prev, newValue: args.whatsappEnabled })
+    }
+
+    // Save all changes in a single write
+    configStore.save(updatedConfig)
+
+    // Handle WhatsApp lifecycle if it was toggled
+    if (typeof args.whatsappEnabled === "boolean") {
+      const prevWhatsApp = config.whatsappEnabled ?? false
+      try {
+        await handleWhatsAppToggle(prevWhatsApp, args.whatsappEnabled)
+      } catch (_e) {
+        // lifecycle is best-effort
       }
     }
 
-    // Determine new value: use provided value or toggle
-    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
-
-    configStore.save({
-      ...config,
-      mcpRequireApprovalBeforeToolCall: enabled,
+    // Build summary message
+    const messages = changes.map((c) => {
+      const label = c.newValue ? "enabled" : "disabled"
+      return `${c.setting}: ${label}${c.note ? ` (${c.note})` : ""}`
     })
 
     return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            success: true,
-            setting: "toolApprovalEnabled",
-            previousValue: currentValue,
-            newValue: enabled,
-            message: `Tool approval has been ${enabled ? "enabled" : "disabled"}. Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
-          }, null, 2),
-        },
-      ],
-      isError: false,
-    }
-  },
-
-  toggle_verification: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const config = configStore.get()
-    const currentValue = config.mcpVerifyCompletionEnabled ?? true
-
-    // Validate enabled parameter if provided (optional)
-    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
-        isError: true,
-      }
-    }
-
-    // Determine new value: use provided value or toggle
-    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
-
-    configStore.save({
-      ...config,
-      mcpVerifyCompletionEnabled: enabled,
-    })
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            success: true,
-            setting: "verificationEnabled",
-            previousValue: currentValue,
-            newValue: enabled,
-            message: `Task completion verification has been ${enabled ? "enabled" : "disabled"}. ${enabled ? "The agent will verify task completion before finishing." : "The agent will respond faster without verification."} Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
-          }, null, 2),
-        },
-      ],
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          changes,
+          message: messages.join("; "),
+        }, null, 2),
+      }],
       isError: false,
     }
   },
@@ -867,50 +827,6 @@ const toolHandlers: Record<string, ToolHandler> = {
             summary,
             confidence,
             message: "Completion signal recorded. Provide the final user-facing response next.",
-          }, null, 2),
-        },
-      ],
-      isError: false,
-    }
-  },
-
-  toggle_whatsapp: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
-    const config = configStore.get()
-    const currentValue = config.whatsappEnabled ?? false
-
-    // Validate enabled parameter if provided (optional)
-    if (args.enabled !== undefined && typeof args.enabled !== "boolean") {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "enabled must be a boolean if provided" }) }],
-        isError: true,
-      }
-    }
-
-    // Determine new value: use provided value or toggle
-    const enabled = typeof args.enabled === "boolean" ? args.enabled : !currentValue
-
-    configStore.save({
-      ...config,
-      whatsappEnabled: enabled,
-    })
-
-    // Trigger WhatsApp MCP server lifecycle changes
-    try {
-      await handleWhatsAppToggle(currentValue, enabled)
-    } catch (_e) {
-      // lifecycle is best-effort
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            success: true,
-            setting: "whatsappEnabled",
-            previousValue: currentValue,
-            newValue: enabled,
-            message: `WhatsApp integration has been ${enabled ? "enabled" : "disabled"}.`,
           }, null, 2),
         },
       ],

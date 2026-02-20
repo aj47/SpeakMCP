@@ -96,4 +96,8 @@ export const router: ReturnType<typeof createBrowserRouter> =
       path: "/panel",
       lazy: () => import("./pages/panel"),
     },
-  ])
+  ], {
+    future: {
+      v7_startTransition: true,
+    },
+  })

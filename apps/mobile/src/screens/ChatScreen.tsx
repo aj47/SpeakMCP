@@ -363,7 +363,36 @@ export default function ChatScreen({ route, navigation }: any) {
   const [sttPreview, setSttPreview] = useState('');
   const sttPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({});
+  const [expandedMessages, setExpandedMessages] = useState<Record<number, boolean>>({})
+  // Track which message index is currently being read aloud
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null)
+
+  // Read aloud handler for individual messages
+  const handleReadAloud = useCallback((index: number, text: string) => {
+    // If already speaking this message, stop it
+    if (speakingIndex === index) {
+      Speech.stop();
+      setSpeakingIndex(null);
+      return;
+    }
+    // Stop any current speech
+    Speech.stop();
+    const processed = preprocessTextForTTS(text);
+    if (!processed.trim()) return;
+    const speechOptions: Speech.SpeechOptions = {
+      language: 'en-US',
+      rate: config.ttsRate ?? 1.0,
+      pitch: config.ttsPitch ?? 1.0,
+      onDone: () => setSpeakingIndex(null),
+      onError: () => setSpeakingIndex(null),
+      onStopped: () => setSpeakingIndex(null),
+    };
+    if (config.ttsVoiceId) {
+      speechOptions.voice = config.ttsVoiceId;
+    }
+    setSpeakingIndex(index);
+    Speech.speak(processed, speechOptions);
+  }, [speakingIndex, config.ttsRate, config.ttsPitch, config.ttsVoiceId]);;
   // Track which individual tool calls are fully expanded to show all input/output details
   // Key format: "messageId-toolCallIndex" (messageId falls back to message array index if undefined)
   const [expandedToolCalls, setExpandedToolCalls] = useState<Record<string, boolean>>({});
@@ -2124,6 +2153,35 @@ export default function ChatScreen({ route, navigation }: any) {
                       </Text>
                     </View>
                   </Pressable>
+                )}
+
+                {/* Read aloud button for assistant messages */}
+                {m.role === 'assistant' && m.content && m.content.trim().length > 0 && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 2 }}>
+                    <TouchableOpacity
+                      onPress={() => handleReadAloud(i, m.content)}
+                      accessibilityRole="button"
+                      accessibilityLabel={speakingIndex === i ? 'Stop reading' : 'Read aloud'}
+                      style={{
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 8,
+                        backgroundColor: speakingIndex === i ? theme.colors.primary + '20' : 'transparent',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12 }}>{speakingIndex === i ? '⏹' : '🔊'}</Text>
+                      <Text style={{
+                        fontSize: 9,
+                        color: speakingIndex === i ? theme.colors.primary : theme.colors.mutedForeground,
+                        fontWeight: '500',
+                      }}>
+                        {speakingIndex === i ? 'Stop' : 'Read'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
 
                 {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (

@@ -20,6 +20,8 @@ import {
   OctagonX,
   Check,
   Loader2,
+  Volume2,
+  Square,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
@@ -27,6 +29,7 @@ import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
 import { useMessageQueue, useIsQueuePaused } from "@renderer/stores"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { preprocessTextForTTS } from "@speakmcp/shared"
 
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 4000 // Allow tiles to fill large displays - effectively no practical limit
@@ -111,6 +114,36 @@ export function SessionTile({
       console.error("Failed to copy message:", err)
     }
   }
+
+  // TTS read-aloud state
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
+
+  const handleReadAloud = (e: React.MouseEvent, text: string, messageId: string) => {
+    e.stopPropagation()
+    // If already speaking this message, stop it
+    if (speakingMessageId === messageId) {
+      window.speechSynthesis.cancel()
+      setSpeakingMessageId(null)
+      return
+    }
+    // Stop any current speech
+    window.speechSynthesis.cancel()
+    const processed = preprocessTextForTTS(text)
+    if (!processed.trim()) return
+    const utterance = new SpeechSynthesisUtterance(processed)
+    utterance.lang = "en-US"
+    utterance.onend = () => setSpeakingMessageId(null)
+    utterance.onerror = () => setSpeakingMessageId(null)
+    setSpeakingMessageId(messageId)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel()
+    }
+  }, [])
 
   // Tool approval state
   const [isRespondingToApproval, setIsRespondingToApproval] = useState(false)
@@ -396,20 +429,36 @@ export function SessionTile({
                     >
                       <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                         <span className="capitalize">{message.role}</span>
-                        {message.role === "user" && typeof message.content === "string" && (
-                          <button
-                            onClick={(e) => handleCopyMessage(e, message.content as string, messageId)}
-                            className="p-1 rounded hover:bg-muted/30 transition-colors"
-                            title={isCopied ? "Copied!" : "Copy prompt"}
-                            aria-label={isCopied ? "Copied!" : "Copy prompt"}
-                          >
-                            {isCopied ? (
-                              <CheckCheck className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
-                            )}
-                          </button>
-                        )}
+                        <div className="flex items-center gap-0.5">
+                          {message.role === "assistant" && typeof message.content === "string" && message.content.trim() && (
+                            <button
+                              onClick={(e) => handleReadAloud(e, message.content as string, messageId)}
+                              className="p-1 rounded hover:bg-muted/30 transition-colors"
+                              title={speakingMessageId === messageId ? "Stop reading" : "Read aloud"}
+                              aria-label={speakingMessageId === messageId ? "Stop reading" : "Read aloud"}
+                            >
+                              {speakingMessageId === messageId ? (
+                                <Square className="h-3 w-3 text-blue-500" />
+                              ) : (
+                                <Volume2 className="h-3 w-3 opacity-60 hover:opacity-100" />
+                              )}
+                            </button>
+                          )}
+                          {(message.role === "user" || message.role === "assistant") && typeof message.content === "string" && (
+                            <button
+                              onClick={(e) => handleCopyMessage(e, message.content as string, messageId)}
+                              className="p-1 rounded hover:bg-muted/30 transition-colors"
+                              title={isCopied ? "Copied!" : "Copy"}
+                              aria-label={isCopied ? "Copied!" : "Copy"}
+                            >
+                              {isCopied ? (
+                                <CheckCheck className="h-3 w-3 text-green-500" />
+                              ) : (
+                                <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       {typeof message.content === "string" ? (

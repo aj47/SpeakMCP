@@ -20,6 +20,26 @@ import { ToolExecutionStats } from "./tool-execution-stats"
 import { ACPSessionBadge } from "./acp-session-badge"
 import { AgentSummaryView } from "./agent-summary-view"
 
+// Module-level set to track sessions that have already auto-played TTS.
+// This prevents double TTS playback when AgentProgress remounts (e.g., when
+// switching between single-session and multi-session views in the panel).
+// The set is keyed by `${sessionId}:${ttsText || messageContent}` to handle
+// cases where the same session replays with different content.
+const sessionsWithTTSPlayed = new Set<string>()
+
+/**
+ * Clear TTS tracking for a specific session. Call this when a session is dismissed
+ * to allow TTS to play again if the session is somehow restored.
+ */
+export function clearSessionTTSTracking(sessionId: string): void {
+  // Remove all entries that start with this sessionId
+  for (const key of sessionsWithTTSPlayed) {
+    if (key.startsWith(`${sessionId}:`)) {
+      sessionsWithTTSPlayed.delete(key)
+    }
+  }
+}
+
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
   className?: string
@@ -112,7 +132,9 @@ const CompactMessage: React.FC<{
   onToggleExpand: () => void
   /** Variant controls TTS auto-play - only 'overlay' variant auto-plays TTS to prevent double playback */
   variant?: "default" | "overlay" | "tile"
-}> = ({ message, ttsText, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default" }) => {
+  /** Session ID for tracking TTS playback across remounts */
+  sessionId?: string
+}> = ({ message, ttsText, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default", sessionId }) => {
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
@@ -221,15 +243,38 @@ const CompactMessage: React.FC<{
   //   (they run silently in background - user can unsnooze to see/hear them)
   // - The "default" variant (main window ConversationDisplay) and "tile" variant (session tiles)
   //   never auto-play TTS - they are for viewing/managing, not primary interaction
+  // - Additionally, we track which sessions have already played TTS in a module-level set
+  //   to prevent double playback when AgentProgress remounts (e.g., when switching between
+  //   single-session and multi-session views in the panel)
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"
-    if (shouldAutoPlay && shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
-      generateAudio().catch((error) => {
-        // Error is already handled in generateAudio function
-      })
+    if (!shouldAutoPlay || !shouldShowTTS || !configQuery.data?.ttsAutoPlay || audioData || isGeneratingAudio || ttsError || wasStopped) {
+      return
     }
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
+
+    // Create a key to track TTS playback for this specific session + content combination
+    const ttsContent = ttsText || message.content
+    const ttsKey = sessionId ? `${sessionId}:${ttsContent}` : null
+
+    // If we have a session key and TTS has already played for this content, skip
+    if (ttsKey && sessionsWithTTSPlayed.has(ttsKey)) {
+      return
+    }
+
+    // Mark as playing before starting generation to prevent race conditions
+    if (ttsKey) {
+      sessionsWithTTSPlayed.add(ttsKey)
+    }
+
+    generateAudio().catch((error) => {
+      // If generation fails, remove from the set so user can retry
+      if (ttsKey) {
+        sessionsWithTTSPlayed.delete(ttsKey)
+      }
+      // Error is already handled in generateAudio function
+    })
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsText, message.content])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -2373,6 +2418,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             isExpanded={isExpanded}
                             onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                             variant="tile"
+                            sessionId={progress.sessionId}
                           />
                         )
                       } else if (item.kind === "assistant_with_tools") {
@@ -2729,6 +2775,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       isExpanded={isExpanded}
                       onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                       variant={variant}
+                      sessionId={progress.sessionId}
                     />
                   )
                 } else if (item.kind === "assistant_with_tools") {

@@ -223,12 +223,14 @@ export class OpenAIClient {
     // Wrap onToken to update checkpoint with streaming content
     const wrappedOnToken: ((token: string) => void) | undefined = onToken
       ? (token) => {
+          const isFullUpdate = token.startsWith(accumulatedContent) && token.length >= accumulatedContent.length;
+
           // Handle both delta tokens and full-text updates.
           // When called via onProgress with streamingContent.text, token contains the full accumulated text.
           // When called via SSE delta events, token contains just the new delta.
           // Detect full-text updates: if token starts with current accumulatedContent and is longer,
           // or if token equals accumulatedContent (duplicate call), use replacement instead of append.
-          if (token.startsWith(accumulatedContent)) {
+          if (isFullUpdate) {
             // Full-text update: replace instead of append
             accumulatedContent = token;
           } else {
@@ -408,7 +410,8 @@ export class OpenAIClient {
           if (obj.type === 'progress' && obj.data) {
             const update = obj.data as AgentProgressUpdate;
             onProgress?.(update);
-            if (update.streamingContent?.text) {
+            // Only call onToken as a fallback when onProgress is NOT provided
+            if (!onProgress && update.streamingContent?.text) {
               onToken?.(update.streamingContent.text);
             }
             return;
@@ -840,7 +843,10 @@ export class OpenAIClient {
         if (obj.type === 'progress' && obj.data) {
           const update = obj.data as AgentProgressUpdate;
           onProgress?.(update);
-          if (update.streamingContent?.text) {
+          // Only call onToken as a fallback when onProgress is NOT provided.
+          // When onProgress IS provided, it already handles streaming content display
+          // via convertProgressToMessages(). Calling both causes duplicate state updates.
+          if (!onProgress && update.streamingContent?.text) {
             onToken?.(update.streamingContent.text);
           }
           continue;

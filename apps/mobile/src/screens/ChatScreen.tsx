@@ -350,7 +350,8 @@ export default function ChatScreen({ route, navigation }: any) {
 		if (typeof extra !== 'undefined') console.log(`[Voice ${seq}] ${msg}`, extra);
 		else console.log(`[Voice ${seq}] ${msg}`);
 	}, []);
-  const [input, setInput] = useState('');
+	  const [input, setInput] = useState('');
+	  const inputRef = useRef<TextInput>(null);
   const [listening, setListening] = useState(false);
 	const listeningRef = useRef<boolean>(listening);
 	useEffect(() => { listeningRef.current = listening; }, [listening]);
@@ -1612,12 +1613,10 @@ export default function ChatScreen({ route, navigation }: any) {
 					final: finalText?.trim(),
 					handsFree: handsFreeRef.current,
 				});
-        if (interim) {
-          setLiveTranscriptValue(interim);
-          setSttPreviewWithExpiry(interim);
-        }
-        if (finalText) {
-          if (handsFreeRef.current) {
+	        // Update our running final transcript, then compute a preview that
+	        // includes both final + interim so the overlay shows *all* words.
+	        if (finalText) {
+	          if (handsFreeRef.current) {
             if (handsFreeDebounceRef.current) {
               clearTimeout(handsFreeDebounceRef.current);
             }
@@ -1638,9 +1637,18 @@ export default function ChatScreen({ route, navigation }: any) {
               }, handsFreeDebounceMs);
             }
           } else {
-            webFinalRef.current += finalText;
+	            webFinalRef.current = mergeVoiceText(webFinalRef.current, finalText);
           }
         }
+
+	        const baseFinal = handsFreeRef.current
+	          ? pendingHandsFreeFinalRef.current
+	          : webFinalRef.current;
+	        const previewText = mergeVoiceText(baseFinal, interim);
+	        if (previewText) {
+	          setLiveTranscriptValue(previewText);
+	          setSttPreviewWithExpiry(previewText);
+	        }
       };
       rec.onend = () => {
 				voiceLog('web:onend', {
@@ -1705,6 +1713,7 @@ export default function ChatScreen({ route, navigation }: any) {
 							voiceLog('web:onend -> willEdit=true (append to input)', { gestureId, finalText });
 							setSttPreviewWithExpiry(finalText);
 							setInput((t) => (t ? `${t} ${finalText}` : finalText));
+								setTimeout(() => inputRef.current?.focus(), 0);
 						} else {
 							voiceLog('web:onend -> sending', { gestureId, finalText });
 							setSttPreviewWithExpiry(finalText);
@@ -1741,7 +1750,6 @@ export default function ChatScreen({ route, navigation }: any) {
 				gestureId: voiceGestureIdRef.current,
 				handsFree: handsFreeRef.current,
 			});
-      setWillCancel(false);
 	      setLiveTranscriptValue('');
 	      setListeningValue(true);
       nativeFinalRef.current = '';
@@ -1771,11 +1779,7 @@ export default function ChatScreen({ route, navigation }: any) {
 								isFinal: event?.isFinal,
 								transcript: t,
 							});
-	                  if (t) {
-	                    setLiveTranscriptValue(t);
-	                    setSttPreviewWithExpiry(t);
-	                  }
-              if (event?.isFinal && t) {
+	              if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
                   if (handsFreeDebounceRef.current) {
                     clearTimeout(handsFreeDebounceRef.current);
@@ -1797,11 +1801,22 @@ export default function ChatScreen({ route, navigation }: any) {
                     }, handsFreeDebounceMs);
                   }
                 } else {
-                  nativeFinalRef.current = nativeFinalRef.current
-                    ? `${nativeFinalRef.current} ${t}`
-                    : t;
+	                  nativeFinalRef.current = mergeVoiceText(nativeFinalRef.current, t);
                 }
               }
+
+	              // Live preview should show the whole phrase so far (final + current interim).
+	              if (t) {
+	                const baseFinal = handsFreeRef.current
+	                  ? pendingHandsFreeFinalRef.current
+	                  : nativeFinalRef.current;
+	                const livePart = event?.isFinal ? '' : t;
+	                const previewText = mergeVoiceText(baseFinal, livePart);
+	                if (previewText) {
+	                  setLiveTranscriptValue(previewText);
+	                  setSttPreviewWithExpiry(previewText);
+	                }
+	              }
             });
             const subError = srEmitterRef.current.addListener('error', (event: any) => {
 							voiceLog('native:error', event);
@@ -1878,6 +1893,7 @@ export default function ChatScreen({ route, navigation }: any) {
 										voiceLog('native:end -> willEdit=true (append to input)', { gestureId, finalText });
 										setSttPreviewWithExpiry(finalText);
 										setInput((t) => (t ? `${t} ${finalText}` : finalText));
+										setTimeout(() => inputRef.current?.focus(), 0);
 									} else {
 										voiceLog('native:end -> sending', { gestureId, finalText });
 										setSttPreviewWithExpiry(finalText);
@@ -2019,7 +2035,6 @@ export default function ChatScreen({ route, navigation }: any) {
 	      setListeningValue(false);
     } finally {
       startYRef.current = null;
-      setWillCancel(false);
       stoppingRef.current = false;
 			voiceLog('stopRecordingAndHandle finished', {
 				gestureId: voiceGestureIdRef.current,
@@ -2312,13 +2327,13 @@ export default function ChatScreen({ route, navigation }: any) {
             <Text style={styles.scrollToBottomText}>↓</Text>
           </TouchableOpacity>
         )}
-        {listening && (
-          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
+	        {listening && (
+	          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
             <Text style={styles.overlayText}>
               {handsFree ? 'Listening...' : (willCancel ? 'Release to edit' : 'Release to send')}
             </Text>
             {!!liveTranscript && (
-              <Text style={styles.overlayTranscript} numberOfLines={2}>
+	              <Text style={styles.overlayTranscript}>
                 {liveTranscript}
               </Text>
             )}
@@ -2505,11 +2520,11 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
-	        <View style={[styles.inputArea, { paddingBottom: 12 + insets.bottom }]}>
+		        <View style={[styles.inputArea, { paddingBottom: 12 + insets.bottom }]}>
 	          {!!sttPreview && (
 	            <View style={styles.sttPreviewBox}>
 	              <Text style={styles.sttPreviewLabel}>STT preview</Text>
-	              <Text style={styles.sttPreviewText} numberOfLines={2}>{sttPreview}</Text>
+		              <Text style={styles.sttPreviewText}>{sttPreview}</Text>
 	            </View>
 	          )}
 	          {/* Top row: TTS toggle, text input, send button */}
@@ -2521,7 +2536,21 @@ export default function ChatScreen({ route, navigation }: any) {
             >
               <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
             </TouchableOpacity>
+	            {!handsFree && (
+	              <TouchableOpacity
+	                style={[styles.ttsToggle, willCancel && styles.ttsToggleOn]}
+	                onPress={() => setWillCancel((v) => !v)}
+	                activeOpacity={0.7}
+	                accessibilityRole="switch"
+	                accessibilityState={{ checked: willCancel }}
+	                accessibilityLabel="Edit before send"
+	                accessibilityHint="When enabled, releasing the mic inserts the transcript into the input so you can edit before sending."
+	              >
+	                <Text style={styles.ttsToggleText}>✏️</Text>
+	              </TouchableOpacity>
+	            )}
             <TextInput
+	              ref={inputRef}
               style={styles.input}
               value={input}
               onChangeText={handleInputChange}
@@ -2825,6 +2854,9 @@ function createStyles(theme: Theme, screenHeight: number) {
       left: 0,
       right: 0,
       bottom: 72,
+	      // Ensure the live transcription overlay renders above the input area.
+	      zIndex: 1000,
+	      elevation: 10,
       alignItems: 'center',
       padding: spacing.md,
     },

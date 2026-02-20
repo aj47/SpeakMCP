@@ -46,7 +46,6 @@ const FORCE_NO_EXPORTS = new Set([
 const DEDUPE_PACKAGES = new Set([
   'react',
   'react-dom',
-  'react-native',
   'react-native-web',
 ]);
 

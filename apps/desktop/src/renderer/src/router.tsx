@@ -98,6 +98,8 @@ export const router: ReturnType<typeof createBrowserRouter> =
     },
   ], {
     future: {
-      v7_startTransition: true,
-    },
+	      // React Router future flags are version-dependent. Keep this enabled when
+	      // supported, but don't fail typechecking on versions that don't include it.
+	      v7_startTransition: true,
+	    } as any,
   })

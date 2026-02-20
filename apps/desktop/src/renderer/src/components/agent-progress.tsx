@@ -211,13 +211,15 @@ const CompactMessage: React.FC<{
 
   // Invalidate cached audio when the TTS source text changes (e.g. via a later progress merge)
   // so stale audio from a previous text is never played alongside the new text.
-  const prevTtsTextRef = useRef(ttsText)
+  // Track the computed ttsSource (ttsText || message.content) since that's what determines the ttsKey.
+  const ttsSource = ttsText || message.content
+  const prevTtsSourceRef = useRef(ttsSource)
   useEffect(() => {
-    if (prevTtsTextRef.current !== ttsText) {
-      prevTtsTextRef.current = ttsText
+    if (prevTtsSourceRef.current !== ttsSource) {
+      prevTtsSourceRef.current = ttsSource
       setAudioData(null)
     }
-  }, [ttsText])
+  }, [ttsSource])
 
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
@@ -243,8 +245,8 @@ const CompactMessage: React.FC<{
     }
 
     // Create a key to track TTS playback for this specific session + content combination
-    const ttsContent = ttsText || message.content
-    const ttsKey = sessionId ? `${sessionId}:${ttsContent}` : null
+    // Use ttsSource (computed above) to ensure consistency with audioData invalidation
+    const ttsKey = sessionId ? `${sessionId}:${ttsSource}` : null
 
     // If we have a session key and TTS has already played for this content, skip
     if (ttsKey && hasTTSPlayed(ttsKey)) {
@@ -273,7 +275,7 @@ const CompactMessage: React.FC<{
         }
         // Error is already handled in generateAudio function
       })
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsText, message.content])
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsSource])
 
   const getRoleStyle = () => {
     switch (message.role) {

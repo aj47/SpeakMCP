@@ -68,6 +68,10 @@ release/
 trace-session*.json
 apps/desktop/tmp/
 
+# Heap snapshots
+*.heapsnapshot
+testmemorysnapshot
+
 # Node compile cache
 node-compile-cache/
 tmp/

@@ -166,6 +166,24 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       newMap.set(sessionId, mergedUpdate)
 
+      // Cap total sessions to prevent unbounded memory growth
+      const MAX_SESSIONS = 50
+      if (newMap.size > MAX_SESSIONS) {
+        // Find oldest completed sessions to prune
+        const completed = Array.from(newMap.entries())
+          .filter(([id, p]) => p.isComplete && id !== sessionId)
+          .sort((a, b) => {
+            const ta = a[1].conversationHistory?.[0]?.timestamp || 0
+            const tb = b[1].conversationHistory?.[0]?.timestamp || 0
+            return ta - tb // oldest first
+          })
+        const toRemove = completed.slice(0, newMap.size - MAX_SESSIONS)
+        for (const [id] of toRemove) {
+          clearSessionTTSTracking(id)
+          newMap.delete(id)
+        }
+      }
+
       // Only auto-focus new sessions that aren't snoozed or complete
       let newFocusedSessionId = state.focusedSessionId
       if (isNewSession && !state.focusedSessionId && !mergedUpdate.isSnoozed && !mergedUpdate.isComplete) {
@@ -231,9 +249,21 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const newMap = new Map<string, AgentProgressUpdate>()
 
       // Keep only active (not complete) sessions
+      const activeSessionIds = new Set<string>()
       for (const [sessionId, progress] of state.agentProgressById.entries()) {
         if (!progress.isComplete) {
           newMap.set(sessionId, progress)
+          activeSessionIds.add(sessionId)
+        }
+      }
+
+      // Prune orphaned message queue entries for removed sessions
+      const newQueueMap = new Map(state.messageQueuesByConversation)
+      const newPausedSet = new Set(state.pausedQueueConversations)
+      for (const convId of newQueueMap.keys()) {
+        if (!activeSessionIds.has(convId)) {
+          newQueueMap.delete(convId)
+          newPausedSet.delete(convId)
         }
       }
 
@@ -253,6 +283,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       return {
         agentProgressById: newMap,
         focusedSessionId: newFocusedSessionId,
+        messageQueuesByConversation: newQueueMap,
+        pausedQueueConversations: newPausedSet,
       }
     })
   },

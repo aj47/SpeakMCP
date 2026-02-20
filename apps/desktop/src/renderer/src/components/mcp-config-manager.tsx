@@ -2438,16 +2438,19 @@ export function MCPConfigManager({
                                     try {
                                       await window.electronAPI.initiateOAuthFlow(name)
                                       toast.success("OAuth authentication started")
-                                      // Poll for completion
-                                      const checkCompletion = setInterval(async () => {
+                                      // Poll for completion – track IDs so repeated clicks don't stack intervals
+                                      let pollId: ReturnType<typeof setInterval> | undefined
+                                      let timeoutId: ReturnType<typeof setTimeout> | undefined
+                                      pollId = setInterval(async () => {
                                         const statusResult = await window.electronAPI.getOAuthStatus(name)
                                         if (statusResult.authenticated) {
-                                          clearInterval(checkCompletion)
+                                          clearInterval(pollId)
+                                          clearTimeout(timeoutId)
                                           refreshOAuthStatus()
                                           toast.success("OAuth authentication completed")
                                         }
                                       }, 2000)
-                                      setTimeout(() => clearInterval(checkCompletion), 60000)
+                                      timeoutId = setTimeout(() => clearInterval(pollId), 60000)
                                     } catch (error) {
                                       toast.error(`Failed to start OAuth flow: ${error instanceof Error ? error.message : String(error)}`)
                                     }

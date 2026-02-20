@@ -175,19 +175,38 @@ const CompactMessage: React.FC<{
     displayResults.length > 0
   const shouldCollapse = (message.content?.length ?? 0) > 100 || hasExtras
 
+  // Track the computed ttsSource (ttsText || message.content) since that's what determines the
+  // ttsKey and should also gate async state updates.
+  const ttsSource = ttsText || message.content
+  const latestTtsSourceRef = useRef(ttsSource)
+  latestTtsSourceRef.current = ttsSource
+  const ttsGenerationIdRef = useRef(0)
+
   // TTS functionality
   const generateAudio = async (): Promise<ArrayBuffer> => {
     if (!configQuery.data?.ttsEnabled) {
       throw new Error("TTS is not enabled")
     }
 
+    const generationId = ++ttsGenerationIdRef.current
+    const generationSource = ttsSource
+
     setIsGeneratingAudio(true)
     setTtsError(null)
 
     try {
       const result = await tipcClient.generateSpeech({
-        text: ttsText || message.content,
+        text: generationSource,
       })
+
+      // Ignore stale completions if the TTS source changed while this request was in-flight.
+      if (
+        ttsGenerationIdRef.current !== generationId ||
+        latestTtsSourceRef.current !== generationSource
+      ) {
+        return result.audio
+      }
+
       setAudioData(result.audio)
       return result.audio
     } catch (error) {
@@ -211,17 +230,24 @@ const CompactMessage: React.FC<{
         }
       }
 
-      setTtsError(errorMessage)
+      // Only surface the error if this is still the latest generation for the current source.
+      if (
+        ttsGenerationIdRef.current === generationId &&
+        latestTtsSourceRef.current === generationSource
+      ) {
+        setTtsError(errorMessage)
+      }
       throw error
     } finally {
-      setIsGeneratingAudio(false)
+      // Only clear the spinner for the latest in-flight request.
+      if (ttsGenerationIdRef.current === generationId) {
+        setIsGeneratingAudio(false)
+      }
     }
   }
 
   // Invalidate cached audio when the TTS source text changes (e.g. via a later progress merge)
   // so stale audio from a previous text is never played alongside the new text.
-  // Track the computed ttsSource (ttsText || message.content) since that's what determines the ttsKey.
-  const ttsSource = ttsText || message.content
   const prevTtsSourceRef = useRef(ttsSource)
   useEffect(() => {
     if (prevTtsSourceRef.current !== ttsSource) {

@@ -20,9 +20,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@renderer/components/ui/dialog"
-import { BookMarked, Plus, Pencil, Trash2 } from "lucide-react"
+import { BookMarked, Plus, Pencil, Trash2, Sparkles } from "lucide-react"
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/queries"
 import { PredefinedPrompt } from "../../../shared/types"
+import { useQuery } from "@tanstack/react-query"
+import { tipcClient } from "@renderer/lib/tipc-client"
 
 interface PredefinedPromptsMenuProps {
   onSelectPrompt: (content: string) => void
@@ -47,6 +49,24 @@ export function PredefinedPromptsMenu({
   const [promptContent, setPromptContent] = useState("")
 
   const prompts = configQuery.data?.predefinedPrompts || []
+
+  const skillsQuery = useQuery({
+    queryKey: ["skills"],
+    queryFn: () => tipcClient.getSkills(),
+  })
+  const profileQuery = useQuery({
+    queryKey: ["current-profile"],
+    queryFn: () => tipcClient.getCurrentProfile(),
+  })
+  const profileId = profileQuery.data?.id
+  const enabledSkillIdsQuery = useQuery({
+    queryKey: ["enabled-skill-ids", profileId],
+    queryFn: () => tipcClient.getEnabledSkillIdsForProfile({ profileId: profileId! }),
+    enabled: !!profileId,
+  })
+  const enabledSkills = (skillsQuery.data ?? []).filter(
+    (skill) => skill.enabled && (enabledSkillIdsQuery.data ?? []).includes(skill.id)
+  )
 
   const handleSelectPrompt = (prompt: PredefinedPrompt) => {
     onSelectPrompt(prompt.content)
@@ -178,6 +198,24 @@ export function PredefinedPromptsMenu({
             <Plus className="h-4 w-4 mr-2" />
             Add new prompt
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Skills</DropdownMenuLabel>
+          {enabledSkills.length === 0 ? (
+            <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+              No skills enabled
+            </div>
+          ) : (
+            enabledSkills.map((skill) => (
+              <DropdownMenuItem
+                key={skill.id}
+                className="flex items-center gap-2 cursor-pointer"
+                onSelect={() => onSelectPrompt(skill.instructions)}
+              >
+                <Sparkles className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{skill.name}</span>
+              </DropdownMenuItem>
+            ))
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

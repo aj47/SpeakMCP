@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
-import { clearSessionTTSTracking } from '@renderer/components/agent-progress'
+import { clearSessionTTSTracking } from '@renderer/lib/tts-tracking'
 
 export type SessionViewMode = 'grid' | 'list' | 'kanban'
 export type SessionFilter = 'all' | 'active' | 'completed' | 'error'

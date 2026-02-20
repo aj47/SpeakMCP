@@ -19,26 +19,7 @@ import { getToolResultsSummary } from "@speakmcp/shared"
 import { ToolExecutionStats } from "./tool-execution-stats"
 import { ACPSessionBadge } from "./acp-session-badge"
 import { AgentSummaryView } from "./agent-summary-view"
-
-// Module-level set to track sessions that have already auto-played TTS.
-// This prevents double TTS playback when AgentProgress remounts (e.g., when
-// switching between single-session and multi-session views in the panel).
-// The set is keyed by `${sessionId}:${ttsText || messageContent}` to handle
-// cases where the same session replays with different content.
-const sessionsWithTTSPlayed = new Set<string>()
-
-/**
- * Clear TTS tracking for a specific session. Call this when a session is dismissed
- * to allow TTS to play again if the session is somehow restored.
- */
-export function clearSessionTTSTracking(sessionId: string): void {
-  // Remove all entries that start with this sessionId
-  for (const key of sessionsWithTTSPlayed) {
-    if (key.startsWith(`${sessionId}:`)) {
-      sessionsWithTTSPlayed.delete(key)
-    }
-  }
-}
+import { hasTTSPlayed, markTTSPlayed, removeTTSKey } from "@renderer/lib/tts-tracking"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -153,7 +134,7 @@ const CompactMessage: React.FC<{
       // If we're unmounting while TTS generation is in-flight, remove the key
       // from the tracking set so future mounts can retry generation
       if (inFlightTtsKeyRef.current) {
-        sessionsWithTTSPlayed.delete(inFlightTtsKeyRef.current)
+        removeTTSKey(inFlightTtsKeyRef.current)
         inFlightTtsKeyRef.current = null
       }
     }
@@ -266,13 +247,13 @@ const CompactMessage: React.FC<{
     const ttsKey = sessionId ? `${sessionId}:${ttsContent}` : null
 
     // If we have a session key and TTS has already played for this content, skip
-    if (ttsKey && sessionsWithTTSPlayed.has(ttsKey)) {
+    if (ttsKey && hasTTSPlayed(ttsKey)) {
       return
     }
 
     // Mark as playing before starting generation to prevent race conditions
     if (ttsKey) {
-      sessionsWithTTSPlayed.add(ttsKey)
+      markTTSPlayed(ttsKey)
       // Track in-flight key so we can clean up on unmount
       inFlightTtsKeyRef.current = ttsKey
     }
@@ -284,10 +265,12 @@ const CompactMessage: React.FC<{
       })
       .catch((error) => {
         // If generation fails, remove from the set so user can retry
-        if (ttsKey) {
-          sessionsWithTTSPlayed.delete(ttsKey)
+        // Only remove if this is still the in-flight key (prevents race condition where
+        // a new mount re-added the key and this old catch handler would delete it)
+        if (ttsKey && inFlightTtsKeyRef.current === ttsKey) {
+          removeTTSKey(ttsKey)
+          inFlightTtsKeyRef.current = null
         }
-        inFlightTtsKeyRef.current = null
         // Error is already handled in generateAudio function
       })
   }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsText, message.content])

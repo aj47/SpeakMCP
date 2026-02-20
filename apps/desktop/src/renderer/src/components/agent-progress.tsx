@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain, Volume2 } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -208,8 +208,10 @@ const CompactMessage: React.FC<{
     }
   }, [ttsText])
 
-  // Check if TTS should be shown for this message
-  const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
+  // Check if TTS button should be shown for this message (any completed assistant message with content)
+  const shouldShowTTSButton = message.role === "assistant" && isComplete && configQuery.data?.ttsEnabled && !!(message.content?.trim())
+  // Auto-play TTS only on the last message
+  const shouldAutoPlayTTS = shouldShowTTSButton && isLast
 
   // Auto-play TTS when assistant message completes (but NOT if agent was stopped by kill switch)
   //
@@ -224,12 +226,12 @@ const CompactMessage: React.FC<{
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"
-    if (shouldAutoPlay && shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
+    if (shouldAutoPlay && shouldAutoPlayTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
       generateAudio().catch((error) => {
         // Error is already handled in generateAudio function
       })
     }
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
+  }, [shouldAutoPlayTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -376,8 +378,8 @@ const CompactMessage: React.FC<{
             </div>
           )}
 
-          {/* TTS Audio Player - only show for completed assistant messages */}
-          {shouldShowTTS && (
+          {/* TTS Audio Player - show for all completed assistant messages with content */}
+          {shouldShowTTSButton && isLast && (
             <div className="mt-2">
               <AudioPlayer
                 audioData={audioData || undefined}
@@ -417,8 +419,8 @@ const CompactMessage: React.FC<{
 
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Copy button for user prompts and final assistant response */}
-          {(message.role === "user" || (message.role === "assistant" && isLast && isComplete)) && (
+          {/* Copy button for user prompts and all completed assistant responses */}
+          {(message.role === "user" || (message.role === "assistant" && isComplete)) && (
             <button
               onClick={handleCopyResponse}
               className="p-1 rounded hover:bg-muted/30 transition-colors"
@@ -429,6 +431,22 @@ const CompactMessage: React.FC<{
                 <CheckCheck className="h-3 w-3 text-green-500" />
               ) : (
                 <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+              )}
+            </button>
+          )}
+          {/* Read Aloud button for non-last completed assistant messages with TTS enabled */}
+          {shouldShowTTSButton && !isLast && (
+            <button
+              onClick={() => generateAudio().catch(() => {})}
+              className="p-1 rounded hover:bg-muted/30 transition-colors"
+              title={isGeneratingAudio ? "Generating audio..." : "Read aloud"}
+              aria-label="Read aloud"
+              disabled={isGeneratingAudio}
+            >
+              {isGeneratingAudio ? (
+                <Loader2 className="h-3 w-3 opacity-60 animate-spin" />
+              ) : (
+                <Volume2 className="h-3 w-3 opacity-60 hover:opacity-100" />
               )}
             </button>
           )}

@@ -303,10 +303,10 @@ export function PresetModelSelector({
           onCloseAutoFocus={(e) => e.preventDefault()}
           header={
             <div
-              className="flex items-center border-b px-3 py-2"
+              className="flex items-center gap-2 border-b px-3 py-2"
               onMouseDown={(e) => e.preventDefault()}
             >
-              <Search className="text-muted-foreground mr-2 h-4 w-4 shrink-0" />
+              <Search className="text-muted-foreground h-4 w-4 shrink-0" />
               <Input
                 ref={searchInputRef}
                 placeholder="Search models..."
@@ -336,10 +336,10 @@ export function PresetModelSelector({
               </div>
             )}
           {models.length === 0 && !isLoading && (
-            <div className="text-muted-foreground flex items-center justify-center py-4 text-sm">
+            <div className="text-muted-foreground flex items-center justify-center gap-2 py-4 text-sm">
               {hasError ? (
                 <>
-                  <AlertCircle className="mr-2 h-4 w-4" />
+                  <AlertCircle className="h-4 w-4" />
                   {error}
                 </>
               ) : (

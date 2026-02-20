@@ -241,11 +241,12 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
             variant="outline"
             size="sm"
             onClick={() => setShowDisabledTools(!showDisabledTools)}
+            className="gap-2"
           >
             {showDisabledTools ? (
-              <EyeOff className="mr-2 h-4 w-4" />
+              <EyeOff className="h-4 w-4" />
             ) : (
-              <Eye className="mr-2 h-4 w-4" />
+              <Eye className="h-4 w-4" />
             )}
             {showDisabledTools ? "Hide Disabled" : "Show All"}
           </Button>
@@ -256,12 +257,12 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="min-w-0 flex-1">
           <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search tools..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
+              className="pl-9"
             />
           </div>
         </div>
@@ -325,9 +326,9 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                           e.stopPropagation()
                           handleToggleAllTools(serverName, true)
                         }}
-                        className="h-7 px-2 text-xs"
+                        className="h-7 gap-1 px-2 text-xs"
                       >
-                        <Power className="mr-1 h-3 w-3" />
+                        <Power className="h-3 w-3" />
                         All ON
                       </Button>
                       <Button
@@ -337,9 +338,9 @@ export function MCPToolManager({ onToolToggle }: MCPToolManagerProps) {
                           e.stopPropagation()
                           handleToggleAllTools(serverName, false)
                         }}
-                        className="h-7 px-2 text-xs"
+                        className="h-7 gap-1 px-2 text-xs"
                       >
-                        <PowerOff className="mr-1 h-3 w-3" />
+                        <PowerOff className="h-3 w-3" />
                         All OFF
                       </Button>
                     </div>

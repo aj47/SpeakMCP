@@ -348,18 +348,20 @@ export function Component() {
             <Button
               variant="outline"
               size="sm"
+              className="gap-1.5"
               onClick={() => openSkillsFolderMutation.mutate()}
             >
-              <FolderOpen className="h-3 w-3 mr-1" />
+              <FolderOpen className="h-3 w-3" />
               Open Folder
             </Button>
             <Button
               variant="outline"
               size="sm"
+              className="gap-1.5"
               onClick={() => scanSkillsFolderMutation.mutate()}
               disabled={scanSkillsFolderMutation.isPending}
             >
-              <RefreshCw className={`h-3 w-3 mr-1 ${scanSkillsFolderMutation.isPending ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3 w-3 ${scanSkillsFolderMutation.isPending ? 'animate-spin' : ''}`} />
               Scan Folder
             </Button>
             <DropdownMenu>
@@ -367,37 +369,39 @@ export function Component() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="gap-1.5"
                   disabled={importSkillMutation.isPending || importSkillFolderMutation.isPending || importSkillsFromParentFolderMutation.isPending || importSkillFromGitHubMutation.isPending}
                 >
-                  <Upload className="h-3 w-3 mr-1" />
+                  <Upload className="h-3 w-3" />
                   Import
-                  <ChevronDown className="h-3 w-3 ml-1" />
+                  <ChevronDown className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setIsGitHubDialogOpen(true)}>
-                  <Github className="h-4 w-4 mr-2" />
+                  <Github />
                   Import from GitHub
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => importSkillMutation.mutate()}>
-                  <Upload className="h-4 w-4 mr-2" />
+                  <Upload />
                   Import SKILL.md File
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => importSkillFolderMutation.mutate()}>
-                  <FolderOpen className="h-4 w-4 mr-2" />
+                  <FolderOpen />
                   Import Skill Folder
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => importSkillsFromParentFolderMutation.mutate()}>
-                  <FolderUp className="h-4 w-4 mr-2" />
+                  <FolderUp />
                   Bulk Import from Folder
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button
               size="sm"
+              className="gap-1.5"
               onClick={() => setIsCreateDialogOpen(true)}
             >
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="h-3 w-3" />
               New Skill
             </Button>
           </div>
@@ -612,15 +616,15 @@ export function Component() {
               }}>
                 Cancel
               </Button>
-              <Button onClick={handleImportFromGitHub} disabled={importSkillFromGitHubMutation.isPending}>
+              <Button className="gap-1.5" onClick={handleImportFromGitHub} disabled={importSkillFromGitHubMutation.isPending}>
                 {importSkillFromGitHubMutation.isPending ? (
                   <>
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    <Loader2 className="h-3 w-3 animate-spin" />
                     Importing...
                   </>
                 ) : (
                   <>
-                    <Github className="h-3 w-3 mr-1" />
+                    <Github className="h-3 w-3" />
                     Import
                   </>
                 )}

@@ -133,9 +133,18 @@ const CompactMessage: React.FC<{
       }
       // If we're unmounting while TTS generation is in-flight, remove the key
       // from the tracking set so future mounts can retry generation
-      if (inFlightTtsKeyRef.current) {
-        removeTTSKey(inFlightTtsKeyRef.current)
-        inFlightTtsKeyRef.current = null
+      const inFlightKeyAtUnmount = inFlightTtsKeyRef.current
+      if (inFlightKeyAtUnmount) {
+        // IMPORTANT: defer cleanup to a microtask.
+        // If generation has already completed, its `.then()` handler will run
+        // before this microtask and clear `inFlightTtsKeyRef`, preventing us
+        // from accidentally deleting a "success" key during a view switch.
+        queueMicrotask(() => {
+          if (inFlightTtsKeyRef.current === inFlightKeyAtUnmount) {
+            removeTTSKey(inFlightKeyAtUnmount)
+            inFlightTtsKeyRef.current = null
+          }
+        })
       }
     }
   }, [])

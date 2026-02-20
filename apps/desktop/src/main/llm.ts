@@ -32,6 +32,7 @@ import {
   type SummarizationInput,
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
+import { filterEphemeralMessages } from "./conversation-history-utils"
 
 // Internal completion nudge message: include in the LLM context, but hide from the progress UI.
 // Keep this as a single canonical string so we can filter it via exact match (no false positives).
@@ -676,6 +677,7 @@ export async function processTranscriptWithAgentMode(
       toolCalls,
       toolResults,
       timestamp: timestamp || Date.now(),
+      ephemeral: true,
     }
 
     conversationHistory.push(message)
@@ -792,6 +794,7 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
     timestamp?: number
+    ephemeral?: boolean
   }> = [
     ...(previousConversationHistory || []),
     { role: "user", content: transcript, timestamp: Date.now() },
@@ -821,10 +824,11 @@ export async function processTranscriptWithAgentMode(
   let emptyResponseRetryCount = 0
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
+  // - Filters out ephemeral messages (internal prompt-engineering nudges)
+  // - Filters out other internal "user" nudges that we don't want to render in the progress UI
   const formatConversationForProgress = (
     history: typeof conversationHistory,
   ) => {
-
     const isNudge = (content: string) => {
       const trimmed = content.trim()
       // Exact-match the internal completion nudge to avoid hiding legitimate user content.
@@ -845,6 +849,7 @@ export async function processTranscriptWithAgentMode(
     }
 
     return history
+      .filter((entry) => !entry.ephemeral)
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
       .map((entry) => ({
         role: entry.role,
@@ -2828,7 +2833,7 @@ Return ONLY JSON per schema.`,
 
     return {
       content: finalContent,
-      conversationHistory,
+      conversationHistory: filterEphemeralMessages(conversationHistory),
       totalIterations: iteration,
     }
   } finally {

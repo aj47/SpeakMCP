@@ -85,7 +85,7 @@ export function PastSessionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm w-[calc(100%-2rem)] overflow-hidden">
+      <DialogContent className="max-w-sm w-[calc(100%-2rem)] overflow-hidden grid-cols-1">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-4 w-4" />

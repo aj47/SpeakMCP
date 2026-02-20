@@ -140,13 +140,21 @@ const CompactMessage: React.FC<{
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Track the ttsKey that's currently being generated, so we can clean it up on unmount
+  const inFlightTtsKeyRef = useRef<string | null>(null)
   const configQuery = useConfigQuery()
 
-  // Cleanup copy timeout on unmount
+  // Cleanup copy timeout and in-flight TTS key on unmount
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current)
+      }
+      // If we're unmounting while TTS generation is in-flight, remove the key
+      // from the tracking set so future mounts can retry generation
+      if (inFlightTtsKeyRef.current) {
+        sessionsWithTTSPlayed.delete(inFlightTtsKeyRef.current)
+        inFlightTtsKeyRef.current = null
       }
     }
   }, [])
@@ -265,15 +273,23 @@ const CompactMessage: React.FC<{
     // Mark as playing before starting generation to prevent race conditions
     if (ttsKey) {
       sessionsWithTTSPlayed.add(ttsKey)
+      // Track in-flight key so we can clean up on unmount
+      inFlightTtsKeyRef.current = ttsKey
     }
 
-    generateAudio().catch((error) => {
-      // If generation fails, remove from the set so user can retry
-      if (ttsKey) {
-        sessionsWithTTSPlayed.delete(ttsKey)
-      }
-      // Error is already handled in generateAudio function
-    })
+    generateAudio()
+      .then(() => {
+        // Generation succeeded, clear the in-flight ref (key stays in set permanently)
+        inFlightTtsKeyRef.current = null
+      })
+      .catch((error) => {
+        // If generation fails, remove from the set so user can retry
+        if (ttsKey) {
+          sessionsWithTTSPlayed.delete(ttsKey)
+        }
+        inFlightTtsKeyRef.current = null
+        // Error is already handled in generateAudio function
+      })
   }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsText, message.content])
 
   const getRoleStyle = () => {

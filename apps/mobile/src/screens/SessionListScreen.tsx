@@ -5,6 +5,7 @@ import { EventEmitter } from 'expo-modules-core';
 import { useTheme } from '../ui/ThemeProvider';
 import { spacing, radius, Theme } from '../ui/theme';
 import { useSessionContext, SessionStore } from '../store/sessions';
+import { useConfigContext } from '../store/config';
 import { useConnectionManager } from '../store/connectionManager';
 import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
@@ -25,13 +26,18 @@ export default function SessionListScreen({ navigation }: Props) {
   const connectionManager = useConnectionManager();
   const { connectionInfo } = useTunnelConnection();
   const { currentProfile } = useProfile();
+  const { config } = useConfigContext();
+  const ttsEnabled = config.ttsEnabled !== false; // default true
 
   // ── Rapid Fire voice state ─────────────────────────────────────────────────
   const [rfListening, setRfListening] = useState(false);
   const [rfTranscript, setRfTranscript] = useState('');
+  const [rfLastCreatedSessionId, setRfLastCreatedSessionId] = useState<string | null>(null);
+  const [rfHighlightSessionId, setRfHighlightSessionId] = useState<string | null>(null);
   const [rfStatus, setRfStatus] = useState<
     'idle' | 'listening' | 'sending' | 'sent' | 'empty' | 'permissionDenied' | 'unavailable' | 'error'
   >('idle');
+  const sessionListRef = useRef<FlatList<SessionListItem> | null>(null);
   const rfListeningRef = useRef(false);
   const rfStartingRef = useRef(false);
   const rfStoppingRef = useRef(false);
@@ -45,6 +51,7 @@ export default function SessionListScreen({ navigation }: Props) {
   const rfMinHoldMs = 200;
   const sessionStoreRef = useRef<SessionStore | null>(null);
   const rfStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rfHighlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const rfSetListening = useCallback((v: boolean) => {
     rfListeningRef.current = v;
@@ -219,6 +226,23 @@ export default function SessionListScreen({ navigation }: Props) {
           // race-load the new session while it still has 0 messages.
           const prevSessionId = ss.currentSessionId;
           const newSession = ss.createNewSession();
+
+          // Make the new session immediately visible in the list.
+          setRfLastCreatedSessionId(newSession.id);
+          setRfHighlightSessionId(newSession.id);
+          if (rfHighlightTimeoutRef.current) {
+            clearTimeout(rfHighlightTimeoutRef.current);
+          }
+          rfHighlightTimeoutRef.current = setTimeout(() => {
+            setRfHighlightSessionId(null);
+            rfHighlightTimeoutRef.current = null;
+          }, 5000);
+          setTimeout(() => {
+            try {
+              sessionListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            } catch {}
+          }, 50);
+
           // Restore immediately so ChatScreen's useEffect doesn't prematurely load
           // the new empty session. When the user later taps the session,
           // setCurrentSession(newId) will properly trigger the load with messages.
@@ -248,6 +272,10 @@ export default function SessionListScreen({ navigation }: Props) {
       }
       if (rfStatusTimeoutRef.current) {
         clearTimeout(rfStatusTimeoutRef.current);
+      }
+      if (rfHighlightTimeoutRef.current) {
+        clearTimeout(rfHighlightTimeoutRef.current);
+        rfHighlightTimeoutRef.current = null;
       }
     };
   }, [rfCleanupSubs]);
@@ -316,11 +344,15 @@ export default function SessionListScreen({ navigation }: Props) {
   }
 
   const handleCreateSession = () => {
+    setRfLastCreatedSessionId(null);
+    setRfHighlightSessionId(null);
     sessionStore.createNewSession();
     navigation.navigate('Chat');
   };
 
   const handleSelectSession = (sessionId: string) => {
+    setRfLastCreatedSessionId(null);
+    setRfHighlightSessionId(null);
     sessionStore.setCurrentSession(sessionId);
     navigation.navigate('Chat');
   };
@@ -398,10 +430,15 @@ export default function SessionListScreen({ navigation }: Props) {
   const renderSession = ({ item }: { item: SessionListItem }) => {
     const isActive = item.id === sessionStore.currentSessionId;
     const isStub = stubSessionIds.has(item.id);
+    const isHighlighted = item.id === rfHighlightSessionId;
 
     return (
       <TouchableOpacity
-        style={[styles.sessionItem, isActive && styles.sessionItemActive]}
+        style={[
+          styles.sessionItem,
+          isActive && styles.sessionItemActive,
+          isHighlighted && styles.sessionItemHighlighted,
+        ]}
         onPress={() => handleSelectSession(item.id)}
         onLongPress={() => handleDeleteSession(item)}
         accessibilityRole="button"
@@ -439,11 +476,11 @@ export default function SessionListScreen({ navigation }: Props) {
   );
 
   const rfHintText = rfStatus === 'listening'
-    ? 'Release to send...'
+    ? 'Release to save to a new chat…'
     : rfStatus === 'sending'
-      ? 'Sending...'
+      ? 'Saving…'
       : rfStatus === 'sent'
-        ? 'Sent to a new chat. Tap it to open.'
+        ? 'Saved to a new chat. Tap it above to open.'
         : rfStatus === 'empty'
           ? 'No speech detected. Try again.'
           : rfStatus === 'permissionDenied'
@@ -453,6 +490,14 @@ export default function SessionListScreen({ navigation }: Props) {
               : rfStatus === 'error'
                 ? 'Rapid Fire failed. Try again.'
                 : 'Hold to talk (Rapid Fire)';
+
+  const rfVoiceHintText = ttsEnabled
+    ? 'Voice replies: ON (they play after you open the chat)'
+    : 'Voice replies: OFF (enable TTS in a chat)';
+
+  const lastCreatedSession = rfLastCreatedSessionId
+    ? sessions.find(s => s.id === rfLastCreatedSessionId) || null
+    : null;
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -477,6 +522,7 @@ export default function SessionListScreen({ navigation }: Props) {
       </View>
 
       <FlatList
+        ref={sessionListRef}
         data={sessions}
         renderItem={renderSession}
         keyExtractor={(item) => item.id}
@@ -486,15 +532,33 @@ export default function SessionListScreen({ navigation }: Props) {
 
       {/* Rapid Fire hold-to-speak button */}
       <View style={styles.rfContainer}>
+        {lastCreatedSession && (
+          <View style={styles.rfLastSessionBanner}>
+            <Text style={styles.rfLastSessionText} numberOfLines={1}>
+              New chat: {lastCreatedSession.title}
+            </Text>
+            <TouchableOpacity
+              style={styles.rfLastSessionButton}
+              onPress={() => handleSelectSession(lastCreatedSession.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open new chat ${lastCreatedSession.title}`}
+            >
+              <Text style={styles.rfLastSessionButtonText}>Open</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {(rfListening || rfStatus === 'sent') && rfTranscript ? (
           <Text style={styles.rfTranscript} numberOfLines={2}>{rfTranscript}</Text>
         ) : null}
         <Text style={styles.rfHint}>
           {rfHintText}
         </Text>
+        <Text style={styles.rfVoiceHint}>
+          {rfVoiceHintText}
+        </Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={rfListening ? 'Release to send' : 'Hold to talk, Rapid Fire'}
+          accessibilityLabel={rfListening ? 'Release to save to a new chat' : 'Hold to talk, Rapid Fire'}
           style={({ pressed }) => [
             styles.rfButton,
             rfListening && styles.rfButtonOn,
@@ -516,7 +580,7 @@ export default function SessionListScreen({ navigation }: Props) {
         >
           <Text style={styles.rfButtonText}>{rfListening ? '\uD83C\uDF99\uFE0F' : '\uD83C\uDFA4'}</Text>
           <Text style={styles.rfButtonLabel}>
-            {rfListening ? '...' : (rfStatus === 'sending' ? 'Sending' : 'Hold')}
+            {rfListening ? '...' : (rfStatus === 'sending' ? 'Saving' : 'Hold')}
           </Text>
         </Pressable>
       </View>
@@ -590,6 +654,11 @@ function createStyles(theme: Theme, screenHeight: number) {
       borderColor: theme.colors.primary,
       borderWidth: 2,
     },
+	    sessionItemHighlighted: {
+	      borderColor: theme.colors.primary,
+	      borderWidth: 2,
+	      backgroundColor: theme.colors.primary + '11',
+	    },
     sessionHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -642,6 +711,42 @@ function createStyles(theme: Theme, screenHeight: number) {
       marginBottom: spacing.xs,
       textAlign: 'center',
     },
+	    rfVoiceHint: {
+	      ...theme.typography.caption,
+	      color: theme.colors.mutedForeground,
+	      marginBottom: spacing.xs,
+	      textAlign: 'center',
+	    },
+	    rfLastSessionBanner: {
+	      width: '100%' as any,
+	      flexDirection: 'row',
+	      alignItems: 'center',
+	      justifyContent: 'space-between',
+	      borderWidth: 1,
+	      borderColor: theme.colors.border,
+	      backgroundColor: theme.colors.background,
+	      borderRadius: radius.lg,
+	      paddingHorizontal: spacing.md,
+	      paddingVertical: spacing.sm,
+	      marginBottom: spacing.xs,
+	    },
+	    rfLastSessionText: {
+	      ...theme.typography.caption,
+	      color: theme.colors.foreground,
+	      flex: 1,
+	      marginRight: spacing.sm,
+	    },
+	    rfLastSessionButton: {
+	      backgroundColor: theme.colors.primary,
+	      paddingHorizontal: spacing.md,
+	      paddingVertical: 6,
+	      borderRadius: radius.md,
+	    },
+	    rfLastSessionButtonText: {
+	      ...theme.typography.caption,
+	      color: theme.colors.primaryForeground,
+	      fontWeight: '600',
+	    },
     rfTranscript: {
       ...theme.typography.body,
       color: theme.colors.foreground,

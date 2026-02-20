@@ -55,6 +55,8 @@ export interface Settings {
   mainAgentMode?: 'api' | 'acp';
   mainAgentName?: string;
   acpInjectBuiltinTools?: boolean;
+  mcpVerifyCompletionEnabled?: boolean;
+  mcpFinalSummaryEnabled?: boolean;
 
   // Context Reduction & Tool Response Processing
   mcpContextReductionEnabled?: boolean;
@@ -65,6 +67,7 @@ export interface Settings {
   // Speech-to-Text Configuration
   sttProviderId?: 'openai' | 'groq' | 'parakeet';
   sttLanguage?: string;
+  transcriptionPreviewEnabled?: boolean;
 
   // Transcript Post-Processing
   transcriptPostProcessingEnabled?: boolean;
@@ -72,11 +75,17 @@ export interface Settings {
   transcriptPostProcessingOpenaiModel?: string;
   transcriptPostProcessingGroqModel?: string;
   transcriptPostProcessingGeminiModel?: string;
+  transcriptPostProcessingPrompt?: string;
 
   // Text-to-Speech Configuration
   ttsEnabled?: boolean;
   ttsAutoPlay?: boolean;
   ttsProviderId?: 'openai' | 'groq' | 'gemini' | 'kitten' | 'supertonic';
+  ttsPreprocessingEnabled?: boolean;
+  ttsRemoveCodeBlocks?: boolean;
+  ttsRemoveUrls?: boolean;
+  ttsConvertMarkdown?: boolean;
+  ttsUseLLMPreprocessing?: boolean;
 
   // WhatsApp Integration
   whatsappEnabled?: boolean;
@@ -93,7 +102,11 @@ export interface Settings {
   // Dual-Model & Memory Settings
   dualModelEnabled?: boolean;
   dualModelInjectMemories?: boolean;
+  dualModelAutoSaveImportant?: boolean;
   memoriesEnabled?: boolean;
+
+  // Streamer Mode
+  streamerModeEnabled?: boolean;
 }
 
 export interface ModelInfo {
@@ -164,6 +177,8 @@ export interface SettingsUpdate {
   mainAgentMode?: 'api' | 'acp';
   mainAgentName?: string;
   acpInjectBuiltinTools?: boolean;
+  mcpVerifyCompletionEnabled?: boolean;
+  mcpFinalSummaryEnabled?: boolean;
 
   // Context Reduction & Tool Response Processing
   mcpContextReductionEnabled?: boolean;
@@ -174,6 +189,7 @@ export interface SettingsUpdate {
   // Speech-to-Text Configuration
   sttProviderId?: 'openai' | 'groq' | 'parakeet';
   sttLanguage?: string;
+  transcriptionPreviewEnabled?: boolean;
 
   // Transcript Post-Processing
   transcriptPostProcessingEnabled?: boolean;
@@ -181,11 +197,17 @@ export interface SettingsUpdate {
   transcriptPostProcessingOpenaiModel?: string;
   transcriptPostProcessingGroqModel?: string;
   transcriptPostProcessingGeminiModel?: string;
+  transcriptPostProcessingPrompt?: string;
 
   // Text-to-Speech Configuration
   ttsEnabled?: boolean;
   ttsAutoPlay?: boolean;
   ttsProviderId?: 'openai' | 'groq' | 'gemini' | 'kitten' | 'supertonic';
+  ttsPreprocessingEnabled?: boolean;
+  ttsRemoveCodeBlocks?: boolean;
+  ttsRemoveUrls?: boolean;
+  ttsConvertMarkdown?: boolean;
+  ttsUseLLMPreprocessing?: boolean;
 
   // WhatsApp Integration
   whatsappEnabled?: boolean;
@@ -202,7 +224,11 @@ export interface SettingsUpdate {
   // Dual-Model & Memory Settings
   dualModelEnabled?: boolean;
   dualModelInjectMemories?: boolean;
+  dualModelAutoSaveImportant?: boolean;
   memoriesEnabled?: boolean;
+
+  // Streamer Mode
+  streamerModeEnabled?: boolean;
 }
 
 export class SettingsApiClient {

@@ -47,7 +47,13 @@ export interface AgentProgressUpdate {
   steps: AgentProgressStep[];
   isComplete: boolean;
   finalContent?: string;
-  spokenContent?: string;
+  /**
+   * User-facing response set via respond_to_user tool.
+   * On voice interfaces: spoken aloud via TTS
+   * On messaging channels (mobile, WhatsApp): sent as a message
+   * Falls back to finalContent if not set.
+   */
+  userResponse?: string;
   conversationHistory?: ConversationHistoryMessage[];
   streamingContent?: {
     text: string;

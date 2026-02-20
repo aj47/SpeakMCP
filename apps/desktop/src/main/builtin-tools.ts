@@ -21,7 +21,7 @@ import { emergencyStopAll } from "./emergency-stop"
 import { executeACPRouterTool, isACPRouterTool } from "./acp/acp-router-tools"
 import { memoryService } from "./memory-service"
 import { messageQueueService } from "./message-queue-service"
-import { setSessionSpokenContent } from "./session-spoken-content-store"
+import { setSessionUserResponse } from "./session-user-response-store"
 import { exec } from "child_process"
 import { promisify } from "util"
 import path from "path"
@@ -798,7 +798,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  speak_to_user: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
+  respond_to_user: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
     if (typeof args.text !== "string" || args.text.trim() === "") {
       return {
         content: [{ type: "text", text: JSON.stringify({ success: false, error: "text must be a non-empty string" }) }],
@@ -808,13 +808,13 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     if (!context.sessionId) {
       return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "speak_to_user requires an active agent session" }) }],
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "respond_to_user requires an active agent session" }) }],
         isError: true,
       }
     }
 
     const text = args.text.trim()
-    setSessionSpokenContent(context.sessionId, text)
+    setSessionUserResponse(context.sessionId, text)
 
     return {
       content: [
@@ -822,7 +822,7 @@ const toolHandlers: Record<string, ToolHandler> = {
           type: "text",
           text: JSON.stringify({
             success: true,
-            message: "Spoken response recorded for this session.",
+            message: "Response recorded for delivery to user.",
             textLength: text.length,
           }, null, 2),
         },

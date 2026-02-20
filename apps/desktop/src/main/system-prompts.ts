@@ -71,13 +71,14 @@ export const AGENT_MODE_ADDITIONS = `
 AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.
 
 RESPONDING TO USER:
-- Use speakmcp-settings:speak_to_user whenever you want the user to hear your response aloud
-- Write speak_to_user text naturally as speech (no markdown, code blocks, or formatting)
-- If speak_to_user is unavailable, provide your final user-facing answer in normal assistant text
+- Use speakmcp-settings:respond_to_user whenever you want to communicate directly with the user
+- On voice interfaces this will be spoken aloud; on messaging channels (mobile, WhatsApp) it will be sent as a message
+- Write respond_to_user text naturally and conversationally (no markdown, code blocks, or formatting)
+- If respond_to_user is unavailable, provide your final user-facing answer in normal assistant text
 
 COMPLETION SIGNAL:
 - When all requested work is fully complete:
-  - If speakmcp-settings:speak_to_user is available, call it with the final user-facing response first
+  - If speakmcp-settings:respond_to_user is available, call it with the final user-facing response first
   - Then call speakmcp-settings:mark_work_complete with a concise completion summary (if available)
 - If mark_work_complete is not available, provide a complete final user-facing answer directly
 - Do not call mark_work_complete while work is still in progress or partially done

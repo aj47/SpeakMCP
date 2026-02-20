@@ -209,16 +209,16 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
-    name: `${BUILTIN_SERVER_NAME}:speak_to_user`,
+    name: `${BUILTIN_SERVER_NAME}:respond_to_user`,
     description:
-      "Speak directly to the user via text-to-speech. Use this when you want the user to hear content aloud. Regular assistant text is not guaranteed to be spoken; this tool explicitly sets spoken output.",
+      "Send a response directly to the user. On voice interfaces this will be spoken aloud via TTS; on messaging channels (mobile, WhatsApp, etc.) it will be sent as a message. Regular assistant text is internal and not guaranteed to reach the user; use this tool to explicitly communicate with them.",
     inputSchema: {
       type: "object",
       properties: {
         text: {
           type: "string",
           description:
-            "The exact text to speak aloud to the user. Write naturally as speech, without markdown or code formatting.",
+            "The response text for the user. Write naturally and conversationally, without markdown or code formatting.",
         },
       },
       required: ["text"],

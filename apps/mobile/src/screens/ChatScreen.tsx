@@ -951,6 +951,9 @@ export default function ChatScreen({ route, navigation }: any) {
 
     try {
       let streamingText = '';
+      // Track userResponse from progress updates for TTS
+      // This is set via the respond_to_user tool and takes priority over finalText
+      let lastUserResponse: string | undefined;
 
       const serverConversationId = sessionStore.getServerConversationId();
       console.log('[ChatScreen] Starting chat request with', messages.length + 1, 'messages, conversationId:', serverConversationId || 'new');
@@ -968,6 +971,10 @@ export default function ChatScreen({ route, navigation }: any) {
         if (requestSessionId && connectionManager.getLatestRequestId(requestSessionId) !== thisRequestId) {
           console.log('[ChatScreen] Request superseded within same session, skipping onProgress update');
           return;
+        }
+        // Capture userResponse from progress updates for TTS
+        if (update.userResponse) {
+          lastUserResponse = update.userResponse;
         }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
@@ -1168,8 +1175,11 @@ export default function ChatScreen({ route, navigation }: any) {
       // Note: Removed duplicate setServerConversationId call that was after the message handling
       // The conversation ID is now saved once at the beginning of this block
 
-      if (!sessionChanged && finalText && config.ttsEnabled !== false) {
-        const processedText = preprocessTextForTTS(finalText);
+      // TTS: prefer userResponse (from respond_to_user tool) over finalText
+      // userResponse is explicitly set by the agent for user communication
+      const ttsText = lastUserResponse || finalText;
+      if (!sessionChanged && ttsText && config.ttsEnabled !== false) {
+        const processedText = preprocessTextForTTS(ttsText);
         const speechOptions: Speech.SpeechOptions = {
           language: 'en-US',
           rate: config.ttsRate ?? 1.0,
@@ -1335,10 +1345,16 @@ export default function ChatScreen({ route, navigation }: any) {
 
     try {
       let streamingText = '';
+      // Track userResponse from progress updates for TTS
+      let lastUserResponse: string | undefined;
 
       const onProgress = (update: AgentProgressUpdate) => {
         if (sessionStore.currentSessionId !== requestSessionId) return;
         if (activeRequestIdRef.current !== thisRequestId) return;
+        // Capture userResponse from progress updates for TTS
+        if (update.userResponse) {
+          lastUserResponse = update.userResponse;
+        }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
           setMessages((m) => {
@@ -1428,8 +1444,10 @@ export default function ChatScreen({ route, navigation }: any) {
         });
       }
 
-      if (finalText && config.ttsEnabled !== false) {
-        const processedText = preprocessTextForTTS(finalText);
+      // TTS: prefer userResponse (from respond_to_user tool) over finalText
+      const ttsText = lastUserResponse || finalText;
+      if (ttsText && config.ttsEnabled !== false) {
+        const processedText = preprocessTextForTTS(ttsText);
         const speechOptions: Speech.SpeechOptions = {
           language: 'en-US',
           rate: config.ttsRate ?? 1.0,

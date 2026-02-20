@@ -481,11 +481,11 @@ export function Component() {
                 variant="ghost"
                 size="sm"
                 onClick={handleResetTileLayout}
-                className="gap-2 text-muted-foreground hover:text-foreground"
+                className="h-7 px-2 text-muted-foreground hover:text-foreground"
                 title="Reset all tile sizes to default dimensions"
+                aria-label="Reset layout"
               >
                 <RotateCcw className="h-4 w-4" />
-                Reset Layout
               </Button>
             )}
             {inactiveSessionCount > 0 && (
@@ -493,11 +493,11 @@ export function Component() {
                 variant="ghost"
                 size="sm"
                 onClick={handleClearInactiveSessions}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-                title="Clear all completed sessions from view (conversations are saved to history)"
+                className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                title={`Clear ${inactiveSessionCount} completed sessions (conversations are saved to history)`}
+                aria-label={`Clear ${inactiveSessionCount} completed sessions`}
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Clear {inactiveSessionCount} completed
               </Button>
             )}
           </div>

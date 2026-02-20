@@ -6,7 +6,7 @@ import { useTheme, ThemeMode } from '../ui/ThemeProvider';
 import { spacing, radius } from '../ui/theme';
 import { useProfile } from '../store/profile';
 import { usePushNotifications } from '../lib/pushNotifications';
-import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo, SettingsUpdate } from '../lib/settingsApi';
+import { ExtendedSettingsApiClient, Profile, MCPServer, Settings, ModelInfo, SettingsUpdate, Skill, Memory, AgentProfile, Loop } from '../lib/settingsApi';
 import { TTSSettings } from '../ui/TTSSettings';
 
 // Enable LayoutAnimation on Android
@@ -48,6 +48,16 @@ export default function SettingsScreen({ navigation }: any) {
   // Track if the server is a SpeakMCP desktop server (supports our settings API)
   const [isSpeakMCPServer, setIsSpeakMCPServer] = useState(false);
 
+  // Skills, Memories, Personas, and Loops state
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
+  const [loops, setLoops] = useState<Loop[]>([]);
+  const [isLoadingSkills, setIsLoadingSkills] = useState(false);
+  const [isLoadingMemories, setIsLoadingMemories] = useState(false);
+  const [isLoadingAgentProfiles, setIsLoadingAgentProfiles] = useState(false);
+  const [isLoadingLoops, setIsLoadingLoops] = useState(false);
+
   // Profile import/export state
   const [isExportingProfile, setIsExportingProfile] = useState(false);
   const [isImportingProfile, setIsImportingProfile] = useState(false);
@@ -80,6 +90,10 @@ export default function SettingsScreen({ navigation }: any) {
     toolExecution: false,
     whatsapp: false,
     langfuse: false,
+    skills: false,
+    memories: false,
+    agentPersonas: false,
+    agentLoops: false,
   });
 
   // Debounced input state for string/number fields
@@ -91,7 +105,7 @@ export default function SettingsScreen({ navigation }: any) {
   // Create settings API client when we have valid credentials
   const settingsClient = useMemo(() => {
     if (config.baseUrl && config.apiKey) {
-      return new SettingsApiClient(config.baseUrl, config.apiKey);
+      return new ExtendedSettingsApiClient(config.baseUrl, config.apiKey);
     }
     return null;
   }, [config.baseUrl, config.apiKey]);
@@ -173,6 +187,62 @@ export default function SettingsScreen({ navigation }: any) {
     }
   }, [settingsClient]);
 
+  // Fetch skills from desktop
+  const fetchSkills = useCallback(async () => {
+    if (!settingsClient) return;
+    setIsLoadingSkills(true);
+    try {
+      const res = await settingsClient.getSkills();
+      setSkills(res.skills);
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch skills:', error);
+    } finally {
+      setIsLoadingSkills(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch memories from desktop
+  const fetchMemories = useCallback(async () => {
+    if (!settingsClient) return;
+    setIsLoadingMemories(true);
+    try {
+      const res = await settingsClient.getMemories();
+      setMemories(res.memories);
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch memories:', error);
+    } finally {
+      setIsLoadingMemories(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch agent profiles from desktop
+  const fetchAgentProfiles = useCallback(async () => {
+    if (!settingsClient) return;
+    setIsLoadingAgentProfiles(true);
+    try {
+      const res = await settingsClient.getAgentProfiles();
+      setAgentProfiles(res.profiles);
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch agent profiles:', error);
+    } finally {
+      setIsLoadingAgentProfiles(false);
+    }
+  }, [settingsClient]);
+
+  // Fetch loops from desktop
+  const fetchLoops = useCallback(async () => {
+    if (!settingsClient) return;
+    setIsLoadingLoops(true);
+    try {
+      const res = await settingsClient.getLoops();
+      setLoops(res.loops);
+    } catch (error: any) {
+      console.error('[Settings] Failed to fetch loops:', error);
+    } finally {
+      setIsLoadingLoops(false);
+    }
+  }, [settingsClient]);
+
   // Fetch remote settings when client becomes available
   useEffect(() => {
     if (settingsClient) {
@@ -180,12 +250,26 @@ export default function SettingsScreen({ navigation }: any) {
     }
   }, [settingsClient, fetchRemoteSettings]);
 
+  // Fetch SpeakMCP-specific data only after confirming it's a SpeakMCP server
+  useEffect(() => {
+    if (settingsClient && isSpeakMCPServer) {
+      fetchSkills();
+      fetchMemories();
+      fetchAgentProfiles();
+      fetchLoops();
+    }
+  }, [settingsClient, isSpeakMCPServer, fetchSkills, fetchMemories, fetchAgentProfiles, fetchLoops]);
+
   // Handle pull-to-refresh
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await fetchRemoteSettings();
+    const fetches: Promise<void>[] = [fetchRemoteSettings()];
+    if (isSpeakMCPServer) {
+      fetches.push(fetchSkills(), fetchMemories(), fetchAgentProfiles(), fetchLoops());
+    }
+    await Promise.all(fetches);
     setIsRefreshing(false);
-  }, [fetchRemoteSettings]);
+  }, [isSpeakMCPServer, fetchRemoteSettings, fetchSkills, fetchMemories, fetchAgentProfiles, fetchLoops]);
 
   // Handle profile switch
   const handleProfileSwitch = async (profileId: string) => {
@@ -199,9 +283,13 @@ export default function SettingsScreen({ navigation }: any) {
       if (selectedProfile) {
         setProfileContext(selectedProfile);
       }
-      // Refresh MCP servers as they may have changed with the profile
+      // Refresh MCP servers and skills as they may have changed with the profile
       const serversRes = await settingsClient.getMCPServers();
       setMcpServers(serversRes.servers);
+      // Skills enabledForProfile is profile-specific, so refetch after switch
+      if (isSpeakMCPServer) {
+        fetchSkills();
+      }
     } catch (error: any) {
       console.error('[Settings] Failed to switch profile:', error);
       setRemoteError(error.message || 'Failed to switch profile');
@@ -325,6 +413,88 @@ export default function SettingsScreen({ navigation }: any) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
+
+  // Handle skill toggle for current profile
+  const handleSkillToggle = async (skillId: string) => {
+    if (!settingsClient) return;
+    try {
+      const res = await settingsClient.toggleSkillForProfile(skillId);
+      // Optimistically update the UI
+      setSkills(prev =>
+        prev.map(s => (s.id === skillId ? { ...s, enabledForProfile: res.enabledForProfile } : s))
+      );
+    } catch (error: any) {
+      console.error('[Settings] Failed to toggle skill:', error);
+      Alert.alert('Error', 'Failed to toggle skill');
+    }
+  };
+
+  // Handle memory delete
+  const handleMemoryDelete = async (memoryId: string) => {
+    if (!settingsClient) return;
+    Alert.alert(
+      'Delete Memory',
+      'Are you sure you want to delete this memory?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await settingsClient.deleteMemory(memoryId);
+              setMemories(prev => prev.filter(m => m.id !== memoryId));
+            } catch (error: any) {
+              console.error('[Settings] Failed to delete memory:', error);
+              Alert.alert('Error', 'Failed to delete memory');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle agent profile toggle
+  const handleAgentProfileToggle = async (profileId: string) => {
+    if (!settingsClient) return;
+    try {
+      const res = await settingsClient.toggleAgentProfile(profileId);
+      setAgentProfiles(prev =>
+        prev.map(p => (p.id === profileId ? { ...p, enabled: res.enabled } : p))
+      );
+    } catch (error: any) {
+      console.error('[Settings] Failed to toggle agent profile:', error);
+      Alert.alert('Error', 'Failed to toggle agent profile');
+    }
+  };
+
+  // Handle loop toggle
+  const handleLoopToggle = async (loopId: string) => {
+    if (!settingsClient) return;
+    try {
+      const res = await settingsClient.toggleLoop(loopId);
+      setLoops(prev =>
+        prev.map(l => (l.id === loopId ? { ...l, enabled: res.enabled } : l))
+      );
+    } catch (error: any) {
+      console.error('[Settings] Failed to toggle loop:', error);
+      Alert.alert('Error', 'Failed to toggle loop');
+    }
+  };
+
+  // Handle loop run
+  const handleLoopRun = async (loopId: string) => {
+    if (!settingsClient) return;
+    try {
+      await settingsClient.runLoop(loopId);
+      Alert.alert('Success', 'Loop triggered successfully');
+      // Refresh loops to get updated lastRunAt
+      fetchLoops();
+    } catch (error: any) {
+      console.error('[Settings] Failed to run loop:', error);
+      Alert.alert('Error', error.message || 'Failed to run loop');
+    }
+  };
 
   // Handle push notification toggle
   const handleNotificationToggle = async (enabled: boolean) => {
@@ -1424,6 +1594,171 @@ export default function SettingsScreen({ navigation }: any) {
                     </Text>
                   </>
                 )}
+              </CollapsibleSection>
+            )}
+
+            {/* 4k. Skills */}
+            {isSpeakMCPServer && (
+              <CollapsibleSection id="skills" title="Skills">
+                {isLoadingSkills ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : skills.length === 0 ? (
+                  <Text style={styles.helperText}>No skills configured</Text>
+                ) : (
+                  skills.map((skill) => (
+                    <View key={skill.id} style={[styles.serverRow, !skill.enabled && { opacity: 0.5 }]}>
+                      <View style={styles.serverInfo}>
+                        <Text style={styles.serverName}>{skill.name}</Text>
+                        <Text style={styles.serverMeta}>
+                          {!skill.enabled ? '(Globally disabled) ' : ''}{skill.description}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={skill.enabledForProfile}
+                        onValueChange={() => handleSkillToggle(skill.id)}
+                        disabled={!skill.enabled}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                        thumbColor={skill.enabledForProfile && skill.enabled ? theme.colors.primaryForeground : theme.colors.background}
+                      />
+                    </View>
+                  ))
+                )}
+                <Text style={styles.helperText}>
+                  Toggle skills for the current profile
+                </Text>
+              </CollapsibleSection>
+            )}
+
+            {/* 4l. Memories */}
+            {isSpeakMCPServer && (
+              <CollapsibleSection id="memories" title="Memories">
+                {isLoadingMemories ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : memories.length === 0 ? (
+                  <Text style={styles.helperText}>No memories saved</Text>
+                ) : (
+                  memories.map((memory) => (
+                    <View key={memory.id} style={[styles.serverRow, { alignItems: 'flex-start' }]}>
+                      <View style={[styles.serverInfo, { flex: 1 }]}>
+                        <Text style={styles.serverName}>{memory.title}</Text>
+                        <Text style={styles.serverMeta} numberOfLines={2}>{memory.content}</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+                          {memory.tags.map((tag, idx) => (
+                            <View key={idx} style={[styles.providerOption, { paddingHorizontal: 6, paddingVertical: 2, marginRight: 4, marginTop: 2 }]}>
+                              <Text style={[styles.providerOptionText, { fontSize: 10 }]}>{tag}</Text>
+                            </View>
+                          ))}
+                          <View style={[
+                            styles.providerOption,
+                            { paddingHorizontal: 6, paddingVertical: 2, marginRight: 4, marginTop: 2 },
+                            memory.importance === 'critical' && { backgroundColor: theme.colors.destructive },
+                            memory.importance === 'high' && { backgroundColor: theme.colors.primary },
+                          ]}>
+                            <Text style={[styles.providerOptionText, { fontSize: 10 }]}>{memory.importance}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={{ padding: 8 }}
+                        onPress={() => handleMemoryDelete(memory.id)}
+                      >
+                        <Text style={{ color: theme.colors.destructive, fontSize: 16 }}>🗑️</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+                <Text style={styles.helperText}>
+                  Manage saved agent memories
+                </Text>
+              </CollapsibleSection>
+            )}
+
+            {/* 4m. Agent Personas */}
+            {isSpeakMCPServer && (
+              <CollapsibleSection id="agentPersonas" title="Agent Personas">
+                {isLoadingAgentProfiles ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : agentProfiles.length === 0 ? (
+                  <Text style={styles.helperText}>No agent personas configured</Text>
+                ) : (
+                  agentProfiles.map((profile) => (
+                    <View key={profile.id} style={styles.serverRow}>
+                      <View style={styles.serverInfo}>
+                        <View style={styles.serverNameRow}>
+                          <Text style={styles.serverName}>{profile.displayName}</Text>
+                          {profile.isBuiltIn && (
+                            <View style={[styles.providerOption, { paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 }]}>
+                              <Text style={[styles.providerOptionText, { fontSize: 10 }]}>Built-in</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.serverMeta}>
+                          {profile.connectionType} • {profile.role || 'agent'}
+                        </Text>
+                        {profile.description && (
+                          <Text style={styles.serverMeta} numberOfLines={1}>{profile.description}</Text>
+                        )}
+                      </View>
+                      <Switch
+                        value={profile.enabled}
+                        onValueChange={() => handleAgentProfileToggle(profile.id)}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                        thumbColor={profile.enabled ? theme.colors.primaryForeground : theme.colors.background}
+                      />
+                    </View>
+                  ))
+                )}
+                <Text style={styles.helperText}>
+                  Enable or disable agent personas for delegation
+                </Text>
+              </CollapsibleSection>
+            )}
+
+            {/* 4n. Agent Loops */}
+            {isSpeakMCPServer && (
+              <CollapsibleSection id="agentLoops" title="Agent Loops">
+                {isLoadingLoops ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : loops.length === 0 ? (
+                  <Text style={styles.helperText}>No agent loops configured</Text>
+                ) : (
+                  loops.map((loop) => (
+                    <View key={loop.id} style={[styles.serverRow, { alignItems: 'flex-start' }]}>
+                      <View style={[styles.serverInfo, { flex: 1 }]}>
+                        <View style={styles.serverNameRow}>
+                          <View style={[
+                            styles.statusDot,
+                            loop.isRunning ? styles.statusConnected : styles.statusDisconnected,
+                          ]} />
+                          <Text style={styles.serverName}>{loop.name}</Text>
+                        </View>
+                        <Text style={styles.serverMeta} numberOfLines={2}>{loop.prompt}</Text>
+                        <Text style={styles.serverMeta}>
+                          Every {loop.intervalMinutes}min
+                          {loop.profileName && ` • ${loop.profileName}`}
+                          {loop.lastRunAt && ` • Last: ${new Date(loop.lastRunAt).toLocaleTimeString()}`}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'center' }}>
+                        <Switch
+                          value={loop.enabled}
+                          onValueChange={() => handleLoopToggle(loop.id)}
+                          trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                          thumbColor={loop.enabled ? theme.colors.primaryForeground : theme.colors.background}
+                        />
+                        <TouchableOpacity
+                          style={{ marginTop: 8, padding: 4 }}
+                          onPress={() => handleLoopRun(loop.id)}
+                        >
+                          <Text style={{ color: theme.colors.primary, fontSize: 12 }}>▶ Run</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )}
+                <Text style={styles.helperText}>
+                  Scheduled agent tasks that run at intervals
+                </Text>
               </CollapsibleSection>
             )}
           </>

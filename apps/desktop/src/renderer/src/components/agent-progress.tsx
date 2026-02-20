@@ -19,6 +19,7 @@ import { getToolResultsSummary } from "@speakmcp/shared"
 import { ToolExecutionStats } from "./tool-execution-stats"
 import { ACPSessionBadge } from "./acp-session-badge"
 import { AgentSummaryView } from "./agent-summary-view"
+import { hasTTSPlayed, markTTSPlayed, removeTTSKey } from "@renderer/lib/tts-tracking"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -112,19 +113,38 @@ const CompactMessage: React.FC<{
   onToggleExpand: () => void
   /** Variant controls TTS auto-play - only 'overlay' variant auto-plays TTS to prevent double playback */
   variant?: "default" | "overlay" | "tile"
-}> = ({ message, ttsText, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default" }) => {
+  /** Session ID for tracking TTS playback across remounts */
+  sessionId?: string
+}> = ({ message, ttsText, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default", sessionId }) => {
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Track the ttsKey that's currently being generated, so we can clean it up on unmount
+  const inFlightTtsKeyRef = useRef<string | null>(null)
   const configQuery = useConfigQuery()
 
-  // Cleanup copy timeout on unmount
+  // Cleanup copy timeout and in-flight TTS key on unmount
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current)
+      }
+      // If we're unmounting while TTS generation is in-flight, remove the key
+      // from the tracking set so future mounts can retry generation
+      const inFlightKeyAtUnmount = inFlightTtsKeyRef.current
+      if (inFlightKeyAtUnmount) {
+        // IMPORTANT: defer cleanup to a microtask.
+        // If generation has already completed, its `.then()` handler will run
+        // before this microtask and clear `inFlightTtsKeyRef`, preventing us
+        // from accidentally deleting a "success" key during a view switch.
+        queueMicrotask(() => {
+          if (inFlightTtsKeyRef.current === inFlightKeyAtUnmount) {
+            removeTTSKey(inFlightKeyAtUnmount)
+            inFlightTtsKeyRef.current = null
+          }
+        })
       }
     }
   }, [])
@@ -155,19 +175,38 @@ const CompactMessage: React.FC<{
     displayResults.length > 0
   const shouldCollapse = (message.content?.length ?? 0) > 100 || hasExtras
 
+  // Track the computed ttsSource (ttsText || message.content) since that's what determines the
+  // ttsKey and should also gate async state updates.
+  const ttsSource = ttsText || message.content
+  const latestTtsSourceRef = useRef(ttsSource)
+  latestTtsSourceRef.current = ttsSource
+  const ttsGenerationIdRef = useRef(0)
+
   // TTS functionality
   const generateAudio = async (): Promise<ArrayBuffer> => {
     if (!configQuery.data?.ttsEnabled) {
       throw new Error("TTS is not enabled")
     }
 
+    const generationId = ++ttsGenerationIdRef.current
+    const generationSource = ttsSource
+
     setIsGeneratingAudio(true)
     setTtsError(null)
 
     try {
       const result = await tipcClient.generateSpeech({
-        text: ttsText || message.content,
+        text: generationSource,
       })
+
+      // Ignore stale completions if the TTS source changed while this request was in-flight.
+      if (
+        ttsGenerationIdRef.current !== generationId ||
+        latestTtsSourceRef.current !== generationSource
+      ) {
+        return result.audio
+      }
+
       setAudioData(result.audio)
       return result.audio
     } catch (error) {
@@ -191,22 +230,31 @@ const CompactMessage: React.FC<{
         }
       }
 
-      setTtsError(errorMessage)
+      // Only surface the error if this is still the latest generation for the current source.
+      if (
+        ttsGenerationIdRef.current === generationId &&
+        latestTtsSourceRef.current === generationSource
+      ) {
+        setTtsError(errorMessage)
+      }
       throw error
     } finally {
-      setIsGeneratingAudio(false)
+      // Only clear the spinner for the latest in-flight request.
+      if (ttsGenerationIdRef.current === generationId) {
+        setIsGeneratingAudio(false)
+      }
     }
   }
 
   // Invalidate cached audio when the TTS source text changes (e.g. via a later progress merge)
   // so stale audio from a previous text is never played alongside the new text.
-  const prevTtsTextRef = useRef(ttsText)
+  const prevTtsSourceRef = useRef(ttsSource)
   useEffect(() => {
-    if (prevTtsTextRef.current !== ttsText) {
-      prevTtsTextRef.current = ttsText
+    if (prevTtsSourceRef.current !== ttsSource) {
+      prevTtsSourceRef.current = ttsSource
       setAudioData(null)
     }
-  }, [ttsText])
+  }, [ttsSource])
 
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
@@ -221,15 +269,48 @@ const CompactMessage: React.FC<{
   //   (they run silently in background - user can unsnooze to see/hear them)
   // - The "default" variant (main window ConversationDisplay) and "tile" variant (session tiles)
   //   never auto-play TTS - they are for viewing/managing, not primary interaction
+  // - Additionally, we track which sessions have already played TTS in a module-level set
+  //   to prevent double playback when AgentProgress remounts (e.g., when switching between
+  //   single-session and multi-session views in the panel)
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"
-    if (shouldAutoPlay && shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
-      generateAudio().catch((error) => {
+    if (!shouldAutoPlay || !shouldShowTTS || !configQuery.data?.ttsAutoPlay || audioData || isGeneratingAudio || ttsError || wasStopped) {
+      return
+    }
+
+    // Create a key to track TTS playback for this specific session + content combination
+    // Use ttsSource (computed above) to ensure consistency with audioData invalidation
+    const ttsKey = sessionId ? `${sessionId}:${ttsSource}` : null
+
+    // If we have a session key and TTS has already played for this content, skip
+    if (ttsKey && hasTTSPlayed(ttsKey)) {
+      return
+    }
+
+    // Mark as playing before starting generation to prevent race conditions
+    if (ttsKey) {
+      markTTSPlayed(ttsKey)
+      // Track in-flight key so we can clean up on unmount
+      inFlightTtsKeyRef.current = ttsKey
+    }
+
+    generateAudio()
+      .then(() => {
+        // Generation succeeded, clear the in-flight ref (key stays in set permanently)
+        inFlightTtsKeyRef.current = null
+      })
+      .catch((error) => {
+        // If generation fails, remove from the set so user can retry
+        // Only remove if this is still the in-flight key (prevents race condition where
+        // a new mount re-added the key and this old catch handler would delete it)
+        if (ttsKey && inFlightTtsKeyRef.current === ttsKey) {
+          removeTTSKey(ttsKey)
+          inFlightTtsKeyRef.current = null
+        }
         // Error is already handled in generateAudio function
       })
-    }
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
+  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsSource])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -2375,6 +2456,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                             isExpanded={isExpanded}
                             onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                             variant="tile"
+                            sessionId={progress.sessionId}
                           />
                         )
                       } else if (item.kind === "assistant_with_tools") {
@@ -2731,6 +2813,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                       isExpanded={isExpanded}
                       onToggleExpand={() => toggleItemExpansion(itemKey, isExpanded)}
                       variant={variant}
+                      sessionId={progress.sessionId}
                     />
                   )
                 } else if (item.kind === "assistant_with_tools") {

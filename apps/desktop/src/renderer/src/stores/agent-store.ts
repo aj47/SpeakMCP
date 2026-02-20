@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { AgentProgressUpdate, QueuedMessage } from '@shared/types'
+import { clearSessionTTSTracking } from '@renderer/lib/tts-tracking'
 
 export type SessionViewMode = 'grid' | 'list' | 'kanban'
 export type SessionFilter = 'all' | 'active' | 'completed' | 'error'
@@ -179,6 +180,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   clearAllProgress: () => {
+    // Clear TTS tracking for all sessions being removed
+    const state = get()
+    for (const sessionId of state.agentProgressById.keys()) {
+      clearSessionTTSTracking(sessionId)
+    }
     set({
       agentProgressById: new Map(),
       focusedSessionId: null,
@@ -186,6 +192,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   clearSessionProgress: (sessionId: string) => {
+    // Clear TTS tracking for this session
+    clearSessionTTSTracking(sessionId)
     set((state) => {
       const newMap = new Map(state.agentProgressById)
       newMap.delete(sessionId)
@@ -212,6 +220,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   clearInactiveSessions: () => {
+    // Clear TTS tracking for sessions being removed
+    const state = get()
+    for (const [sessionId, progress] of state.agentProgressById.entries()) {
+      if (progress.isComplete) {
+        clearSessionTTSTracking(sessionId)
+      }
+    }
     set((state) => {
       const newMap = new Map<string, AgentProgressUpdate>()
 

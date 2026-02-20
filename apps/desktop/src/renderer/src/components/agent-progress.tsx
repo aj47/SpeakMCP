@@ -210,15 +210,17 @@ const CompactMessage: React.FC<{
   //   (they run silently in background - user can unsnooze to see/hear them)
   // - The "default" variant (main window ConversationDisplay) and "tile" variant (session tiles)
   //   never auto-play TTS - they are for viewing/managing, not primary interaction
+  // - For non-final messages (isComplete=false at session level), never auto-generate TTS -
+  //   only generate on button click to avoid wasting processing power on intermediate messages
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"
-    if (shouldAutoPlay && canUseTTS && isLast && isMessageComplete && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
+    if (shouldAutoPlay && canUseTTS && isLast && isComplete && isMessageComplete && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
       generateAudio().catch((error) => {
         // Error is already handled in generateAudio function
       })
     }
-  }, [canUseTTS, isLast, isMessageComplete, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
+  }, [canUseTTS, isLast, isComplete, isMessageComplete, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
 
   const getRoleStyle = () => {
     switch (message.role) {

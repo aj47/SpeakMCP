@@ -651,7 +651,7 @@ export async function processTranscriptWithAgentMode(
       content,
       toolCalls,
       toolResults,
-      timestamp: timestamp || Date.now()
+      timestamp: timestamp ?? Date.now(),
     }
     conversationHistory.push(message)
 
@@ -675,7 +675,7 @@ export async function processTranscriptWithAgentMode(
       content,
       toolCalls,
       toolResults,
-      timestamp: timestamp || Date.now(),
+      timestamp: timestamp ?? Date.now(),
       ephemeral: true,
     }
 

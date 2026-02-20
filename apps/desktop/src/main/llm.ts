@@ -32,11 +32,12 @@ import {
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
 import { clearSessionUserResponse, getSessionUserResponse } from "./session-user-response-store"
-
-const MARK_WORK_COMPLETE_TOOL = "speakmcp-settings:mark_work_complete"
-const RESPOND_TO_USER_TOOL = "speakmcp-settings:respond_to_user"
-const INTERNAL_COMPLETION_NUDGE_TEXT =
-  `If all requested work is complete, use ${RESPOND_TO_USER_TOOL} to tell the user the result, then call ${MARK_WORK_COMPLETE_TOOL} with a concise summary. Otherwise continue working and call more tools.`
+import {
+  MARK_WORK_COMPLETE_TOOL,
+  RESPOND_TO_USER_TOOL,
+  INTERNAL_COMPLETION_NUDGE_TEXT,
+} from "../shared/builtin-tool-names"
+import { filterEphemeralMessages } from "./conversation-history-utils"
 
 /**
  * Clean error message by removing stack traces and noise
@@ -681,6 +682,26 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Helper function to add a message to the in-memory conversation history ONLY (not persisted).
+  // Use for internal prompt-engineering nudges that should never appear in saved transcripts.
+  const addEphemeralMessage = (
+    role: "user" | "assistant" | "tool",
+    content: string,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[],
+    timestamp?: number
+  ) => {
+    const message: typeof conversationHistory[0] = {
+      role,
+      content,
+      toolCalls,
+      toolResults,
+      timestamp: timestamp ?? Date.now(),
+      ephemeral: true,
+    }
+    conversationHistory.push(message)
+  }
+
   // Track current iteration for retry progress callback
   // This is updated in the agent loop and read by onRetryProgress
   let currentIterationRef = 0
@@ -792,6 +813,7 @@ export async function processTranscriptWithAgentMode(
     toolCalls?: MCPToolCall[]
     toolResults?: MCPToolResult[]
     timestamp?: number
+    ephemeral?: boolean
   }> = [
     ...(previousConversationHistory || []),
     { role: "user", content: transcript, timestamp: Date.now() },
@@ -821,6 +843,8 @@ export async function processTranscriptWithAgentMode(
   let emptyResponseRetryCount = 0
 
   // Helper function to convert conversation history to the format expected by AgentProgressUpdate
+  // - Filters out ephemeral messages (internal prompt-engineering nudges)
+  // - Filters out other internal "user" nudges that we don't want to render in the progress UI
   const formatConversationForProgress = (
     history: typeof conversationHistory,
   ) => {
@@ -829,20 +853,21 @@ export async function processTranscriptWithAgentMode(
       if (trimmed === INTERNAL_COMPLETION_NUDGE_TEXT) return true
 
       return (
-        content.includes("Please either take action using available tools") ||
-        content.includes("You have relevant tools available for this request") ||
-        content.includes("Your previous response was empty") ||
-        content.includes("Verifier indicates the task is not complete") ||
-        content.includes("Please respond with a valid JSON object") ||
-        content.includes("Use available tools directly via native function-calling") ||
-        content.includes("Provide a complete final answer") ||
-        content.includes("Your last response was not a final deliverable") ||
-        content.includes("Your last response was empty or non-deliverable") ||
-        content.includes("Continue and finish remaining work")
+        trimmed.includes("Please either take action using available tools") ||
+        trimmed.includes("You have relevant tools available for this request") ||
+        trimmed.includes("Your previous response was empty") ||
+        trimmed.includes("Verifier indicates the task is not complete") ||
+        trimmed.includes("Please respond with a valid JSON object") ||
+        trimmed.includes("Use available tools directly via native function-calling") ||
+        trimmed.includes("Provide a complete final answer") ||
+        trimmed.includes("Your last response was not a final deliverable") ||
+        trimmed.includes("Your last response was empty or non-deliverable") ||
+        trimmed.includes("Continue and finish remaining work")
       )
     }
 
     return history
+      .filter((entry) => !entry.ephemeral)
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
       .map((entry) => ({
         role: entry.role,
@@ -1821,10 +1846,8 @@ Return ONLY JSON per schema.`,
             if (trimmedContent.length > 0) {
               addMessage("assistant", contentText)
             }
-            addMessage(
-              "user",
-              INTERNAL_COMPLETION_NUDGE_TEXT,
-            )
+            // Internal completion nudge: include in LLM context, but do NOT persist to disk.
+            addEphemeralMessage("user", INTERNAL_COMPLETION_NUDGE_TEXT)
             completionSignalHintCount++
             // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
             // completion in a tool-driven task is still a no-op from a progress standpoint.
@@ -2828,7 +2851,7 @@ Return ONLY JSON per schema.`,
 
     return {
       content: finalContent,
-      conversationHistory,
+      conversationHistory: filterEphemeralMessages(conversationHistory),
       totalIterations: iteration,
     }
   } finally {

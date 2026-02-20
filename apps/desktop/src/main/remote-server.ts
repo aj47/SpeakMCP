@@ -1043,6 +1043,42 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         whatsappEnabled: cfg.whatsappEnabled ?? false,
         // Agent settings
         mcpMaxIterations: cfg.mcpMaxIterations ?? 10,
+        // Streamer Mode
+        streamerModeEnabled: cfg.streamerModeEnabled ?? false,
+        // Speech-to-Text
+        sttLanguage: cfg.sttLanguage ?? "",
+        transcriptionPreviewEnabled: cfg.transcriptionPreviewEnabled ?? true,
+        transcriptPostProcessingPrompt: cfg.transcriptPostProcessingPrompt ?? "",
+        // Text-to-Speech
+        ttsAutoPlay: cfg.ttsAutoPlay ?? true,
+        ttsPreprocessingEnabled: cfg.ttsPreprocessingEnabled ?? true,
+        ttsRemoveCodeBlocks: cfg.ttsRemoveCodeBlocks ?? true,
+        ttsRemoveUrls: cfg.ttsRemoveUrls ?? true,
+        ttsConvertMarkdown: cfg.ttsConvertMarkdown ?? true,
+        ttsUseLLMPreprocessing: cfg.ttsUseLLMPreprocessing ?? false,
+        // Agent settings (extended)
+        mainAgentMode: cfg.mainAgentMode ?? "api",
+        mcpMessageQueueEnabled: cfg.mcpMessageQueueEnabled ?? true,
+        mcpVerifyCompletionEnabled: cfg.mcpVerifyCompletionEnabled ?? true,
+        mcpFinalSummaryEnabled: cfg.mcpFinalSummaryEnabled ?? false,
+        memoriesEnabled: cfg.memoriesEnabled ?? false,
+        dualModelInjectMemories: cfg.dualModelInjectMemories ?? true,
+        dualModelEnabled: cfg.dualModelEnabled ?? false,
+        dualModelAutoSaveImportant: cfg.dualModelAutoSaveImportant ?? false,
+        mcpUnlimitedIterations: cfg.mcpUnlimitedIterations ?? false,
+        // Tool Execution
+        mcpContextReductionEnabled: cfg.mcpContextReductionEnabled ?? true,
+        mcpToolResponseProcessingEnabled: cfg.mcpToolResponseProcessingEnabled ?? true,
+        mcpParallelToolExecution: cfg.mcpParallelToolExecution ?? false,
+        // WhatsApp (extended)
+        whatsappAllowedNumbers: cfg.whatsappAllowedNumbers ?? "",
+        whatsappAutoReplyEnabled: cfg.whatsappAutoReplyEnabled ?? false,
+        whatsappLogMessagesEnabled: cfg.whatsappLogMessagesEnabled ?? false,
+        // Langfuse
+        langfuseEnabled: cfg.langfuseEnabled ?? false,
+        langfusePublicKey: cfg.langfusePublicKey ?? "",
+        langfuseSecretKey: cfg.langfuseSecretKey ?? "",
+        langfuseBaseUrl: cfg.langfuseBaseUrl ?? "",
       })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to get settings", error)
@@ -1100,6 +1136,101 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
           updates.currentModelPresetId = body.currentModelPresetId
         }
         // If preset ID is invalid, silently ignore to avoid breaking client
+      }
+      // Streamer Mode
+      if (typeof body.streamerModeEnabled === "boolean") {
+        updates.streamerModeEnabled = body.streamerModeEnabled
+      }
+      // Speech-to-Text
+      if (typeof body.sttLanguage === "string") {
+        updates.sttLanguage = body.sttLanguage
+      }
+      if (typeof body.transcriptionPreviewEnabled === "boolean") {
+        updates.transcriptionPreviewEnabled = body.transcriptionPreviewEnabled
+      }
+      if (typeof body.transcriptPostProcessingPrompt === "string") {
+        updates.transcriptPostProcessingPrompt = body.transcriptPostProcessingPrompt
+      }
+      // Text-to-Speech
+      if (typeof body.ttsAutoPlay === "boolean") {
+        updates.ttsAutoPlay = body.ttsAutoPlay
+      }
+      if (typeof body.ttsPreprocessingEnabled === "boolean") {
+        updates.ttsPreprocessingEnabled = body.ttsPreprocessingEnabled
+      }
+      if (typeof body.ttsRemoveCodeBlocks === "boolean") {
+        updates.ttsRemoveCodeBlocks = body.ttsRemoveCodeBlocks
+      }
+      if (typeof body.ttsRemoveUrls === "boolean") {
+        updates.ttsRemoveUrls = body.ttsRemoveUrls
+      }
+      if (typeof body.ttsConvertMarkdown === "boolean") {
+        updates.ttsConvertMarkdown = body.ttsConvertMarkdown
+      }
+      if (typeof body.ttsUseLLMPreprocessing === "boolean") {
+        updates.ttsUseLLMPreprocessing = body.ttsUseLLMPreprocessing
+      }
+      // Agent settings
+      const validAgentModes = ["api", "acp"]
+      if (typeof body.mainAgentMode === "string" && validAgentModes.includes(body.mainAgentMode)) {
+        updates.mainAgentMode = body.mainAgentMode as "api" | "acp"
+      }
+      if (typeof body.mcpMessageQueueEnabled === "boolean") {
+        updates.mcpMessageQueueEnabled = body.mcpMessageQueueEnabled
+      }
+      if (typeof body.mcpVerifyCompletionEnabled === "boolean") {
+        updates.mcpVerifyCompletionEnabled = body.mcpVerifyCompletionEnabled
+      }
+      if (typeof body.mcpFinalSummaryEnabled === "boolean") {
+        updates.mcpFinalSummaryEnabled = body.mcpFinalSummaryEnabled
+      }
+      if (typeof body.memoriesEnabled === "boolean") {
+        updates.memoriesEnabled = body.memoriesEnabled
+      }
+      if (typeof body.dualModelInjectMemories === "boolean") {
+        updates.dualModelInjectMemories = body.dualModelInjectMemories
+      }
+      if (typeof body.dualModelEnabled === "boolean") {
+        updates.dualModelEnabled = body.dualModelEnabled
+      }
+      if (typeof body.dualModelAutoSaveImportant === "boolean") {
+        updates.dualModelAutoSaveImportant = body.dualModelAutoSaveImportant
+      }
+      if (typeof body.mcpUnlimitedIterations === "boolean") {
+        updates.mcpUnlimitedIterations = body.mcpUnlimitedIterations
+      }
+      // Tool Execution
+      if (typeof body.mcpContextReductionEnabled === "boolean") {
+        updates.mcpContextReductionEnabled = body.mcpContextReductionEnabled
+      }
+      if (typeof body.mcpToolResponseProcessingEnabled === "boolean") {
+        updates.mcpToolResponseProcessingEnabled = body.mcpToolResponseProcessingEnabled
+      }
+      if (typeof body.mcpParallelToolExecution === "boolean") {
+        updates.mcpParallelToolExecution = body.mcpParallelToolExecution
+      }
+      // WhatsApp (extended)
+      if (typeof body.whatsappAllowedNumbers === "string") {
+        updates.whatsappAllowedNumbers = body.whatsappAllowedNumbers
+      }
+      if (typeof body.whatsappAutoReplyEnabled === "boolean") {
+        updates.whatsappAutoReplyEnabled = body.whatsappAutoReplyEnabled
+      }
+      if (typeof body.whatsappLogMessagesEnabled === "boolean") {
+        updates.whatsappLogMessagesEnabled = body.whatsappLogMessagesEnabled
+      }
+      // Langfuse
+      if (typeof body.langfuseEnabled === "boolean") {
+        updates.langfuseEnabled = body.langfuseEnabled
+      }
+      if (typeof body.langfusePublicKey === "string") {
+        updates.langfusePublicKey = body.langfusePublicKey
+      }
+      if (typeof body.langfuseSecretKey === "string") {
+        updates.langfuseSecretKey = body.langfuseSecretKey
+      }
+      if (typeof body.langfuseBaseUrl === "string") {
+        updates.langfuseBaseUrl = body.langfuseBaseUrl
       }
 
       if (Object.keys(updates).length === 0) {

@@ -70,7 +70,7 @@ export default function ConnectionSettingsScreen({ navigation }: any) {
       normalizedDraft.baseUrl = 'https://api.openai.com/v1';
     }
 
-    const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl !== 'https://api.openai.com/v1';
+    const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl.replace(/\/+$/, '') !== 'https://api.openai.com/v1';
     const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.length > 0;
 
     // Require API key when using a custom server URL

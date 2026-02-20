@@ -1394,7 +1394,18 @@ export default function SettingsScreen({ navigation }: any) {
                     <TextInput
                       style={styles.input}
                       value={inputDrafts.langfuseSecretKey ?? ''}
-                      onChangeText={(v) => handleRemoteSettingUpdate('langfuseSecretKey', v)}
+                      onChangeText={(v) => setInputDrafts(prev => ({ ...prev, langfuseSecretKey: v }))}
+                      onBlur={() => {
+                        const value = inputDrafts.langfuseSecretKey;
+                        if (value !== undefined && value !== '' && settingsClient) {
+                          settingsClient.updateSettings({ langfuseSecretKey: value }).then(() => {
+                            setRemoteSettings(prev => prev ? { ...prev, langfuseSecretKey: '••••••••' } : null);
+                          }).catch((error: any) => {
+                            console.error('[Settings] Failed to update langfuseSecretKey:', error);
+                            setRemoteError(error.message || 'Failed to update langfuseSecretKey');
+                          });
+                        }
+                      }}
                       placeholder="sk-..."
                       placeholderTextColor={theme.colors.mutedForeground}
                       autoCapitalize='none'

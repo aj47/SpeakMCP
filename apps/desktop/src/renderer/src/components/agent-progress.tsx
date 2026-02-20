@@ -2398,14 +2398,14 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   <div className="space-y-1 p-2">
                     {displayItems.map((item, index) => {
                       const itemKey = item.id
-                      const isLastAssistant = item.kind === "message" && item.data.role === "assistant" && index === lastAssistantDisplayIndex
                       // Final assistant message should be expanded by default when agent is complete
                       // Tool executions should be collapsed by default to reduce visual clutter
                       // unless user has explicitly toggled them (itemKey exists in expandedItems)
-                      const isFinalAssistantMessage = isLastAssistant && isComplete
+                      const isFinalAssistantMessage = item.kind === "message" && index === lastAssistantDisplayIndex && isComplete
                       const isExpanded = itemKey in expandedItems
                         ? expandedItems[itemKey]
                         : isFinalAssistantMessage // Only final assistant message expanded by default
+                      const isLastAssistant = item.kind === "message" && item.data.role === "assistant" && index === lastAssistantDisplayIndex
 
                       if (item.kind === "message") {
                         return (

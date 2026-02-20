@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import SessionListScreen from './src/screens/SessionListScreen';
+import ConnectionSettingsScreen from './src/screens/ConnectionSettingsScreen';
 import { ConfigContext, useConfig, saveConfig } from './src/store/config';
 import { SessionContext, useSessions } from './src/store/sessions';
 import { MessageQueueContext, useMessageQueue } from './src/store/message-queue';
@@ -322,6 +323,11 @@ function Navigation() {
                       name="Settings"
                       component={SettingsScreen}
                       options={{ title: 'SpeakMCP' }}
+                    />
+                    <Stack.Screen
+                      name="ConnectionSettings"
+                      component={ConnectionSettingsScreen}
+                      options={{ title: 'Connection' }}
                     />
                     <Stack.Screen
                       name="Sessions"

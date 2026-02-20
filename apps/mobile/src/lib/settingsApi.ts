@@ -40,17 +40,73 @@ export interface ModelPreset {
 }
 
 export interface Settings {
-  mcpToolsProviderId: 'openai' | 'groq' | 'gemini';
+  // MCP Tools Model Configuration
+  mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
   mcpToolsOpenaiModel?: string;
   mcpToolsGroqModel?: string;
   mcpToolsGeminiModel?: string;
   currentModelPresetId?: string;
   availablePresets?: ModelPreset[];
-  transcriptPostProcessingEnabled: boolean;
-  mcpRequireApprovalBeforeToolCall: boolean;
-  ttsEnabled: boolean;
-  whatsappEnabled: boolean;
-  mcpMaxIterations: number;
+
+  // Agent Execution Settings
+  mcpRequireApprovalBeforeToolCall?: boolean;
+  mcpMaxIterations?: number;
+  mcpUnlimitedIterations?: boolean;
+  mainAgentMode?: 'api' | 'acp';
+  mainAgentName?: string;
+  acpInjectBuiltinTools?: boolean;
+  mcpVerifyCompletionEnabled?: boolean;
+  mcpFinalSummaryEnabled?: boolean;
+
+  // Context Reduction & Tool Response Processing
+  mcpContextReductionEnabled?: boolean;
+  mcpToolResponseProcessingEnabled?: boolean;
+  mcpParallelToolExecution?: boolean;
+  mcpMessageQueueEnabled?: boolean;
+
+  // Speech-to-Text Configuration
+  sttProviderId?: 'openai' | 'groq' | 'parakeet';
+  sttLanguage?: string;
+  transcriptionPreviewEnabled?: boolean;
+
+  // Transcript Post-Processing
+  transcriptPostProcessingEnabled?: boolean;
+  transcriptPostProcessingProviderId?: 'openai' | 'groq' | 'gemini';
+  transcriptPostProcessingOpenaiModel?: string;
+  transcriptPostProcessingGroqModel?: string;
+  transcriptPostProcessingGeminiModel?: string;
+  transcriptPostProcessingPrompt?: string;
+
+  // Text-to-Speech Configuration
+  ttsEnabled?: boolean;
+  ttsAutoPlay?: boolean;
+  ttsProviderId?: 'openai' | 'groq' | 'gemini' | 'kitten' | 'supertonic';
+  ttsPreprocessingEnabled?: boolean;
+  ttsRemoveCodeBlocks?: boolean;
+  ttsRemoveUrls?: boolean;
+  ttsConvertMarkdown?: boolean;
+  ttsUseLLMPreprocessing?: boolean;
+
+  // WhatsApp Integration
+  whatsappEnabled?: boolean;
+  whatsappAllowFrom?: string[];
+  whatsappAutoReply?: boolean;
+  whatsappLogMessages?: boolean;
+
+  // Langfuse Observability
+  langfuseEnabled?: boolean;
+  langfusePublicKey?: string;
+  langfuseSecretKey?: string;
+  langfuseBaseUrl?: string;
+
+  // Dual-Model & Memory Settings
+  dualModelEnabled?: boolean;
+  dualModelInjectMemories?: boolean;
+  dualModelAutoSaveImportant?: boolean;
+  memoriesEnabled?: boolean;
+
+  // Streamer Mode
+  streamerModeEnabled?: boolean;
 }
 
 export interface ModelInfo {
@@ -107,16 +163,72 @@ export interface UpdateConversationRequest {
 }
 
 export interface SettingsUpdate {
-  transcriptPostProcessingEnabled?: boolean;
-  mcpRequireApprovalBeforeToolCall?: boolean;
-  ttsEnabled?: boolean;
-  whatsappEnabled?: boolean;
-  mcpMaxIterations?: number;
+  // MCP Tools Model Configuration
   mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
   mcpToolsOpenaiModel?: string;
   mcpToolsGroqModel?: string;
   mcpToolsGeminiModel?: string;
   currentModelPresetId?: string;
+
+  // Agent Execution Settings
+  mcpRequireApprovalBeforeToolCall?: boolean;
+  mcpMaxIterations?: number;
+  mcpUnlimitedIterations?: boolean;
+  mainAgentMode?: 'api' | 'acp';
+  mainAgentName?: string;
+  acpInjectBuiltinTools?: boolean;
+  mcpVerifyCompletionEnabled?: boolean;
+  mcpFinalSummaryEnabled?: boolean;
+
+  // Context Reduction & Tool Response Processing
+  mcpContextReductionEnabled?: boolean;
+  mcpToolResponseProcessingEnabled?: boolean;
+  mcpParallelToolExecution?: boolean;
+  mcpMessageQueueEnabled?: boolean;
+
+  // Speech-to-Text Configuration
+  sttProviderId?: 'openai' | 'groq' | 'parakeet';
+  sttLanguage?: string;
+  transcriptionPreviewEnabled?: boolean;
+
+  // Transcript Post-Processing
+  transcriptPostProcessingEnabled?: boolean;
+  transcriptPostProcessingProviderId?: 'openai' | 'groq' | 'gemini';
+  transcriptPostProcessingOpenaiModel?: string;
+  transcriptPostProcessingGroqModel?: string;
+  transcriptPostProcessingGeminiModel?: string;
+  transcriptPostProcessingPrompt?: string;
+
+  // Text-to-Speech Configuration
+  ttsEnabled?: boolean;
+  ttsAutoPlay?: boolean;
+  ttsProviderId?: 'openai' | 'groq' | 'gemini' | 'kitten' | 'supertonic';
+  ttsPreprocessingEnabled?: boolean;
+  ttsRemoveCodeBlocks?: boolean;
+  ttsRemoveUrls?: boolean;
+  ttsConvertMarkdown?: boolean;
+  ttsUseLLMPreprocessing?: boolean;
+
+  // WhatsApp Integration
+  whatsappEnabled?: boolean;
+  whatsappAllowFrom?: string[];
+  whatsappAutoReply?: boolean;
+  whatsappLogMessages?: boolean;
+
+  // Langfuse Observability
+  langfuseEnabled?: boolean;
+  langfusePublicKey?: string;
+  langfuseSecretKey?: string;
+  langfuseBaseUrl?: string;
+
+  // Dual-Model & Memory Settings
+  dualModelEnabled?: boolean;
+  dualModelInjectMemories?: boolean;
+  dualModelAutoSaveImportant?: boolean;
+  memoriesEnabled?: boolean;
+
+  // Streamer Mode
+  streamerModeEnabled?: boolean;
 }
 
 export class SettingsApiClient {

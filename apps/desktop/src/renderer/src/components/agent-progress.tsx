@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
-import { MARK_WORK_COMPLETE_TOOL } from "../../../shared/builtin-tool-names"
+import { INTERNAL_COMPLETION_NUDGE_TEXT } from "../../../shared/builtin-tool-names"
 import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
@@ -1730,8 +1730,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     const isCompletionNudge = (c: string) => {
       const trimmed = c.trim()
       // Only filter the exact completion nudge text to avoid false positives
-      return trimmed.includes("If all requested work is complete, call") &&
-        trimmed.includes(MARK_WORK_COMPLETE_TOOL)
+	      return trimmed === INTERNAL_COMPLETION_NUDGE_TEXT
     }
 
     messages = historyForSession

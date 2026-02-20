@@ -17,7 +17,10 @@ import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { conversationService } from "./conversation-service"
 import { getCurrentPresetName } from "../shared"
-import { MARK_WORK_COMPLETE_TOOL } from "../shared/builtin-tool-names"
+import {
+  INTERNAL_COMPLETION_NUDGE_TEXT,
+  MARK_WORK_COMPLETE_TOOL,
+} from "../shared/builtin-tool-names"
 import {
   createAgentTrace,
   endAgentTrace,
@@ -33,10 +36,6 @@ import {
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
 import { filterEphemeralMessages } from "./conversation-history-utils"
-
-// Internal completion nudge message: include in the LLM context, but hide from the progress UI.
-// Keep this as a single canonical string so we can filter it via exact match (no false positives).
-const INTERNAL_COMPLETION_NUDGE_TEXT = `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`
 
 /**
  * Clean error message by removing stack traces and noise

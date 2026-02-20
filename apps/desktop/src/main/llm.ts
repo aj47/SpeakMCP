@@ -34,6 +34,10 @@ import { memoryService } from "./memory-service"
 
 const MARK_WORK_COMPLETE_TOOL = "speakmcp-settings:mark_work_complete"
 
+// Internal completion nudge message: include in the LLM context, but hide from the progress UI.
+// Keep this as a single canonical string so we can filter it via exact match (no false positives).
+const INTERNAL_COMPLETION_NUDGE_TEXT = `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`
+
 /**
  * Clean error message by removing stack traces and noise
  */
@@ -821,19 +825,25 @@ export async function processTranscriptWithAgentMode(
   const formatConversationForProgress = (
     history: typeof conversationHistory,
   ) => {
-    const isNudge = (content: string) =>
-      content.includes("Please either take action using available tools") ||
-      content.includes("You have relevant tools available for this request") ||
-      content.includes("Your previous response was empty") ||
-      content.includes("Verifier indicates the task is not complete") ||
-      content.includes("Please respond with a valid JSON object") ||
-      content.includes("Use available tools directly via native function-calling") ||
-      content.includes("Provide a complete final answer") ||
-      content.includes("Your last response was not a final deliverable") ||
-      content.includes("Your last response was empty or non-deliverable") ||
-      content.includes("Continue and finish remaining work") ||
-      (content.includes("If all requested work is complete, call") &&
-        content.includes(MARK_WORK_COMPLETE_TOOL))
+
+    const isNudge = (content: string) => {
+      const trimmed = content.trim()
+      // Exact-match the internal completion nudge to avoid hiding legitimate user content.
+      if (trimmed === INTERNAL_COMPLETION_NUDGE_TEXT) return true
+
+      return (
+        trimmed.includes("Please either take action using available tools") ||
+        trimmed.includes("You have relevant tools available for this request") ||
+        trimmed.includes("Your previous response was empty") ||
+        trimmed.includes("Verifier indicates the task is not complete") ||
+        trimmed.includes("Please respond with a valid JSON object") ||
+        trimmed.includes("Use available tools directly via native function-calling") ||
+        trimmed.includes("Provide a complete final answer") ||
+        trimmed.includes("Your last response was not a final deliverable") ||
+        trimmed.includes("Your last response was empty or non-deliverable") ||
+        trimmed.includes("Continue and finish remaining work")
+      )
+    }
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
@@ -1815,10 +1825,7 @@ Return ONLY JSON per schema.`,
               addMessage("assistant", contentText)
             }
             // Internal completion nudge: include in LLM context, but do NOT persist to disk.
-            addEphemeralMessage(
-              "user",
-              `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`,
-            )
+            addEphemeralMessage("user", INTERNAL_COMPLETION_NUDGE_TEXT)
             completionSignalHintCount++
             // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
             // completion in a tool-driven task is still a no-op from a progress standpoint.

@@ -338,6 +338,9 @@ export default function ChatScreen({ route, navigation }: any) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Keep a ref to messages to avoid stale closures in setTimeout callbacks (PR review fix)
   const messagesRef = useRef<ChatMessage[]>(messages);
+  // Track progress messages so we can merge them with final conversationHistory
+  // instead of replacing, preventing intermediate messages from disappearing (#1083)
+  const progressMessagesRef = useRef<ChatMessage[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 	// Stable ref to the latest send() to avoid stale closures in speech callbacks
 	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
@@ -370,6 +373,55 @@ export default function ChatScreen({ route, navigation }: any) {
   // Track the last failed message for retry functionality
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
+  // Per-message TTS: track which message index is currently being spoken (#1078)
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
+  // Ref to track the intended speaking index, preventing race conditions
+  // when Speech.stop()'s onStopped fires after a new Speech.speak() starts
+  const intendedSpeakingIndexRef = useRef<number | null>(null);
+
+  const speakMessage = useCallback((index: number, content: string) => {
+    if (speakingMessageIndex === index) {
+      // Toggle off - stop speaking
+      intendedSpeakingIndexRef.current = null;
+      Speech.stop();
+      setSpeakingMessageIndex(null);
+      return;
+    }
+    // Stop any current speech first
+    intendedSpeakingIndexRef.current = index;
+    Speech.stop();
+    const processedText = preprocessTextForTTS(content);
+    if (!processedText) {
+      intendedSpeakingIndexRef.current = null;
+      return;
+    }
+    setSpeakingMessageIndex(index);
+    const speechOptions: Speech.SpeechOptions = {
+      language: 'en-US',
+      rate: config.ttsRate ?? 1.0,
+      pitch: config.ttsPitch ?? 1.0,
+      onDone: () => {
+        intendedSpeakingIndexRef.current = null;
+        setSpeakingMessageIndex(null);
+      },
+      onError: () => {
+        intendedSpeakingIndexRef.current = null;
+        setSpeakingMessageIndex(null);
+      },
+      onStopped: () => {
+        // Only clear if this callback is for the current intended message,
+        // not a stale callback from a previously stopped utterance
+        if (intendedSpeakingIndexRef.current === null) {
+          setSpeakingMessageIndex(null);
+        }
+      },
+    };
+    if (config.ttsVoiceId) {
+      speechOptions.voice = config.ttsVoiceId;
+    }
+    Speech.speak(processedText, speechOptions);
+  }, [speakingMessageIndex, config.ttsRate, config.ttsPitch, config.ttsVoiceId]);
+
   // Auto-scroll state and ref for mobile chat
   const scrollViewRef = useRef<ScrollView>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -400,6 +452,13 @@ export default function ChatScreen({ route, navigation }: any) {
       if (sttPreviewTimeoutRef.current) {
         clearTimeout(sttPreviewTimeoutRef.current);
       }
+    };
+  }, []);
+
+  // Cleanup: stop speech on unmount (#1078)
+  useEffect(() => {
+    return () => {
+      Speech.stop();
     };
   }, []);
 
@@ -917,6 +976,8 @@ export default function ChatScreen({ route, navigation }: any) {
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     const messageCountBeforeTurn = messages.length;
+    // Clear progress messages ref for this new request (#1083)
+    progressMessagesRef.current = [];
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
@@ -978,6 +1039,8 @@ export default function ChatScreen({ route, navigation }: any) {
         }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
+          // Store progress messages so we can merge with final history (#1083)
+          progressMessagesRef.current = progressMessages;
           setMessages((m) => {
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
             const newMessages = [...beforePlaceholder, ...progressMessages];
@@ -1130,11 +1193,31 @@ export default function ChatScreen({ route, navigation }: any) {
           }
         } else {
           // Normal case: update UI state (persistence happens via useEffect)
+          // Merge progress messages with final history to prevent intermediate messages
+          // from disappearing when the server's history has fewer messages (#1083)
+          const progressMsgs = progressMessagesRef.current;
           setMessages((m) => {
             console.log('[ChatScreen] Current messages before update:', m.length);
             const beforePlaceholder = m.slice(0, messageCountBeforeTurn + 1);
             console.log('[ChatScreen] beforePlaceholder count:', beforePlaceholder.length);
-            const result = [...beforePlaceholder, ...newMessages];
+            // If progress had more messages than conversationHistory, keep progress messages
+            // and only update/append the final message from history
+            let mergedMessages: ChatMessage[];
+            if (progressMsgs.length > 0 && newMessages.length === 0) {
+              // Edge case: server returned empty history but we have progress messages
+              // Keep progress messages to prevent intermediate messages from disappearing (#1083)
+              console.log('[ChatScreen] Merging: newMessages empty, keeping progress messages');
+              mergedMessages = [...progressMsgs];
+            } else if (progressMsgs.length > newMessages.length && newMessages.length > 0) {
+              console.log('[ChatScreen] Merging: progress had more messages, preserving intermediate');
+              mergedMessages = [...progressMsgs];
+              // Replace/update the last message with the final one from history
+              mergedMessages[mergedMessages.length - 1] = newMessages[newMessages.length - 1];
+            } else {
+              // History is authoritative when it has >= messages
+              mergedMessages = newMessages;
+            }
+            const result = [...beforePlaceholder, ...mergedMessages];
             console.log('[ChatScreen] Final messages count:', result.length);
             return result;
           });
@@ -2321,6 +2404,26 @@ export default function ChatScreen({ route, navigation }: any) {
                     )}
                   </>
                 )}
+
+                {/* Per-message Read Aloud button for assistant messages with content (#1078) */}
+                {m.role === 'assistant' && m.content && m.content.trim().length > 0 && config.ttsEnabled !== false && (
+                  <TouchableOpacity
+                    onPress={() => speakMessage(i, m.content!)}
+                    style={[
+                      styles.speakButton,
+                      speakingMessageIndex === i && styles.speakButtonActive,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={speakingMessageIndex === i ? 'Stop reading' : 'Read aloud'}
+                  >
+                    <Text style={[
+                      styles.speakButtonText,
+                      speakingMessageIndex === i && styles.speakButtonTextActive,
+                    ]}>
+                      {speakingMessageIndex === i ? '⏹' : '🔊'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })}
@@ -3160,5 +3263,24 @@ function createStyles(theme: Theme, screenHeight: number) {
       padding: 3,
       borderRadius: radius.sm,
     },
+    // Per-message TTS button styles (#1078)
+    speakButton: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
+      marginTop: 4,
+      borderRadius: radius.sm,
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.1),
+    } as const,
+    speakButtonActive: {
+      backgroundColor: hexToRgba(theme.colors.primary, 0.15),
+    } as const,
+    speakButtonText: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+    } as const,
+    speakButtonTextActive: {
+      color: theme.colors.primary,
+    } as const,
   });
 }

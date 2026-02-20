@@ -257,8 +257,10 @@ const CompactMessage: React.FC<{
     }
   }, [ttsSource])
 
-  // Check if TTS should be shown for this message
-  const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
+  // Check if TTS button should be shown for this message (any completed assistant message with content)
+  const shouldShowTTSButton = message.role === "assistant" && isComplete && configQuery.data?.ttsEnabled && !!(message.content?.trim())
+  // Auto-play TTS only on the last message
+  const shouldAutoPlayTTS = shouldShowTTSButton && isLast
 
   // Auto-play TTS when assistant message completes (but NOT if agent was stopped by kill switch)
   //
@@ -276,7 +278,7 @@ const CompactMessage: React.FC<{
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"
-    if (!shouldAutoPlay || !shouldShowTTS || !configQuery.data?.ttsAutoPlay || audioData || isGeneratingAudio || ttsError || wasStopped) {
+    if (!shouldAutoPlay || !shouldAutoPlayTTS || !configQuery.data?.ttsAutoPlay || audioData || isGeneratingAudio || ttsError || wasStopped) {
       return
     }
 
@@ -311,7 +313,7 @@ const CompactMessage: React.FC<{
         }
         // Error is already handled in generateAudio function
       })
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsSource])
+  }, [shouldAutoPlayTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant, sessionId, ttsSource])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -458,8 +460,8 @@ const CompactMessage: React.FC<{
             </div>
           )}
 
-          {/* TTS Audio Player - only show for completed assistant messages */}
-          {shouldShowTTS && (
+          {/* TTS Audio Player - show for all completed assistant messages with content */}
+          {shouldShowTTSButton && (
             <div className="mt-2">
               <AudioPlayer
                 audioData={audioData || undefined}
@@ -468,7 +470,7 @@ const CompactMessage: React.FC<{
                 isGenerating={isGeneratingAudio}
                 error={ttsError}
                 compact={true}
-                autoPlay={configQuery.data?.ttsAutoPlay ?? true}
+                autoPlay={isLast ? (configQuery.data?.ttsAutoPlay ?? true) : false}
               />
               {ttsError && (
                 <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -499,8 +501,8 @@ const CompactMessage: React.FC<{
 
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Copy button for user prompts and final assistant response */}
-          {(message.role === "user" || (message.role === "assistant" && isLast && isComplete)) && (
+          {/* Copy button for user prompts and all completed assistant responses */}
+          {(message.role === "user" || (message.role === "assistant" && isComplete)) && (
             <button
               onClick={handleCopyResponse}
               className="p-1 rounded hover:bg-muted/30 transition-colors"

@@ -1920,7 +1920,14 @@ Return ONLY JSON per schema.`,
           }
         }
 
-        if (!skipPostVerifySummary && !completionForcedByVerificationLimit) {
+        // Skip post-verify summary if respond_to_user already provided a response (#1084)
+        const existingUserResponse1 = getSessionUserResponse(currentSessionId)
+        if (existingUserResponse1?.trim().length) {
+          finalContent = existingUserResponse1
+          if (finalContent.trim().length > 0) {
+            addMessage("assistant", finalContent)
+          }
+        } else if (!skipPostVerifySummary && !completionForcedByVerificationLimit) {
           try {
             const result = await generatePostVerifySummary(finalContent, false, activeTools)
             finalContent = result.content
@@ -1938,7 +1945,7 @@ Return ONLY JSON per schema.`,
           }
         }
 
-        if (completionForcedByVerificationLimit) {
+        if (completionForcedByVerificationLimit && !existingUserResponse1?.trim().length) {
           finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails)
           addMessage("assistant", finalContent)
         }
@@ -2527,7 +2534,18 @@ Return ONLY JSON per schema.`,
       const hasToolCalls = llmResponse.toolCalls && llmResponse.toolCalls.length > 0
       const hasMinimalContent = lastAssistantContent.trim().length < 50
 
-      if (hasToolCalls && (hasMinimalContent || !lastAssistantContent.trim())) {
+      // Skip summary generation if respond_to_user already provided a response (#1084)
+      const existingUserResponse = getSessionUserResponse(currentSessionId)
+      let respondToUserAlreadyInHistory = false
+      if (existingUserResponse?.trim().length) {
+        finalContent = existingUserResponse
+        conversationHistory.push({
+          role: "assistant",
+          content: finalContent,
+          timestamp: Date.now(),
+        })
+        respondToUserAlreadyInHistory = true
+      } else if (hasToolCalls && (hasMinimalContent || !lastAssistantContent.trim())) {
         // The agent just made tool calls without providing a summary
         // Prompt the agent to provide a concise summary of what was accomplished
         const summaryPrompt = "Please provide a concise summary of what you just accomplished with the tool calls. Focus on the key results and outcomes for the user."
@@ -2711,7 +2729,17 @@ Return ONLY JSON per schema.`,
 
         // Post-verify: produce a concise final summary for the user
         // Skip when forced incomplete - the fallback message below will be the only assistant message
-        if (!skipPostVerifySummary2 && !completionForcedByVerificationLimit2) {
+        // Skip summary generation if respond_to_user already provided a response (#1084)
+        // Also skip if respond_to_user response was already added to history above
+        const existingUserResponse2 = getSessionUserResponse(currentSessionId)
+        if (existingUserResponse2?.trim().length && !respondToUserAlreadyInHistory) {
+          finalContent = existingUserResponse2
+          if (finalContent.trim().length > 0) {
+            conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
+          }
+        } else if (respondToUserAlreadyInHistory) {
+          // Already handled above — skip post-verify summary entirely
+        } else if (!skipPostVerifySummary2 && !completionForcedByVerificationLimit2) {
           try {
             const result = await generatePostVerifySummary(finalContent, true, activeTools)
             if (result.stopped) {
@@ -2747,7 +2775,7 @@ Return ONLY JSON per schema.`,
 	          }
 	        }
 
-	      if (completionForcedByVerificationLimit2) {
+	      if (completionForcedByVerificationLimit2 && !respondToUserAlreadyInHistory && !existingUserResponse2?.trim().length) {
 	        finalContent = buildIncompleteTaskFallback(finalContent, completionForcedIncompleteDetails2)
 	        conversationHistory.push({ role: "assistant", content: finalContent, timestamp: Date.now() })
 	      }

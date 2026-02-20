@@ -247,25 +247,29 @@ export default function SettingsScreen({ navigation }: any) {
   useEffect(() => {
     if (settingsClient) {
       fetchRemoteSettings();
+    }
+  }, [settingsClient, fetchRemoteSettings]);
+
+  // Fetch SpeakMCP-specific data only after confirming it's a SpeakMCP server
+  useEffect(() => {
+    if (settingsClient && isSpeakMCPServer) {
       fetchSkills();
       fetchMemories();
       fetchAgentProfiles();
       fetchLoops();
     }
-  }, [settingsClient, fetchRemoteSettings, fetchSkills, fetchMemories, fetchAgentProfiles, fetchLoops]);
+  }, [settingsClient, isSpeakMCPServer, fetchSkills, fetchMemories, fetchAgentProfiles, fetchLoops]);
 
   // Handle pull-to-refresh
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await Promise.all([
-      fetchRemoteSettings(),
-      fetchSkills(),
-      fetchMemories(),
-      fetchAgentProfiles(),
-      fetchLoops(),
-    ]);
+    const fetches: Promise<void>[] = [fetchRemoteSettings()];
+    if (isSpeakMCPServer) {
+      fetches.push(fetchSkills(), fetchMemories(), fetchAgentProfiles(), fetchLoops());
+    }
+    await Promise.all(fetches);
     setIsRefreshing(false);
-  }, [fetchRemoteSettings, fetchSkills, fetchMemories, fetchAgentProfiles, fetchLoops]);
+  }, [isSpeakMCPServer, fetchRemoteSettings, fetchSkills, fetchMemories, fetchAgentProfiles, fetchLoops]);
 
   // Handle profile switch
   const handleProfileSwitch = async (profileId: string) => {

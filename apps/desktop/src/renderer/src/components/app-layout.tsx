@@ -26,13 +26,6 @@ export const Component = () => {
     useSidebar()
   const configQuery = useConfigQuery()
 
-  // Ensure the dialog cannot stay open once the sidebar expands.
-  useEffect(() => {
-    if (!isCollapsed && pastSessionsDialogOpen) {
-      setPastSessionsDialogOpen(false)
-    }
-  }, [isCollapsed, pastSessionsDialogOpen])
-
   const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
   const memoriesEnabled = configQuery.data?.memoriesEnabled !== false // default true
 
@@ -281,7 +274,7 @@ export const Component = () => {
               </div>
 
               {/* Sessions Section - shows sessions list */}
-              <ActiveAgentsSidebar />
+              <ActiveAgentsSidebar onOpenPastSessionsDialog={() => setPastSessionsDialogOpen(true)} />
             </div>
           )}
 

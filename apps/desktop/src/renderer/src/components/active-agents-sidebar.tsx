@@ -48,7 +48,11 @@ const STORAGE_KEY = 'active-agents-sidebar-expanded'
 const PAST_SESSIONS_STORAGE_KEY = 'past-sessions-sidebar-expanded'
 const INITIAL_PAST_SESSIONS = 10
 
-export function ActiveAgentsSidebar() {
+export function ActiveAgentsSidebar({
+  onOpenPastSessionsDialog,
+}: {
+  onOpenPastSessionsDialog?: () => void
+}) {
   const [isExpanded, setIsExpanded] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
     const initial = stored !== null ? stored === 'true' : true
@@ -501,6 +505,19 @@ export function ActiveAgentsSidebar() {
           </button>
           {isPastSessionsExpanded && (
             <div className="flex items-center gap-1 ml-auto">
+              {onOpenPastSessionsDialog && (
+                <button
+                  onClick={onOpenPastSessionsDialog}
+                  className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                  title="Open in dialog"
+                >
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                </button>
+              )}
               <button
                 onClick={handleOpenHistoryFolder}
                 className="p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground"

@@ -85,29 +85,29 @@ export function PastSessionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="max-w-sm w-[calc(100%-2rem)] overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
             Past Sessions
           </DialogTitle>
-          <DialogDescription>
-            Open a previous session while keeping the sidebar collapsed.
+          <DialogDescription className="line-clamp-2">
+            Open a previous session.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="relative">
+        <div className="space-y-3 min-h-0">
+          <div className="relative shrink-0">
             <Search className="text-muted-foreground absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search past sessions..."
-              className="pl-7 text-xs"
+              className="pl-7 text-xs w-full"
             />
           </div>
 
-          <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
+          <div className="max-h-[50vh] sm:max-h-[60vh] space-y-1 overflow-y-auto pr-1">
             {conversationHistoryQuery.isLoading ? (
               <div className="text-muted-foreground flex items-center gap-2 px-2 py-2 text-xs">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -135,7 +135,7 @@ export function PastSessionsDialog({
                     title={`${session.preview}\n${dayjs(session.updatedAt).format("MMM D, h:mm A")}`}
                   >
                     <CheckCircle2 className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium">
                           {session.title}

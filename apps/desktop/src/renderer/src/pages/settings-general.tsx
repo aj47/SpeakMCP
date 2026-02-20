@@ -911,22 +911,6 @@ export function Component() {
             </Control>
           )}
 
-          <Control label={<ControlLabel label="Enable Summarization" tooltip="When enabled, a separate model will generate summaries of each agent step for the UI. Configure the summarization model in Models settings." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.dualModelEnabled ?? false}
-              onCheckedChange={(value) => saveConfig({ dualModelEnabled: value })}
-            />
-          </Control>
-
-          {configQuery.data?.dualModelEnabled && configQuery.data?.memoriesEnabled !== false && (
-            <Control label={<ControlLabel label="Auto-save Important Summaries" tooltip="Automatically save high and critical importance summaries to memory." />} className="px-3 pl-6">
-              <Switch
-                checked={configQuery.data?.dualModelAutoSaveImportant ?? false}
-                onCheckedChange={(value) => saveConfig({ dualModelAutoSaveImportant: value })}
-              />
-            </Control>
-          )}
-
           <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer. Disabled when Unlimited Iterations is enabled." />} className="px-3">
             <Input
               type="number"

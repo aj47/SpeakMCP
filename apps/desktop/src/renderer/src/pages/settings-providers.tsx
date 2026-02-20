@@ -1026,87 +1026,6 @@ export function Component() {
                 </p>
               </div>
 
-              {/* Summarization Model - shown when dual model is enabled */}
-              {dualModelEnabled && (
-                <div className="px-3 py-3 border-t bg-muted/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <BookOpen className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm font-medium">Summarization Model</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Faster, cheaper model for summarizing agent steps.
-                  </p>
-                  <div className="space-y-2">
-                    <Control
-                      label={<ControlLabel label="Preset" tooltip="Select which model preset to use for summarization" />}
-                    >
-                      <Select
-                        value={weakPresetId}
-                        onValueChange={(value) => saveConfig({ dualModelWeakPresetId: value })}
-                      >
-                        <SelectTrigger className="w-[200px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allPresets.map((preset) => (
-                            <SelectItem key={preset.id} value={preset.id}>
-                              {preset.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Control>
-                    {weakPreset && (
-                      <PresetModelSelector
-                        presetId={weakPresetId}
-                        baseUrl={weakPreset.baseUrl}
-                        apiKey={weakPreset.apiKey}
-                        value={config.dualModelWeakModelName || ""}
-                        onValueChange={(value) => saveConfig({ dualModelWeakModelName: value })}
-                        label="Model"
-                        placeholder="Select model..."
-                      />
-                    )}
-                    <Control
-                      label={<ControlLabel label="Frequency" tooltip="How often to generate summaries" />}
-                    >
-                      <Select
-                        value={config.dualModelSummarizationFrequency || "every_response"}
-                        onValueChange={(value) =>
-                          saveConfig({ dualModelSummarizationFrequency: value as "every_response" | "major_steps_only" })
-                        }
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="every_response">Every Response</SelectItem>
-                          <SelectItem value="major_steps_only">Major Steps Only</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Control>
-                    <Control
-                      label={<ControlLabel label="Detail Level" tooltip="How detailed the summaries should be" />}
-                    >
-                      <Select
-                        value={config.dualModelSummaryDetailLevel || "compact"}
-                        onValueChange={(value) =>
-                          saveConfig({ dualModelSummaryDetailLevel: value as "compact" | "detailed" })
-                        }
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="compact">Compact</SelectItem>
-                          <SelectItem value="detailed">Detailed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Control>
-                  </div>
-                </div>
-              )}
-
               {/* OpenAI TTS - only shown for native OpenAI preset */}
               <div className="border-t mt-3 pt-3">
                 <div className="px-3 pb-2">
@@ -1750,21 +1669,6 @@ export function Component() {
                 <Switch
                   checked={dualModelEnabled}
                   onCheckedChange={(checked) => saveConfig({ dualModelEnabled: checked })}
-                />
-              </Control>
-
-              <Control
-                label={
-                  <ControlLabel
-                    label="Inject Memories"
-                    tooltip="Include saved memories in agent context. Works independently of summarization."
-                  />
-                }
-                className="px-3"
-              >
-                <Switch
-                  checked={config.dualModelInjectMemories ?? false}
-                  onCheckedChange={(checked) => saveConfig({ dualModelInjectMemories: checked })}
                 />
               </Control>
 

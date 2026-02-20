@@ -19,7 +19,23 @@ https://github.com/user-attachments/assets/0c181c70-d1f1-4c5d-a6f5-a73147e75182
 **[📥 Download Latest Release](https://github.com/aj47/SpeakMCP/releases/latest)**
 
 > **Platform Support**: macOS (Apple Silicon & Intel) with full MCP agent functionality.
-> ⚠️ **Windows/Linux**: MCP tools not currently supported — see [v0.2.2](https://github.com/aj47/SpeakMCP/releases/tag/v0.2.2) for dictation-only builds.
+> **Windows/Linux**: Voice dictation fully supported. MCP agent tools not yet available on these platforms.
+
+#### Linux Installation
+
+Download the `.deb` package (Debian/Ubuntu) or `.AppImage` (universal) from the releases page:
+
+```bash
+# Debian/Ubuntu - Install .deb package
+sudo dpkg -i speakmcp_*.deb
+sudo apt-get install -f  # Install any missing dependencies
+
+# Or use AppImage (no installation required)
+chmod +x SpeakMCP-*.AppImage
+./SpeakMCP-*.AppImage
+```
+
+After installation, SpeakMCP will appear in your application menu, or run `speakmcp` from terminal.
 
 ### Basic Usage
 
@@ -59,6 +75,42 @@ pnpm install && pnpm build-rs && pnpm dev
 ```
 
 See **[DEVELOPMENT.md](DEVELOPMENT.md)** for full setup, build commands, troubleshooting, and architecture details.
+
+**Linux: GPU-related errors in terminal:**
+
+If you see GPU-related errors when launching SpeakMCP from terminal (e.g., "GPU process isn't usable" or "Passthrough is not supported"), the app should still work. These are warnings from Chromium/Electron that don't affect functionality.
+
+If the app fails to launch due to GPU issues, try disabling GPU acceleration:
+
+```bash
+SPEAKMCP_DISABLE_GPU=1 speakmcp
+```
+
+**Linux: App not appearing in application menu:**
+
+If SpeakMCP doesn't appear in your application menu after installing the .deb package:
+
+```bash
+# Update the desktop database manually
+sudo update-desktop-database /usr/share/applications
+
+# Update icon cache
+sudo gtk-update-icon-cache /usr/share/icons/hicolor
+
+# Log out and back in, or restart your desktop environment
+```
+
+**Linux: Permission denied errors:**
+
+If you encounter permission issues with the keyboard listener on Linux:
+
+```bash
+# Add your user to the input group (requires logout/login)
+sudo usermod -aG input $USER
+
+# For X11 systems, ensure you have xdotool installed
+sudo apt install xdotool
+```
 
 ## ⚙️ Configuration
 

@@ -973,8 +973,8 @@ export default function ChatScreen({ route, navigation }: any) {
           return;
         }
         // Capture userResponse from progress updates for TTS
-        if (update.userResponse) {
-          lastUserResponse = update.userResponse;
+        if (update.userResponse || update.spokenContent) {
+          lastUserResponse = update.userResponse || update.spokenContent;
         }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {
@@ -1352,8 +1352,8 @@ export default function ChatScreen({ route, navigation }: any) {
         if (sessionStore.currentSessionId !== requestSessionId) return;
         if (activeRequestIdRef.current !== thisRequestId) return;
         // Capture userResponse from progress updates for TTS
-        if (update.userResponse) {
-          lastUserResponse = update.userResponse;
+        if (update.userResponse || update.spokenContent) {
+          lastUserResponse = update.userResponse || update.spokenContent;
         }
         const progressMessages = convertProgressToMessages(update);
         if (progressMessages.length > 0) {

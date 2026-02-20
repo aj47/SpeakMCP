@@ -301,11 +301,6 @@ export function constructSystemPrompt(
     prompt += `\n\nUSER GUIDELINES:\n${userGuidelines.trim()}`
   }
 
-  // Add skills instructions if provided (from persona's enabled skills)
-  if (skillsInstructions?.trim()) {
-    prompt += skillsInstructions.trim()
-  }
-
   // Add persona properties if provided (dynamic key-value pairs)
   if (personaProperties && Object.keys(personaProperties).length > 0) {
     const propertiesText = Object.entries(personaProperties)

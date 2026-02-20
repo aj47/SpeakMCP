@@ -697,7 +697,7 @@ export default function ChatScreen({ route, navigation }: any) {
   const startYRef = useRef<number | null>(null);
 
   const mountedRef = useRef(true);
-  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const nativeSRUnavailableShownRef = useRef(false);
 

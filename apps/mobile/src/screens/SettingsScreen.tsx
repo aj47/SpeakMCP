@@ -139,6 +139,17 @@ export default function SettingsScreen({ navigation }: any) {
       }
       if (settingsRes) {
         setRemoteSettings(settingsRes);
+        // Sync input drafts from fetched settings (only on explicit fetch,
+        // not on optimistic local updates, to avoid overwriting user's typing)
+        setInputDrafts({
+          sttLanguage: settingsRes.sttLanguage || '',
+          transcriptPostProcessingPrompt: settingsRes.transcriptPostProcessingPrompt || '',
+          mcpMaxIterations: String(settingsRes.mcpMaxIterations ?? 10),
+          whatsappAllowFrom: (settingsRes.whatsappAllowFrom || []).join(', '),
+          langfusePublicKey: settingsRes.langfusePublicKey || '',
+          langfuseSecretKey: settingsRes.langfuseSecretKey === '••••••••' ? '' : (settingsRes.langfuseSecretKey || ''),
+          langfuseBaseUrl: settingsRes.langfuseBaseUrl || '',
+        });
         successCount++;
       }
 
@@ -517,20 +528,6 @@ export default function SettingsScreen({ navigation }: any) {
     setDraft(config);
   }, [ready, config]);
 
-  // Sync input drafts with remoteSettings when they change
-  useEffect(() => {
-    if (remoteSettings) {
-      setInputDrafts({
-        sttLanguage: remoteSettings.sttLanguage || '',
-        transcriptPostProcessingPrompt: remoteSettings.transcriptPostProcessingPrompt || '',
-        mcpMaxIterations: String(remoteSettings.mcpMaxIterations ?? 10),
-        whatsappAllowFrom: (remoteSettings.whatsappAllowFrom || []).join(', '),
-        langfusePublicKey: remoteSettings.langfusePublicKey || '',
-        langfuseSecretKey: remoteSettings.langfuseSecretKey === '••••••••' ? '' : (remoteSettings.langfuseSecretKey || ''),
-        langfuseBaseUrl: remoteSettings.langfuseBaseUrl || '',
-      });
-    }
-  }, [remoteSettings]);
 
   // CollapsibleSection component
   const CollapsibleSection = ({

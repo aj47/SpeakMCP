@@ -18,6 +18,8 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       networkMode: "always",
+      staleTime: 30_000, // 30s – avoid redundant refetches
+      gcTime: 2 * 60_000, // 2min – evict unused cache entries to limit memory growth
     },
   },
 })
@@ -61,6 +63,7 @@ export const useConversationQuery = (conversationId: string | null) =>
       return result
     },
     enabled: !!conversationId,
+    gcTime: 60_000, // 1min – full conversation objects are the heaviest cached items
   })
 
 export const useMcpServerStatus = () =>

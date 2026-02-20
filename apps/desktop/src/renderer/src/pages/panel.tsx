@@ -469,6 +469,12 @@ export function Component() {
       setFromButtonClick(false)
       setContinueConversationTitle(null)
     })
+    return () => {
+      if (recorderRef.current) {
+        recorderRef.current.destroy()
+        recorderRef.current = null
+      }
+    }
   }, [mcpMode, mcpTranscribeMutation, transcribeMutation])
 
   useEffect(() => {

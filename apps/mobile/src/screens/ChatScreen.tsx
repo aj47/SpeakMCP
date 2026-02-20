@@ -77,6 +77,7 @@ export default function ChatScreen({ route, navigation }: any) {
     // Stop any currently playing TTS when disabling
     if (!next) {
       Speech.stop();
+      setSpeakingMessageId(null);
     }
     const nextCfg = { ...config, ttsEnabled: next } as any;
     setConfig(nextCfg);
@@ -339,6 +340,14 @@ export default function ChatScreen({ route, navigation }: any) {
   // Keep a ref to messages to avoid stale closures in setTimeout callbacks (PR review fix)
   const messagesRef = useRef<ChatMessage[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const speakingMessageIdRef = useRef<string | null>(null);
+  useEffect(() => { speakingMessageIdRef.current = speakingMessageId; }, [speakingMessageId]);
+  useEffect(() => {
+    return () => {
+      Speech.stop();
+    };
+  }, []);
 	// Stable ref to the latest send() to avoid stale closures in speech callbacks
 	const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
 	// Voice debug logging (dev-only) to help diagnose recording/send lifecycle.
@@ -661,6 +670,37 @@ export default function ChatScreen({ route, navigation }: any) {
   const toggleMessageExpansion = useCallback((index: number) => {
     setExpandedMessages(prev => ({ ...prev, [index]: !prev[index] }));
   }, []);
+
+  const handleSpeakMessage = useCallback((messageId: string, text: string) => {
+    if (!ttsEnabled) return;
+
+    if (speakingMessageIdRef.current === messageId) {
+      Speech.stop();
+      setSpeakingMessageId(null);
+      return;
+    }
+
+    Speech.stop();
+    const processedText = preprocessTextForTTS(text);
+    const speechOptions: Speech.SpeechOptions = {
+      rate: config.ttsRate ?? 1.0,
+      pitch: config.ttsPitch ?? 1.0,
+      onDone: () => {
+        setSpeakingMessageId((prev) => (prev === messageId ? null : prev));
+      },
+      onStopped: () => {
+        setSpeakingMessageId((prev) => (prev === messageId ? null : prev));
+      },
+      onError: () => {
+        setSpeakingMessageId((prev) => (prev === messageId ? null : prev));
+      },
+    };
+    if (config.ttsVoiceId) {
+      speechOptions.voice = config.ttsVoiceId;
+    }
+    setSpeakingMessageId(messageId);
+    Speech.speak(processedText, speechOptions);
+  }, [config.ttsPitch, config.ttsRate, config.ttsVoiceId, ttsEnabled]);
 
   // Toggle expansion of individual tool call details (input params and results)
   const toggleToolCallExpansion = useCallback((messageId: string, toolCallIndex: number) => {
@@ -2088,6 +2128,8 @@ export default function ChatScreen({ route, navigation }: any) {
             // expandedMessages is auto-updated via useEffect to expand the last assistant message
             // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
+            const messageKey = m.id ?? String(i);
+            const isSpeaking = speakingMessageId === messageKey;
 
             const toolCallCount = m.toolCalls?.length ?? 0;
             const toolResultCount = m.toolResults?.length ?? 0;
@@ -2300,6 +2342,22 @@ export default function ChatScreen({ route, navigation }: any) {
                           </View>
                         )}
                       </>
+                    )}
+
+                    {ttsEnabled && m.role === 'assistant' && m.content && m.content.trim().length > 0 && (
+                      <View style={styles.messageActions}>
+                        <Pressable
+                          onPress={() => handleSpeakMessage(messageKey, m.content!)}
+                          accessibilityRole="button"
+                          accessibilityLabel={isSpeaking ? 'Stop read aloud' : 'Read aloud'}
+                          style={({ pressed }) => [
+                            styles.ttsMessageButton,
+                            pressed && styles.ttsMessageButtonPressed,
+                          ]}
+                        >
+                          <Text style={styles.ttsMessageButtonText}>{isSpeaking ? '⏹' : '🔊'}</Text>
+                        </Pressable>
+                      </View>
                     )}
                   </>
                 )}
@@ -2679,6 +2737,28 @@ function createStyles(theme: Theme, screenHeight: number) {
       fontSize: 8,
       color: theme.colors.primary,
       fontWeight: '500',
+    },
+    messageActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    ttsMessageButton: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.muted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    ttsMessageButtonPressed: {
+      backgroundColor: theme.colors.card,
+      borderColor: theme.colors.primary,
+    },
+    ttsMessageButtonText: {
+      fontSize: 14,
     },
 
     inputArea: {

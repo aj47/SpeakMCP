@@ -197,8 +197,8 @@ const CompactMessage: React.FC<{
     }
   }
 
-  // Check if TTS should be shown for this message
-  const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
+  const isMessageComplete = message.isComplete ?? isComplete
+  const canUseTTS = message.role === "assistant" && message.content.trim().length > 0 && configQuery.data?.ttsEnabled
 
   // Auto-play TTS when assistant message completes (but NOT if agent was stopped by kill switch)
   //
@@ -213,12 +213,12 @@ const CompactMessage: React.FC<{
   useEffect(() => {
     // Only auto-generate and play TTS in overlay variant to prevent double playback
     const shouldAutoPlay = variant === "overlay"
-    if (shouldAutoPlay && shouldShowTTS && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
+    if (shouldAutoPlay && canUseTTS && isLast && isMessageComplete && configQuery.data?.ttsAutoPlay && !audioData && !isGeneratingAudio && !ttsError && !wasStopped) {
       generateAudio().catch((error) => {
         // Error is already handled in generateAudio function
       })
     }
-  }, [shouldShowTTS, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
+  }, [canUseTTS, isLast, isMessageComplete, configQuery.data?.ttsAutoPlay, audioData, isGeneratingAudio, ttsError, wasStopped, variant])
 
   const getRoleStyle = () => {
     switch (message.role) {
@@ -365,47 +365,45 @@ const CompactMessage: React.FC<{
             </div>
           )}
 
-          {/* TTS Audio Player - only show for completed assistant messages */}
-          {shouldShowTTS && (
-            <div className="mt-2">
-              <AudioPlayer
-                audioData={audioData || undefined}
-                text={message.content}
-                onGenerateAudio={generateAudio}
-                isGenerating={isGeneratingAudio}
-                error={ttsError}
-                compact={true}
-                autoPlay={configQuery.data?.ttsAutoPlay ?? true}
-              />
-              {ttsError && (
-                <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
-                  <span className="font-medium">Audio generation failed:</span>{" "}
-                  {ttsError.includes("terms acceptance") ? (
-                    <>
-                      Groq TTS model requires terms acceptance.{" "}
-                      <a
-                        href="https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline hover:no-underline"
-                      >
-                        Click here to open the Playground
-                      </a>{" "}
-                      and accept the terms when prompted.
-                    </>
-                  ) : (
-                    ttsError
-                  )}
-                </div>
+          {ttsError && (
+            <div className="mt-2 rounded-md bg-red-50 p-2 text-[10px] text-red-700 dark:bg-red-900/20 dark:text-red-300">
+              <span className="font-medium">Audio generation failed:</span>{" "}
+              {ttsError.includes("terms acceptance") ? (
+                <>
+                  Groq TTS model requires terms acceptance.{" "}
+                  <a
+                    href="https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:no-underline"
+                  >
+                    Click here to open the Playground
+                  </a>{" "}
+                  and accept the terms when prompted.
+                </>
+              ) : (
+                ttsError
               )}
             </div>
-
-
           )}
 
 
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {canUseTTS && (
+            <AudioPlayer
+              audioData={audioData || undefined}
+              text={message.content}
+              onGenerateAudio={generateAudio}
+              isGenerating={isGeneratingAudio}
+              error={ttsError}
+              compact={true}
+              compactVariant="speaker"
+              showTime={false}
+              autoPlay={variant === "overlay" && isLast && (configQuery.data?.ttsAutoPlay ?? true)}
+              className="text-muted-foreground"
+            />
+          )}
           {/* Copy button for user prompts and final assistant response */}
           {(message.role === "user" || (message.role === "assistant" && isLast && isComplete)) && (
             <button

@@ -25,8 +25,10 @@ import { Button } from "@renderer/components/ui/button"
 import { Badge } from "@renderer/components/ui/badge"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { MessageQueuePanel } from "@renderer/components/message-queue-panel"
+import { AudioPlayer } from "@renderer/components/audio-player"
 import { useMessageQueue, useIsQueuePaused } from "@renderer/stores"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { useConfigQuery } from "@renderer/lib/queries"
 
 const MIN_HEIGHT = 120
 const MAX_HEIGHT = 4000 // Allow tiles to fill large displays - effectively no practical limit
@@ -55,6 +57,48 @@ interface SessionTileProps {
   onRetry?: () => void
   onDismiss?: () => void
   className?: string
+}
+
+const MessageTTSButton: React.FC<{ text: string }> = ({ text }) => {
+  const configQuery = useConfigQuery()
+  const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [ttsError, setTtsError] = useState<string | null>(null)
+
+  const canUseTTS = configQuery.data?.ttsEnabled && text.trim().length > 0
+  if (!canUseTTS) return null
+
+  const generateAudio = async (): Promise<ArrayBuffer> => {
+    setIsGenerating(true)
+    setTtsError(null)
+    try {
+      const result = await tipcClient.generateSpeech({ text })
+      setAudioData(result.audio)
+      return result.audio
+    } catch (error) {
+      console.error("[TTS UI] Failed to generate TTS audio:", error)
+      setTtsError(error instanceof Error ? error.message : "Failed to generate audio")
+      throw error
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  return (
+    <div title={ttsError ?? undefined}>
+      <AudioPlayer
+        audioData={audioData || undefined}
+        text={text}
+        onGenerateAudio={generateAudio}
+        isGenerating={isGenerating}
+        error={ttsError}
+        compact={true}
+        compactVariant="speaker"
+        showTime={false}
+        autoPlay={false}
+      />
+    </div>
+  )
 }
 
 export function SessionTile({
@@ -367,6 +411,7 @@ export function SessionTile({
                 messages.map((message, index) => {
                   const messageId = getMessageId(message, index)
                   const isCopied = copiedMessageId === messageId
+                  const hasAssistantTTS = message.role === "assistant" && typeof message.content === "string" && message.content.trim().length > 0
 
                   // Render error messages with special styling
                   if (message.role === "error") {
@@ -396,20 +441,25 @@ export function SessionTile({
                     >
                       <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                         <span className="capitalize">{message.role}</span>
-                        {message.role === "user" && typeof message.content === "string" && (
-                          <button
-                            onClick={(e) => handleCopyMessage(e, message.content as string, messageId)}
-                            className="p-1 rounded hover:bg-muted/30 transition-colors"
-                            title={isCopied ? "Copied!" : "Copy prompt"}
-                            aria-label={isCopied ? "Copied!" : "Copy prompt"}
-                          >
-                            {isCopied ? (
-                              <CheckCheck className="h-3 w-3 text-green-500" />
-                            ) : (
-                              <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
-                            )}
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {hasAssistantTTS && (
+                            <MessageTTSButton text={message.content as string} />
+                          )}
+                          {message.role === "user" && typeof message.content === "string" && (
+                            <button
+                              onClick={(e) => handleCopyMessage(e, message.content as string, messageId)}
+                              className="p-1 rounded hover:bg-muted/30 transition-colors"
+                              title={isCopied ? "Copied!" : "Copy prompt"}
+                              aria-label={isCopied ? "Copied!" : "Copy prompt"}
+                            >
+                              {isCopied ? (
+                                <CheckCheck className="h-3 w-3 text-green-500" />
+                              ) : (
+                                <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     <div className="prose prose-sm dark:prose-invert max-w-none">
                       {typeof message.content === "string" ? (
@@ -544,4 +594,3 @@ export function SessionTile({
     </div>
   )
 }
-

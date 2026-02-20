@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Slider } from "@renderer/components/ui/slider"
-import { Play, Pause, Volume2, VolumeX, Loader2 } from "lucide-react"
+import { Play, Pause, Volume2, VolumeX, Loader2, Square } from "lucide-react"
 import { cn } from "@renderer/lib/utils"
 import { ttsManager } from "@renderer/lib/tts-manager"
 
@@ -11,6 +11,8 @@ interface AudioPlayerProps {
   onGenerateAudio?: () => Promise<ArrayBuffer>
   className?: string
   compact?: boolean
+  compactVariant?: "play" | "speaker"
+  showTime?: boolean
   isGenerating?: boolean
   error?: string | null
   autoPlay?: boolean
@@ -22,6 +24,8 @@ export function AudioPlayer({
   onGenerateAudio,
   className,
   compact = false,
+  compactVariant = "play",
+  showTime = true,
   isGenerating = false,
   error = null,
   autoPlay = false,
@@ -161,6 +165,10 @@ export function AudioPlayer({
       try {
         if (isPlaying) {
           audioRef.current.pause()
+          if (compactVariant === "speaker") {
+            audioRef.current.currentTime = 0
+            setCurrentTime(0)
+          }
         } else {
           await audioRef.current.play()
         }
@@ -206,6 +214,8 @@ export function AudioPlayer({
   }
 
   if (compact) {
+    const idleIcon = compactVariant === "speaker" ? <Volume2 className="h-4 w-4" /> : <Play className="h-4 w-4" />
+    const activeIcon = compactVariant === "speaker" ? <Square className="h-4 w-4" /> : <Pause className="h-4 w-4" />
     return (
       <div className={cn("flex items-center gap-2", className)}>
         <Button
@@ -217,13 +227,9 @@ export function AudioPlayer({
         >
           {isGenerating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
-          ) : isPlaying ? (
-            <Pause className="h-4 w-4" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
+          ) : isPlaying ? activeIcon : idleIcon}
         </Button>
-        {hasAudio && duration > 0 && (
+        {showTime && hasAudio && duration > 0 && (
           <span className="text-xs text-muted-foreground">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>

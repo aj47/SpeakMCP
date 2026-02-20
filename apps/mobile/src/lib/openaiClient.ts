@@ -47,6 +47,7 @@ export interface AgentProgressUpdate {
   steps: AgentProgressStep[];
   isComplete: boolean;
   finalContent?: string;
+  spokenContent?: string;
   conversationHistory?: ConversationHistoryMessage[];
   streamingContent?: {
     text: string;
@@ -951,4 +952,3 @@ export class OpenAIClient {
     }
   }
 }
-

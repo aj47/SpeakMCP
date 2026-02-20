@@ -142,6 +142,27 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         }
       }
 
+      // Prevent stale isStreaming: true from persisting in the store.
+      // This can happen because the throttle in emit-agent-progress.ts discards a
+      // pending "clear streaming" update (isComplete: false, isStreaming: false) when
+      // a critical completion update (isComplete: true, no streamingContent) arrives.
+      // The spread merge then inherits isStreaming: true from existingProgress.
+      // Rule: if the incoming update does NOT include streamingContent at all, we must
+      // not keep a stale isStreaming: true.  Also, a completed session must never show
+      // the spinner regardless of how the update was constructed.
+      if (
+        mergedUpdate.streamingContent?.isStreaming &&
+        (!('streamingContent' in update) || mergedUpdate.isComplete)
+      ) {
+        mergedUpdate = {
+          ...mergedUpdate,
+          streamingContent: {
+            ...mergedUpdate.streamingContent,
+            isStreaming: false,
+          },
+        }
+      }
+
       newMap.set(sessionId, mergedUpdate)
 
       // Only auto-focus new sessions that aren't snoozed or complete

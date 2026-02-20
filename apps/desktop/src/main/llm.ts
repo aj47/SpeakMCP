@@ -31,8 +31,12 @@ import {
   type SummarizationInput,
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
+import { clearSessionSpokenContent, getSessionSpokenContent } from "./session-spoken-content-store"
 
 const MARK_WORK_COMPLETE_TOOL = "speakmcp-settings:mark_work_complete"
+const SPEAK_TO_USER_TOOL = "speakmcp-settings:speak_to_user"
+const INTERNAL_COMPLETION_NUDGE_TEXT =
+  `If all requested work is complete, use ${SPEAK_TO_USER_TOOL} to tell the user the result, then call ${MARK_WORK_COMPLETE_TOOL} with a concise summary. Otherwise continue working and call more tools.`
 
 /**
  * Clean error message by removing stack traces and noise
@@ -390,6 +394,8 @@ export async function processTranscriptWithAgentMode(
   const currentConversationId = conversationId
   const currentSessionId =
     sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  // Clear any stale spoken content from prior runs that may have reused this session ID.
+  clearSessionSpokenContent(currentSessionId)
   // Number of messages in the conversation history that predate this agent session.
   // Used by the UI to show only this session's messages while still saving full history.
   // When continuing a conversation, we set this to 0 so the UI shows the full history.
@@ -463,9 +469,26 @@ export async function processTranscriptWithAgentMode(
     const session = agentSessionTracker.getSession(currentSessionId)
     const conversationTitle = session?.conversationTitle
     const profileName = session?.profileSnapshot?.profileName
+    const storedSpokenContent = getSessionSpokenContent(currentSessionId)
+    const normalizedStoredSpokenContent =
+      typeof storedSpokenContent === "string" && storedSpokenContent.trim().length > 0
+        ? storedSpokenContent
+        : undefined
+    const isKillSwitchCompletion =
+      update.isComplete &&
+      typeof update.finalContent === "string" &&
+      update.finalContent.includes("emergency kill switch")
+    const spokenContentForUpdate =
+      update.spokenContent ??
+      (update.isComplete && !isKillSwitchCompletion
+        ? normalizedStoredSpokenContent
+        : undefined)
 
     const fullUpdate: AgentProgressUpdate = {
       ...update,
+      // Only include spokenContent when it has a value, so undefined doesn't
+      // overwrite a previously-set value during the renderer's spread-merge.
+      ...(spokenContentForUpdate !== undefined ? { spokenContent: spokenContentForUpdate } : {}),
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       conversationTitle,
@@ -801,17 +824,23 @@ export async function processTranscriptWithAgentMode(
   const formatConversationForProgress = (
     history: typeof conversationHistory,
   ) => {
-    const isNudge = (content: string) =>
-      content.includes("Please either take action using available tools") ||
-      content.includes("You have relevant tools available for this request") ||
-      content.includes("Your previous response was empty") ||
-      content.includes("Verifier indicates the task is not complete") ||
-      content.includes("Please respond with a valid JSON object") ||
-      content.includes("Use available tools directly via native function-calling") ||
-      content.includes("Provide a complete final answer") ||
-      content.includes("Your last response was not a final deliverable") ||
-      content.includes("Your last response was empty or non-deliverable") ||
-      content.includes("Continue and finish remaining work")
+    const isNudge = (content: string) => {
+      const trimmed = content.trim()
+      if (trimmed === INTERNAL_COMPLETION_NUDGE_TEXT) return true
+
+      return (
+        content.includes("Please either take action using available tools") ||
+        content.includes("You have relevant tools available for this request") ||
+        content.includes("Your previous response was empty") ||
+        content.includes("Verifier indicates the task is not complete") ||
+        content.includes("Please respond with a valid JSON object") ||
+        content.includes("Use available tools directly via native function-calling") ||
+        content.includes("Provide a complete final answer") ||
+        content.includes("Your last response was not a final deliverable") ||
+        content.includes("Your last response was empty or non-deliverable") ||
+        content.includes("Continue and finish remaining work")
+      )
+    }
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
@@ -1794,7 +1823,7 @@ Return ONLY JSON per schema.`,
             }
             addMessage(
               "user",
-              `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`,
+              INTERNAL_COMPLETION_NUDGE_TEXT,
             )
             completionSignalHintCount++
             // Do NOT reset noOpCount here. Substantive text without tool calls or explicit
@@ -2818,6 +2847,7 @@ Return ONLY JSON per schema.`,
     }
 
     // Clean up session state at the end of agent processing
+    clearSessionSpokenContent(currentSessionId)
     agentSessionStateManager.cleanupSession(currentSessionId)
   }
 }

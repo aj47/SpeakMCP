@@ -21,6 +21,7 @@ import { emergencyStopAll } from "./emergency-stop"
 import { executeACPRouterTool, isACPRouterTool } from "./acp/acp-router-tools"
 import { memoryService } from "./memory-service"
 import { messageQueueService } from "./message-queue-service"
+import { setSessionSpokenContent } from "./session-spoken-content-store"
 import { exec } from "child_process"
 import { promisify } from "util"
 import path from "path"
@@ -40,8 +41,15 @@ export {
 // Import for local use
 import { BUILTIN_SERVER_NAME, builtinToolDefinitions } from "./builtin-tool-definitions"
 
+interface BuiltinToolContext {
+  sessionId?: string
+}
+
 // Tool execution handlers
-type ToolHandler = (args: Record<string, unknown>) => Promise<MCPToolResult>
+type ToolHandler = (
+  args: Record<string, unknown>,
+  context: BuiltinToolContext
+) => Promise<MCPToolResult>
 
 const toolHandlers: Record<string, ToolHandler> = {
   list_mcp_servers: async (): Promise<MCPToolResult> => {
@@ -783,6 +791,39 @@ const toolHandlers: Record<string, ToolHandler> = {
             previousValue: currentValue,
             newValue: enabled,
             message: `Task completion verification has been ${enabled ? "enabled" : "disabled"}. ${enabled ? "The agent will verify task completion before finishing." : "The agent will respond faster without verification."} Note: This change takes effect for new agent sessions only; currently running sessions are not affected.`,
+          }, null, 2),
+        },
+      ],
+      isError: false,
+    }
+  },
+
+  speak_to_user: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
+    if (typeof args.text !== "string" || args.text.trim() === "") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "text must be a non-empty string" }) }],
+        isError: true,
+      }
+    }
+
+    if (!context.sessionId) {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ success: false, error: "speak_to_user requires an active agent session" }) }],
+        isError: true,
+      }
+    }
+
+    const text = args.text.trim()
+    setSessionSpokenContent(context.sessionId, text)
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            message: "Spoken response recorded for this session.",
+            textLength: text.length,
           }, null, 2),
         },
       ],
@@ -1912,7 +1953,7 @@ export async function executeBuiltinTool(
   }
 
   try {
-    return await handler(args)
+    return await handler(args, { sessionId })
   } catch (error) {
     return {
       content: [

@@ -209,6 +209,22 @@ export const builtinToolDefinitions: BuiltinToolDefinition[] = [
     },
   },
   {
+    name: `${BUILTIN_SERVER_NAME}:speak_to_user`,
+    description:
+      "Speak directly to the user via text-to-speech. Use this when you want the user to hear content aloud. Regular assistant text is not guaranteed to be spoken; this tool explicitly sets spoken output.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: {
+          type: "string",
+          description:
+            "The exact text to speak aloud to the user. Write naturally as speech, without markdown or code formatting.",
+        },
+      },
+      required: ["text"],
+    },
+  },
+  {
     name: `${BUILTIN_SERVER_NAME}:mark_work_complete`,
     description: "Signal explicit completion for the current task. Call this only when all requested work is actually finished and ready for final delivery.",
     inputSchema: {

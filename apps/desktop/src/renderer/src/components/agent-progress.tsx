@@ -103,6 +103,7 @@ const CompactMessage: React.FC<{
     toolResults?: Array<{ success: boolean; content: string; error?: string }>
     timestamp: number
   }
+  ttsText?: string
   isLast: boolean
   isComplete: boolean
   hasErrors: boolean
@@ -111,7 +112,7 @@ const CompactMessage: React.FC<{
   onToggleExpand: () => void
   /** Variant controls TTS auto-play - only 'overlay' variant auto-plays TTS to prevent double playback */
   variant?: "default" | "overlay" | "tile"
-}> = ({ message, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default" }) => {
+}> = ({ message, ttsText, isLast, isComplete, hasErrors, wasStopped = false, isExpanded, onToggleExpand, variant = "default" }) => {
   const [audioData, setAudioData] = useState<ArrayBuffer | null>(null)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
@@ -165,7 +166,7 @@ const CompactMessage: React.FC<{
 
     try {
       const result = await tipcClient.generateSpeech({
-        text: message.content,
+        text: ttsText || message.content,
       })
       setAudioData(result.audio)
       return result.audio
@@ -196,6 +197,16 @@ const CompactMessage: React.FC<{
       setIsGeneratingAudio(false)
     }
   }
+
+  // Invalidate cached audio when the TTS source text changes (e.g. via a later progress merge)
+  // so stale audio from a previous text is never played alongside the new text.
+  const prevTtsTextRef = useRef(ttsText)
+  useEffect(() => {
+    if (prevTtsTextRef.current !== ttsText) {
+      prevTtsTextRef.current = ttsText
+      setAudioData(null)
+    }
+  }, [ttsText])
 
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
@@ -370,7 +381,7 @@ const CompactMessage: React.FC<{
             <div className="mt-2">
               <AudioPlayer
                 audioData={audioData || undefined}
-                text={message.content}
+                text={ttsText || message.content}
                 onGenerateAudio={generateAudio}
                 isGenerating={isGeneratingAudio}
                 error={ttsError}
@@ -2354,6 +2365,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                           <CompactMessage
                             key={itemKey}
                             message={item.data}
+                            ttsText={isLastAssistant ? progress.spokenContent : undefined}
                             isLast={isLastAssistant}
                             isComplete={isComplete}
                             hasErrors={hasErrors}
@@ -2704,11 +2716,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   : isFinalAssistantMessage // Only final assistant message expanded by default
 
                 if (item.kind === "message") {
+                  const isLastAssistant = index === lastAssistantDisplayIndex
                   return (
                     <CompactMessage
                       key={itemKey}
                       message={item.data}
-                      isLast={index === lastAssistantDisplayIndex}
+                      ttsText={isLastAssistant ? progress.spokenContent : undefined}
+                      isLast={isLastAssistant}
                       isComplete={isComplete}
                       hasErrors={hasErrors}
                       wasStopped={wasStopped}

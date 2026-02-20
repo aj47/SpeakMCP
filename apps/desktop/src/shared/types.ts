@@ -206,7 +206,13 @@ export interface AgentProgressUpdate {
   isComplete: boolean
   isSnoozed?: boolean
   finalContent?: string
-  spokenContent?: string
+  /**
+   * User-facing response set via respond_to_user tool.
+   * On voice interfaces: spoken aloud via TTS
+   * On messaging channels (mobile, WhatsApp): sent as a message
+   * Consumers should fall back to finalContent if this is not set.
+   */
+  userResponse?: string
   conversationHistory?: Array<{
     role: "user" | "assistant" | "tool"
     content: string

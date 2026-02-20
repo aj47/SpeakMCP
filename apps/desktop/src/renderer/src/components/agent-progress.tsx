@@ -2367,7 +2367,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                           <CompactMessage
                             key={itemKey}
                             message={item.data}
-                            ttsText={isLastAssistant ? progress.spokenContent : undefined}
+                            ttsText={isLastAssistant ? progress.userResponse : undefined}
                             isLast={isLastAssistant}
                             isComplete={isComplete}
                             hasErrors={hasErrors}
@@ -2723,7 +2723,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                     <CompactMessage
                       key={itemKey}
                       message={item.data}
-                      ttsText={isLastAssistant ? progress.spokenContent : undefined}
+                      ttsText={isLastAssistant ? progress.userResponse : undefined}
                       isLast={isLastAssistant}
                       isComplete={isComplete}
                       hasErrors={hasErrors}

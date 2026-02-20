@@ -31,12 +31,12 @@ import {
   type SummarizationInput,
 } from "./summarization-service"
 import { memoryService } from "./memory-service"
-import { clearSessionSpokenContent, getSessionSpokenContent } from "./session-spoken-content-store"
+import { clearSessionUserResponse, getSessionUserResponse } from "./session-user-response-store"
 
 const MARK_WORK_COMPLETE_TOOL = "speakmcp-settings:mark_work_complete"
-const SPEAK_TO_USER_TOOL = "speakmcp-settings:speak_to_user"
+const RESPOND_TO_USER_TOOL = "speakmcp-settings:respond_to_user"
 const INTERNAL_COMPLETION_NUDGE_TEXT =
-  `If all requested work is complete, use ${SPEAK_TO_USER_TOOL} to tell the user the result, then call ${MARK_WORK_COMPLETE_TOOL} with a concise summary. Otherwise continue working and call more tools.`
+  `If all requested work is complete, use ${RESPOND_TO_USER_TOOL} to tell the user the result, then call ${MARK_WORK_COMPLETE_TOOL} with a concise summary. Otherwise continue working and call more tools.`
 
 /**
  * Clean error message by removing stack traces and noise
@@ -394,8 +394,8 @@ export async function processTranscriptWithAgentMode(
   const currentConversationId = conversationId
   const currentSessionId =
     sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  // Clear any stale spoken content from prior runs that may have reused this session ID.
-  clearSessionSpokenContent(currentSessionId)
+  // Clear any stale user response from prior runs that may have reused this session ID.
+  clearSessionUserResponse(currentSessionId)
   // Number of messages in the conversation history that predate this agent session.
   // Used by the UI to show only this session's messages while still saving full history.
   // When continuing a conversation, we set this to 0 so the UI shows the full history.
@@ -469,26 +469,26 @@ export async function processTranscriptWithAgentMode(
     const session = agentSessionTracker.getSession(currentSessionId)
     const conversationTitle = session?.conversationTitle
     const profileName = session?.profileSnapshot?.profileName
-    const storedSpokenContent = getSessionSpokenContent(currentSessionId)
-    const normalizedStoredSpokenContent =
-      typeof storedSpokenContent === "string" && storedSpokenContent.trim().length > 0
-        ? storedSpokenContent
+    const storedUserResponse = getSessionUserResponse(currentSessionId)
+    const normalizedStoredUserResponse =
+      typeof storedUserResponse === "string" && storedUserResponse.trim().length > 0
+        ? storedUserResponse
         : undefined
     const isKillSwitchCompletion =
       update.isComplete &&
       typeof update.finalContent === "string" &&
       update.finalContent.includes("emergency kill switch")
-    const spokenContentForUpdate =
-      update.spokenContent ??
+    const userResponseForUpdate =
+      update.userResponse ??
       (update.isComplete && !isKillSwitchCompletion
-        ? normalizedStoredSpokenContent
+        ? normalizedStoredUserResponse ?? update.finalContent
         : undefined)
 
     const fullUpdate: AgentProgressUpdate = {
       ...update,
-      // Only include spokenContent when it has a value, so undefined doesn't
-      // overwrite a previously-set value during the renderer's spread-merge.
-      ...(spokenContentForUpdate !== undefined ? { spokenContent: spokenContentForUpdate } : {}),
+	      // Only include userResponse when it has a value, so undefined doesn't
+	      // overwrite a previously-set value during the renderer's spread-merge.
+	      ...(userResponseForUpdate !== undefined ? { userResponse: userResponseForUpdate } : {}),
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       conversationTitle,
@@ -2847,7 +2847,7 @@ Return ONLY JSON per schema.`,
     }
 
     // Clean up session state at the end of agent processing
-    clearSessionSpokenContent(currentSessionId)
+    clearSessionUserResponse(currentSessionId)
     agentSessionStateManager.cleanupSession(currentSessionId)
   }
 }

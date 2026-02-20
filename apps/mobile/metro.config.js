@@ -40,9 +40,50 @@ const FORCE_NO_EXPORTS = new Set([
   'assert',
 ]);
 
-// 6. Custom resolver for pnpm compatibility + exports bypass
+// 6. Packages that must be deduplicated to avoid multiple instances.
+// React/ReactDOM must be single instances or hooks will fail with
+// "Cannot read properties of undefined (reading 'ReactCurrentDispatcher')"
+const DEDUPE_PACKAGES = new Set([
+  'react',
+  'react-dom',
+  'react-native',
+  'react-native-web',
+]);
+
+// Pre-resolve dedupe packages to ensure single instances
+const dedupeResolvedPaths = {};
+for (const pkg of DEDUPE_PACKAGES) {
+  const pkgPath = path.resolve(projectRoot, 'node_modules', pkg);
+  if (fs.existsSync(pkgPath)) {
+    dedupeResolvedPaths[pkg] = fs.realpathSync(pkgPath);
+  }
+}
+
+// 7. Custom resolver for pnpm compatibility + exports bypass + React deduplication
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Force React and related packages to resolve from project's node_modules
+  // This prevents multiple React instances when dependencies from root node_modules
+  // try to use their own React version (fixes ReactCurrentDispatcher errors)
+  const baseModuleName = moduleName.split('/')[0];
+  if (DEDUPE_PACKAGES.has(baseModuleName) && dedupeResolvedPaths[baseModuleName]) {
+    // For subpath imports like 'react/jsx-runtime', resolve from project root
+    const subpath = moduleName.slice(baseModuleName.length);
+    const targetPath = dedupeResolvedPaths[baseModuleName] + subpath;
+    try {
+      const resolved = require.resolve(
+        moduleName.startsWith('@') ? moduleName : baseModuleName + subpath,
+        { paths: [projectRoot] }
+      );
+      return {
+        filePath: resolved,
+        type: 'sourceFile',
+      };
+    } catch (e) {
+      // Fall through to default resolution
+    }
+  }
+
   // Bypass package exports for problematic CJS packages
   const pkgName = moduleName.startsWith('@')
     ? moduleName.split('/').slice(0, 2).join('/')

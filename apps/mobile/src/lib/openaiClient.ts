@@ -220,15 +220,27 @@ export class OpenAIClient {
     // Track accumulated content for checkpoint updates
     let accumulatedContent = '';
 
+    // DEBUG: Track token source to identify duplication
+    let tokenCallCount = 0;
+    const DEBUG_MAX_TOKENS = 50; // Limit logging to first 50 tokens to avoid log spam
+
     // Wrap onToken to update checkpoint with streaming content
     const wrappedOnToken: ((token: string) => void) | undefined = onToken
       ? (token) => {
+          tokenCallCount++;
+          const isFullUpdate = token.startsWith(accumulatedContent) && token.length >= accumulatedContent.length;
+
+          // Log first few tokens for debugging
+          if (tokenCallCount <= DEBUG_MAX_TOKENS) {
+            console.log(`[OpenAIClient] onToken #${tokenCallCount}: "${token.slice(0, 50)}..." isFullUpdate=${isFullUpdate}, token.length=${token.length}, accumulatedContent.length=${accumulatedContent.length}`);
+          }
+
           // Handle both delta tokens and full-text updates.
           // When called via onProgress with streamingContent.text, token contains the full accumulated text.
           // When called via SSE delta events, token contains just the new delta.
           // Detect full-text updates: if token starts with current accumulatedContent and is longer,
           // or if token equals accumulatedContent (duplicate call), use replacement instead of append.
-          if (token.startsWith(accumulatedContent)) {
+          if (isFullUpdate) {
             // Full-text update: replace instead of append
             accumulatedContent = token;
           } else {
@@ -840,9 +852,9 @@ export class OpenAIClient {
         if (obj.type === 'progress' && obj.data) {
           const update = obj.data as AgentProgressUpdate;
           onProgress?.(update);
-          if (update.streamingContent?.text) {
-            onToken?.(update.streamingContent.text);
-          }
+          // NOTE: Do NOT call onToken here - onProgress already handles streaming content
+          // display via convertProgressToMessages(). Calling both causes duplicate state
+          // updates and can lead to message repetition bugs.
           continue;
         }
 
@@ -864,6 +876,8 @@ export class OpenAIClient {
         const delta = obj?.choices?.[0]?.delta;
         const token = delta?.content;
         if (typeof token === 'string' && token.length > 0) {
+          // DEBUG: Log SSE delta tokens
+          console.log(`[OpenAIClient] processSSEEvent: delta token, content="${token}"`);
           onToken?.(token);
           // Initialize result if null to avoid "Cannot spread null" error on first token
           result = { ...(result || {}), content: (result?.content || '') + token };

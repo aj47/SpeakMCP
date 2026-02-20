@@ -1724,15 +1724,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     const historyForSession =
       startIndex > 0 ? conversationHistory.slice(startIndex) : conversationHistory
 
-    // Filter internal nudges from the visible history
-    const isNudge = (c: string) =>
-      c.includes("Please either take action using available tools") ||
-      c.includes("You have relevant tools available for this request") ||
-      (c.includes("If all requested work is complete, call") &&
-        c.includes(MARK_WORK_COMPLETE_TOOL))
+    // Filter internal nudges from the visible history (fallback for older data)
+    // The main process now filters ephemeral messages, but this fallback catches
+    // any completion nudges that might appear in older conversation data
+    const isCompletionNudge = (c: string) => {
+      const trimmed = c.trim()
+      // Only filter the exact completion nudge text to avoid false positives
+      return trimmed.includes("If all requested work is complete, call") &&
+        trimmed.includes(MARK_WORK_COMPLETE_TOOL)
+    }
 
     messages = historyForSession
-      .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
+      .filter((entry) => !(entry.role === "user" && isCompletionNudge(entry.content)))
       .map((entry) => ({
         role: entry.role,
         content: entry.content,

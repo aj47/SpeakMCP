@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useQueryClient, useQuery } from "@tanstack/react-query"
-import { useParams } from "react-router-dom"
+import { useParams, useOutletContext } from "react-router-dom"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useAgentStore } from "@renderer/stores"
 import { SessionGrid, SessionTileWrapper } from "@renderer/components/session-grid"
 import { clearPersistedSize } from "@renderer/hooks/use-resizable"
 import { AgentProgress } from "@renderer/components/agent-progress"
-import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, Keyboard } from "lucide-react"
+import { MessageCircle, Mic, Plus, CheckCircle2, LayoutGrid, Kanban, Keyboard, Clock } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { AgentProgressUpdate } from "@shared/types"
 import { cn } from "@renderer/lib/utils"
@@ -14,16 +14,49 @@ import { toast } from "sonner"
 import { SessionsKanban } from "@renderer/components/sessions-kanban"
 import { PredefinedPromptsMenu } from "@renderer/components/predefined-prompts-menu"
 import { useConfigQuery } from "@renderer/lib/query-client"
+import { useConversationHistoryQuery } from "@renderer/lib/queries"
 import { getMcpToolsShortcutDisplay, getTextInputShortcutDisplay, getDictationShortcutDisplay } from "@shared/key-utils"
+import dayjs from "dayjs"
 
-function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortcut, voiceInputShortcut, dictationShortcut }: {
+interface LayoutContext {
+  onOpenPastSessionsDialog: () => void
+}
+
+function formatTimestamp(timestamp: number): string {
+  const now = dayjs()
+  const date = dayjs(timestamp)
+  const diffHours = Math.max(0, now.diff(date, "hour"))
+
+  if (diffHours < 24) {
+    const diffSeconds = Math.max(0, now.diff(date, "second"))
+    const diffMinutes = Math.max(0, now.diff(date, "minute"))
+    if (diffSeconds < 60) return `${diffSeconds}s`
+    if (diffMinutes < 60) return `${diffMinutes}m`
+    return `${diffHours}h`
+  }
+  if (diffHours < 168) return date.format("ddd h:mm A")
+  return date.format("MMM D")
+}
+
+const RECENT_SESSIONS_LIMIT = 8
+
+function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, onPastSessionClick, onOpenPastSessionsDialog, textInputShortcut, voiceInputShortcut, dictationShortcut }: {
   onTextClick: () => void
   onVoiceClick: () => void
   onSelectPrompt: (content: string) => void
+  onPastSessionClick: (conversationId: string) => void
+  onOpenPastSessionsDialog: () => void
   textInputShortcut: string
   voiceInputShortcut: string
   dictationShortcut: string
 }) {
+  const conversationHistoryQuery = useConversationHistoryQuery()
+  const recentSessions = useMemo(
+    () => (conversationHistoryQuery.data ?? []).slice(0, RECENT_SESSIONS_LIMIT),
+    [conversationHistoryQuery.data],
+  )
+  const totalCount = conversationHistoryQuery.data?.length ?? 0
+
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -70,6 +103,41 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
           </div>
         </div>
       </div>
+
+      {/* Recent past sessions */}
+      {recentSessions.length > 0 && (
+        <div className="mt-8 w-full max-w-md text-left">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Recent Sessions
+            </h4>
+            {totalCount > RECENT_SESSIONS_LIMIT && (
+              <button
+                onClick={onOpenPastSessionsDialog}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                View all ({totalCount})
+              </button>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            {recentSessions.map((session) => (
+              <button
+                key={session.id}
+                onClick={() => onPastSessionClick(session.id)}
+                className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left transition-colors hover:bg-accent/50"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate flex-1">{session.title}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                  {formatTimestamp(session.updatedAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -77,6 +145,7 @@ function EmptyState({ onTextClick, onVoiceClick, onSelectPrompt, textInputShortc
 export function Component() {
   const queryClient = useQueryClient()
   const { id: routeHistoryItemId } = useParams<{ id: string }>()
+  const { onOpenPastSessionsDialog } = (useOutletContext<LayoutContext>() ?? {}) as LayoutContext
   const agentProgressById = useAgentStore((s) => s.agentProgressById)
   const focusedSessionId = useAgentStore((s) => s.focusedSessionId)
   const setFocusedSessionId = useAgentStore((s) => s.setFocusedSessionId)
@@ -451,6 +520,19 @@ export function Component() {
             />
           </div>
           <div className="flex items-center gap-2">
+            {/* Past sessions button */}
+            {onOpenPastSessionsDialog && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onOpenPastSessionsDialog}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+                title="Past Sessions"
+              >
+                <Clock className="h-4 w-4" />
+                Past Sessions
+              </Button>
+            )}
             {/* View mode toggle */}
             <div className="flex border rounded-md overflow-hidden" role="group" aria-label="Session view mode">
               <Button
@@ -507,6 +589,8 @@ export function Component() {
             onTextClick={handleTextClick}
             onVoiceClick={handleVoiceStart}
             onSelectPrompt={handleSelectPrompt}
+            onPastSessionClick={handleContinueConversation}
+            onOpenPastSessionsDialog={onOpenPastSessionsDialog}
             textInputShortcut={textInputShortcut}
             voiceInputShortcut={voiceInputShortcut}
             dictationShortcut={dictationShortcut}

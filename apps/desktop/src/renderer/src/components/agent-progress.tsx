@@ -198,6 +198,16 @@ const CompactMessage: React.FC<{
     }
   }
 
+  // Invalidate cached audio when the TTS source text changes (e.g. via a later progress merge)
+  // so stale audio from a previous text is never played alongside the new text.
+  const prevTtsTextRef = useRef(ttsText)
+  useEffect(() => {
+    if (prevTtsTextRef.current !== ttsText) {
+      prevTtsTextRef.current = ttsText
+      setAudioData(null)
+    }
+  }, [ttsText])
+
   // Check if TTS should be shown for this message
   const shouldShowTTS = message.role === "assistant" && isComplete && isLast && configQuery.data?.ttsEnabled
 
@@ -2343,11 +2353,13 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
                   <div className="space-y-1 p-2">
                     {displayItems.map((item, index) => {
                       const itemKey = item.id
+                      // Final assistant message should be expanded by default when agent is complete
                       // Tool executions should be collapsed by default to reduce visual clutter
                       // unless user has explicitly toggled them (itemKey exists in expandedItems)
+                      const isFinalAssistantMessage = item.kind === "message" && index === lastAssistantDisplayIndex && isComplete
                       const isExpanded = itemKey in expandedItems
                         ? expandedItems[itemKey]
-                        : false // Tool executions collapsed by default
+                        : isFinalAssistantMessage // Only final assistant message expanded by default
                       const isLastAssistant = item.kind === "message" && item.data.role === "assistant" && index === lastAssistantDisplayIndex
 
                       if (item.kind === "message") {

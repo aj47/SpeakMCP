@@ -1,36 +1,17 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl, Share, Alert } from 'react-native';
+import { View, Text, TextInput, Switch, StyleSheet, ScrollView, Modal, TouchableOpacity, Platform, Pressable, ActivityIndicator, RefreshControl, Share, Alert, LayoutAnimation, UIManager } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppConfig, saveConfig, useConfigContext } from '../store/config';
 import { useTheme, ThemeMode } from '../ui/ThemeProvider';
 import { spacing, radius } from '../ui/theme';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Linking from 'expo-linking';
-import { checkServerConnection, ConnectionCheckResult } from '../lib/connectionRecovery';
-import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
 import { usePushNotifications } from '../lib/pushNotifications';
-import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo } from '../lib/settingsApi';
+import { SettingsApiClient, Profile, MCPServer, Settings, ModelInfo, SettingsUpdate } from '../lib/settingsApi';
 import { TTSSettings } from '../ui/TTSSettings';
 
-function parseQRCode(data: string): { baseUrl?: string; apiKey?: string; model?: string } | null {
-  try {
-    const parsed = Linking.parse(data);
-    // Handle speakmcp://config?baseUrl=...&apiKey=...&model=...
-    if (parsed.scheme === 'speakmcp' && (parsed.path === 'config' || parsed.hostname === 'config')) {
-      const { baseUrl, apiKey, model } = parsed.queryParams || {};
-      if (baseUrl || apiKey || model) {
-        return {
-          baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
-          apiKey: typeof apiKey === 'string' ? apiKey : undefined,
-          model: typeof model === 'string' ? model : undefined,
-        };
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to parse QR code:', e);
-  }
-  return null;
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
@@ -41,15 +22,9 @@ const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
 
 export default function SettingsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const { theme, themeMode, setThemeMode, isDark } = useTheme();
+  const { theme, themeMode, setThemeMode } = useTheme();
   const { config, setConfig, ready } = useConfigContext();
   const [draft, setDraft] = useState<AppConfig>(config);
-  const [showScanner, setShowScanner] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const { connect: tunnelConnect, disconnect: tunnelDisconnect } = useTunnelConnection();
   const { setCurrentProfile: setProfileContext } = useProfile();
 
   // Push notification state
@@ -92,6 +67,24 @@ export default function SettingsScreen({ navigation }: any) {
   // Custom model input state (for debouncing)
   const [customModelDraft, setCustomModelDraft] = useState('');
   const modelUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Collapsible section state - all new sections start collapsed
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    profileModel: true,  // Keep profile/model expanded by default since it was already visible
+    mcpServers: true,    // Keep MCP servers expanded by default since it was already visible
+    streamerMode: false,
+    speechToText: false,
+    textToSpeech: false,
+    agentSettings: false,
+    memorySummarization: false,
+    toolExecution: false,
+    whatsapp: false,
+    langfuse: false,
+  });
+
+  // Debounced input state for string/number fields
+  const [inputDrafts, setInputDrafts] = useState<Record<string, string>>({});
+  const inputTimeoutRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -146,6 +139,17 @@ export default function SettingsScreen({ navigation }: any) {
       }
       if (settingsRes) {
         setRemoteSettings(settingsRes);
+        // Sync input drafts from fetched settings (only on explicit fetch,
+        // not on optimistic local updates, to avoid overwriting user's typing)
+        setInputDrafts({
+          sttLanguage: settingsRes.sttLanguage || '',
+          transcriptPostProcessingPrompt: settingsRes.transcriptPostProcessingPrompt || '',
+          mcpMaxIterations: String(settingsRes.mcpMaxIterations ?? 10),
+          whatsappAllowFrom: (settingsRes.whatsappAllowFrom || []).join(', '),
+          langfusePublicKey: settingsRes.langfusePublicKey || '',
+          langfuseSecretKey: settingsRes.langfuseSecretKey === '••••••••' ? '' : (settingsRes.langfuseSecretKey || ''),
+          langfuseBaseUrl: settingsRes.langfuseBaseUrl || '',
+        });
         successCount++;
       }
 
@@ -282,6 +286,45 @@ export default function SettingsScreen({ navigation }: any) {
       setRemoteError(error.message || 'Failed to update setting');
     }
   };
+
+  // Handle remote settings update for string/number fields (with debounce)
+  const handleRemoteSettingUpdate = useCallback((key: keyof SettingsUpdate, value: string | number | string[]) => {
+    // Update local draft immediately for responsive UI
+    setInputDrafts(prev => ({ ...prev, [key]: String(value) }));
+    setRemoteSettings(prev => prev ? { ...prev, [key]: value } : null);
+
+    // Cancel any pending update for this key
+    if (inputTimeoutRefs.current[key]) {
+      clearTimeout(inputTimeoutRefs.current[key]);
+    }
+
+    // Debounce the actual API call by 1000ms
+    inputTimeoutRefs.current[key] = setTimeout(async () => {
+      if (!settingsClient) return;
+
+      try {
+        await settingsClient.updateSettings({ [key]: value });
+      } catch (error: any) {
+        console.error(`[Settings] Failed to update ${key}:`, error);
+        setRemoteError(error.message || `Failed to update ${key}`);
+        // Refresh to get actual state
+        fetchRemoteSettings();
+      }
+    }, 1000);
+  }, [settingsClient, fetchRemoteSettings]);
+
+  // Cleanup input timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(inputTimeoutRefs.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  // Toggle section collapse state
+  const toggleSection = useCallback((section: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  }, []);
 
   // Handle push notification toggle
   const handleNotificationToggle = async (enabled: boolean) => {
@@ -483,132 +526,38 @@ export default function SettingsScreen({ navigation }: any) {
 
   useEffect(() => {
     setDraft(config);
-  }, [ready]);
+  }, [ready, config]);
 
-  // Clear connection error when draft changes
-  useEffect(() => {
-    if (connectionError) {
-      setConnectionError(null);
-    }
-  }, [draft.baseUrl, draft.apiKey]);
 
-  const onSave = async () => {
-    let normalizedDraft = {
-      ...draft,
-      baseUrl: draft.baseUrl?.trim?.() ?? '',
-      apiKey: draft.apiKey?.trim?.() ?? '',
-    };
-
-    // Clear any previous error
-    setConnectionError(null);
-
-    // Default to OpenAI URL if baseUrl is empty to prevent OpenAIClient from throwing
-    if (!normalizedDraft.baseUrl) {
-      normalizedDraft.baseUrl = 'https://api.openai.com/v1';
-    }
-
-    // Check if we have a base URL to validate
-    // If using default OpenAI URL with no API key, allow pass-through (might be using built-in key)
-    const hasCustomUrl = normalizedDraft.baseUrl && normalizedDraft.baseUrl !== 'https://api.openai.com/v1';
-    const hasApiKey = normalizedDraft.apiKey && normalizedDraft.apiKey.length > 0;
-
-    // Require API key when using a custom server URL
-    if (hasCustomUrl && !hasApiKey) {
-      setConnectionError('API Key is required when using a custom server URL');
-      return;
-    }
-
-    // Validate: if API key is set, base URL must also be set
-    if (hasApiKey && !normalizedDraft.baseUrl) {
-      setConnectionError('Base URL is required when an API key is provided');
-      return;
-    }
-
-    // Only check connection if we have both a custom URL and API key
-    // Or if we have an API key with the default URL
-    if (hasApiKey && normalizedDraft.baseUrl) {
-      setIsCheckingConnection(true);
-
-      try {
-        const result = await checkServerConnection(
-          normalizedDraft.baseUrl,
-          normalizedDraft.apiKey,
-          10000 // 10 second timeout
-        );
-
-        if (!result.success) {
-          setConnectionError(result.error || 'Connection failed');
-          setIsCheckingConnection(false);
-          return; // Don't proceed if connection fails
-        }
-
-        // Use the normalized URL from the connection check so the saved config
-        // matches what was actually verified (includes scheme, no trailing slashes)
-        if (result.normalizedUrl) {
-          normalizedDraft = {
-            ...normalizedDraft,
-            baseUrl: result.normalizedUrl,
-          };
-        }
-
-        console.log('[Settings] Connection check successful:', result);
-      } catch (error: any) {
-        console.error('[Settings] Connection check error:', error);
-        setConnectionError(error.message || 'Connection check failed');
-        setIsCheckingConnection(false);
-        return;
-      }
-
-      setIsCheckingConnection(false);
-    }
-
-    // Connection successful or no validation needed, proceed
-    setConfig(normalizedDraft);
-    await saveConfig(normalizedDraft);
-
-    // Connect tunnel for persistence (fire and forget - don't block navigation)
-    if (normalizedDraft.baseUrl && normalizedDraft.apiKey) {
-      tunnelConnect(normalizedDraft.baseUrl, normalizedDraft.apiKey).catch((error) => {
-        console.warn('[Settings] Tunnel connect failed (non-blocking):', error);
-      });
-    } else {
-      // Clear tunnel metadata when credentials are removed
-      tunnelDisconnect().catch((error) => {
-        console.warn('[Settings] Tunnel disconnect failed (non-blocking):', error);
-      });
-    }
-
-    navigation.navigate('Sessions');
-  };
-
-  const handleScanQR = async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        return;
-      }
-    }
-    setScanned(false);
-    setShowScanner(true);
-  };
-
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
-    if (scanned) return;
-    setScanned(true);
-
-    const params = parseQRCode(data);
-    if (params) {
-      setDraft(prev => ({
-        ...prev,
-        ...(params.baseUrl && { baseUrl: params.baseUrl }),
-        ...(params.apiKey && { apiKey: params.apiKey }),
-        ...(params.model && { model: params.model }),
-      }));
-      setShowScanner(false);
-    } else {
-      // Invalid QR code, allow scanning again
-      setTimeout(() => setScanned(false), 2000);
-    }
+  // CollapsibleSection component
+  const CollapsibleSection = ({
+    id,
+    title,
+    children
+  }: {
+    id: string;
+    title: string;
+    children: React.ReactNode;
+  }) => {
+    const isExpanded = expandedSections[id] ?? false;
+    return (
+      <View style={styles.collapsibleSection}>
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => toggleSection(id)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isExpanded }}
+        >
+          <Text style={styles.collapsibleTitle}>{title}</Text>
+          <Text style={styles.collapsibleChevron}>{isExpanded ? '▼' : '▶'}</Text>
+        </TouchableOpacity>
+        {isExpanded && (
+          <View style={styles.collapsibleContent}>
+            {children}
+          </View>
+        )}
+      </View>
+    );
   };
 
   if (!ready) return null;
@@ -629,27 +578,46 @@ export default function SettingsScreen({ navigation }: any) {
       >
         <Text style={styles.h1}>Settings</Text>
 
-        {connectionError && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>⚠️ {connectionError}</Text>
-          </View>
-        )}
-
+        {/* Connection Card - Tap to navigate to ConnectionSettings */}
         <TouchableOpacity
-          style={[styles.primaryButton, isCheckingConnection && styles.primaryButtonDisabled]}
-          onPress={onSave}
-          disabled={isCheckingConnection}
+          style={styles.connectionCard}
+          onPress={() => navigation.navigate('ConnectionSettings')}
           accessibilityRole="button"
-          accessibilityLabel={isCheckingConnection ? 'Checking connection' : 'Connect'}
+          accessibilityLabel="Connection settings"
         >
-          {isCheckingConnection ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
-              <Text style={styles.primaryButtonText}>  Checking connection...</Text>
+          <View style={styles.connectionCardContent}>
+            <View style={styles.connectionCardLeft}>
+              <View style={styles.connectionStatusRow}>
+                <View style={[
+                  styles.statusDot,
+                  { width: 10, height: 10, borderRadius: 5 },
+                  config.baseUrl && config.apiKey
+                    ? styles.statusConnected
+                    : { backgroundColor: '#ef4444' }
+                ]} />
+                <Text style={styles.connectionCardTitle}>
+                  {config.baseUrl && config.apiKey ? 'Connected' : 'Not connected'}
+                </Text>
+              </View>
+              {config.baseUrl && (
+                <Text style={styles.connectionCardUrl} numberOfLines={1}>
+                  {config.baseUrl}
+                </Text>
+              )}
             </View>
-          ) : (
-            <Text style={styles.primaryButtonText}>Connect</Text>
-          )}
+            <Text style={styles.connectionCardChevron}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Go to Chats button */}
+        <TouchableOpacity
+          style={[styles.primaryButton, !(config.baseUrl && config.apiKey) && styles.primaryButtonDisabled]}
+          onPress={() => navigation.navigate('Sessions')}
+          disabled={!(config.baseUrl && config.apiKey)}
+          accessibilityRole="button"
+          accessibilityLabel="Go to Chats"
+        >
+          <Text style={styles.primaryButtonText}>Go to Chats</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Appearance</Text>
@@ -672,32 +640,6 @@ export default function SettingsScreen({ navigation }: any) {
             </Pressable>
           ))}
         </View>
-
-        <Text style={styles.sectionTitle}>API Configuration</Text>
-
-        <TouchableOpacity style={styles.scanButton} onPress={handleScanQR} accessibilityRole="button" accessibilityLabel="Scan QR Code">
-          <Text style={styles.scanButtonText}>📷 Scan QR Code</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.label}>API Key</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.apiKey}
-          onChangeText={(t) => setDraft({ ...draft, apiKey: t })}
-          placeholder="sk-..."
-          placeholderTextColor={theme.colors.mutedForeground}
-          autoCapitalize='none'
-        />
-
-        <Text style={styles.label}>Base URL</Text>
-        <TextInput
-          style={styles.input}
-          value={draft.baseUrl}
-          onChangeText={(t) => setDraft({ ...draft, baseUrl: t })}
-          placeholder='https://api.openai.com/v1'
-          placeholderTextColor={theme.colors.mutedForeground}
-          autoCapitalize='none'
-        />
 
         <View style={styles.row}>
           <Text style={styles.label}>Hands-free Voice Mode</Text>
@@ -794,61 +736,526 @@ export default function SettingsScreen({ navigation }: any) {
               </View>
             )}
 
-            {/* Profile Switching */}
-            {profiles.length > 0 && (
-              <>
-                <Text style={styles.subsectionTitle}>Profile</Text>
-                <View style={styles.profileList}>
-                  {profiles.map((profile) => (
-                    <TouchableOpacity
-                      key={profile.id}
+            {/* 4a. Profile & Model */}
+            {remoteSettings && (
+              <CollapsibleSection id="profileModel" title="Profile & Model">
+                {/* Profile Switching */}
+                {profiles.length > 0 && (
+                  <>
+                    <Text style={styles.label}>Profile</Text>
+                    <View style={styles.profileList}>
+                      {profiles.map((profile) => (
+                        <TouchableOpacity
+                          key={profile.id}
+                          style={[
+                            styles.profileItem,
+                            currentProfileId === profile.id && styles.profileItemActive,
+                          ]}
+                          onPress={() => handleProfileSwitch(profile.id)}
+                        >
+                          <Text style={[
+                            styles.profileName,
+                            currentProfileId === profile.id && styles.profileNameActive,
+                          ]}>
+                            {profile.name}
+                            {profile.isDefault && ' (Default)'}
+                          </Text>
+                          {currentProfileId === profile.id && (
+                            <Text style={styles.checkmark}>✓</Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.profileActions}>
+                      <TouchableOpacity
+                        style={[styles.profileActionButton, isImportingProfile && styles.profileActionButtonDisabled]}
+                        onPress={() => setShowImportModal(true)}
+                        disabled={isImportingProfile}
+                      >
+                        <Text style={styles.profileActionButtonText}>
+                          {isImportingProfile ? 'Importing...' : '📥 Import'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.profileActionButton, (!currentProfileId || isExportingProfile) && styles.profileActionButtonDisabled]}
+                        onPress={handleExportProfile}
+                        disabled={!currentProfileId || isExportingProfile}
+                      >
+                        <Text style={styles.profileActionButtonText}>
+                          {isExportingProfile ? 'Exporting...' : '📤 Export'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {/* Model Settings */}
+                <Text style={styles.label}>Provider</Text>
+                <View style={styles.providerSelector}>
+                  {(['openai', 'groq', 'gemini'] as const).map((provider) => (
+                    <Pressable
+                      key={provider}
                       style={[
-                        styles.profileItem,
-                        currentProfileId === profile.id && styles.profileItemActive,
+                        styles.providerOption,
+                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionActive,
                       ]}
-                      onPress={() => handleProfileSwitch(profile.id)}
+                      onPress={() => handleProviderChange(provider)}
                     >
                       <Text style={[
-                        styles.profileName,
-                        currentProfileId === profile.id && styles.profileNameActive,
+                        styles.providerOptionText,
+                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionTextActive,
                       ]}>
-                        {profile.name}
-                        {profile.isDefault && ' (Default)'}
+                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
                       </Text>
-                      {currentProfileId === profile.id && (
-                        <Text style={styles.checkmark}>✓</Text>
-                      )}
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </View>
-                {/* Profile Import/Export Buttons */}
-                <View style={styles.profileActions}>
-                  <TouchableOpacity
-                    style={[styles.profileActionButton, isImportingProfile && styles.profileActionButtonDisabled]}
-                    onPress={() => setShowImportModal(true)}
-                    disabled={isImportingProfile}
-                  >
-                    <Text style={styles.profileActionButtonText}>
-                      {isImportingProfile ? 'Importing...' : '📥 Import'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.profileActionButton, (!currentProfileId || isExportingProfile) && styles.profileActionButtonDisabled]}
-                    onPress={handleExportProfile}
-                    disabled={!currentProfileId || isExportingProfile}
-                  >
-                    <Text style={styles.profileActionButtonText}>
-                      {isExportingProfile ? 'Exporting...' : '📤 Export'}
-                    </Text>
-                  </TouchableOpacity>
+
+                {remoteSettings.mcpToolsProviderId === 'openai' && remoteSettings.availablePresets && remoteSettings.availablePresets.length > 0 && (
+                  <>
+                    <Text style={styles.label}>OpenAI Compatible Endpoint</Text>
+                    <TouchableOpacity
+                      style={styles.modelSelector}
+                      onPress={() => setShowPresetPicker(true)}
+                    >
+                      <View style={styles.modelSelectorContent}>
+                        <Text style={styles.modelSelectorText}>
+                          {getCurrentPresetName()}
+                        </Text>
+                        <Text style={styles.modelSelectorChevron}>▼</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <View style={styles.modelLabelRow}>
+                  <Text style={styles.label}>Model Name</Text>
+                  <View style={styles.modelActions}>
+                    <TouchableOpacity
+                      style={styles.modelActionButton}
+                      onPress={() => setUseCustomModel(!useCustomModel)}
+                    >
+                      <Text style={styles.modelActionText}>
+                        {useCustomModel ? '📋 List' : '✏️ Custom'}
+                      </Text>
+                    </TouchableOpacity>
+                    {!useCustomModel && (
+                      <TouchableOpacity
+                        style={styles.modelActionButton}
+                        onPress={() => remoteSettings?.mcpToolsProviderId && fetchModels(remoteSettings.mcpToolsProviderId)}
+                        disabled={isLoadingModels}
+                      >
+                        <Text style={styles.modelActionText}>
+                          {isLoadingModels ? '⏳' : '🔄'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-              </>
+
+                {useCustomModel ? (
+                  <TextInput
+                    style={styles.input}
+                    value={customModelDraft}
+                    onChangeText={handleModelNameChange}
+                    placeholder={getModelPlaceholder()}
+                    placeholderTextColor={theme.colors.mutedForeground}
+                    autoCapitalize='none'
+                  />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.modelSelector}
+                    onPress={() => setShowModelPicker(true)}
+                    disabled={isLoadingModels}
+                  >
+                    {isLoadingModels ? (
+                      <View style={styles.modelSelectorContent}>
+                        <ActivityIndicator size="small" color={theme.colors.mutedForeground} />
+                        <Text style={styles.modelSelectorPlaceholder}>Loading models...</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.modelSelectorContent}>
+                        <Text style={[
+                          styles.modelSelectorText,
+                          !getCurrentModelValue() && styles.modelSelectorPlaceholder
+                        ]}>
+                          {getCurrentModelDisplayName()}
+                        </Text>
+                        <Text style={styles.modelSelectorChevron}>▼</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </CollapsibleSection>
             )}
 
-            {/* MCP Servers */}
+            {/* 4b. Streamer Mode */}
+            {remoteSettings && (
+              <CollapsibleSection id="streamerMode" title="Streamer Mode">
+                <View style={styles.row}>
+                  <Text style={styles.label}>Streamer Mode</Text>
+                  <Switch
+                    value={remoteSettings.streamerModeEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('streamerModeEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.streamerModeEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Hide sensitive information when streaming or sharing screen
+                </Text>
+              </CollapsibleSection>
+            )}
+
+            {/* 4c. Speech-to-Text */}
+            {remoteSettings && (
+              <CollapsibleSection id="speechToText" title="Speech-to-Text">
+                <Text style={styles.label}>STT Language</Text>
+                <TextInput
+                  style={styles.input}
+                  value={inputDrafts.sttLanguage ?? ''}
+                  onChangeText={(v) => handleRemoteSettingUpdate('sttLanguage', v)}
+                  placeholder="en (default)"
+                  placeholderTextColor={theme.colors.mutedForeground}
+                  autoCapitalize='none'
+                />
+                <Text style={styles.helperText}>
+                  Language code for speech-to-text (e.g., en, es, fr)
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Transcription Preview</Text>
+                  <Switch
+                    value={remoteSettings.transcriptionPreviewEnabled ?? true}
+                    onValueChange={(v) => handleRemoteSettingToggle('transcriptionPreviewEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.transcriptionPreviewEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Show live transcription while recording
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Post-Processing</Text>
+                  <Switch
+                    value={remoteSettings.transcriptPostProcessingEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('transcriptPostProcessingEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.transcriptPostProcessingEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Clean up transcripts before sending to LLM
+                </Text>
+
+                {remoteSettings.transcriptPostProcessingEnabled && (
+                  <>
+                    <Text style={styles.label}>Post-Processing Prompt</Text>
+                    <TextInput
+                      style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]}
+                      value={inputDrafts.transcriptPostProcessingPrompt ?? ''}
+                      onChangeText={(v) => handleRemoteSettingUpdate('transcriptPostProcessingPrompt', v)}
+                      placeholder="Custom instructions for transcript cleanup..."
+                      placeholderTextColor={theme.colors.mutedForeground}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </>
+                )}
+              </CollapsibleSection>
+            )}
+
+            {/* 4d. Text-to-Speech */}
+            {remoteSettings && (
+              <CollapsibleSection id="textToSpeech" title="Text-to-Speech">
+                <View style={styles.row}>
+                  <Text style={styles.label}>TTS Enabled</Text>
+                  <Switch
+                    value={remoteSettings.ttsEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('ttsEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.ttsEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Enable text-to-speech for responses on desktop
+                </Text>
+
+                {remoteSettings.ttsEnabled && (
+                  <>
+                    <View style={styles.row}>
+                      <Text style={styles.label}>Auto-Play</Text>
+                      <Switch
+                        value={remoteSettings.ttsAutoPlay ?? true}
+                        onValueChange={(v) => handleRemoteSettingToggle('ttsAutoPlay', v)}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                        thumbColor={remoteSettings.ttsAutoPlay ? theme.colors.primaryForeground : theme.colors.background}
+                      />
+                    </View>
+
+                    <View style={styles.row}>
+                      <Text style={styles.label}>TTS Preprocessing</Text>
+                      <Switch
+                        value={remoteSettings.ttsPreprocessingEnabled ?? true}
+                        onValueChange={(v) => handleRemoteSettingToggle('ttsPreprocessingEnabled', v)}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                        thumbColor={remoteSettings.ttsPreprocessingEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                      />
+                    </View>
+                    <Text style={styles.helperText}>
+                      Clean up text before speaking
+                    </Text>
+
+                    {remoteSettings.ttsPreprocessingEnabled && (
+                      <>
+                        <View style={[styles.row, { paddingLeft: spacing.md }]}>
+                          <Text style={styles.label}>Remove Code Blocks</Text>
+                          <Switch
+                            value={remoteSettings.ttsRemoveCodeBlocks ?? true}
+                            onValueChange={(v) => handleRemoteSettingToggle('ttsRemoveCodeBlocks', v)}
+                            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                            thumbColor={remoteSettings.ttsRemoveCodeBlocks ? theme.colors.primaryForeground : theme.colors.background}
+                          />
+                        </View>
+
+                        <View style={[styles.row, { paddingLeft: spacing.md }]}>
+                          <Text style={styles.label}>Remove URLs</Text>
+                          <Switch
+                            value={remoteSettings.ttsRemoveUrls ?? true}
+                            onValueChange={(v) => handleRemoteSettingToggle('ttsRemoveUrls', v)}
+                            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                            thumbColor={remoteSettings.ttsRemoveUrls ? theme.colors.primaryForeground : theme.colors.background}
+                          />
+                        </View>
+
+                        <View style={[styles.row, { paddingLeft: spacing.md }]}>
+                          <Text style={styles.label}>Convert Markdown</Text>
+                          <Switch
+                            value={remoteSettings.ttsConvertMarkdown ?? true}
+                            onValueChange={(v) => handleRemoteSettingToggle('ttsConvertMarkdown', v)}
+                            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                            thumbColor={remoteSettings.ttsConvertMarkdown ? theme.colors.primaryForeground : theme.colors.background}
+                          />
+                        </View>
+
+                        <View style={[styles.row, { paddingLeft: spacing.md }]}>
+                          <Text style={styles.label}>Use LLM Preprocessing</Text>
+                          <Switch
+                            value={remoteSettings.ttsUseLLMPreprocessing ?? false}
+                            onValueChange={(v) => handleRemoteSettingToggle('ttsUseLLMPreprocessing', v)}
+                            trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                            thumbColor={remoteSettings.ttsUseLLMPreprocessing ? theme.colors.primaryForeground : theme.colors.background}
+                          />
+                        </View>
+                      </>
+                    )}
+                  </>
+                )}
+              </CollapsibleSection>
+            )}
+
+            {/* 4e. Agent Settings */}
+            {remoteSettings && (
+              <CollapsibleSection id="agentSettings" title="Agent Settings">
+                <Text style={styles.label}>Main Agent Mode</Text>
+                <View style={styles.providerSelector}>
+                  {(['api', 'acp'] as const).map((mode) => (
+                    <Pressable
+                      key={mode}
+                      style={[
+                        styles.providerOption,
+                        remoteSettings.mainAgentMode === mode && styles.providerOptionActive,
+                      ]}
+                      onPress={() => handleRemoteSettingUpdate('mainAgentMode', mode)}
+                    >
+                      <Text style={[
+                        styles.providerOptionText,
+                        remoteSettings.mainAgentMode === mode && styles.providerOptionTextActive,
+                      ]}>
+                        {mode.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.helperText}>
+                  API uses external LLMs, ACP routes to an ACP agent
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Message Queue</Text>
+                  <Switch
+                    value={remoteSettings.mcpMessageQueueEnabled ?? true}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpMessageQueueEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpMessageQueueEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Require Tool Approval</Text>
+                  <Switch
+                    value={remoteSettings.mcpRequireApprovalBeforeToolCall ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpRequireApprovalBeforeToolCall', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpRequireApprovalBeforeToolCall ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Require approval before executing MCP tools
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Verify Completion</Text>
+                  <Switch
+                    value={remoteSettings.mcpVerifyCompletionEnabled ?? true}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpVerifyCompletionEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpVerifyCompletionEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Final Summary</Text>
+                  <Switch
+                    value={remoteSettings.mcpFinalSummaryEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpFinalSummaryEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpFinalSummaryEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Generate a summary after completing a task
+                </Text>
+
+                <Text style={styles.label}>Max Iterations</Text>
+                <TextInput
+                  style={styles.input}
+                  value={inputDrafts.mcpMaxIterations ?? '10'}
+                  onChangeText={(v) => {
+                    const num = parseInt(v, 10);
+                    if (!isNaN(num) && num >= 1 && num <= 100) {
+                      handleRemoteSettingUpdate('mcpMaxIterations', num);
+                    } else {
+                      setInputDrafts(prev => ({ ...prev, mcpMaxIterations: v }));
+                    }
+                  }}
+                  placeholder="10"
+                  placeholderTextColor={theme.colors.mutedForeground}
+                  keyboardType="number-pad"
+                />
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Unlimited Iterations</Text>
+                  <Switch
+                    value={remoteSettings.mcpUnlimitedIterations ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpUnlimitedIterations', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpUnlimitedIterations ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+              </CollapsibleSection>
+            )}
+
+            {/* 4f. Memory & Summarization */}
+            {remoteSettings && (
+              <CollapsibleSection id="memorySummarization" title="Memory & Summarization">
+                <View style={styles.row}>
+                  <Text style={styles.label}>Memory System</Text>
+                  <Switch
+                    value={remoteSettings.memoriesEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('memoriesEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.memoriesEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Enable memory features and save_memory tool
+                </Text>
+
+                {remoteSettings.memoriesEnabled && (
+                  <View style={[styles.row, { paddingLeft: spacing.md }]}>
+                    <Text style={styles.label}>Inject Memories</Text>
+                    <Switch
+                      value={remoteSettings.dualModelInjectMemories ?? false}
+                      onValueChange={(v) => handleRemoteSettingToggle('dualModelInjectMemories', v)}
+                      trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                      thumbColor={remoteSettings.dualModelInjectMemories ? theme.colors.primaryForeground : theme.colors.background}
+                    />
+                  </View>
+                )}
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Summarization</Text>
+                  <Switch
+                    value={remoteSettings.dualModelEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('dualModelEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.dualModelEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Generate summaries of agent steps for the UI
+                </Text>
+
+                {remoteSettings.dualModelEnabled && remoteSettings.memoriesEnabled && (
+                  <View style={[styles.row, { paddingLeft: spacing.md }]}>
+                    <Text style={styles.label}>Auto-Save Important</Text>
+                    <Switch
+                      value={remoteSettings.dualModelAutoSaveImportant ?? false}
+                      onValueChange={(v) => handleRemoteSettingToggle('dualModelAutoSaveImportant', v)}
+                      trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                      thumbColor={remoteSettings.dualModelAutoSaveImportant ? theme.colors.primaryForeground : theme.colors.background}
+                    />
+                  </View>
+                )}
+              </CollapsibleSection>
+            )}
+
+            {/* 4g. Tool Execution */}
+            {remoteSettings && (
+              <CollapsibleSection id="toolExecution" title="Tool Execution">
+                <View style={styles.row}>
+                  <Text style={styles.label}>Context Reduction</Text>
+                  <Switch
+                    value={remoteSettings.mcpContextReductionEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpContextReductionEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpContextReductionEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Reduce context size for tool responses
+                </Text>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Tool Response Processing</Text>
+                  <Switch
+                    value={remoteSettings.mcpToolResponseProcessingEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpToolResponseProcessingEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpToolResponseProcessingEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+
+                <View style={styles.row}>
+                  <Text style={styles.label}>Parallel Tool Execution</Text>
+                  <Switch
+                    value={remoteSettings.mcpParallelToolExecution ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('mcpParallelToolExecution', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.mcpParallelToolExecution ? theme.colors.primaryForeground : theme.colors.background}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  Execute multiple tools in parallel when possible
+                </Text>
+              </CollapsibleSection>
+            )}
+
+            {/* 4h. MCP Servers */}
             {mcpServers.length > 0 && (
-              <>
-                <Text style={styles.subsectionTitle}>MCP Servers</Text>
+              <CollapsibleSection id="mcpServers" title="MCP Servers">
                 {mcpServers.map((server) => (
                   <View key={server.name} style={styles.serverRow}>
                     <View style={styles.serverInfo}>
@@ -873,198 +1280,156 @@ export default function SettingsScreen({ navigation }: any) {
                     />
                   </View>
                 ))}
-              </>
+              </CollapsibleSection>
             )}
 
-            {/* Model Settings */}
+            {/* 4i. WhatsApp */}
             {remoteSettings && (
-              <>
-                <Text style={styles.subsectionTitle}>Model</Text>
-
-                <Text style={styles.label}>Provider</Text>
-                <View style={styles.providerSelector}>
-                  {(['openai', 'groq', 'gemini'] as const).map((provider) => (
-                    <Pressable
-                      key={provider}
-                      style={[
-                        styles.providerOption,
-                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionActive,
-                      ]}
-                      onPress={() => handleProviderChange(provider)}
-                    >
-                      <Text style={[
-                        styles.providerOptionText,
-                        remoteSettings.mcpToolsProviderId === provider && styles.providerOptionTextActive,
-                      ]}>
-                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
-                      </Text>
-                    </Pressable>
-                  ))}
+              <CollapsibleSection id="whatsapp" title="WhatsApp">
+                <View style={styles.row}>
+                  <Text style={styles.label}>WhatsApp Integration</Text>
+                  <Switch
+                    value={remoteSettings.whatsappEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('whatsappEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.whatsappEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
                 </View>
 
-                {/* OpenAI Compatible Preset Selector - only show when OpenAI provider is selected */}
-                {remoteSettings.mcpToolsProviderId === 'openai' && remoteSettings.availablePresets && remoteSettings.availablePresets.length > 0 && (
+                {remoteSettings.whatsappEnabled && (
                   <>
-                    <Text style={styles.label}>OpenAI Compatible Endpoint</Text>
-                    <TouchableOpacity
-                      style={styles.modelSelector}
-                      onPress={() => setShowPresetPicker(true)}
-                    >
-                      <View style={styles.modelSelectorContent}>
-                        <Text style={styles.modelSelectorText}>
-                          {getCurrentPresetName()}
-                        </Text>
-                        <Text style={styles.modelSelectorChevron}>▼</Text>
-                      </View>
-                    </TouchableOpacity>
+                    <Text style={styles.label}>Allowed Numbers</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={inputDrafts.whatsappAllowFrom ?? ''}
+                      onChangeText={(v) => {
+                        // Update the text draft immediately for responsive UI
+                        setInputDrafts(prev => ({ ...prev, whatsappAllowFrom: v }));
+                        // Parse comma-separated numbers and debounce the API update
+                        // Don't update remoteSettings locally to avoid the sync effect
+                        // rewriting the user's raw text (losing trailing commas/spaces)
+                        const numbers = v.split(',').map(n => n.trim()).filter(n => n);
+                        if (inputTimeoutRefs.current.whatsappAllowFrom) {
+                          clearTimeout(inputTimeoutRefs.current.whatsappAllowFrom);
+                        }
+                        inputTimeoutRefs.current.whatsappAllowFrom = setTimeout(async () => {
+                          if (!settingsClient) return;
+                          try {
+                            await settingsClient.updateSettings({ whatsappAllowFrom: numbers });
+                          } catch (error: any) {
+                            console.error('[Settings] Failed to update whatsappAllowFrom:', error);
+                            setRemoteError(error.message || 'Failed to update whatsappAllowFrom');
+                            fetchRemoteSettings();
+                          }
+                        }, 1000);
+                      }}
+                      placeholder="1234567890, 0987654321"
+                      placeholderTextColor={theme.colors.mutedForeground}
+                      autoCapitalize='none'
+                      keyboardType="phone-pad"
+                    />
                     <Text style={styles.helperText}>
-                      Select API endpoint (OpenAI, OpenRouter, Together AI, etc.)
+                      Comma-separated phone numbers (international format without +)
+                    </Text>
+
+                    <View style={styles.row}>
+                      <Text style={styles.label}>Auto-Reply</Text>
+                      <Switch
+                        value={remoteSettings.whatsappAutoReply ?? false}
+                        onValueChange={(v) => handleRemoteSettingToggle('whatsappAutoReply', v)}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                        thumbColor={remoteSettings.whatsappAutoReply ? theme.colors.primaryForeground : theme.colors.background}
+                      />
+                    </View>
+
+                    <View style={styles.row}>
+                      <Text style={styles.label}>Log Messages</Text>
+                      <Switch
+                        value={remoteSettings.whatsappLogMessages ?? false}
+                        onValueChange={(v) => handleRemoteSettingToggle('whatsappLogMessages', v)}
+                        trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                        thumbColor={remoteSettings.whatsappLogMessages ? theme.colors.primaryForeground : theme.colors.background}
+                      />
+                    </View>
+                    <Text style={styles.helperText}>
+                      Log message content (privacy concern)
                     </Text>
                   </>
                 )}
+              </CollapsibleSection>
+            )}
 
-                <View style={styles.modelLabelRow}>
-                  <Text style={styles.label}>Model Name</Text>
-                  <View style={styles.modelActions}>
-                    <TouchableOpacity
-                      style={styles.modelActionButton}
-                      onPress={() => setUseCustomModel(!useCustomModel)}
-                    >
-                      <Text style={styles.modelActionText}>
-                        {useCustomModel ? '📋 List' : '✏️ Custom'}
-                      </Text>
-                    </TouchableOpacity>
-                    {!useCustomModel && (
-                      <TouchableOpacity
-                        style={styles.modelActionButton}
-                        onPress={() => remoteSettings && fetchModels(remoteSettings.mcpToolsProviderId)}
-                        disabled={isLoadingModels}
-                      >
-                        <Text style={styles.modelActionText}>
-                          {isLoadingModels ? '⏳' : '🔄'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+            {/* 4j. Langfuse */}
+            {remoteSettings && (
+              <CollapsibleSection id="langfuse" title="Langfuse">
+                <View style={styles.row}>
+                  <Text style={styles.label}>Langfuse Observability</Text>
+                  <Switch
+                    value={remoteSettings.langfuseEnabled ?? false}
+                    onValueChange={(v) => handleRemoteSettingToggle('langfuseEnabled', v)}
+                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
+                    thumbColor={remoteSettings.langfuseEnabled ? theme.colors.primaryForeground : theme.colors.background}
+                  />
                 </View>
+                <Text style={styles.helperText}>
+                  Enable tracing and observability via Langfuse
+                </Text>
 
-                {useCustomModel ? (
+                {remoteSettings.langfuseEnabled && (
                   <>
+                    <Text style={styles.label}>Public Key</Text>
                     <TextInput
                       style={styles.input}
-                      value={customModelDraft}
-                      onChangeText={handleModelNameChange}
-                      placeholder={getModelPlaceholder()}
+                      value={inputDrafts.langfusePublicKey ?? ''}
+                      onChangeText={(v) => handleRemoteSettingUpdate('langfusePublicKey', v)}
+                      placeholder="pk-..."
                       placeholderTextColor={theme.colors.mutedForeground}
                       autoCapitalize='none'
                     />
+
+                    <Text style={styles.label}>Secret Key</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={inputDrafts.langfuseSecretKey ?? ''}
+                      onChangeText={(v) => setInputDrafts(prev => ({ ...prev, langfuseSecretKey: v }))}
+                      onBlur={() => {
+                        const value = inputDrafts.langfuseSecretKey;
+                        if (value !== undefined && value !== '' && settingsClient) {
+                          settingsClient.updateSettings({ langfuseSecretKey: value }).then(() => {
+                            setRemoteSettings(prev => prev ? { ...prev, langfuseSecretKey: '••••••••' } : null);
+                          }).catch((error: any) => {
+                            console.error('[Settings] Failed to update langfuseSecretKey:', error);
+                            setRemoteError(error.message || 'Failed to update langfuseSecretKey');
+                          });
+                        }
+                      }}
+                      placeholder="sk-..."
+                      placeholderTextColor={theme.colors.mutedForeground}
+                      autoCapitalize='none'
+                      secureTextEntry
+                    />
+
+                    <Text style={styles.label}>Base URL</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={inputDrafts.langfuseBaseUrl ?? ''}
+                      onChangeText={(v) => handleRemoteSettingUpdate('langfuseBaseUrl', v)}
+                      placeholder="https://cloud.langfuse.com (default)"
+                      placeholderTextColor={theme.colors.mutedForeground}
+                      autoCapitalize='none'
+                      keyboardType="url"
+                    />
                     <Text style={styles.helperText}>
-                      Enter any model name supported by your provider
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={styles.modelSelector}
-                      onPress={() => setShowModelPicker(true)}
-                      disabled={isLoadingModels}
-                    >
-                      {isLoadingModels ? (
-                        <View style={styles.modelSelectorContent}>
-                          <ActivityIndicator size="small" color={theme.colors.mutedForeground} />
-                          <Text style={styles.modelSelectorPlaceholder}>Loading models...</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.modelSelectorContent}>
-                          <Text style={[
-                            styles.modelSelectorText,
-                            !getCurrentModelValue() && styles.modelSelectorPlaceholder
-                          ]}>
-                            {getCurrentModelDisplayName()}
-                          </Text>
-                          <Text style={styles.modelSelectorChevron}>▼</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    <Text style={styles.helperText}>
-                      {availableModels.length > 0
-                        ? `${availableModels.length} model${availableModels.length !== 1 ? 's' : ''} available`
-                        : 'Model used for agent/MCP tool calling'}
+                      Leave empty for Langfuse Cloud
                     </Text>
                   </>
                 )}
-              </>
-            )}
-
-            {/* Feature Toggles */}
-            {remoteSettings && (
-              <>
-                <Text style={styles.subsectionTitle}>Features</Text>
-
-                <View style={styles.row}>
-                  <Text style={styles.label}>Text-to-Speech</Text>
-                  <Switch
-                    value={remoteSettings.ttsEnabled}
-                    onValueChange={(v) => handleRemoteSettingToggle('ttsEnabled', v)}
-                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-                    thumbColor={remoteSettings.ttsEnabled ? theme.colors.primaryForeground : theme.colors.background}
-                  />
-                </View>
-                <Text style={styles.helperText}>
-                  Enable text-to-speech for responses on desktop
-                </Text>
-
-                <View style={styles.row}>
-                  <Text style={styles.label}>Post-Processing</Text>
-                  <Switch
-                    value={remoteSettings.transcriptPostProcessingEnabled}
-                    onValueChange={(v) => handleRemoteSettingToggle('transcriptPostProcessingEnabled', v)}
-                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-                    thumbColor={remoteSettings.transcriptPostProcessingEnabled ? theme.colors.primaryForeground : theme.colors.background}
-                  />
-                </View>
-                <Text style={styles.helperText}>
-                  Clean up transcripts before sending to LLM
-                </Text>
-
-                <View style={styles.row}>
-                  <Text style={styles.label}>Tool Approval Required</Text>
-                  <Switch
-                    value={remoteSettings.mcpRequireApprovalBeforeToolCall}
-                    onValueChange={(v) => handleRemoteSettingToggle('mcpRequireApprovalBeforeToolCall', v)}
-                    trackColor={{ false: theme.colors.muted, true: theme.colors.primary }}
-                    thumbColor={remoteSettings.mcpRequireApprovalBeforeToolCall ? theme.colors.primaryForeground : theme.colors.background}
-                  />
-                </View>
-                <Text style={styles.helperText}>
-                  Require approval before executing MCP tools
-                </Text>
-              </>
+              </CollapsibleSection>
             )}
           </>
         )}
 
       </ScrollView>
-
-      <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
-        <View style={styles.scannerContainer}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
-          <View style={styles.scannerOverlay}>
-            <View style={styles.scannerFrame} />
-            <Text style={styles.scannerText}>
-              {scanned ? 'Invalid QR code format' : 'Scan a SpeakMCP QR code'}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => setShowScanner(false)}>
-            <Text style={styles.closeButtonText}>✕ Close</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
 
       {/* Model Picker Modal */}
       <Modal
@@ -1291,6 +1656,42 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       ...theme.typography.h1,
       marginBottom: spacing.sm,
     },
+    // Connection card styles
+    connectionCard: {
+      backgroundColor: theme.colors.card,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    connectionCardContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    connectionCardLeft: {
+      flex: 1,
+    },
+    connectionStatusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    connectionCardTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    connectionCardUrl: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+      marginTop: spacing.xs,
+    },
+    connectionCardChevron: {
+      fontSize: 24,
+      color: theme.colors.mutedForeground,
+      marginLeft: spacing.sm,
+    },
     sectionTitle: {
       ...theme.typography.label,
       marginTop: spacing.lg,
@@ -1372,19 +1773,6 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
     },
-    scanButton: {
-      backgroundColor: theme.colors.secondary,
-      padding: spacing.md,
-      borderRadius: radius.lg,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    scanButtonText: {
-      color: theme.colors.foreground,
-      fontSize: 16,
-      fontWeight: '500',
-    },
     primaryButton: {
       backgroundColor: theme.colors.primary,
       padding: spacing.md,
@@ -1397,63 +1785,6 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     primaryButtonText: {
       color: theme.colors.primaryForeground,
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    loadingContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    errorContainer: {
-      backgroundColor: theme.colors.destructive + '20',
-      borderWidth: 1,
-      borderColor: theme.colors.destructive,
-      borderRadius: radius.md,
-      padding: spacing.md,
-      marginTop: spacing.md,
-    },
-    errorText: {
-      color: theme.colors.destructive,
-      fontSize: 14,
-      textAlign: 'center',
-    },
-    scannerContainer: {
-      flex: 1,
-      backgroundColor: '#000',
-    },
-    camera: {
-      flex: 1,
-    },
-    scannerOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    scannerFrame: {
-      width: 250,
-      height: 250,
-      borderWidth: 2,
-      borderColor: '#fff',
-      borderRadius: radius.xl,
-      backgroundColor: 'transparent',
-    },
-    scannerText: {
-      color: '#fff',
-      fontSize: 16,
-      marginTop: 20,
-      textAlign: 'center',
-    },
-    closeButton: {
-      position: 'absolute',
-      top: 60,
-      right: 20,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      padding: 12,
-      borderRadius: radius.lg,
-    },
-    closeButtonText: {
-      color: '#fff',
       fontSize: 16,
       fontWeight: '600',
     },
@@ -1806,6 +2137,35 @@ function createStyles(theme: ReturnType<typeof useTheme>['theme']) {
     modelPickerFooterText: {
       fontSize: 12,
       color: theme.colors.mutedForeground,
+    },
+    // Collapsible section styles
+    collapsibleSection: {
+      marginTop: spacing.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radius.md,
+      backgroundColor: theme.colors.card,
+      overflow: 'hidden',
+    },
+    collapsibleHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+      backgroundColor: theme.colors.muted,
+    },
+    collapsibleTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.foreground,
+    },
+    collapsibleChevron: {
+      fontSize: 12,
+      color: theme.colors.mutedForeground,
+    },
+    collapsibleContent: {
+      padding: spacing.md,
+      paddingTop: spacing.sm,
     },
   });
 }

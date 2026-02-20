@@ -486,7 +486,9 @@ export async function processTranscriptWithAgentMode(
 
     const fullUpdate: AgentProgressUpdate = {
       ...update,
-      userResponse: userResponseForUpdate,
+	      // Only include userResponse when it has a value, so undefined doesn't
+	      // overwrite a previously-set value during the renderer's spread-merge.
+	      ...(userResponseForUpdate !== undefined ? { userResponse: userResponseForUpdate } : {}),
       sessionId: currentSessionId,
       conversationId: currentConversationId,
       conversationTitle,

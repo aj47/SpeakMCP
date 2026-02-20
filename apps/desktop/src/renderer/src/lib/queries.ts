@@ -42,13 +42,14 @@ export const useConfigQuery = () =>
     },
   })
 
-export const useConversationHistoryQuery = () =>
+export const useConversationHistoryQuery = (enabled: boolean = true) =>
   useQuery({
     queryKey: ["conversation-history"],
     queryFn: async () => {
       const result = await tipcClient.getConversationHistory()
       return result
     },
+    enabled,
   })
 
 export const useConversationQuery = (conversationId: string | null) =>
@@ -84,9 +85,10 @@ export const useAvailableModelsQuery = (
   presetId?: string,
 ) =>
   useQuery({
-    queryKey: providerId === "openai" && presetId
-      ? ["available-models", providerId, presetId]
-      : ["available-models", providerId],
+    queryKey:
+      providerId === "openai" && presetId
+        ? ["available-models", providerId, presetId]
+        : ["available-models", providerId],
     queryFn: async () => {
       return tipcClient.fetchAvailableModels({ providerId })
     },

@@ -17,10 +17,27 @@ import * as fs from "fs"
 import * as path from "path"
 import * as https from "https"
 
-// onnxruntime-node types (dynamically imported)
-type OrtModule = typeof import("onnxruntime-node")
-type InferenceSession = import("onnxruntime-node").InferenceSession
-type Tensor = import("onnxruntime-node").Tensor
+// onnxruntime-node is an optional dependency (loaded dynamically at runtime).
+// Keep our local typings lightweight so TypeScript can typecheck even when the
+// native module isn't installed.
+type Tensor = {
+  data: unknown
+}
+
+type InferenceSession = {
+  run: (feeds: Record<string, Tensor>) => Promise<Record<string, Tensor>>
+}
+
+type OrtModule = {
+  InferenceSession: {
+    create: (modelPath: string, options?: unknown) => Promise<InferenceSession>
+  }
+  Tensor: new (
+    dataType: string,
+    data: ArrayBufferView,
+    dims: number[],
+  ) => Tensor
+}
 
 const HF_BASE_URL = "https://huggingface.co/Supertone/supertonic-2/resolve/main"
 
@@ -147,17 +164,27 @@ function downloadFile(
             response.headers.location
           ) {
             response.resume()
-            const redirectUrl = new URL(response.headers.location, currentUrl).toString()
+            const redirectUrl = new URL(
+              response.headers.location,
+              currentUrl,
+            ).toString()
             request(redirectUrl)
             return
           }
 
           if (response.statusCode !== 200) {
-            cleanupAndReject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`))
+            cleanupAndReject(
+              new Error(
+                `HTTP ${response.statusCode}: ${response.statusMessage}`,
+              ),
+            )
             return
           }
 
-          const totalSize = parseInt(response.headers["content-length"] || "0", 10)
+          const totalSize = parseInt(
+            response.headers["content-length"] || "0",
+            10,
+          )
           let downloadedSize = 0
 
           response.on("data", (chunk: Buffer) => {
@@ -224,7 +251,9 @@ export async function downloadSupertonicModel(
     }
 
     if (!isModelReady()) {
-      throw new Error("Model download failed: some files missing after download")
+      throw new Error(
+        "Model download failed: some files missing after download",
+      )
     }
 
     downloadState.progress = 1
@@ -244,7 +273,7 @@ async function loadOrt(): Promise<OrtModule> {
   if (ortLoadError) throw new Error(ortLoadError)
 
   try {
-    ortModule = await import("onnxruntime-node")
+    ortModule = (await import("onnxruntime-node")) as unknown as OrtModule
     console.log("[Supertonic] onnxruntime-node loaded successfully")
     return ortModule
   } catch (error) {
@@ -482,13 +511,16 @@ class TextToSpeech {
     this.ldim = cfgs.ttl.latent_dim
   }
 
-  private arrayToTensor(array: number[] | number[][] | number[][][], dims: number[]): Tensor {
+  private arrayToTensor(
+    array: number[] | number[][] | number[][][],
+    dims: number[],
+  ): Tensor {
     const flat = array.flat(Infinity as 1) as number[]
     return new this.ort.Tensor("float32", Float32Array.from(flat), dims)
   }
 
-  private intArrayToTensor(array: number[][] , dims: number[]): Tensor {
-    const flat = (array.flat(Infinity as 1) as number[])
+  private intArrayToTensor(array: number[][], dims: number[]): Tensor {
+    const flat = array.flat(Infinity as 1) as number[]
     return new this.ort.Tensor(
       "int64",
       BigInt64Array.from(flat.map((x) => BigInt(x))),
@@ -578,11 +610,7 @@ class TextToSpeech {
     const textEmbTensor = textEncResult.text_emb
 
     const { noisyLatent, latentMask } = this.sampleNoisyLatent(durOnnx)
-    const latentShape = [
-      bsz,
-      noisyLatent[0].length,
-      noisyLatent[0][0].length,
-    ]
+    const latentShape = [bsz, noisyLatent[0].length, noisyLatent[0][0].length]
     const latentMaskShape = [bsz, 1, latentMask[0][0].length]
     const latentMaskTensor = this.arrayToTensor(latentMask, latentMaskShape)
 
@@ -665,10 +693,7 @@ class TextToSpeech {
 
 // --- Voice style loading ---
 
-function loadVoiceStyle(
-  ort: OrtModule,
-  voiceStylePath: string,
-): StyleData {
+function loadVoiceStyle(ort: OrtModule, voiceStylePath: string): StyleData {
   const voiceStyle = JSON.parse(fs.readFileSync(voiceStylePath, "utf8"))
 
   const ttlDims = voiceStyle.style_ttl.dims as number[]
@@ -682,16 +707,16 @@ function loadVoiceStyle(
   ) as number[]
 
   // Single voice: batch size = 1
-  const ttlTensor = new ort.Tensor(
-    "float32",
-    Float32Array.from(ttlData),
-    [1, ttlDims[1], ttlDims[2]],
-  )
-  const dpTensor = new ort.Tensor(
-    "float32",
-    Float32Array.from(dpData),
-    [1, dpDims[1], dpDims[2]],
-  )
+  const ttlTensor = new ort.Tensor("float32", Float32Array.from(ttlData), [
+    1,
+    ttlDims[1],
+    ttlDims[2],
+  ])
+  const dpTensor = new ort.Tensor("float32", Float32Array.from(dpData), [
+    1,
+    dpDims[1],
+    dpDims[2],
+  ])
 
   return { ttl: ttlTensor, dp: dpTensor }
 }
@@ -723,13 +748,9 @@ async function initializeEngine(): Promise<TextToSpeech> {
   // Load all ONNX models
   console.log("[Supertonic] Loading ONNX models...")
   const [dpOrt, textEncOrt, vectorEstOrt, vocoderOrt] = await Promise.all([
-    ort.InferenceSession.create(
-      path.join(onnxDir, "duration_predictor.onnx"),
-    ),
+    ort.InferenceSession.create(path.join(onnxDir, "duration_predictor.onnx")),
     ort.InferenceSession.create(path.join(onnxDir, "text_encoder.onnx")),
-    ort.InferenceSession.create(
-      path.join(onnxDir, "vector_estimator.onnx"),
-    ),
+    ort.InferenceSession.create(path.join(onnxDir, "vector_estimator.onnx")),
     ort.InferenceSession.create(path.join(onnxDir, "vocoder.onnx")),
   ])
 
@@ -781,9 +802,7 @@ export async function synthesize(
   // Load voice style
   const voiceStylePath = path.join(getVoiceStylesDir(), `${voice}.json`)
   if (!fs.existsSync(voiceStylePath)) {
-    throw new Error(
-      `Voice style not found: ${voice}. Available: M1-M5, F1-F5`,
-    )
+    throw new Error(`Voice style not found: ${voice}. Available: M1-M5, F1-F5`)
   }
 
   const style = loadVoiceStyle(ort, voiceStylePath)

@@ -139,6 +139,17 @@ export default function SettingsScreen({ navigation }: any) {
       }
       if (settingsRes) {
         setRemoteSettings(settingsRes);
+        // Sync input drafts from fetched settings (only on explicit fetch,
+        // not on optimistic local updates, to avoid overwriting user's typing)
+        setInputDrafts({
+          sttLanguage: settingsRes.sttLanguage || '',
+          transcriptPostProcessingPrompt: settingsRes.transcriptPostProcessingPrompt || '',
+          mcpMaxIterations: String(settingsRes.mcpMaxIterations ?? 10),
+          whatsappAllowFrom: (settingsRes.whatsappAllowFrom || []).join(', '),
+          langfusePublicKey: settingsRes.langfusePublicKey || '',
+          langfuseSecretKey: settingsRes.langfuseSecretKey === '••••••••' ? '' : (settingsRes.langfuseSecretKey || ''),
+          langfuseBaseUrl: settingsRes.langfuseBaseUrl || '',
+        });
         successCount++;
       }
 
@@ -517,20 +528,6 @@ export default function SettingsScreen({ navigation }: any) {
     setDraft(config);
   }, [ready, config]);
 
-  // Sync input drafts with remoteSettings when they change
-  useEffect(() => {
-    if (remoteSettings) {
-      setInputDrafts({
-        sttLanguage: remoteSettings.sttLanguage || '',
-        transcriptPostProcessingPrompt: remoteSettings.transcriptPostProcessingPrompt || '',
-        mcpMaxIterations: String(remoteSettings.mcpMaxIterations ?? 10),
-        whatsappAllowFrom: (remoteSettings.whatsappAllowFrom || []).join(', '),
-        langfusePublicKey: remoteSettings.langfusePublicKey || '',
-        langfuseSecretKey: remoteSettings.langfuseSecretKey === '••••••••' ? '' : (remoteSettings.langfuseSecretKey || ''),
-        langfuseBaseUrl: remoteSettings.langfuseBaseUrl || '',
-      });
-    }
-  }, [remoteSettings]);
 
   // CollapsibleSection component
   const CollapsibleSection = ({
@@ -1309,9 +1306,9 @@ export default function SettingsScreen({ navigation }: any) {
                         // Update the text draft immediately for responsive UI
                         setInputDrafts(prev => ({ ...prev, whatsappAllowFrom: v }));
                         // Parse comma-separated numbers and debounce the API update
-                        // without overwriting the user's raw text input
+                        // Don't update remoteSettings locally to avoid the sync effect
+                        // rewriting the user's raw text (losing trailing commas/spaces)
                         const numbers = v.split(',').map(n => n.trim()).filter(n => n);
-                        setRemoteSettings(prev => prev ? { ...prev, whatsappAllowFrom: numbers } : null);
                         if (inputTimeoutRefs.current.whatsappAllowFrom) {
                           clearTimeout(inputTimeoutRefs.current.whatsappAllowFrom);
                         }
@@ -1394,7 +1391,18 @@ export default function SettingsScreen({ navigation }: any) {
                     <TextInput
                       style={styles.input}
                       value={inputDrafts.langfuseSecretKey ?? ''}
-                      onChangeText={(v) => handleRemoteSettingUpdate('langfuseSecretKey', v)}
+                      onChangeText={(v) => setInputDrafts(prev => ({ ...prev, langfuseSecretKey: v }))}
+                      onBlur={() => {
+                        const value = inputDrafts.langfuseSecretKey;
+                        if (value !== undefined && value !== '' && settingsClient) {
+                          settingsClient.updateSettings({ langfuseSecretKey: value }).then(() => {
+                            setRemoteSettings(prev => prev ? { ...prev, langfuseSecretKey: '••••••••' } : null);
+                          }).catch((error: any) => {
+                            console.error('[Settings] Failed to update langfuseSecretKey:', error);
+                            setRemoteError(error.message || 'Failed to update langfuseSecretKey');
+                          });
+                        }
+                      }}
                       placeholder="sk-..."
                       placeholderTextColor={theme.colors.mutedForeground}
                       autoCapitalize='none'

@@ -728,8 +728,10 @@ export default function ChatScreen({ route, navigation }: any) {
 		if (a === b) return a;
 		if (b.startsWith(a)) return b;
 		if (a.startsWith(b)) return a;
-		if (a.includes(b)) return a;
-		if (b.includes(a)) return b;
+		const bWordBoundary = new RegExp(`(?:^|\\s)${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+		if (bWordBoundary.test(a)) return a;
+		const aWordBoundary = new RegExp(`(?:^|\\s)${a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+		if (aWordBoundary.test(b)) return b;
 		const aWords = a.split(' ');
 		const bWords = b.split(' ');
 		const maxOverlap = Math.min(aWords.length, bWords.length);

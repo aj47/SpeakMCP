@@ -9,7 +9,11 @@
  * import from services that might also need access to these definitions.
  */
 
+import { BUILTIN_SERVER_NAME } from '../shared/builtin-tool-names'
 import { acpRouterToolDefinitions } from './acp/acp-router-tool-definitions'
+
+// Re-export for backward compatibility (single source of truth in @shared/builtin-tool-names)
+export { BUILTIN_SERVER_NAME }
 
 // Define a local type to avoid importing from mcp-service
 export interface BuiltinToolDefinition {
@@ -21,9 +25,6 @@ export interface BuiltinToolDefinition {
     required: string[]
   }
 }
-
-// The virtual server name for built-in tools
-export const BUILTIN_SERVER_NAME = "speakmcp-settings"
 
 // Tool definitions
 export const builtinToolDefinitions: BuiltinToolDefinition[] = [

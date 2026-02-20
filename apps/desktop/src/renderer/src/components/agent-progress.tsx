@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
+import { INTERNAL_COMPLETION_NUDGE_TEXT } from "../../../shared/builtin-tool-names"
 import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
@@ -1734,13 +1735,18 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     const historyForSession =
       startIndex > 0 ? conversationHistory.slice(startIndex) : conversationHistory
 
-    // Filter internal nudges from the visible history
-    const isNudge = (c: string) =>
-      c.includes("Please either take action using available tools") ||
-      c.includes("You have relevant tools available for this request")
+    // Filter internal nudges from the visible history (fallback for older persisted data).
+    // The main process now marks completion nudges as ephemeral and filters them before
+    // returning or persisting conversation history, but this fallback catches any that
+    // might appear in older conversation data.
+    const isCompletionNudge = (c: string) => {
+      const trimmed = c.trim()
+      // Only filter the exact completion nudge text to avoid false positives
+      return trimmed === INTERNAL_COMPLETION_NUDGE_TEXT
+    }
 
     messages = historyForSession
-      .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
+      .filter((entry) => !(entry.role === "user" && isCompletionNudge(entry.content)))
       .map((entry) => ({
         role: entry.role,
         content: entry.content,

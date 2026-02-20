@@ -658,6 +658,26 @@ export async function processTranscriptWithAgentMode(
     })
   }
 
+  // Helper function to add a message to the in-memory conversation history ONLY (not persisted).
+  // Use for internal prompt-engineering nudges that should never appear in saved transcripts.
+  const addEphemeralMessage = (
+    role: "user" | "assistant" | "tool",
+    content: string,
+    toolCalls?: MCPToolCall[],
+    toolResults?: MCPToolResult[],
+    timestamp?: number
+  ) => {
+    const message: typeof conversationHistory[0] = {
+      role,
+      content,
+      toolCalls,
+      toolResults,
+      timestamp: timestamp || Date.now(),
+    }
+
+    conversationHistory.push(message)
+  }
+
   // Track current iteration for retry progress callback
   // This is updated in the agent loop and read by onRetryProgress
   let currentIterationRef = 0
@@ -811,7 +831,9 @@ export async function processTranscriptWithAgentMode(
       content.includes("Provide a complete final answer") ||
       content.includes("Your last response was not a final deliverable") ||
       content.includes("Your last response was empty or non-deliverable") ||
-      content.includes("Continue and finish remaining work")
+      content.includes("Continue and finish remaining work") ||
+      (content.includes("If all requested work is complete, call") &&
+        content.includes(MARK_WORK_COMPLETE_TOOL))
 
     return history
       .filter((entry) => !(entry.role === "user" && isNudge(entry.content)))
@@ -1792,7 +1814,8 @@ Return ONLY JSON per schema.`,
             if (trimmedContent.length > 0) {
               addMessage("assistant", contentText)
             }
-            addMessage(
+            // Internal completion nudge: include in LLM context, but do NOT persist to disk.
+            addEphemeralMessage(
               "user",
               `If all requested work is complete, call ${MARK_WORK_COMPLETE_TOOL} with a concise summary and then provide the final answer. Otherwise continue working and call more tools.`,
             )

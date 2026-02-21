@@ -10,6 +10,8 @@
 export interface ToolCall {
   name: string;
   arguments: Record<string, unknown>;
+  /** Unique identifier linking this tool call to its result */
+  toolCallId?: string;
 }
 
 /**
@@ -19,6 +21,10 @@ export interface ToolResult {
   success: boolean;
   content: string;
   error?: string;
+  /** Unique identifier linking this result to its tool call */
+  toolCallId?: string;
+  /** The name of the tool that produced this result */
+  toolName?: string;
 }
 
 /**

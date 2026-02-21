@@ -123,6 +123,8 @@ export interface MCPTool {
 export interface MCPToolCall {
   name: string
   arguments: any
+  /** Unique identifier linking this tool call to its result */
+  toolCallId?: string
 }
 
 export interface MCPToolResult {
@@ -131,6 +133,10 @@ export interface MCPToolResult {
     text: string
   }>
   isError?: boolean
+  /** Unique identifier linking this result to its tool call */
+  toolCallId?: string
+  /** The name of the tool that produced this result */
+  toolName?: string
 }
 
 export interface LLMToolCallResponse {

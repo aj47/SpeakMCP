@@ -33,6 +33,7 @@ import {
 import { memoryService } from "./memory-service"
 import { clearSessionUserResponse, getSessionUserResponse } from "./session-user-response-store"
 import {
+  BUILTIN_SERVER_NAME,
   MARK_WORK_COMPLETE_TOOL,
   RESPOND_TO_USER_TOOL,
   INTERNAL_COMPLETION_NUDGE_TEXT,
@@ -1818,7 +1819,12 @@ Return ONLY JSON per schema.`,
       // - accepted directly for no-tool/simple flows, or
       // - treated as in-progress status for tool-driven flows until explicit completion.
       if (hasSubstantiveResponse) {
-        const canBypassVerification = !config.mcpVerifyCompletionEnabled || !hasToolsAvailable
+        // Also bypass verification when no tools have been called in this session: it is a
+        // pure Q&A turn and there is nothing tool-related to verify.  Without this, the
+        // hasCompletionSignalTool nudge path would keep the loop running and stream the LLM
+        // response a second time even though the user already received the first answer.
+        const canBypassVerification =
+          !config.mcpVerifyCompletionEnabled || !hasToolsAvailable || !hasToolResultsInCurrentTurn
 
         if (canBypassVerification) {
           finalContent = contentText
@@ -2430,6 +2436,40 @@ Return ONLY JSON per schema.`,
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+    }
+
+    // If respond_to_user was called during this tool batch, deliver the response immediately
+    // and stop iterating — BUT only when respond_to_user is acting as the FINAL response,
+    // not as a mid-task acknowledgment ("Got it, I'll look into that!") alongside work tools.
+    //
+    // Rule: break early only when every tool in this batch was a response/completion tool.
+    // If the LLM also called a real work tool in the same batch it is providing an
+    // acknowledgment while kicking off work — keep iterating so that work can finish.
+    const userResponseSetAfterTools = getSessionUserResponse(currentSessionId)
+    if (userResponseSetAfterTools?.trim().length) {
+      const RESPONSE_OR_COMPLETION_TOOLS = new Set([
+        RESPOND_TO_USER_TOOL,
+        `${BUILTIN_SERVER_NAME}:speak_to_user`, // deprecated alias that sets the same store
+        MARK_WORK_COMPLETE_TOOL,
+      ])
+      const hasWorkToolsInBatch = toolCallsArray.some((tc) => !RESPONSE_OR_COMPLETION_TOOLS.has(tc.name))
+
+      if (!hasWorkToolsInBatch) {
+        // All tools in this batch were response/completion tools — this is the final response.
+        finalContent = userResponseSetAfterTools
+        addMessage("assistant", finalContent)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+      // Otherwise: respond_to_user was an intermediate acknowledgment alongside work tools.
+      // Do NOT break — continue the loop so the remaining work can be completed.
     }
 
     // Generate step summary after tool execution (if dual-model enabled)

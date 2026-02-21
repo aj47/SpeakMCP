@@ -8,7 +8,7 @@ import {
 import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback, LLMMessage } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -536,6 +536,7 @@ export async function processTranscriptWithAgentMode(
 
     try {
       // Convert toolResults from MCPToolResult format to stored format
+      // Preserve toolCallId and toolName for proper AI SDK format linking
       const convertedToolResults = toolResults?.map(tr => ({
         success: !tr.isError,
         content: Array.isArray(tr.content)
@@ -543,7 +544,9 @@ export async function processTranscriptWithAgentMode(
           : String(tr.content || ""),
         error: tr.isError
           ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
-          : undefined
+          : undefined,
+        toolCallId: tr.toolCallId,
+        toolName: tr.toolName,
       }))
 
       await conversationService.addMessageToConversation(
@@ -595,6 +598,7 @@ export async function processTranscriptWithAgentMode(
       toolCalls: toolCalls?.map(tc => ({
         name: tc.name,
         arguments: tc.arguments,
+        toolCallId: tc.toolCallId,
       })),
       toolResults: toolResults?.map(tr => ({
         success: !tr.isError,
@@ -604,6 +608,8 @@ export async function processTranscriptWithAgentMode(
         error: tr.isError
           ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
           : undefined,
+        toolCallId: tr.toolCallId,
+        toolName: tr.toolName,
       })),
       assistantResponse,
       recentMessages: conversationHistory.slice(-5).map(m => ({
@@ -1448,41 +1454,64 @@ Return ONLY JSON per schema.`,
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
-    // Build messages for LLM call
-    const messages = [
+    // Build messages for LLM call using proper AI SDK format with tool calls/results
+    const messages: LLMMessage[] = [
       { role: "system", content: currentSystemPrompt },
       ...conversationHistory
-        .map((entry) => {
+        .map((entry): LLMMessage | null => {
+          // Handle tool result messages - convert to proper tool role with toolResults
           if (entry.role === "tool") {
+            // If we have structured toolResults, use them directly
+            if (entry.toolResults && entry.toolResults.length > 0) {
+              return {
+                role: "tool",
+                content: entry.content || "",
+                toolResults: entry.toolResults.map(tr => ({
+                  ...tr,
+                  toolCallId: tr.toolCallId,
+                  toolName: tr.toolName,
+                })),
+              }
+            }
+            // Fallback: legacy format with just content string
+            // Skip empty tool results
             const text = (entry.content || "").trim()
             if (!text) return null
-            // Tool results already contain tool name prefix (format: [toolName] content...)
-            // Pass through directly without adding redundant wrapper
             return {
-              role: "user" as const,
+              role: "tool",
               content: text,
+              // Note: Without toolCallId, this will get a generated ID in convertMessages
             }
           }
-          // For assistant messages, ensure non-empty content
-          // Anthropic API requires all messages to have non-empty content
-          // except for the optional final assistant message
-          let content = entry.content
-          if (entry.role === "assistant" && !content?.trim()) {
-            // If assistant message has tool calls but no content, describe the tool calls
+
+          // Handle assistant messages - preserve tool calls structure
+          if (entry.role === "assistant") {
+            // If assistant has tool calls, include them in proper format
             if (entry.toolCalls && entry.toolCalls.length > 0) {
-              const toolNames = entry.toolCalls.map(tc => tc.name).join(", ")
-              content = `[Calling tools: ${toolNames}]`
-            } else {
-              // Fallback for empty assistant messages without tool calls
-              content = "[Processing...]"
+              return {
+                role: "assistant",
+                content: entry.content || "",
+                toolCalls: entry.toolCalls.map(tc => ({
+                  name: tc.name,
+                  arguments: tc.arguments,
+                  toolCallId: tc.toolCallId,
+                })),
+              }
+            }
+            // Plain assistant message without tool calls
+            return {
+              role: "assistant",
+              content: entry.content || "",
             }
           }
+
+          // Handle user messages
           return {
-            role: entry.role as "user" | "assistant",
-            content,
+            role: entry.role as "user",
+            content: entry.content || "",
           }
         })
-        .filter(Boolean as any),
+        .filter((msg): msg is LLMMessage => msg !== null),
     ]
 
     // Apply context budget management before the agent LLM call
@@ -2403,23 +2432,31 @@ Return ONLY JSON per schema.`,
     // Always add a tool message if any tools were executed, even if results are empty
     // This ensures the verifier sees tool execution evidence in conversationHistory
     if (processedToolResults.length > 0) {
-      // For each result, use "[No output]" if the content is empty and not an error
-      const resultsWithPlaceholders = processedToolResults.map((result) => {
+      // For each result, add toolCallId and toolName for proper AI SDK format linking
+      // Also use "[No output]" if the content is empty and not an error
+      const resultsWithPlaceholders = processedToolResults.map((result, i) => {
+        const toolCall = toolCallsArray[i]
         const contentText = result.content?.map((c) => c.text).join("").trim() || ""
+        const baseResult = {
+          ...result,
+          // Link this result to its originating tool call
+          toolCallId: toolCall?.toolCallId || result.toolCallId,
+          toolName: toolCall?.name || result.toolName || 'unknown',
+        }
         if (!result.isError && contentText.length === 0) {
           return {
-            ...result,
+            ...baseResult,
             content: [{ type: "text" as const, text: "[No output]" }],
           }
         }
-        return result
+        return baseResult
       })
 
       // Format tool results with tool name prefix for better context preservation
       // Format: [toolName] content... or [toolName] ERROR: content...
       const toolResultsText = resultsWithPlaceholders
-        .map((result, i) => {
-          const toolName = toolCallsArray[i]?.name || 'unknown'
+        .map((result) => {
+          const toolName = result.toolName || 'unknown'
           const content = result.content.map((c) => c.text).join("\n")
           const prefix = result.isError ? `[${toolName}] ERROR: ` : `[${toolName}] `
           return `${prefix}${content}`

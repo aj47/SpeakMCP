@@ -1,11 +1,12 @@
 import { configStore } from "./config"
 import { isDebugLLM, logLLM } from "./debug"
-import { makeTextCompletionWithFetch } from "./llm-fetch"
+import { makeTextCompletionWithFetch, LLMMessage } from "./llm-fetch"
 import { constructMinimalSystemPrompt } from "./system-prompts"
 import { agentSessionStateManager } from "./state"
 import { summarizationService } from "./summarization-service"
 
-export type LLMMessage = { role: string; content: string }
+// Re-export LLMMessage for consumers that import from this module
+export type { LLMMessage } from "./llm-fetch"
 
 // Simple in-memory cache for provider/model context windows
 const contextWindowCache = new Map<string, number>()

@@ -11,6 +11,7 @@
  */
 
 import { generateText, streamText, tool as aiTool } from "ai"
+import type { CoreMessage, CoreAssistantMessage, CoreToolMessage, ToolCallPart, ToolResultPart } from "ai"
 import { jsonSchema } from "ai"
 import { randomUUID } from "crypto"
 import {
@@ -21,7 +22,7 @@ import {
   type ProviderType,
 } from "./ai-sdk-provider"
 import { configStore } from "./config"
-import type { LLMToolCallResponse, MCPTool } from "./mcp-service"
+import type { LLMToolCallResponse, MCPTool, MCPToolCall } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
@@ -30,6 +31,20 @@ import {
   endLLMGeneration,
   isLangfuseEnabled,
 } from "./langfuse-service"
+import type { ToolResult } from "@shared/types"
+
+/**
+ * Extended message type that supports both simple string content and structured tool data.
+ * This is used to pass conversation history to the LLM with proper tool call/result linking.
+ */
+export interface LLMMessage {
+  role: "system" | "user" | "assistant" | "tool"
+  content: string
+  /** Tool calls made by the assistant (only for role="assistant") */
+  toolCalls?: MCPToolCall[]
+  /** Tool results (only for role="tool") */
+  toolResults?: Array<ToolResult & { toolCallId?: string; toolName?: string }>
+}
 
 /**
  * Build token usage object for Langfuse, only including it when at least one token field is present.
@@ -532,21 +547,103 @@ async function withRetry<T>(
  * OpenAI-compatible APIs (including OpenRouter) do not support "assistant
  * message prefill" and require the conversation to end with a user message.
  * See: https://github.com/aj47/SpeakMCP/issues/1035
+ *
+ * When messages contain toolCalls or toolResults, they are converted to proper AI SDK format:
+ * - Assistant messages with toolCalls become messages with tool-call parts
+ * - Tool messages with toolResults become CoreToolMessage with tool-result parts
  */
-function convertMessages(messages: Array<{ role: string; content: string }>): {
+function convertMessages(messages: Array<LLMMessage | { role: string; content: string }>): {
   system: string | undefined
-  messages: Array<{ role: "user" | "assistant"; content: string }>
+  messages: CoreMessage[]
 } {
   const systemMessages: string[] = []
-  const otherMessages: Array<{ role: "user" | "assistant"; content: string }> =
-    []
+  const coreMessages: CoreMessage[] = []
 
   for (const msg of messages) {
     if (msg.role === "system") {
       systemMessages.push(msg.content)
-    } else {
-      otherMessages.push({
-        role: msg.role as "user" | "assistant",
+      continue
+    }
+
+    // Handle assistant messages with tool calls
+    if (msg.role === "assistant") {
+      const llmMsg = msg as LLMMessage
+      if (llmMsg.toolCalls && llmMsg.toolCalls.length > 0) {
+        // Build content array with text and tool-call parts
+        const contentParts: (string | ToolCallPart)[] = []
+
+        // Add text content if present
+        if (llmMsg.content?.trim()) {
+          contentParts.push(llmMsg.content)
+        }
+
+        // Add tool call parts
+        for (const tc of llmMsg.toolCalls) {
+          const toolCallPart: ToolCallPart = {
+            type: "tool-call",
+            toolCallId: tc.toolCallId || `call_${randomUUID()}`,
+            toolName: tc.name,
+            args: tc.arguments || {},
+          }
+          contentParts.push(toolCallPart)
+        }
+
+        const assistantMsg: CoreAssistantMessage = {
+          role: "assistant",
+          content: contentParts,
+        }
+        coreMessages.push(assistantMsg)
+      } else {
+        // Plain assistant message without tool calls
+        coreMessages.push({
+          role: "assistant",
+          content: llmMsg.content || "",
+        })
+      }
+      continue
+    }
+
+    // Handle tool results
+    if (msg.role === "tool") {
+      const llmMsg = msg as LLMMessage
+      if (llmMsg.toolResults && llmMsg.toolResults.length > 0) {
+        // Build tool result parts
+        const toolResultParts: ToolResultPart[] = llmMsg.toolResults.map(tr => ({
+          type: "tool-result" as const,
+          toolCallId: tr.toolCallId || `call_${randomUUID()}`,
+          toolName: tr.toolName || "unknown",
+          result: tr.content,
+          isError: !tr.success,
+        }))
+
+        const toolMsg: CoreToolMessage = {
+          role: "tool",
+          content: toolResultParts,
+        }
+        coreMessages.push(toolMsg)
+      } else {
+        // Fallback: tool message with only content string (legacy format)
+        // Convert to a single tool result with a generated ID
+        // This handles the case where tool results weren't properly structured
+        const toolMsg: CoreToolMessage = {
+          role: "tool",
+          content: [{
+            type: "tool-result" as const,
+            toolCallId: `call_${randomUUID()}`,
+            toolName: "unknown",
+            result: llmMsg.content || "",
+            isError: false,
+          }],
+        }
+        coreMessages.push(toolMsg)
+      }
+      continue
+    }
+
+    // Handle user messages (simple case)
+    if (msg.role === "user") {
+      coreMessages.push({
+        role: "user",
         content: msg.content,
       })
     }
@@ -555,8 +652,8 @@ function convertMessages(messages: Array<{ role: string; content: string }>): {
   // Ensure the conversation doesn't end with an assistant message.
   // Some providers (e.g., OpenRouter proxying to Claude models) don't support
   // assistant message prefill and require the last message to be from the user.
-  if (otherMessages.length > 0 && otherMessages[otherMessages.length - 1].role === "assistant") {
-    otherMessages.push({
+  if (coreMessages.length > 0 && coreMessages[coreMessages.length - 1].role === "assistant") {
+    coreMessages.push({
       role: "user",
       content: "Continue from your most recent step using the existing context. Do not restart.",
     })
@@ -564,7 +661,7 @@ function convertMessages(messages: Array<{ role: string; content: string }>): {
 
   return {
     system: systemMessages.length > 0 ? systemMessages.join("\n\n") : undefined,
-    messages: otherMessages,
+    messages: coreMessages,
   }
 }
 
@@ -621,10 +718,14 @@ function extractJsonObject(str: string): any | null {
 
 /**
  * Main function to make LLM calls using AI SDK with automatic retry
- * Now supports native AI SDK tool calling when tools are provided
+ * Now supports native AI SDK tool calling when tools are provided.
+ *
+ * Messages can include proper tool call/result structures:
+ * - Assistant messages with toolCalls array are converted to AI SDK tool-call parts
+ * - Tool messages with toolResults array are converted to AI SDK tool-result parts
  */
 export async function makeLLMCallWithFetch(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<LLMMessage | { role: string; content: string }>,
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
   sessionId?: string,
@@ -716,9 +817,11 @@ export async function makeLLMCallWithFetch(
 
           // Convert AI SDK tool calls to our MCPToolCall format
           // Restore original tool names using the nameMap for accurate lookup
+          // Preserve toolCallId for proper linking between tool calls and results
           const toolCalls = result.toolCalls.map(tc => ({
             name: restoreToolName(tc.toolName, convertedTools?.nameMap),
             arguments: tc.input,
+            toolCallId: tc.toolCallId,
           }))
 
           // End Langfuse generation with tool calls
@@ -767,12 +870,14 @@ export async function makeLLMCallWithFetch(
           // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement.
           // Filter out malformed items (missing/non-string name) so a bad model JSON response
           // can't crash the fetch layer.
+          // Generate toolCallId if missing (for JSON fallback responses from models that don't support native tool calling).
           if (response.toolCalls) {
             response.toolCalls = response.toolCalls
               .filter(tc => tc && typeof tc.name === "string" && tc.name.length > 0)
               .map(tc => ({
                 ...tc,
                 name: restoreToolName(tc.name, convertedTools?.nameMap),
+                toolCallId: tc.toolCallId || `call_${randomUUID()}`,
               }))
           }
           // End Langfuse generation with JSON response
@@ -823,7 +928,7 @@ export async function makeLLMCallWithFetch(
  * Make a streaming LLM call using AI SDK
  */
 export async function makeLLMCallWithStreaming(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<LLMMessage | { role: string; content: string }>,
   onChunk: StreamingCallback,
   providerId?: string,
   sessionId?: string,

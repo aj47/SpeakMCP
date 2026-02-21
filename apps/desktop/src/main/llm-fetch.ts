@@ -575,11 +575,12 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
       const llmMsg = msg as LLMMessage
       if (llmMsg.toolCalls && llmMsg.toolCalls.length > 0) {
         // Build content array with text and tool-call parts
-        const contentParts: (string | ToolCallPart)[] = []
+        // AI SDK v6 requires structured part objects, not plain strings
+        const contentParts: ({ type: "text"; text: string } | ToolCallPart)[] = []
 
-        // Add text content if present
+        // Add text content if present as a structured text part
         if (llmMsg.content?.trim()) {
-          contentParts.push(llmMsg.content)
+          contentParts.push({ type: "text" as const, text: llmMsg.content })
         }
 
         // Add tool call parts, tracking any generated IDs for pairing with tool results

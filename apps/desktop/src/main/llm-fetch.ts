@@ -558,6 +558,11 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
 } {
   const systemMessages: string[] = []
   const coreMessages: CoreMessage[] = []
+  // Track generated tool call IDs from the most recent assistant message so that
+  // when the following tool-result message is also missing IDs, we can pair them
+  // by position. This prevents OpenAI-compatible providers from rejecting unmatched
+  // tool results in legacy conversation history.
+  let lastGeneratedToolCallIds: string[] = []
 
   for (const msg of messages) {
     if (msg.role === "system") {
@@ -577,16 +582,22 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
           contentParts.push(llmMsg.content)
         }
 
-        // Add tool call parts
+        // Add tool call parts, tracking any generated IDs for pairing with tool results
+        const generatedIds: string[] = []
         for (const tc of llmMsg.toolCalls) {
+          const toolCallId = tc.toolCallId || `call_${randomUUID()}`
+          if (!tc.toolCallId) {
+            generatedIds.push(toolCallId)
+          }
           const toolCallPart: ToolCallPart = {
             type: "tool-call",
-            toolCallId: tc.toolCallId || `call_${randomUUID()}`,
+            toolCallId,
             toolName: tc.name,
             args: tc.arguments || {},
           }
           contentParts.push(toolCallPart)
         }
+        lastGeneratedToolCallIds = generatedIds
 
         const assistantMsg: CoreAssistantMessage = {
           role: "assistant",
@@ -610,6 +621,10 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
         // Build tool result parts
         // Handle both string content (ToolResult from @speakmcp/shared) and
         // array content (MCPToolResult format from mcp-service)
+        // When backfilling missing toolCallIds, reuse IDs generated for the
+        // preceding assistant message's tool calls (matched by position) so that
+        // tool results pair correctly with their calls.
+        let backfillIdx = 0
         const toolResultParts: ToolResultPart[] = llmMsg.toolResults.map(tr => {
           // Normalize content: convert MCP array format to string for AI SDK
           let resultContent: string
@@ -626,14 +641,25 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
           // Determine error state - handle both ToolResult (success) and MCPToolResult (isError)
           const isError = 'success' in tr ? !tr.success : Boolean((tr as any).isError)
 
+          // Pair with the preceding assistant message's generated ID when available
+          let toolCallId = tr.toolCallId
+          if (!toolCallId && backfillIdx < lastGeneratedToolCallIds.length) {
+            toolCallId = lastGeneratedToolCallIds[backfillIdx++]
+          }
+          if (!toolCallId) {
+            toolCallId = `call_${randomUUID()}`
+          }
+
           return {
             type: "tool-result" as const,
-            toolCallId: tr.toolCallId || `call_${randomUUID()}`,
+            toolCallId,
             toolName: tr.toolName || "unknown",
             result: resultContent,
             isError,
           }
         })
+        // Clear after consumption so IDs aren't reused for unrelated tool results
+        lastGeneratedToolCallIds = []
 
         const toolMsg: CoreToolMessage = {
           role: "tool",
@@ -642,13 +668,17 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
         coreMessages.push(toolMsg)
       } else {
         // Fallback: tool message with only content string (legacy format)
-        // Convert to a single tool result with a generated ID
-        // This handles the case where tool results weren't properly structured
+        // Convert to a single tool result with a generated ID, paired with
+        // the preceding assistant tool call if available.
+        const pairedId = lastGeneratedToolCallIds.length > 0
+          ? lastGeneratedToolCallIds[0]
+          : `call_${randomUUID()}`
+        lastGeneratedToolCallIds = []
         const toolMsg: CoreToolMessage = {
           role: "tool",
           content: [{
             type: "tool-result" as const,
-            toolCallId: `call_${randomUUID()}`,
+            toolCallId: pairedId,
             toolName: "unknown",
             result: llmMsg.content || "",
             isError: false,

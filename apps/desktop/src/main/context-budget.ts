@@ -1,6 +1,7 @@
 import { configStore } from "./config"
 import { isDebugLLM, logLLM } from "./debug"
-import { makeTextCompletionWithFetch, LLMMessage } from "./llm-fetch"
+import { makeTextCompletionWithFetch } from "./llm-fetch"
+import type { LLMMessage } from "./llm-fetch"
 import { constructMinimalSystemPrompt } from "./system-prompts"
 import { agentSessionStateManager } from "./state"
 import { summarizationService } from "./summarization-service"

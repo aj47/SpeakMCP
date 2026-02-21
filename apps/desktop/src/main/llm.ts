@@ -8,7 +8,8 @@ import {
 import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback, LLMMessage } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
+import type { LLMMessage } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -1369,6 +1370,12 @@ Return ONLY JSON per schema.`,
   while (iteration < maxIterations) {
     iteration++
     currentIterationRef = iteration // Update ref for retry progress callback
+
+    // Clear any stale respond_to_user value from the session store at the start of
+    // each iteration. The store is session-wide, so a value from a previous iteration
+    // (e.g. a mid-task acknowledgment) could linger and cause the emit() helper or
+    // post-verify paths to finalize with a stale response instead of the current one.
+    clearSessionUserResponse(currentSessionId)
 
     // Filter out tools that have failed too many times - compute at start of iteration
     // so the same filtered list is used consistently throughout (LLM call + heuristics)

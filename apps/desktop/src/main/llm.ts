@@ -1848,12 +1848,8 @@ Return ONLY JSON per schema.`,
       // - accepted directly for no-tool/simple flows, or
       // - treated as in-progress status for tool-driven flows until explicit completion.
       if (hasSubstantiveResponse) {
-        // Also bypass verification when no tools have been called in this session: it is a
-        // pure Q&A turn and there is nothing tool-related to verify.  Without this, the
-        // hasCompletionSignalTool nudge path would keep the loop running and stream the LLM
-        // response a second time even though the user already received the first answer.
         const canBypassVerification =
-          !config.mcpVerifyCompletionEnabled || !hasToolsAvailable || !hasToolResultsInCurrentTurn
+          !config.mcpVerifyCompletionEnabled || !hasToolsAvailable
 
         if (canBypassVerification) {
           finalContent = contentText
@@ -1874,7 +1870,7 @@ Return ONLY JSON per schema.`,
           // (noOpCount >= 2), so we don't churn until maxIterations when the model
           // keeps returning substantive text but never calls mark_work_complete.
           const noOpThresholdReached = noOpCount >= 2
-          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS && !noOpThresholdReached) {
+          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS && !noOpThresholdReached && hasToolResultsInCurrentTurn) {
             // In tool-driven tasks, substantive text without explicit completion is usually
             // a progress/status update. Keep iterating and reserve verifier calls for explicit
             // completion signals from mark_work_complete.
@@ -2482,13 +2478,23 @@ Return ONLY JSON per schema.`,
     // Rule: break early only when every tool in this batch was a response/completion tool.
     // If the LLM also called a real work tool in the same batch it is providing an
     // acknowledgment while kicking off work — keep iterating so that work can finish.
-    const userResponseSetAfterTools = getSessionUserResponse(currentSessionId)
+    //
+    // Important: only check the session store when respond_to_user/speak_to_user was actually
+    // called in THIS batch. The store is session-wide, so a value from a previous iteration
+    // (e.g. a mid-task acknowledgment) could linger and cause a later mark_work_complete-only
+    // batch to finalize with a stale response.
+    const RESPONSE_OR_COMPLETION_TOOLS = new Set([
+      RESPOND_TO_USER_TOOL,
+      `${BUILTIN_SERVER_NAME}:speak_to_user`, // deprecated alias that sets the same store
+      MARK_WORK_COMPLETE_TOOL,
+    ])
+    const respondToUserCalledInBatch = toolCallsArray.some(
+      (tc) => tc.name === RESPOND_TO_USER_TOOL || tc.name === `${BUILTIN_SERVER_NAME}:speak_to_user`
+    )
+    const userResponseSetAfterTools = respondToUserCalledInBatch
+      ? getSessionUserResponse(currentSessionId)
+      : undefined
     if (userResponseSetAfterTools?.trim().length) {
-      const RESPONSE_OR_COMPLETION_TOOLS = new Set([
-        RESPOND_TO_USER_TOOL,
-        `${BUILTIN_SERVER_NAME}:speak_to_user`, // deprecated alias that sets the same store
-        MARK_WORK_COMPLETE_TOOL,
-      ])
       const hasWorkToolsInBatch = toolCallsArray.some((tc) => !RESPONSE_OR_COMPLETION_TOOLS.has(tc.name))
 
       if (!hasWorkToolsInBatch) {
@@ -2612,7 +2618,14 @@ Return ONLY JSON per schema.`,
       const hasMinimalContent = lastAssistantContent.trim().length < 50
 
       // Skip summary generation if respond_to_user already provided a response (#1084)
-      const existingUserResponse = getSessionUserResponse(currentSessionId)
+      // Only use the stored response if respond_to_user/speak_to_user was called in THIS batch,
+      // not from a stale value left over from a previous iteration's mid-task acknowledgment.
+      const respondToUserInCompletionBatch = toolCallsArray.some(
+        (tc) => tc.name === RESPOND_TO_USER_TOOL || tc.name === `${BUILTIN_SERVER_NAME}:speak_to_user`
+      )
+      const existingUserResponse = respondToUserInCompletionBatch
+        ? getSessionUserResponse(currentSessionId)
+        : undefined
       let respondToUserAlreadyInHistory = false
       if (existingUserResponse?.trim().length) {
         finalContent = existingUserResponse

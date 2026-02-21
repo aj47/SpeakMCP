@@ -2596,22 +2596,9 @@ Return ONLY JSON per schema.`,
         }
       }
 
-      // Add clean error summary to conversation history for LLM context
-      const errorSummary = failedTools
-        .map((toolName, idx) => {
-          const failedResult = toolResults.filter((r) => r.isError)[idx]
-          const rawError = failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
-          const cleanedError = cleanErrorMessage(rawError)
-          const failureCount = toolFailureCount.get(toolName) || 1
-          return `TOOL FAILED: ${toolName} (attempt ${failureCount}/${MAX_TOOL_FAILURES})\nError: ${cleanedError}`
-        })
-        .join("\n\n")
-
-      conversationHistory.push({
-        role: "tool",
-        content: errorSummary,
-        timestamp: Date.now(),
-      })
+      // Skip adding a separate error summary - the error info is already in the tool results
+      // Adding a separate tool message with no matching toolCallId breaks the AI SDK schema
+      // which requires tool results to have corresponding tool calls in the previous message
     }
 
     // Check if agent indicated completion after executing tools.

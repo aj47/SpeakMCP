@@ -608,13 +608,32 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
       const llmMsg = msg as LLMMessage
       if (llmMsg.toolResults && llmMsg.toolResults.length > 0) {
         // Build tool result parts
-        const toolResultParts: ToolResultPart[] = llmMsg.toolResults.map(tr => ({
-          type: "tool-result" as const,
-          toolCallId: tr.toolCallId || `call_${randomUUID()}`,
-          toolName: tr.toolName || "unknown",
-          result: tr.content,
-          isError: !tr.success,
-        }))
+        // Handle both string content (ToolResult from @speakmcp/shared) and
+        // array content (MCPToolResult format from mcp-service)
+        const toolResultParts: ToolResultPart[] = llmMsg.toolResults.map(tr => {
+          // Normalize content: convert MCP array format to string for AI SDK
+          let resultContent: string
+          if (Array.isArray(tr.content)) {
+            // MCPToolResult format: Array<{ type: "text", text: string }>
+            resultContent = (tr.content as Array<{ type: string; text: string }>)
+              .map(c => c.text)
+              .join("\n")
+          } else {
+            // ToolResult format: string
+            resultContent = String(tr.content || "")
+          }
+
+          // Determine error state - handle both ToolResult (success) and MCPToolResult (isError)
+          const isError = 'success' in tr ? !tr.success : Boolean((tr as any).isError)
+
+          return {
+            type: "tool-result" as const,
+            toolCallId: tr.toolCallId || `call_${randomUUID()}`,
+            toolName: tr.toolName || "unknown",
+            result: resultContent,
+            isError,
+          }
+        })
 
         const toolMsg: CoreToolMessage = {
           role: "tool",

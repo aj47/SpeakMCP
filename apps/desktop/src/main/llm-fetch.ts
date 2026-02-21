@@ -650,12 +650,15 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
             toolCallId = `call_${randomUUID()}`
           }
 
+          // AI SDK v6 requires `output` with structured type, not `result`
+          // Use 'error-text' type for errors, 'text' for successful results
           return {
             type: "tool-result" as const,
             toolCallId,
             toolName: tr.toolName || "unknown",
-            result: resultContent,
-            isError,
+            output: isError
+              ? { type: "error-text" as const, value: resultContent }
+              : { type: "text" as const, value: resultContent },
           }
         })
         // Clear after consumption so IDs aren't reused for unrelated tool results
@@ -680,8 +683,7 @@ function convertMessages(messages: Array<LLMMessage | { role: string; content: s
             type: "tool-result" as const,
             toolCallId: pairedId,
             toolName: "unknown",
-            result: llmMsg.content || "",
-            isError: false,
+            output: { type: "text" as const, value: llmMsg.content || "" },
           }],
         }
         coreMessages.push(toolMsg)

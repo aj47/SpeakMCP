@@ -146,12 +146,19 @@ export class ActiveConversationSync {
 
   /**
    * Force an immediate sync (e.g., user taps a refresh button).
-   * Resets error count.
+   * Resets error count. Uses isPolling lock to avoid concurrent fetches.
    */
   async forceSync(): Promise<void> {
     if (!this.conversationId) return;
-    this.updateState({ ...this.state, errorCount: 0, lastError: null });
-    await this.fetchAndDeliver();
+    // Use the same isPolling lock to avoid concurrent fetches
+    if (this.isPolling) return;
+    this.isPolling = true;
+    try {
+      this.updateState({ ...this.state, errorCount: 0, lastError: null });
+      await this.fetchAndDeliver();
+    } finally {
+      this.isPolling = false;
+    }
   }
 
   /**

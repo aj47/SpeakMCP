@@ -699,13 +699,23 @@ export default function ChatScreen({ route, navigation }: any) {
     };
   }, [config.baseUrl, config.apiKey]);
 
-  // Start/stop active sync when session or serverConversationId changes
+  // Memoize serverConversationId to avoid re-triggering effect on every session update.
+  // This prevents stop/start churn when handleUpdate calls setMessagesForSession.
+  const currentSession = sessionStore.getCurrentSession();
+  const serverConversationIdRef = useRef<string | undefined>(currentSession?.serverConversationId);
+  useEffect(() => {
+    serverConversationIdRef.current = currentSession?.serverConversationId;
+  }, [currentSession?.serverConversationId]);
+
+  // Start/stop active sync when session or serverConversationId changes.
+  // Note: We only depend on currentSessionId and serverConversationId (via currentSession),
+  // NOT on sessionStore.sessions, to avoid stop/start churn when messages update.
   useEffect(() => {
     const sync = activeSyncRef.current;
     if (!sync) return;
 
-    const currentSession = sessionStore.getCurrentSession();
-    const serverConversationId = currentSession?.serverConversationId;
+    const session = sessionStore.getCurrentSession();
+    const serverConversationId = session?.serverConversationId;
 
     if (!serverConversationId) {
       sync.stop();
@@ -713,12 +723,18 @@ export default function ChatScreen({ route, navigation }: any) {
       return;
     }
 
-    // Don't start sync while responding - the SSE stream handles live updates
+    // Don't start sync while responding - the SSE stream handles live updates.
+    // Also stop any existing sync to prevent it from polling during SSE streaming.
     if (respondingRef.current) {
       activeSyncPausedRef.current = true;
+      sync.stop();
+      setActiveSyncState(null);
       return;
     }
     activeSyncPausedRef.current = false;
+
+    // Capture session id for closure to avoid stale references
+    const sessionId = session.id;
 
     // Convert server messages to ChatMessage format for the UI
     const handleUpdate = (update: ConversationUpdate) => {
@@ -726,7 +742,7 @@ export default function ChatScreen({ route, navigation }: any) {
       if (respondingRef.current) return;
 
       // Don't apply if the session changed since we started syncing
-      if (currentSessionIdRef.current !== sessionStore.currentSessionId) return;
+      if (currentSessionIdRef.current !== sessionId) return;
 
       const convertedMessages: ChatMessage[] = update.messages.map((msg: ServerConversationMessage) => ({
         role: msg.role,
@@ -756,15 +772,16 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Persist synced messages to the session store so they survive app restart.
       // skipNextPersistRef prevents the setMessages effect from double-persisting.
-      if (currentSession) {
-        void sessionStore.setMessagesForSession(currentSession.id, convertedMessages);
-      }
+      // Always persist even if messages.length is 0 (server-side clear should be respected).
+      void sessionStore.setMessagesForSession(sessionId, convertedMessages);
     };
 
+    // Use 0 as initialUpdatedAt to avoid clock skew issues - let the first poll
+    // determine the current server state. The status check uses server timestamps.
     sync.start(
       serverConversationId,
-      currentSession?.updatedAt || 0,
-      currentSession?.messages.length || 0,
+      0, // Always start with 0 to avoid local vs server clock skew
+      messagesRef.current.length,
       handleUpdate,
       (state) => setActiveSyncState(state),
     );
@@ -773,69 +790,12 @@ export default function ChatScreen({ route, navigation }: any) {
       sync.stop();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStore.currentSessionId, sessionStore.sessions, responding]);
+  }, [sessionStore.currentSessionId, currentSession?.serverConversationId, responding]);
 
-  // Resume active sync when a response finishes (responding goes from true→false)
-  useEffect(() => {
-    if (!responding && activeSyncPausedRef.current) {
-      activeSyncPausedRef.current = false;
-      const sync = activeSyncRef.current;
-      const currentSession = sessionStore.getCurrentSession();
-      const serverConversationId = currentSession?.serverConversationId;
-
-      if (sync && serverConversationId) {
-        // Force an immediate sync to pick up any changes from the response
-        const handleUpdate = (update: ConversationUpdate) => {
-          if (respondingRef.current) return;
-          if (currentSessionIdRef.current !== sessionStore.currentSessionId) return;
-
-          const convertedMessages: ChatMessage[] = update.messages.map((msg: ServerConversationMessage) => ({
-            role: msg.role,
-            content: msg.content,
-            toolCalls: msg.toolCalls as any,
-            toolResults: msg.toolResults as any,
-          }));
-
-          setMessages(currentMessages => {
-            if (currentMessages.length === convertedMessages.length) {
-              const allMatch = currentMessages.every((msg, i) => {
-                const server = convertedMessages[i];
-                return msg.role === server.role &&
-                  msg.content === server.content &&
-                  JSON.stringify(msg.toolCalls) === JSON.stringify(server.toolCalls) &&
-                  JSON.stringify(msg.toolResults) === JSON.stringify(server.toolResults);
-              });
-              if (allMatch) {
-                return currentMessages;
-              }
-            }
-            skipNextPersistRef.current = true;
-            return convertedMessages;
-          });
-
-          // Persist synced messages to the session store so they survive app restart
-          if (currentSession) {
-            void sessionStore.setMessagesForSession(currentSession.id, convertedMessages);
-          }
-        };
-
-        // Update known state with current messages before restarting
-        sync.updateKnownState(
-          currentSession?.updatedAt || 0,
-          messagesRef.current.length,
-        );
-
-        sync.start(
-          serverConversationId,
-          currentSession?.updatedAt || 0,
-          messagesRef.current.length,
-          handleUpdate,
-          (state) => setActiveSyncState(state),
-        );
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [responding]);
+  // Note: The main sync effect above already handles responding changes since
+  // `responding` is in its dependency array. When responding goes from true→false,
+  // the effect will re-run and restart the sync automatically.
+  // This separate effect is no longer needed and was causing duplicate restarts.
 
   // Auto-send initialMessage from route params (e.g. from rapid fire mode in SessionListScreen)
   const initialMessageRef = useRef<string | null>(route?.params?.initialMessage ?? null);

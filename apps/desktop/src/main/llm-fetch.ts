@@ -11,7 +11,6 @@
  */
 
 import { generateText, streamText, tool as aiTool } from "ai"
-import type { CoreMessage, CoreAssistantMessage, CoreToolMessage, ToolCallPart, ToolResultPart } from "ai"
 import { jsonSchema } from "ai"
 import { randomUUID } from "crypto"
 import {
@@ -32,6 +31,12 @@ import {
   isLangfuseEnabled,
 } from "./langfuse-service"
 import type { ToolResult } from "@shared/types"
+
+import {
+  convertMessagesToAISDK,
+  restoreToolName,
+  sanitizeToolName,
+} from "./ai-sdk-message-utils"
 
 /**
  * Extended message type that supports both simple string content and structured tool data.
@@ -71,78 +76,14 @@ function buildTokenUsage(usage?: { inputTokens?: number; outputTokens?: number }
 }
 
 /**
- * Sanitize tool name for provider compatibility.
- * Providers require tool names matching pattern: ^[a-zA-Z0-9_-]{1,128}$
- * MCP tool names often include server prefixes like "server:tool_name" and may
- * contain spaces or other special characters.
- * We replace ':' with '__COLON__' and other invalid characters with '__'
- * to ensure compatibility while maintaining reversibility through the nameMap.
- *
- * @param name - Original tool name
- * @param suffix - Optional disambiguation suffix for collision handling
- */
-function sanitizeToolName(name: string, suffix?: string): string {
-  // First replace colons with __COLON__ to preserve server prefix distinction
-  let sanitized = name.replace(/:/g, "__COLON__")
-  // Replace any remaining characters that don't match [a-zA-Z0-9_-] with underscore
-  sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, "_")
-
-  // If we have a suffix, ensure it survives truncation by reserving space for it
-  // The suffix is added after truncation to prevent it from being cut off
-  if (suffix) {
-    const suffixStr = `_${suffix}`
-    const maxBaseLength = 128 - suffixStr.length
-    if (sanitized.length > maxBaseLength) {
-      sanitized = sanitized.substring(0, maxBaseLength)
-    }
-    sanitized = `${sanitized}${suffixStr}`
-  } else {
-    // No suffix - simple truncation
-    if (sanitized.length > 128) {
-      sanitized = sanitized.substring(0, 128)
-    }
-  }
-
-  return sanitized
-}
-
-/**
- * Restore original tool name from sanitized version using the provided map.
- * Falls back to simple replacement if no map is provided (for JSON response parsing).
- *
- * Note: Some LLM proxies (e.g., certain OpenAI-compatible gateways) may prepend
- * "proxy_" to tool names in responses. We strip this prefix only when we have
- * a toolNameMap to verify the mapping, to avoid conflicts with legitimate tools
- * whose names actually start with "proxy_".
- */
-function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
-  // First, try exact match with the sanitized name (handles legitimate "proxy_" prefixed tools)
-  if (toolNameMap && toolNameMap.has(sanitizedName)) {
-    return toolNameMap.get(sanitizedName)!
-  }
-
-  // If no exact match, we have a map, and name starts with "proxy_", try stripping the prefix
-  // This handles LLM proxies that prepend "proxy_" to tool names in responses
-  // We only do this when toolNameMap is provided so we can verify the stripped name exists
-  if (toolNameMap && sanitizedName.startsWith("proxy_")) {
-    const cleanedName = sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
-    if (toolNameMap.has(cleanedName)) {
-      return toolNameMap.get(cleanedName)!
-    }
-  }
-
-  // Fallback: reverse the sanitization for JSON responses where we don't have the map
-  // We don't strip "proxy_" here since we can't verify if it's a legitimate tool name
-  return sanitizedName.replace(/__COLON__/g, ":")
-}
-
-/**
  * Result of converting MCP tools to AI SDK format
  */
 interface ConvertedTools {
   tools: Record<string, ReturnType<typeof aiTool>>
   /** Map from sanitized name back to original MCP tool name */
   nameMap: Map<string, string>
+  /** Map from original MCP tool name to provider-safe (sanitized) tool name */
+  originalToolNameToProviderToolName: Map<string, string>
 }
 
 /**
@@ -153,6 +94,7 @@ interface ConvertedTools {
 function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
   const tools: Record<string, ReturnType<typeof aiTool>> = {}
   const nameMap = new Map<string, string>()
+  const originalToolNameToProviderToolName = new Map<string, string>()
   // Track collision counts for disambiguation
   const collisionCount = new Map<string, number>()
 
@@ -178,6 +120,7 @@ function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
 
     // Store the mapping from sanitized name to original name
     nameMap.set(sanitizedName, mcpTool.name)
+    originalToolNameToProviderToolName.set(mcpTool.name, sanitizedName)
 
     // Create AI SDK tool with JSON schema (not Zod)
     tools[sanitizedName] = aiTool({
@@ -187,7 +130,7 @@ function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
     })
   }
 
-  return { tools, nameMap }
+  return { tools, nameMap, originalToolNameToProviderToolName }
 }
 
 /**
@@ -552,169 +495,15 @@ async function withRetry<T>(
  * - Assistant messages with toolCalls become messages with tool-call parts
  * - Tool messages with toolResults become CoreToolMessage with tool-result parts
  */
-function convertMessages(messages: Array<LLMMessage | { role: string; content: string }>): {
-  system: string | undefined
-  messages: CoreMessage[]
-} {
-  const systemMessages: string[] = []
-  const coreMessages: CoreMessage[] = []
-  // Track generated tool call IDs from the most recent assistant message so that
-  // when the following tool-result message is also missing IDs, we can pair them
-  // by position. This prevents OpenAI-compatible providers from rejecting unmatched
-  // tool results in legacy conversation history.
-  let lastGeneratedToolCallIds: string[] = []
-
-  for (const msg of messages) {
-    if (msg.role === "system") {
-      systemMessages.push(msg.content)
-      continue
-    }
-
-    // Handle assistant messages with tool calls
-    if (msg.role === "assistant") {
-      const llmMsg = msg as LLMMessage
-      if (llmMsg.toolCalls && llmMsg.toolCalls.length > 0) {
-        // Build content array with text and tool-call parts
-        // AI SDK v6 requires structured part objects, not plain strings
-        const contentParts: ({ type: "text"; text: string } | ToolCallPart)[] = []
-
-        // Add text content if present as a structured text part
-        if (llmMsg.content?.trim()) {
-          contentParts.push({ type: "text" as const, text: llmMsg.content })
-        }
-
-        // Add tool call parts, tracking any generated IDs for pairing with tool results
-        const generatedIds: string[] = []
-        for (const tc of llmMsg.toolCalls) {
-          const toolCallId = tc.toolCallId || `call_${randomUUID()}`
-          if (!tc.toolCallId) {
-            generatedIds.push(toolCallId)
-          }
-          const toolCallPart: ToolCallPart = {
-            type: "tool-call",
-            toolCallId,
-            toolName: tc.name,
-            args: tc.arguments || {},
-          }
-          contentParts.push(toolCallPart)
-        }
-        lastGeneratedToolCallIds = generatedIds
-
-        const assistantMsg: CoreAssistantMessage = {
-          role: "assistant",
-          content: contentParts,
-        }
-        coreMessages.push(assistantMsg)
-      } else {
-        // Plain assistant message without tool calls
-        coreMessages.push({
-          role: "assistant",
-          content: llmMsg.content || "",
-        })
-      }
-      continue
-    }
-
-    // Handle tool results
-    if (msg.role === "tool") {
-      const llmMsg = msg as LLMMessage
-      if (llmMsg.toolResults && llmMsg.toolResults.length > 0) {
-        // Build tool result parts
-        // Handle both string content (ToolResult from @speakmcp/shared) and
-        // array content (MCPToolResult format from mcp-service)
-        // When backfilling missing toolCallIds, reuse IDs generated for the
-        // preceding assistant message's tool calls (matched by position) so that
-        // tool results pair correctly with their calls.
-        let backfillIdx = 0
-        const toolResultParts: ToolResultPart[] = llmMsg.toolResults.map(tr => {
-          // Normalize content: convert MCP array format to string for AI SDK
-          let resultContent: string
-          if (Array.isArray(tr.content)) {
-            // MCPToolResult format: Array<{ type: "text", text: string }>
-            resultContent = (tr.content as Array<{ type: string; text: string }>)
-              .map(c => c.text)
-              .join("\n")
-          } else {
-            // ToolResult format: string
-            resultContent = String(tr.content || "")
-          }
-
-          // Determine error state - handle both ToolResult (success) and MCPToolResult (isError)
-          const isError = 'success' in tr ? !tr.success : Boolean((tr as any).isError)
-
-          // Pair with the preceding assistant message's generated ID when available
-          let toolCallId = tr.toolCallId
-          if (!toolCallId && backfillIdx < lastGeneratedToolCallIds.length) {
-            toolCallId = lastGeneratedToolCallIds[backfillIdx++]
-          }
-          if (!toolCallId) {
-            toolCallId = `call_${randomUUID()}`
-          }
-
-          // AI SDK v6 requires `output` with structured type, not `result`
-          // Use 'error-text' type for errors, 'text' for successful results
-          return {
-            type: "tool-result" as const,
-            toolCallId,
-            toolName: tr.toolName || "unknown",
-            output: isError
-              ? { type: "error-text" as const, value: resultContent }
-              : { type: "text" as const, value: resultContent },
-          }
-        })
-        // Clear after consumption so IDs aren't reused for unrelated tool results
-        lastGeneratedToolCallIds = []
-
-        const toolMsg: CoreToolMessage = {
-          role: "tool",
-          content: toolResultParts,
-        }
-        coreMessages.push(toolMsg)
-      } else {
-        // Fallback: tool message with only content string (legacy format)
-        // Convert to a single tool result with a generated ID, paired with
-        // the preceding assistant tool call if available.
-        const pairedId = lastGeneratedToolCallIds.length > 0
-          ? lastGeneratedToolCallIds[0]
-          : `call_${randomUUID()}`
-        lastGeneratedToolCallIds = []
-        const toolMsg: CoreToolMessage = {
-          role: "tool",
-          content: [{
-            type: "tool-result" as const,
-            toolCallId: pairedId,
-            toolName: "unknown",
-            output: { type: "text" as const, value: llmMsg.content || "" },
-          }],
-        }
-        coreMessages.push(toolMsg)
-      }
-      continue
-    }
-
-    // Handle user messages (simple case)
-    if (msg.role === "user") {
-      coreMessages.push({
-        role: "user",
-        content: msg.content,
-      })
-    }
+function convertMessages(
+  messages: Array<LLMMessage | { role: string; content: string }>,
+  options?: {
+    originalToolNameToProviderToolName?: Map<string, string>
   }
-
-  // Ensure the conversation doesn't end with an assistant message.
-  // Some providers (e.g., OpenRouter proxying to Claude models) don't support
-  // assistant message prefill and require the last message to be from the user.
-  if (coreMessages.length > 0 && coreMessages[coreMessages.length - 1].role === "assistant") {
-    coreMessages.push({
-      role: "user",
-      content: "Continue from your most recent step using the existing context. Do not restart.",
-    })
-  }
-
-  return {
-    system: systemMessages.length > 0 ? systemMessages.join("\n\n") : undefined,
-    messages: coreMessages,
-  }
+) {
+  return convertMessagesToAISDK(messages, {
+    originalToolNameToProviderToolName: options?.originalToolNameToProviderToolName,
+  })
 }
 
 /**
@@ -727,7 +516,7 @@ function createSessionAbortController(sessionId?: string): AbortController {
   } else {
     llmRequestAbortManager.register(controller)
   }
-return controller
+  return controller
 }
 
 /**
@@ -789,7 +578,6 @@ export async function makeLLMCallWithFetch(
   return withRetry(
     async () => {
       const model = createLanguageModel(effectiveProviderId)
-      const { system, messages: convertedMessages } = convertMessages(messages)
       const abortController = createSessionAbortController(sessionId)
 
       try {
@@ -805,6 +593,9 @@ export async function makeLLMCallWithFetch(
         const convertedTools = tools && tools.length > 0
           ? convertMCPToolsToAISDKTools(tools)
           : undefined
+        const { system, messages: convertedMessages } = convertMessages(messages, {
+          originalToolNameToProviderToolName: convertedTools?.originalToolNameToProviderToolName,
+        })
 
         const modelName = getCurrentModelName(effectiveProviderId)
 

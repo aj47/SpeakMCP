@@ -73,6 +73,14 @@ export interface QueuedMessage {
   errorMessage?: string;
   /** Indicates the message was added to conversation history before processing failed */
   addedToHistory?: boolean;
+  /** Image attachments queued alongside the text message */
+  images?: Array<{
+    uri: string;
+    base64?: string;
+    mimeType: string;
+    width?: number;
+    height?: number;
+  }>;
 }
 
 /**

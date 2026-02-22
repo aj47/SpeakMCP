@@ -197,18 +197,25 @@ export class OpenAIClient {
       // Build multimodal content array
       const contentParts: any[] = [];
 
-      // Add text content if present
+      // Add text content if present; for image-only messages add a minimal
+      // placeholder so backends that require a text part don't reject the request.
       if (msg.content) {
         contentParts.push({ type: 'text', text: msg.content });
+      } else {
+        contentParts.push({ type: 'text', text: '[image]' });
       }
 
       // Add each image as a base64 image_url part
       for (const img of msg.images) {
         if (img.base64) {
+          // expo-image-picker always encodes base64 as JPEG regardless of the
+          // original file format, so normalise the MIME type to match the actual
+          // encoded bytes and avoid invalid data-URIs.
+          const normalizedMime = 'image/jpeg';
           contentParts.push({
             type: 'image_url',
             image_url: {
-              url: `data:${img.mimeType};base64,${img.base64}`,
+              url: `data:${normalizedMime};base64,${img.base64}`,
             },
           });
         } else {

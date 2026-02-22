@@ -384,7 +384,7 @@ export default function ChatScreen({ route, navigation }: any) {
     width?: number;
     height?: number;
   }>>([]);
-  const [fullscreenImage, setFullscreenImage] = useState<{ uri: string; base64?: string } | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<{ uri: string; fileUri?: string; base64?: string } | null>(null);
 
   // Per-message TTS: track which message index is currently being spoken (#1078)
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
@@ -1039,8 +1039,12 @@ export default function ChatScreen({ route, navigation }: any) {
     // If message queue is enabled and we're already responding, queue the message
     if (messageQueueEnabled && responding) {
       console.log('[ChatScreen] Agent busy, queuing message:', text);
-      messageQueue.enqueue(currentConversationId, text);
+      messageQueue.enqueue(currentConversationId, text, images);
       setInput('');
+      // Clear pending images so they aren't re-sent on the next manual send
+      if (images && images.length > 0) {
+        setPendingImages([]);
+      }
       return;
     }
 
@@ -1483,9 +1487,10 @@ export default function ChatScreen({ route, navigation }: any) {
   };
 
   // Process a queued message (similar to send but handles queue state)
-  const processQueuedMessage = async (queuedMsg: { id: string; text: string }) => {
+  const processQueuedMessage = async (queuedMsg: { id: string; text: string; images?: typeof pendingImages }) => {
     const text = queuedMsg.text;
-    if (!text.trim()) {
+    const queuedImages = queuedMsg.images;
+    if (!text.trim() && (!queuedImages || queuedImages.length === 0)) {
       messageQueue.markProcessed(currentConversationId, queuedMsg.id);
       return;
     }
@@ -1503,7 +1508,11 @@ export default function ChatScreen({ route, navigation }: any) {
 
     setDebugInfo(`Processing queued message...`);
 
-    const userMsg: ChatMessage = { role: 'user', content: text };
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: text,
+      images: queuedImages && queuedImages.length > 0 ? queuedImages : undefined,
+    };
     // Use ref to get latest messages to avoid stale closure when called via setTimeout (PR review fix)
     const currentMessages = messagesRef.current;
     const messageCountBeforeTurn = currentMessages.length;
@@ -2505,19 +2514,26 @@ export default function ChatScreen({ route, navigation }: any) {
                     style={styles.messageImagesStrip}
                     contentContainerStyle={styles.messageImagesContent}
                   >
-                    {m.images.map((img, imgIdx) => (
-                      <TouchableOpacity
-                        key={imgIdx}
-                        onPress={() => setFullscreenImage({ uri: img.uri, base64: img.base64 })}
-                        activeOpacity={0.8}
-                      >
-                        <Image
-                          source={{ uri: img.uri }}
-                          style={styles.messageImageThumb}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    ))}
+                    {m.images.map((img, imgIdx) => {
+                      // Prefer base64 data URI over file:// URIs which can break
+                      // after app restarts or cache eviction
+                      const displayUri = img.base64
+                        ? `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`
+                        : img.uri;
+                      return (
+                        <TouchableOpacity
+                          key={imgIdx}
+                          onPress={() => setFullscreenImage({ uri: displayUri, fileUri: img.uri, base64: img.base64 })}
+                          activeOpacity={0.8}
+                        >
+                          <Image
+                            source={{ uri: displayUri }}
+                            style={styles.messageImageThumb}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 )}
 
@@ -2937,7 +2953,7 @@ export default function ChatScreen({ route, navigation }: any) {
           {fullscreenImage && Platform.OS !== 'web' && (
             <TouchableOpacity
               style={styles.fullscreenSave}
-              onPress={() => saveImageToGallery(fullscreenImage.uri)}
+              onPress={() => saveImageToGallery(fullscreenImage.fileUri || fullscreenImage.uri)}
               accessibilityLabel="Save image to camera roll"
             >
               <Text style={styles.fullscreenSaveText}>Save to Camera Roll</Text>

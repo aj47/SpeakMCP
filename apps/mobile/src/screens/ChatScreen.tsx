@@ -2920,37 +2920,42 @@ export default function ChatScreen({ route, navigation }: any) {
 }
 
 function createStyles(theme: Theme, screenHeight: number) {
-  const micButtonHeight = Math.round(screenHeight * 0.2);
   return StyleSheet.create({
     // Compact desktop-style messages: left-border accent, full width, no bubbles
     msg: {
-      paddingLeft: spacing.xs,
-      paddingVertical: 2,
-      marginBottom: 0,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
       width: '100%',
+      borderRadius: radius.md,
     },
     user: {
-      // User messages: subtle left border accent
-      borderLeftWidth: 2,
-      borderLeftColor: hexToRgba(theme.colors.info, 0.4),
-      paddingLeft: spacing.xs,
+      // User messages: nice primary tint with border
+      backgroundColor: hexToRgba(theme.colors.primary, 0.03),
+      borderLeftWidth: 3,
+      borderLeftColor: theme.colors.primary,
     },
     assistant: {
-      // Assistant messages: subtle left-border accent like desktop
-      borderLeftWidth: 2,
-      borderLeftColor: hexToRgba(theme.colors.mutedForeground, 0.3),
-      paddingLeft: spacing.xs,
+      // Assistant messages: modern card style
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      shadowColor: '#000',
+      shadowOpacity: theme.isDark ? 0.3 : 0.05,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: theme.isDark ? 3 : 1,
     },
     messageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: 2,
-      marginBottom: 1,
-      paddingVertical: 1,
-      marginHorizontal: -1,
-      paddingHorizontal: 1,
-      borderRadius: radius.sm,
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.05),
+      borderRadius: radius.md,
+      marginBottom: spacing.xs,
+      minHeight: 44,
     },
     messageHeaderClickable: {
       // Visual hint that header is clickable
@@ -2960,13 +2965,13 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     expandButton: {
       marginLeft: 'auto',
-      paddingHorizontal: 2,
-      paddingVertical: 1,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     expandButtonText: {
-      fontSize: 8,
+      fontSize: 14,
       color: theme.colors.primary,
-      fontWeight: '500',
+      fontWeight: '600',
     },
 
     inputArea: {
@@ -3012,34 +3017,35 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     mic: {
       width: '100%' as any,
-      height: micButtonHeight,
-      borderRadius: radius.xl,
-      borderWidth: 1.5,
+      height: 56,
+      borderRadius: radius.full,
+      borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
       alignItems: 'center',
       justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
     },
     micOn: {
       backgroundColor: theme.colors.primary,
       borderColor: theme.colors.primary,
     },
     micText: {
-      fontSize: 32,
+      fontSize: 24,
     },
     micLabel: {
-      fontSize: 13,
+      fontSize: 14,
       color: theme.colors.mutedForeground,
-      marginTop: 4,
       fontWeight: '600',
     },
     micLabelOn: {
       color: theme.colors.primaryForeground,
     },
     ttsToggle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.muted,
@@ -3051,18 +3057,20 @@ function createStyles(theme: Theme, screenHeight: number) {
       borderColor: theme.colors.primary,
     },
     ttsToggleText: {
-      fontSize: 14,
+      fontSize: 18,
     },
     sendButton: {
       backgroundColor: theme.colors.primary,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.full,
+      minHeight: 44,
+      justifyContent: 'center',
     },
     sendButtonText: {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
-      fontSize: 13,
+      fontSize: 14,
     },
     debugInfo: {
       backgroundColor: theme.colors.muted,
@@ -3217,10 +3225,11 @@ function createStyles(theme: Theme, screenHeight: number) {
     toolCallCompactRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 2,
-      paddingHorizontal: 3,
-      borderRadius: radius.sm,
-      gap: 3,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.md,
+      gap: spacing.xs,
+      minHeight: 36,
     },
     toolCallCompactPending: {
       backgroundColor: hexToRgba(theme.colors.info, 0.05),
@@ -3235,7 +3244,7 @@ function createStyles(theme: Theme, screenHeight: number) {
       opacity: 0.7,
     },
     toolCallCompactIcon: {
-      fontSize: 8,
+      fontSize: 12,
     },
     toolCallCompactIconPending: {
       // uses default
@@ -3248,7 +3257,7 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     toolCallCompactName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: '500',
       flexShrink: 1,
     },
@@ -3262,7 +3271,7 @@ function createStyles(theme: Theme, screenHeight: number) {
       color: theme.colors.mutedForeground,
     },
     toolCallCompactStatus: {
-      fontSize: 9,
+      fontSize: 11,
       marginLeft: 1,
     },
     toolCallCompactStatusPending: {
@@ -3275,13 +3284,13 @@ function createStyles(theme: Theme, screenHeight: number) {
       color: theme.colors.mutedForeground,
     },
     toolCallCompactChevron: {
-      fontSize: 8,
+      fontSize: 12,
       color: theme.colors.mutedForeground,
       opacity: 0.4,
       marginLeft: 'auto',
     },
     toolCallCompactPreview: {
-      fontSize: 9,
+      fontSize: 11,
       color: theme.colors.mutedForeground,
       opacity: 0.6,
       flex: 1,
@@ -3314,26 +3323,30 @@ function createStyles(theme: Theme, screenHeight: number) {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
       color: theme.colors.primary,
-      fontSize: 10,
+      fontSize: 12,
       flex: 1,
     },
     toolCallHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.05),
+      borderRadius: radius.sm,
       marginBottom: spacing.xs,
+      minHeight: 44,
     },
     toolCallHeaderPressed: {
       opacity: 0.7,
     },
     toolCallExpandHint: {
-      fontSize: 9,
+      fontSize: 11,
       color: theme.colors.mutedForeground,
       fontWeight: '500',
     },
     toolSectionLabel: {
-      fontSize: 8,
+      fontSize: 10,
       fontWeight: '600',
       color: theme.colors.mutedForeground,
       marginBottom: 2,
@@ -3352,10 +3365,10 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.muted,
-      padding: 3,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     toolResponseSection: {
@@ -3372,14 +3385,14 @@ function createStyles(theme: Theme, screenHeight: number) {
       // No background - let parent handle it
     },
     toolResponseSectionTitle: {
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: '600',
       color: theme.colors.mutedForeground,
       marginBottom: 2,
       opacity: 0.7,
     },
     toolResponsePendingText: {
-      fontSize: 9,
+      fontSize: 11,
       fontStyle: 'italic',
       color: theme.colors.mutedForeground,
       textAlign: 'center',
@@ -3395,16 +3408,16 @@ function createStyles(theme: Theme, screenHeight: number) {
       marginBottom: 1,
     },
     toolResultCharCount: {
-      fontSize: 8,
+      fontSize: 10,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       color: theme.colors.mutedForeground,
       opacity: 0.6,
     },
     toolResultBadge: {
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: '600',
-      paddingHorizontal: 4,
-      paddingVertical: 1,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
       borderRadius: radius.sm,
     },
     toolResultBadgeSuccess: {
@@ -3427,44 +3440,48 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.muted,
-      padding: 3,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     toolResultErrorSection: {
       marginTop: 1,
     },
     toolResultErrorLabel: {
-      fontSize: 8,
+      fontSize: 10,
       fontWeight: '500',
       color: theme.colors.destructive,
       marginBottom: 1,
     },
     toolResultErrorText: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.destructive,
       backgroundColor: hexToRgba(theme.colors.destructive, 0.06),
-      padding: 3,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     // Per-message TTS button styles (#1078)
     speakButton: {
       alignSelf: 'flex-start',
-      paddingHorizontal: spacing.xs,
-      paddingVertical: 2,
-      marginTop: 4,
-      borderRadius: radius.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginTop: spacing.sm,
+      borderRadius: radius.full,
+      minHeight: 36,
       backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.1),
     } as const,
     speakButtonActive: {
       backgroundColor: hexToRgba(theme.colors.primary, 0.15),
     } as const,
     speakButtonText: {
-      fontSize: 12,
+      fontSize: 14,
       color: theme.colors.mutedForeground,
+      fontWeight: '500',
     } as const,
     speakButtonTextActive: {
       color: theme.colors.primary,

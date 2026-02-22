@@ -2950,10 +2950,12 @@ export default function ChatScreen({ route, navigation }: any) {
               resizeMode="contain"
             />
           )}
-          {fullscreenImage && Platform.OS !== 'web' && (
+          {/* Only show save button when a local file URI is available.
+              data: URIs and remote URLs can't be saved with MediaLibrary.saveToLibraryAsync. */}
+          {fullscreenImage && Platform.OS !== 'web' && fullscreenImage.fileUri && !fullscreenImage.fileUri.startsWith('data:') && (
             <TouchableOpacity
               style={styles.fullscreenSave}
-              onPress={() => saveImageToGallery(fullscreenImage.fileUri || fullscreenImage.uri)}
+              onPress={() => saveImageToGallery(fullscreenImage.fileUri!)}
               accessibilityLabel="Save image to camera roll"
             >
               <Text style={styles.fullscreenSaveText}>Save to Camera Roll</Text>

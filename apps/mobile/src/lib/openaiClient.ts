@@ -218,14 +218,17 @@ export class OpenAIClient {
               url: `data:${normalizedMime};base64,${img.base64}`,
             },
           });
-        } else {
-          // Fallback to URI if no base64 available
+        } else if (img.uri && !img.uri.startsWith('file://')) {
+          // Only send remote URLs the server can actually fetch.
+          // Local file:// URIs are unreachable from the API and would fail silently.
           contentParts.push({
             type: 'image_url',
             image_url: {
               url: img.uri,
             },
           });
+        } else {
+          console.warn('[OpenAIClient] Skipping image without base64 (local file:// URI not sendable):', img.uri);
         }
       }
 

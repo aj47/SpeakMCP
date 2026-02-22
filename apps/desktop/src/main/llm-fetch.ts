@@ -51,6 +51,8 @@ export interface LLMMessage {
   toolCalls?: MCPToolCall[]
   /** Tool results (only for role="tool") */
   toolResults?: LLMToolResult[]
+  /** Base64-encoded images to include as visual content in this message */
+  images?: Array<{ base64: string; mimeType: string }>
 }
 
 /**
@@ -522,6 +524,17 @@ async function withRetry<T>(
 }
 
 /**
+ * Input message format that supports optional image attachments.
+ * Used by verifyCompletionWithFetch and other simpler call sites.
+ */
+export type LLMInputMessage = {
+  role: string
+  content: string
+  /** Base64-encoded images to include as visual content in this message */
+  images?: Array<{ base64: string; mimeType: string }>
+}
+
+/**
  * Convert messages to AI SDK format, extracting system messages separately
  * This is needed for compatibility with Anthropic/Claude APIs which expect
  * system prompts as a separate parameter, not in the messages array
@@ -683,7 +696,7 @@ export async function makeLLMCallWithFetch(
           result = await generateText({
             model,
             system,
-            messages: convertedMessages,
+            messages: convertedMessages as any,
             abortSignal: abortController.signal,
             tools: convertedTools?.tools,
             // Allow the model to choose whether to use tools or respond with text
@@ -973,7 +986,7 @@ export async function makeLLMCallWithStreaming(
     const result = streamText({
       model,
       system,
-      messages: convertedMessages,
+      messages: convertedMessages as any,
       abortSignal: abortController.signal,
     })
 
@@ -1115,7 +1128,7 @@ export async function makeTextCompletionWithFetch(
  * Includes automatic retry with exponential backoff for transient failures.
  */
 export async function verifyCompletionWithFetch(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<LLMMessage | { role: string; content: string }>,
   providerId?: string,
   sessionId?: string,
   onRetryProgress?: RetryProgressCallback
@@ -1166,7 +1179,7 @@ export async function verifyCompletionWithFetch(
           result = await generateText({
             model,
             system,
-            messages: convertedMessages,
+            messages: convertedMessages as any,
             abortSignal: abortController.signal,
           })
         } catch (error) {

@@ -15,6 +15,23 @@ export interface ToolCall {
 }
 
 /**
+ * Image attachment in a message or tool result.
+ * Used for images from MCP tools, user uploads, or LLM-generated content.
+ */
+export interface ImageContent {
+  /** Base64-encoded image data */
+  base64: string;
+  /** MIME type (e.g., 'image/png', 'image/jpeg') */
+  mimeType: string;
+  /** Optional local file URI (mobile only, not sendable to APIs) */
+  uri?: string;
+  /** Image width in pixels */
+  width?: number;
+  /** Image height in pixels */
+  height?: number;
+}
+
+/**
  * Tool result data - represents the result of an MCP tool execution
  */
 export interface ToolResult {
@@ -25,6 +42,8 @@ export interface ToolResult {
   toolCallId?: string;
   /** The name of the tool that produced this result */
   toolName?: string;
+  /** Images returned by the tool (e.g., screenshots, generated charts) */
+  images?: ImageContent[];
 }
 
 /**
@@ -36,6 +55,8 @@ export interface BaseChatMessage {
   content: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  /** Images attached to this message (user uploads or server-generated) */
+  images?: ImageContent[];
 }
 
 /**

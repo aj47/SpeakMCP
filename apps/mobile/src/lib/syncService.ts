@@ -48,6 +48,12 @@ function toServerMessage(msg: ChatMessage): ServerConversationMessage {
 function fromServerMessage(msg: ServerConversationMessage, index: number): ChatMessage {
   // Use nullish coalescing (??) so that timestamp=0 is not treated as "missing"
   const ts = msg.timestamp ?? Date.now();
+  // Convert server image format to mobile ImageAttachment format
+  const images = msg.images?.map(img => ({
+    uri: `data:${img.mimeType};base64,${img.base64}`,
+    base64: img.base64,
+    mimeType: img.mimeType,
+  }));
   return {
     id: `msg_${ts}_${index}_${Math.random().toString(36).substr(2, 9)}`,
     role: msg.role,
@@ -55,6 +61,7 @@ function fromServerMessage(msg: ServerConversationMessage, index: number): ChatM
     timestamp: ts,
     toolCalls: msg.toolCalls as any,
     toolResults: msg.toolResults as any,
+    images: images && images.length > 0 ? images : undefined,
   };
 }
 

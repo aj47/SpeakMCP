@@ -132,6 +132,11 @@ export interface MCPToolResult {
     type: "text"
     text: string
   }>
+  /** Images extracted from tool results (base64-encoded) */
+  images?: Array<{
+    base64: string
+    mimeType: string
+  }>
   isError?: boolean
   /** Unique identifier linking this result to its tool call */
   toolCallId?: string
@@ -1463,24 +1468,34 @@ export class MCPService {
         }
       }
 
-      // Ensure content is properly formatted
-      const content = Array.isArray(result.content)
-        ? result.content.map((item) => ({
-            type: "text" as const,
-            text:
-              typeof item === "string"
-                ? item
-                : item.text || JSON.stringify(item),
-          }))
-        : [
-            {
-              type: "text" as const,
-              text: "Tool executed successfully",
-            },
-          ]
+      // Separate text and image content from MCP tool results
+      const textItems: Array<{ type: "text"; text: string }> = []
+      const imageItems: Array<{ base64: string; mimeType: string }> = []
 
-      // Apply response filtering to reduce context size
-      const filteredContent = this.filterToolResponse(serverName, toolName, content)
+      if (Array.isArray(result.content)) {
+        for (const item of result.content) {
+          if (typeof item === "string") {
+            textItems.push({ type: "text" as const, text: item })
+          } else if (item && typeof item === "object") {
+            // MCP image content: { type: "image", data: "<base64>", mimeType: "image/png" }
+            if (item.type === "image" && item.data && item.mimeType) {
+              imageItems.push({ base64: item.data, mimeType: item.mimeType })
+            } else if (item.type === "text" || item.text) {
+              textItems.push({ type: "text" as const, text: item.text || JSON.stringify(item) })
+            } else {
+              // Unknown content type - stringify as text
+              textItems.push({ type: "text" as const, text: JSON.stringify(item) })
+            }
+          }
+        }
+      }
+
+      if (textItems.length === 0 && imageItems.length === 0) {
+        textItems.push({ type: "text" as const, text: "Tool executed successfully" })
+      }
+
+      // Apply response filtering to reduce context size (text only)
+      const filteredContent = this.filterToolResponse(serverName, toolName, textItems)
 
       // Check if response needs further processing for context management
       const processedContent = await this.processLargeToolResponse(
@@ -1495,6 +1510,7 @@ export class MCPService {
           type: "text" as const,
           text: item.text
         })),
+        images: imageItems.length > 0 ? imageItems : undefined,
         isError: Boolean(result.isError),
       }
 
@@ -1549,23 +1565,29 @@ export class MCPService {
                 logTools("Retry result", { serverName, toolName, retryResult })
               }
 
-              const retryContent = Array.isArray(retryResult.content)
-                ? retryResult.content.map((item) => ({
-                    type: "text" as const,
-                    text:
-                      typeof item === "string"
-                        ? item
-                        : item.text || JSON.stringify(item),
-                  }))
-                : [
-                    {
-                      type: "text" as const,
-                      text: "Tool executed successfully (after parameter correction)",
-                    },
-                  ]
+              const retryTextItems: Array<{ type: "text"; text: string }> = []
+              const retryImageItems: Array<{ base64: string; mimeType: string }> = []
+
+              if (Array.isArray(retryResult.content)) {
+                for (const item of retryResult.content) {
+                  if (typeof item === "string") {
+                    retryTextItems.push({ type: "text" as const, text: item })
+                  } else if (item && typeof item === "object") {
+                    if (item.type === "image" && item.data && item.mimeType) {
+                      retryImageItems.push({ base64: item.data, mimeType: item.mimeType })
+                    } else {
+                      retryTextItems.push({ type: "text" as const, text: item.text || JSON.stringify(item) })
+                    }
+                  }
+                }
+              }
+              if (retryTextItems.length === 0 && retryImageItems.length === 0) {
+                retryTextItems.push({ type: "text" as const, text: "Tool executed successfully (after parameter correction)" })
+              }
 
               return {
-                content: retryContent,
+                content: retryTextItems,
+                images: retryImageItems.length > 0 ? retryImageItems : undefined,
                 isError: Boolean(retryResult.isError),
               }
             } catch (retryError) {

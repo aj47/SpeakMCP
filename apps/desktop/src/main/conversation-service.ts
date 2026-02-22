@@ -573,7 +573,8 @@ export class ConversationService {
     content: string,
     role: "user" | "assistant" | "tool",
     toolCalls?: Array<{ name: string; arguments: any; toolCallId?: string }>,
-    toolResults?: Array<{ success: boolean; content: string; error?: string; toolCallId?: string; toolName?: string }>,
+    toolResults?: Array<{ success: boolean; content: string; error?: string; toolCallId?: string; toolName?: string; images?: Array<{ base64: string; mimeType: string }> }>,
+    images?: Array<{ base64: string; mimeType: string }>,
   ): Promise<Conversation | null> {
     return this.enqueueConversationMutation(conversationId, async () => {
       try {
@@ -591,6 +592,11 @@ export class ConversationService {
         }
 
         const messageId = this.generateMessageId()
+        // Collect images from tool results and direct message images
+        const allImages = [
+          ...(images || []),
+          ...(toolResults?.flatMap(tr => tr.images || []) || []),
+        ]
         const message: ConversationMessage = {
           id: messageId,
           role,
@@ -598,6 +604,7 @@ export class ConversationService {
           timestamp: Date.now(),
           toolCalls,
           toolResults,
+          images: allImages.length > 0 ? allImages : undefined,
         }
 
         conversation.messages.push(message)

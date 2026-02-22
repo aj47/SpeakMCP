@@ -9,7 +9,7 @@ import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMe
 import { diagnosticsService } from "./diagnostics"
 
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
-import type { LLMMessage } from "./llm-fetch"
+import type { LLMMessage, LLMInputMessage } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -548,6 +548,7 @@ export async function processTranscriptWithAgentMode(
           : undefined,
         toolCallId: tr.toolCallId,
         toolName: tr.toolName,
+        images: tr.images,
       }))
 
       await conversationService.addMessageToConversation(
@@ -894,8 +895,16 @@ export async function processTranscriptWithAgentMode(
             success: !tr.isError,
             content: contentText,
             error: tr.isError ? contentText : undefined,
+            images: tr.images,
           }
         }),
+        // Collect all images from tool results for this message
+        images: entry.toolResults?.flatMap(tr =>
+          (tr.images || []).map(img => ({
+            base64: img.base64,
+            mimeType: img.mimeType,
+          }))
+        )?.filter(Boolean),
         // Preserve original timestamp if available, otherwise use current time
         timestamp: entry.timestamp || Date.now(),
       }))
@@ -986,9 +995,10 @@ export async function processTranscriptWithAgentMode(
   }
 
   // Helper to map conversation history to LLM messages format (filters empty content)
+  // Includes images from tool results when available, so vision-capable models can see them.
   const mapConversationToMessages = (
     addSummaryPrompt: boolean = false
-  ): Array<{ role: "user" | "assistant"; content: string }> => {
+  ): LLMInputMessage[] => {
     const mapped = conversationHistory
       .map((entry) => {
         if (entry.role === "tool") {
@@ -996,13 +1006,26 @@ export async function processTranscriptWithAgentMode(
           if (!text) return null
           // Tool results already contain tool name prefix (format: [toolName] content...)
           // Just pass through without adding generic "Tool execution results:" wrapper
-          return { role: "user" as const, content: text }
+          // Collect any images from tool results to send to vision-capable models
+          const toolImages: Array<{ base64: string; mimeType: string }> = []
+          if (entry.toolResults) {
+            for (const tr of entry.toolResults) {
+              if (tr.images) {
+                toolImages.push(...tr.images)
+              }
+            }
+          }
+          return {
+            role: "user" as const,
+            content: text,
+            images: toolImages.length > 0 ? toolImages : undefined,
+          }
         }
         const content = (entry.content || "").trim()
         if (!content) return null
         return { role: entry.role as "user" | "assistant", content }
       })
-      .filter(Boolean) as Array<{ role: "user" | "assistant"; content: string }>
+      .filter(Boolean) as LLMInputMessage[]
 
     // Add summary prompt if last message is from assistant (ensures LLM has something to respond to)
     if (addSummaryPrompt && mapped.length > 0 && mapped[mapped.length - 1].role === "assistant") {
@@ -1484,10 +1507,20 @@ Return ONLY JSON per schema.`,
             // Skip empty tool results
             const text = (entry.content || "").trim()
             if (!text) return null
+            // Collect any images from tool results to send to vision-capable models
+            const toolImages: Array<{ base64: string; mimeType: string }> = []
+            if (entry.toolResults) {
+              for (const tr of entry.toolResults) {
+                if (tr.images) {
+                  toolImages.push(...tr.images)
+                }
+              }
+            }
             return {
               role: "tool",
               content: text,
               // Note: Without toolCallId, this will get a generated ID in convertMessages
+              images: toolImages.length > 0 ? toolImages : undefined,
             }
           }
 
@@ -2256,6 +2289,7 @@ Return ONLY JSON per schema.`,
           error: execResult.result.isError
             ? execResult.result.content.map((c) => c.text).join("\n")
             : undefined,
+          images: execResult.result.images,
         }
 
         // Add tool result step
@@ -2430,6 +2464,7 @@ Return ONLY JSON per schema.`,
           error: execResult.result.isError
             ? execResult.result.content.map((c) => c.text).join("\n")
             : undefined,
+          images: execResult.result.images,
         }
 
         // Add tool result step with enhanced error information

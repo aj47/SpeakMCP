@@ -923,6 +923,19 @@ export default function ChatScreen({ route, navigation }: any) {
                   ...(lastMessage.toolResults || []),
                   ...(historyMsg.toolResults || []),
                 ];
+                // Merge images from tool results
+                const toolImages = (historyMsg as any).images as Array<{ base64: string; mimeType: string }> | undefined;
+                if (toolImages && toolImages.length > 0) {
+                  const imgAttachments = toolImages.map((img: { base64: string; mimeType: string }) => ({
+                    uri: `data:${img.mimeType};base64,${img.base64}`,
+                    base64: img.base64,
+                    mimeType: img.mimeType,
+                  }));
+                  lastMessage.images = [
+                    ...(lastMessage.images || []),
+                    ...imgAttachments,
+                  ];
+                }
                 // Also preserve any content from the tool message (e.g., error messages)
                 if (hasContent) {
                   lastMessage.content = (lastMessage.content || '') +
@@ -935,11 +948,20 @@ export default function ChatScreen({ route, navigation }: any) {
             }
           }
 
+          // Convert server image format to mobile ImageAttachment format
+          const serverImages = (historyMsg as any).images as Array<{ base64: string; mimeType: string }> | undefined;
+          const imageAttachments = serverImages?.map(img => ({
+            uri: `data:${img.mimeType};base64,${img.base64}`,
+            base64: img.base64,
+            mimeType: img.mimeType,
+          }));
+
           messages.push({
             role: historyMsg.role === 'tool' ? 'assistant' : historyMsg.role,
             content: historyMsg.content || '',
             toolCalls: historyMsg.toolCalls,
             toolResults: historyMsg.toolResults,
+            images: imageAttachments && imageAttachments.length > 0 ? imageAttachments : undefined,
           });
         }
       }
@@ -1249,6 +1271,19 @@ export default function ChatScreen({ route, navigation }: any) {
                   ...(lastMessage.toolResults || []),
                   ...(historyMsg.toolResults || []),
                 ];
+                // Merge images from tool results
+                const toolImages = (historyMsg as any).images as Array<{ base64: string; mimeType: string }> | undefined;
+                if (toolImages && toolImages.length > 0) {
+                  const imgAttachments = toolImages.map((img: { base64: string; mimeType: string }) => ({
+                    uri: `data:${img.mimeType};base64,${img.base64}`,
+                    base64: img.base64,
+                    mimeType: img.mimeType,
+                  }));
+                  lastMessage.images = [
+                    ...(lastMessage.images || []),
+                    ...imgAttachments,
+                  ];
+                }
                 // Also preserve any content from the tool message (e.g., error messages)
                 if (hasContent) {
                   lastMessage.content = (lastMessage.content || '') +

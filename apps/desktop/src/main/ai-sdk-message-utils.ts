@@ -311,6 +311,10 @@ export function convertMessagesToAISDK(
             matched = pendingById.get(tr.toolCallId)
           } else if (!tr.toolCallId) {
             matched = getNextUnresolvedPending()
+          } else if (hasUnresolvedPending()) {
+            // FIX: If toolCallId doesn't match but there are unresolved pending calls,
+            // fall back to positional pairing instead of treating as orphan.
+            matched = getNextUnresolvedPending()
           }
 
           if (!matched) {
@@ -325,11 +329,17 @@ export function convertMessagesToAISDK(
         // Legacy tool message with only text content.
         const next = getNextUnresolvedPending()
         if (next) {
+          // FIX: Detect error indicators in legacy text and emit as error-text
+          const content = llmMsg.content || ""
+          const isErrorContent = content.includes("ERROR:") || content.startsWith("TOOL FAILED")
+          
           toolResultParts.push({
             type: "tool-result" as const,
             toolCallId: next.toolCallId,
             toolName: next.toolName,
-            output: { type: "text" as const, value: llmMsg.content || "" },
+            output: isErrorContent
+              ? { type: "error-text" as const, value: content }
+              : { type: "text" as const, value: content },
           })
           markPendingResolved(next.toolCallId)
         } else if (llmMsg.content?.trim()) {

@@ -32,6 +32,13 @@ export type ChatMessage = {
   content?: string;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  images?: Array<{
+    uri: string;
+    base64?: string;
+    mimeType: string;
+    width?: number;
+    height?: number;
+  }>;
 };
 
 export type ChatResponse = ChatApiResponse;
@@ -174,6 +181,54 @@ export class OpenAIClient {
     }
   }
 
+  /**
+   * Convert messages with image attachments into OpenAI-compatible multimodal format.
+   * Messages with images get their content transformed from a string to an array of
+   * content parts (text + image_url).
+   */
+  private formatMessagesForApi(messages: ChatMessage[]): any[] {
+    return messages.map(msg => {
+      if (!msg.images || msg.images.length === 0) {
+        // No images - send as plain message
+        const { images, ...rest } = msg;
+        return rest;
+      }
+
+      // Build multimodal content array
+      const contentParts: any[] = [];
+
+      // Add text content if present
+      if (msg.content) {
+        contentParts.push({ type: 'text', text: msg.content });
+      }
+
+      // Add each image as a base64 image_url part
+      for (const img of msg.images) {
+        if (img.base64) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.base64}`,
+            },
+          });
+        } else {
+          // Fallback to URI if no base64 available
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: img.uri,
+            },
+          });
+        }
+      }
+
+      return {
+        role: msg.role,
+        content: contentParts,
+      };
+    });
+  }
+
   async chat(
     messages: ChatMessage[],
     onToken?: (token: string) => void,
@@ -181,7 +236,8 @@ export class OpenAIClient {
     conversationId?: string
   ): Promise<ChatResponse> {
     const url = this.getUrl('/chat/completions');
-    const body: Record<string, any> = { model: this.cfg.model, messages, stream: true };
+    const formattedMessages = this.formatMessagesForApi(messages);
+    const body: Record<string, any> = { model: this.cfg.model, messages: formattedMessages, stream: true };
 
     if (conversationId) {
       body.conversation_id = conversationId;

@@ -1,5 +1,13 @@
 import type { ToolCall, ToolResult } from '@speakmcp/shared';
 
+export interface ImageAttachment {
+  uri: string;
+  base64?: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool';
@@ -7,6 +15,7 @@ export interface ChatMessage {
   timestamp: number;
   toolCalls?: ToolCall[];
   toolResults?: ToolResult[];
+  images?: ImageAttachment[];
 }
 
 // Re-export shared types for convenience

@@ -13,11 +13,14 @@ import {
   Alert,
   Pressable,
   Image,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   TextInputKeyPressEventData,
   useWindowDimensions,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 
 const darkSpinner = require('../../assets/loading-spinner.gif');
 const lightSpinner = require('../../assets/light-spinner.gif');
@@ -373,6 +376,16 @@ export default function ChatScreen({ route, navigation }: any) {
   // Track the last failed message for retry functionality
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
+  // Image support state
+  const [pendingImages, setPendingImages] = useState<Array<{
+    uri: string;
+    base64?: string;
+    mimeType: string;
+    width?: number;
+    height?: number;
+  }>>([]);
+  const [fullscreenImage, setFullscreenImage] = useState<{ uri: string; base64?: string } | null>(null);
+
   // Per-message TTS: track which message index is currently being spoken (#1078)
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   // Ref to track the intended speaking index, preventing race conditions
@@ -598,6 +611,7 @@ export default function ChatScreen({ route, navigation }: any) {
           content: m.content,
           toolCalls: m.toolCalls,
           toolResults: m.toolResults,
+          images: m.images,
         }));
         setMessages(chatMessages);
       } else if (currentSession.serverConversationId && hasServerAuth) {
@@ -627,6 +641,7 @@ export default function ChatScreen({ route, navigation }: any) {
               content: m.content,
               toolCalls: m.toolCalls,
               toolResults: m.toolResults,
+              images: m.images,
             })));
           })
           .catch((err) => {
@@ -658,6 +673,7 @@ export default function ChatScreen({ route, navigation }: any) {
         content: m.content,
         toolCalls: m.toolCalls,
         toolResults: m.toolResults,
+        images: m.images,
       }));
       setMessages(chatMessages);
     } else {
@@ -943,14 +959,82 @@ export default function ChatScreen({ route, navigation }: any) {
     return messages;
   }, []);
 
+  // Image picker: pick from gallery
+  const pickImage = useCallback(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please grant photo library access to attach images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      base64: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets) {
+      const newImages = result.assets.map(asset => ({
+        uri: asset.uri,
+        base64: asset.base64 ?? undefined,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+        width: asset.width,
+        height: asset.height,
+      }));
+      setPendingImages(prev => [...prev, ...newImages]);
+    }
+  }, []);
+
+  // Image picker: take photo with camera
+  const takePhoto = useCallback(async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please grant camera access to take photos.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setPendingImages(prev => [...prev, {
+        uri: asset.uri,
+        base64: asset.base64 ?? undefined,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+        width: asset.width,
+        height: asset.height,
+      }]);
+    }
+  }, []);
+
+  // Remove a pending image
+  const removePendingImage = useCallback((index: number) => {
+    setPendingImages(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Save image to camera roll
+  const saveImageToGallery = useCallback(async (uri: string) => {
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Please grant photo library access to save images.');
+        return;
+      }
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('Saved', 'Image saved to camera roll.');
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to save image: ' + (e.message || 'Unknown error'));
+    }
+  }, []);
+
   // Get the current conversation ID for queue operations
   const currentConversationId = sessionStore.currentSessionId || 'default';
 
   // Get queued messages for the current conversation
   const queuedMessages = messageQueue.getQueue(currentConversationId);
 
-  const send = async (text: string) => {
-    if (!text.trim()) return;
+  const send = async (text: string, images?: typeof pendingImages) => {
+    if (!text.trim() && (!images || images.length === 0)) return;
 
     // If message queue is enabled and we're already responding, queue the message
     if (messageQueueEnabled && responding) {
@@ -974,10 +1058,18 @@ export default function ChatScreen({ route, navigation }: any) {
     // Clear any previous failed message when starting a new send
     setLastFailedMessage(null);
 
-    const userMsg: ChatMessage = { role: 'user', content: text };
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: text,
+      images: images && images.length > 0 ? images : undefined,
+    };
     const messageCountBeforeTurn = messages.length;
     // Clear progress messages ref for this new request (#1083)
     progressMessagesRef.current = [];
+    // Clear pending images after attaching to message
+    if (images && images.length > 0) {
+      setPendingImages([]);
+    }
     setMessages((m) => [...m, userMsg, { role: 'assistant', content: 'Assistant is thinking...' }]);
     setResponding(true);
 
@@ -1608,8 +1700,8 @@ export default function ChatScreen({ route, navigation }: any) {
           // to ensure the newline is not inserted after send() clears the input
           e.preventDefault?.();
           webEvent.preventDefault?.();
-          if (input.trim()) {
-            send(input);
+          if (input.trim() || pendingImages.length > 0) {
+            send(input, pendingImages.length > 0 ? pendingImages : undefined);
           }
         }
       } else {
@@ -1651,8 +1743,8 @@ export default function ChatScreen({ route, navigation }: any) {
             // Always suppress the newline that will be inserted by the native TextInput
             // when modifier+Enter is pressed, even if input is empty (matches web behavior)
             suppressNextChangeRef.current = true;
-            if (input.trim()) {
-              send(input);
+            if (input.trim() || pendingImages.length > 0) {
+              send(input, pendingImages.length > 0 ? pendingImages : undefined);
             }
           }
           // Reset modifier state after Enter is processed
@@ -2405,6 +2497,30 @@ export default function ChatScreen({ route, navigation }: any) {
                   </>
                 )}
 
+                {/* Inline images attached to this message */}
+                {m.images && m.images.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.messageImagesStrip}
+                    contentContainerStyle={styles.messageImagesContent}
+                  >
+                    {m.images.map((img, imgIdx) => (
+                      <TouchableOpacity
+                        key={imgIdx}
+                        onPress={() => setFullscreenImage({ uri: img.uri, base64: img.base64 })}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: img.uri }}
+                          style={styles.messageImageThumb}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
                 {/* Per-message Read Aloud button for assistant messages with content (#1078) */}
                 {m.role === 'assistant' && m.content && m.content.trim().length > 0 && config.ttsEnabled !== false && (
                   <TouchableOpacity
@@ -2657,7 +2773,35 @@ export default function ChatScreen({ route, navigation }: any) {
 		              <Text style={styles.sttPreviewText}>{sttPreview}</Text>
 	            </View>
 	          )}
-	          {/* Top row: TTS toggle, text input, send button */}
+	          {/* Pending image preview strip */}
+	          {pendingImages.length > 0 && (
+	            <ScrollView
+	              horizontal
+	              showsHorizontalScrollIndicator={false}
+	              style={styles.pendingImagesStrip}
+	              contentContainerStyle={styles.pendingImagesContent}
+	            >
+	              {pendingImages.map((img, idx) => (
+	                <View key={idx} style={styles.pendingImageWrapper}>
+	                  <TouchableOpacity onPress={() => setFullscreenImage({ uri: img.uri, base64: img.base64 })}>
+	                    <Image
+	                      source={{ uri: img.uri }}
+	                      style={styles.pendingImageThumb}
+	                      resizeMode="cover"
+	                    />
+	                  </TouchableOpacity>
+	                  <TouchableOpacity
+	                    style={styles.pendingImageRemove}
+	                    onPress={() => removePendingImage(idx)}
+	                    accessibilityLabel="Remove image"
+	                  >
+	                    <Text style={styles.pendingImageRemoveText}>✕</Text>
+	                  </TouchableOpacity>
+	                </View>
+	              ))}
+	            </ScrollView>
+	          )}
+	          {/* Top row: TTS toggle, image attach, text input, send button */}
 	          <View style={styles.inputRow}>
             <TouchableOpacity
               style={[styles.ttsToggle, ttsEnabled && styles.ttsToggleOn]}
@@ -2679,6 +2823,25 @@ export default function ChatScreen({ route, navigation }: any) {
 	                <Text style={styles.ttsToggleText}>✏️</Text>
 	              </TouchableOpacity>
 	            )}
+	            <TouchableOpacity
+	              style={styles.ttsToggle}
+	              onPress={() => {
+	                if (Platform.OS === 'web') {
+	                  pickImage();
+	                } else {
+	                  Alert.alert('Attach Image', 'Choose a source', [
+	                    { text: 'Camera', onPress: takePhoto },
+	                    { text: 'Photo Library', onPress: pickImage },
+	                    { text: 'Cancel', style: 'cancel' },
+	                  ]);
+	                }
+	              }}
+	              activeOpacity={0.7}
+	              accessibilityRole="button"
+	              accessibilityLabel="Attach image"
+	            >
+	              <Text style={styles.ttsToggleText}>📷</Text>
+	            </TouchableOpacity>
             <TextInput
 	              ref={inputRef}
               style={styles.input}
@@ -2689,7 +2852,7 @@ export default function ChatScreen({ route, navigation }: any) {
               placeholderTextColor={theme.colors.mutedForeground}
               multiline
             />
-            <TouchableOpacity style={styles.sendButton} onPress={() => send(input)}>
+            <TouchableOpacity style={styles.sendButton} onPress={() => send(input, pendingImages.length > 0 ? pendingImages : undefined)}>
               <Text style={styles.sendButtonText}>Send</Text>
             </TouchableOpacity>
           </View>
@@ -2748,6 +2911,40 @@ export default function ChatScreen({ route, navigation }: any) {
           </View>
         </View>
       </View>
+
+      {/* Fullscreen image viewer modal */}
+      <Modal
+        visible={!!fullscreenImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenImage(null)}
+      >
+        <View style={styles.fullscreenOverlay}>
+          <TouchableOpacity
+            style={styles.fullscreenClose}
+            onPress={() => setFullscreenImage(null)}
+            accessibilityLabel="Close image"
+          >
+            <Text style={styles.fullscreenCloseText}>✕</Text>
+          </TouchableOpacity>
+          {fullscreenImage && (
+            <Image
+              source={{ uri: fullscreenImage.uri }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          )}
+          {fullscreenImage && Platform.OS !== 'web' && (
+            <TouchableOpacity
+              style={styles.fullscreenSave}
+              onPress={() => saveImageToGallery(fullscreenImage.uri)}
+              accessibilityLabel="Save image to camera roll"
+            >
+              <Text style={styles.fullscreenSaveText}>Save to Camera Roll</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -3282,5 +3479,99 @@ function createStyles(theme: Theme, screenHeight: number) {
     speakButtonTextActive: {
       color: theme.colors.primary,
     } as const,
+    // Image attachment styles
+    pendingImagesStrip: {
+      maxHeight: 80,
+      marginHorizontal: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    pendingImagesContent: {
+      gap: spacing.xs,
+      paddingVertical: 4,
+    },
+    pendingImageWrapper: {
+      position: 'relative',
+    },
+    pendingImageThumb: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    pendingImageRemove: {
+      position: 'absolute',
+      top: -6,
+      right: -6,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: theme.colors.danger,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pendingImageRemoveText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700',
+      lineHeight: 13,
+    },
+    // Inline message images
+    messageImagesStrip: {
+      maxHeight: 160,
+      marginTop: 4,
+    },
+    messageImagesContent: {
+      gap: spacing.xs,
+      paddingVertical: 2,
+    },
+    messageImageThumb: {
+      width: 140,
+      height: 140,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    // Fullscreen image viewer
+    fullscreenOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.92)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    fullscreenClose: {
+      position: 'absolute',
+      top: 50,
+      right: 20,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10,
+    },
+    fullscreenCloseText: {
+      color: '#FFFFFF',
+      fontSize: 18,
+      fontWeight: '600',
+    },
+    fullscreenImage: {
+      width: '90%',
+      height: '70%',
+    },
+    fullscreenSave: {
+      position: 'absolute',
+      bottom: 60,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      backgroundColor: theme.colors.primary,
+      borderRadius: radius.lg,
+    },
+    fullscreenSaveText: {
+      color: theme.colors.primaryForeground,
+      fontSize: 14,
+      fontWeight: '600',
+    },
   });
 }

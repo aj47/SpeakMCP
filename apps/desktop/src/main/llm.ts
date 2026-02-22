@@ -2047,7 +2047,10 @@ Return ONLY JSON per schema.`,
       }
 
       // Nudge path for non-deliverable/no-progress responses.
-      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
+      // Important: this must work even when verification is disabled, otherwise the agent can
+      // prematurely exit on a short "progress update" (e.g. "Let me read your notes...")
+      // without ever calling tools or producing a final deliverable.
+      if (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1)) {
         if (totalNudgeCount >= MAX_NUDGES) {
           finalContent = buildIncompleteTaskFallback(contentText)
           addMessage("assistant", finalContent)
@@ -2076,20 +2079,10 @@ Return ONLY JSON per schema.`,
         continue
       }
 
-      // With verification disabled and no substantive completion candidate, exit as incomplete.
-      if (!config.mcpVerifyCompletionEnabled) {
-        finalContent = buildIncompleteTaskFallback(contentText)
-        addMessage("assistant", finalContent)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
-      }
+      // Still no tool calls and still no deliverable content.
+      // Keep iterating (bounded by maxIterations / MAX_NUDGES) rather than falling through into
+      // tool execution with an empty toolCallsArray.
+      continue
     } else {
       // Reset no-op counter when tools are called
       noOpCount = 0

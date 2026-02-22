@@ -822,6 +822,110 @@ export async function makeLLMCallWithFetch(
 }
 
 /**
+ * Strip structured tool parts from messages, converting them to plain text.
+ * This is needed for streaming calls which don't pass a tools registry.
+ * 
+ * Converts:
+ * - system/user messages: keep content as-is
+ * - assistant messages: drop toolCalls, keep content (or use placeholder if empty but toolCalls exist)
+ * - tool messages: convert to user messages with formatted tool result text
+ */
+function stripToolPartsFromMessages(
+  messages: Array<LLMMessage | { role: string; content: string }>
+): Array<{ role: string; content: string }> {
+  const stripped: Array<{ role: string; content: string }> = []
+
+  for (const msg of messages) {
+    const role = msg.role as string
+
+    if (role === "system" || role === "user") {
+      // Keep system and user messages as-is
+      stripped.push({
+        role,
+        content: msg.content,
+      })
+      continue
+    }
+
+    if (role === "assistant") {
+      const llmMsg = msg as LLMMessage
+      // Drop toolCalls, keep content
+      // If content is empty but toolCalls exist, use a placeholder
+      let content = llmMsg.content || ""
+      if (!content.trim() && llmMsg.toolCalls && llmMsg.toolCalls.length > 0) {
+        const toolNames = llmMsg.toolCalls.map(tc => tc.name).join(", ")
+        content = `[Calling tools: ${toolNames}]`
+      }
+      stripped.push({
+        role: "assistant",
+        content,
+      })
+      continue
+    }
+
+    if (role === "tool") {
+      const llmMsg = msg as LLMMessage
+      // Convert tool message to user message with formatted text
+      let textContent = ""
+
+      if (llmMsg.toolResults && llmMsg.toolResults.length > 0) {
+        // Format tool results as text
+        const formattedResults = llmMsg.toolResults.map(tr => {
+          const toolName = tr.toolName || "unknown"
+          let resultText = ""
+
+          // Extract content from both string and array formats
+          if (Array.isArray(tr.content)) {
+            resultText = (tr.content as Array<{ type?: string; text?: string }>)
+              .map(c => c?.text ?? "")
+              .join("\n")
+          } else if (typeof tr.content === "string") {
+            resultText = tr.content
+          } else if (tr.content != null) {
+            try {
+              resultText = JSON.stringify(tr.content)
+            } catch {
+              resultText = String(tr.content)
+            }
+          }
+
+
+	          // Check if error (supports both SharedToolResult and MCPToolResult)
+	          const isError =
+	            ("success" in tr && typeof tr.success === "boolean" && !tr.success) ||
+	            ("isError" in tr && typeof tr.isError === "boolean" && tr.isError) ||
+	            ("error" in tr && typeof tr.error === "string" && tr.error.length > 0)
+
+          const prefix = isError ? `[${toolName}] ERROR: ` : `[${toolName}] `
+          return `${prefix}${resultText}`
+        })
+        textContent = formattedResults.join("\n")
+      } else if (llmMsg.content) {
+        // Fallback to plain content if no structured results
+        textContent = llmMsg.content
+      }
+
+      if (textContent.trim()) {
+        stripped.push({
+          role: "user",
+          content: textContent,
+        })
+      }
+      continue
+    }
+
+    // Unknown role: treat as user
+    stripped.push({
+      role: "user",
+      content: msg.content,
+    })
+  }
+
+  return stripped
+}
+
+
+/**
  * Make a streaming LLM call using AI SDK
  */
 export async function makeLLMCallWithStreaming(
@@ -834,7 +938,10 @@ export async function makeLLMCallWithStreaming(
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
   const model = createLanguageModel(effectiveProviderId)
-  const { system, messages: convertedMessages } = convertMessages(messages)
+  
+  // Strip tool parts from messages since streaming doesn't pass a tools registry
+  const strippedMessages = stripToolPartsFromMessages(messages)
+  const { system, messages: convertedMessages } = convertMessages(strippedMessages)
 
   // Use external controller if provided, otherwise create and register one
   // This ensures stopSession() / emergency stop can abort in-flight streams

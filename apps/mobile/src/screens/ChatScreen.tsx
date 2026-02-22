@@ -41,6 +41,7 @@ import {
   shouldCollapseMessage,
   formatToolArguments,
   getToolResultsSummary,
+  COLLAPSED_LINES,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -301,28 +302,6 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={toggleHandsFree}
-            accessibilityRole="button"
-            accessibilityLabel={`Toggle hands-free (currently ${handsFree ? 'on' : 'off'})`}
-            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
-          >
-            <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 18 }}>🎙️</Text>
-              {!handsFree && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    width: 20,
-                    height: 2,
-                    backgroundColor: theme.colors.danger,
-                    transform: [{ rotate: '45deg' }],
-                    borderRadius: 1,
-                  }}
-                />
-              )}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             accessibilityRole="button"
             accessibilityLabel="Settings"
@@ -363,6 +342,9 @@ export default function ChatScreen({ route, navigation }: any) {
 		listeningRef.current = v;
 		setListening(v);
 	}, []);
+  const [handsFreeCountdown, setHandsFreeCountdown] = useState<number | null>(null);
+  const [handsFreePaused, setHandsFreePaused] = useState(false);
+  const handsFreeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [sttPreview, setSttPreview] = useState('');
   const sttPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -949,7 +931,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const userReleasedButtonRef = useRef(false);
 
-  const handsFreeDebounceMs = 1500;
+  const handsFreeDebounceMs = 5000;
   const handsFreeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingHandsFreeFinalRef = useRef<string>('');
 
@@ -963,12 +945,68 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => {
     return () => {
       cleanupNativeSubs();
-      if (handsFreeDebounceRef.current) {
-        clearTimeout(handsFreeDebounceRef.current);
-      }
+      if (handsFreeDebounceRef.current) clearTimeout(handsFreeDebounceRef.current);
+      if (handsFreeIntervalRef.current) clearInterval(handsFreeIntervalRef.current);
     };
   }, []);
 
+  const clearHandsFreeTimer = useCallback(() => {
+    if (handsFreeDebounceRef.current) clearTimeout(handsFreeDebounceRef.current);
+    if (handsFreeIntervalRef.current) clearInterval(handsFreeIntervalRef.current);
+    handsFreeDebounceRef.current = null;
+    handsFreeIntervalRef.current = null;
+    setHandsFreeCountdown(null);
+  }, []);
+
+  const pauseHandsFreeTimer = useCallback(() => {
+    clearHandsFreeTimer();
+    setHandsFreePaused(true);
+  }, [clearHandsFreeTimer]);
+
+  const sendHandsFreeEarly = useCallback(() => {
+    clearHandsFreeTimer();
+    setHandsFreePaused(false);
+    const toSend = pendingHandsFreeFinalRef.current.trim();
+    pendingHandsFreeFinalRef.current = '';
+    nativeFinalRef.current = '';
+    webFinalRef.current = '';
+    setLiveTranscriptValue('');
+    if (toSend) {
+      setSttPreviewWithExpiry(toSend);
+      void sendRef.current(toSend);
+    }
+  }, [clearHandsFreeTimer, setLiveTranscriptValue, setSttPreviewWithExpiry]);
+
+  const scheduleHandsFreeSend = useCallback(() => {
+    clearHandsFreeTimer();
+    setHandsFreePaused(false);
+
+    const endTime = Date.now() + handsFreeDebounceMs;
+    setHandsFreeCountdown(handsFreeDebounceMs);
+
+    handsFreeIntervalRef.current = setInterval(() => {
+      const remaining = endTime - Date.now();
+      if (remaining <= 0) {
+        if (handsFreeIntervalRef.current) clearInterval(handsFreeIntervalRef.current);
+        setHandsFreeCountdown(null);
+      } else {
+        setHandsFreeCountdown(remaining);
+      }
+    }, 100);
+
+    handsFreeDebounceRef.current = setTimeout(() => {
+      const toSend = pendingHandsFreeFinalRef.current.trim();
+      pendingHandsFreeFinalRef.current = '';
+      nativeFinalRef.current = '';
+      webFinalRef.current = '';
+      setLiveTranscriptValue('');
+      setHandsFreeCountdown(null);
+      if (toSend) {
+        setSttPreviewWithExpiry(toSend);
+        void sendRef.current(toSend);
+      }
+    }, handsFreeDebounceMs);
+  }, [handsFreeDebounceMs, clearHandsFreeTimer, setLiveTranscriptValue, setSttPreviewWithExpiry]);
 
   const convoRef = useRef<string | undefined>(undefined);
 
@@ -1864,28 +1902,25 @@ export default function ChatScreen({ route, navigation }: any) {
 					final: finalText?.trim(),
 					handsFree: handsFreeRef.current,
 				});
+        if (handsFreeRef.current) {
+          if (interim && !finalText) {
+            clearHandsFreeTimer();
+            if (handsFreePaused) setHandsFreePaused(false);
+          }
+        }
 	        // Update our running final transcript, then compute a preview that
 	        // includes both final + interim so the overlay shows *all* words.
 	        if (finalText) {
 	          if (handsFreeRef.current) {
-            if (handsFreeDebounceRef.current) {
-              clearTimeout(handsFreeDebounceRef.current);
+            if (handsFreePaused) {
+              setHandsFreePaused(false);
             }
             const final = finalText.trim();
             if (final) {
               pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
                 ? `${pendingHandsFreeFinalRef.current} ${final}`
                 : final;
-              handsFreeDebounceRef.current = setTimeout(() => {
-                const toSend = pendingHandsFreeFinalRef.current.trim();
-                pendingHandsFreeFinalRef.current = '';
-                webFinalRef.current = '';
-	                setLiveTranscriptValue('');
-	                if (toSend) {
-	                  setSttPreviewWithExpiry(toSend);
-	                  void sendRef.current(toSend);
-	                }
-              }, handsFreeDebounceMs);
+              scheduleHandsFreeSend();
             }
           } else {
 	            webFinalRef.current = mergeVoiceText(webFinalRef.current, finalText);
@@ -1911,10 +1946,7 @@ export default function ChatScreen({ route, navigation }: any) {
 					webFinal: webFinalRef.current,
 					live: liveTranscriptRef.current,
 				});
-        if (handsFreeDebounceRef.current) {
-          clearTimeout(handsFreeDebounceRef.current);
-          handsFreeDebounceRef.current = null;
-        }
+        clearHandsFreeTimer();
 
         if (!handsFreeRef.current && !userReleasedButtonRef.current && webRecognitionRef.current) {
 					voiceLog('web:onend -> attempting restart (user still holding)');
@@ -2007,10 +2039,7 @@ export default function ChatScreen({ route, navigation }: any) {
 	      webFinalRef.current = '';
       pendingHandsFreeFinalRef.current = '';
       userReleasedButtonRef.current = false;
-      if (handsFreeDebounceRef.current) {
-        clearTimeout(handsFreeDebounceRef.current);
-        handsFreeDebounceRef.current = null;
-      }
+      clearHandsFreeTimer();
       if (e) startYRef.current = e.nativeEvent.pageY;
 
       if (Platform.OS !== 'web') {
@@ -2030,26 +2059,23 @@ export default function ChatScreen({ route, navigation }: any) {
 								isFinal: event?.isFinal,
 								transcript: t,
 							});
+              if (handsFreeRef.current) {
+                if (!event?.isFinal && t) {
+                  clearHandsFreeTimer();
+                  if (handsFreePaused) setHandsFreePaused(false);
+                }
+              }
 	              if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
-                  if (handsFreeDebounceRef.current) {
-                    clearTimeout(handsFreeDebounceRef.current);
+                  if (handsFreePaused) {
+                    setHandsFreePaused(false);
                   }
                   const final = t.trim();
                   if (final) {
                     pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
                       ? `${pendingHandsFreeFinalRef.current} ${final}`
                       : final;
-                    handsFreeDebounceRef.current = setTimeout(() => {
-                      const toSend = pendingHandsFreeFinalRef.current.trim();
-                      pendingHandsFreeFinalRef.current = '';
-                      nativeFinalRef.current = '';
-	                          setLiveTranscriptValue('');
-	                          if (toSend) {
-	                            setSttPreviewWithExpiry(toSend);
-	                            void sendRef.current(toSend);
-	                          }
-                    }, handsFreeDebounceMs);
+                    scheduleHandsFreeSend();
                   }
                 } else {
 	                  nativeFinalRef.current = mergeVoiceText(nativeFinalRef.current, t);
@@ -2083,10 +2109,7 @@ export default function ChatScreen({ route, navigation }: any) {
 								nativeFinal: nativeFinalRef.current,
 								live: liveTranscriptRef.current,
 							});
-              if (handsFreeDebounceRef.current) {
-                clearTimeout(handsFreeDebounceRef.current);
-                handsFreeDebounceRef.current = null;
-              }
+              clearHandsFreeTimer();
 
               if (!handsFreeRef.current && !userReleasedButtonRef.current) {
 								voiceLog('native:end -> attempting restart (user still holding)');
@@ -2326,18 +2349,43 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           )}
           {messages.map((m, i) => {
-            const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
+            // Check if this is a redundant tool message (results handled by preceding assistant msg)
+            const prevMsg = i > 0 ? messages[i - 1] : null;
+            const isRedundantTool = m.role === 'tool' && prevMsg?.role === 'assistant' && (prevMsg.toolCalls?.length ?? 0) > 0;
+            if (isRedundantTool) return null;
+
+            // If assistant has tool calls, pull results from next tool message if present
+            let activeToolResults = m.toolResults;
+            if (m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0 && (!activeToolResults || activeToolResults.length === 0)) {
+              const nextMsg = messages[i + 1];
+              if (nextMsg?.role === 'tool' && nextMsg.toolResults) {
+                activeToolResults = nextMsg.toolResults;
+              }
+            }
+
+            const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, activeToolResults);
             // expandedMessages is auto-updated via useEffect to expand the last assistant message
             // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
 
             const toolCallCount = m.toolCalls?.length ?? 0;
-            const toolResultCount = m.toolResults?.length ?? 0;
+            const toolResultCount = activeToolResults?.length ?? 0;
             const hasToolResults = toolResultCount > 0;
-            const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
-            const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
+            const allSuccess = hasToolResults && activeToolResults!.every(r => r.success);
+            const hasErrors = hasToolResults && activeToolResults!.some(r => !r.success);
             // isPending is true when there are more tool calls than results (including partial completion)
             const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
+            const hasToolExtras = toolCallCount > 0 || toolResultCount > 0;
+            const textContent = m.content ? m.content.trim() : '';
+            if (hasToolExtras) {
+              console.log('TOOL MESSAGE CONTENT:', JSON.stringify(textContent));
+            }
+            const isPureTool = hasToolExtras && (
+              m.role === 'tool' ||
+              textContent === '' ||
+              textContent.startsWith('[') ||
+              (m.role === 'assistant' && textContent.length < 150 && !textContent.includes('\n'))
+            );
 
             return (
               <View
@@ -2345,10 +2393,12 @@ export default function ChatScreen({ route, navigation }: any) {
                 style={[
                   styles.msg,
                   m.role === 'user' ? styles.user : styles.assistant,
+                  isPureTool && styles.msgPureTool,
+                  isPureTool && !isExpanded && styles.msgPureToolCollapsed
                 ]}
               >
                 {/* Compact message header - no role labels, just tap to expand */}
-                {shouldCollapse && (
+                {shouldCollapse && !isPureTool && (
                   <Pressable
                     onPress={() => toggleMessageExpansion(i)}
                     accessibilityRole="button"
@@ -2368,7 +2418,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   </Pressable>
                 )}
 
-                {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
+                {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !activeToolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}
@@ -2383,12 +2433,12 @@ export default function ChatScreen({ route, navigation }: any) {
                       isExpanded || !shouldCollapse ? (
                         <MarkdownRenderer content={m.content} />
                       ) : (
-                        // Only show collapsed content preview if there are NO tool calls
-                        // Tool calls have their own compact summary row, so don't duplicate
-                        !((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                        // Only show collapsed content preview if it's not purely a tool execution.
+                        // Pure tool calls have their own compact summary row, so don't duplicate.
+                        !isPureTool && (
                           <Text
                             style={{ color: theme.colors.foreground, fontSize: 13, lineHeight: 18 }}
-                            numberOfLines={1}
+                            numberOfLines={COLLAPSED_LINES}
                           >
                             {m.content}
                           </Text>
@@ -2397,10 +2447,10 @@ export default function ChatScreen({ route, navigation }: any) {
                     ) : null}
 
                     {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
-                    {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                    {hasToolExtras && (
                       <>
                         {/* Collapsed view - single line summary for all tools */}
-                        {!isExpanded && (
+                        {(!isExpanded || isPureTool) && (
                           <Pressable
                             onPress={() => toggleMessageExpansion(i)}
                             style={({ pressed }) => [
@@ -2409,6 +2459,7 @@ export default function ChatScreen({ route, navigation }: any) {
                               allSuccess && styles.toolCallCompactSuccess,
                               hasErrors && styles.toolCallCompactError,
                               pressed && styles.toolCallCompactPressed,
+                              isExpanded && { marginBottom: spacing.xs } // add space below when expanded
                             ]}
                           >
                             <Text style={[
@@ -2437,15 +2488,15 @@ export default function ChatScreen({ route, navigation }: any) {
                               {isPending ? '⏳' : allSuccess ? '✓' : '✗'}
                             </Text>
                             {/* Result preview - show truncated result content like desktop */}
-                            {!isPending && m.toolResults && m.toolResults.length > 0 && (
+                            {!isPending && activeToolResults && activeToolResults.length > 0 && !isExpanded && (
                               <Text
                                 style={styles.toolCallCompactPreview}
                                 numberOfLines={1}
                               >
-                                {getToolResultsSummary(m.toolResults)}
+                                {getToolResultsSummary(activeToolResults)}
                               </Text>
                             )}
-                            <Text style={styles.toolCallCompactChevron}>▶</Text>
+                            <Text style={styles.toolCallCompactChevron}>{isExpanded ? '▼' : '▶'}</Text>
                           </Pressable>
                         )}
 
@@ -2458,8 +2509,8 @@ export default function ChatScreen({ route, navigation }: any) {
                             hasErrors && styles.toolExecutionError,
                           ]}>
                             {m.toolCalls?.map((toolCall, idx) => {
-                              const result = m.toolResults?.[idx];
-                              const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
+                              const result = activeToolResults?.[idx];
+                              const isResultPending = !result && idx >= (activeToolResults?.length ?? 0);
                               // Use message id or fallback to array index to ensure stable, unique keys
                               // that won't collide when m.id is undefined (which is common)
                               const stableMessageKey = m.id ?? String(i);
@@ -2547,7 +2598,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 )}
 
                 {/* Per-message Read Aloud button for assistant messages with content (#1078) */}
-                {m.role === 'assistant' && m.content && m.content.trim().length > 0 && config.ttsEnabled !== false && (
+                {m.role === 'assistant' && !isPureTool && m.content && m.content.trim().length > 0 && config.ttsEnabled !== false && (
                   <TouchableOpacity
                     onPress={() => speakMessage(i, m.content!)}
                     style={[
@@ -2625,10 +2676,38 @@ export default function ChatScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
 	        {listening && (
-	          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
-            <Text style={styles.overlayText}>
-              {handsFree ? 'Listening...' : (willCancel ? 'Release to edit' : 'Release to send')}
-            </Text>
+	          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents={handsFreeCountdown !== null || handsFreePaused ? 'box-none' : 'none'}>
+            {handsFreeCountdown !== null || handsFreePaused ? (
+              <View style={styles.handsFreeActionCard}>
+                <Text style={styles.handsFreeTimerText}>
+                  {handsFreePaused ? 'Paused' : `Sending in ${Math.ceil(handsFreeCountdown! / 1000)}s...`}
+                </Text>
+                <View style={styles.handsFreeActionButtons}>
+                  <TouchableOpacity
+                    style={[styles.handsFreeBtn, styles.handsFreeBtnSecondary]}
+                    onPress={handsFreePaused ? () => setHandsFreePaused(false) : pauseHandsFreeTimer}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.handsFreeBtnTextSecondary}>
+                      {handsFreePaused ? '\u25b6 Resume' : '\u23f8 Pause'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.handsFreeBtn, styles.handsFreeBtnPrimary]}
+                    onPress={sendHandsFreeEarly}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.handsFreeBtnTextPrimary}>
+                      Send Now
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.overlayText}>
+                {handsFree ? 'Listening...' : (willCancel ? 'Release to edit' : 'Release to send')}
+              </Text>
+            )}
             {!!liveTranscript && (
 	              <Text style={styles.overlayTranscript}>
                 {liveTranscript}
@@ -2833,6 +2912,30 @@ export default function ChatScreen({ route, navigation }: any) {
             >
               <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.ttsToggle, handsFree && styles.ttsToggleOn, handsFree && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + '20' }]}
+              onPress={toggleHandsFree}
+              activeOpacity={0.7}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: handsFree }}
+              accessibilityLabel={`Hands-free (currently ${handsFree ? 'on' : 'off'})`}
+            >
+              <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={styles.ttsToggleText}>🎙️</Text>
+                {!handsFree && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      width: 20,
+                      height: 2,
+                      backgroundColor: theme.colors.danger,
+                      transform: [{ rotate: '45deg' }],
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
 	            {!handsFree && (
 	              <TouchableOpacity
 	                style={[styles.ttsToggle, willCancel && styles.ttsToggleOn]}
@@ -2928,6 +3031,17 @@ function createStyles(theme: Theme, screenHeight: number) {
       marginBottom: spacing.sm,
       width: '100%',
       borderRadius: radius.md,
+    },
+    msgPureTool: {
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    msgPureToolCollapsed: {
+      marginBottom: 0,
     },
     user: {
       // User messages: nice primary tint with border
@@ -3200,6 +3314,57 @@ function createStyles(theme: Theme, screenHeight: number) {
       padding: 10,
       borderRadius: radius.lg,
       maxWidth: '90%',
+    },
+    handsFreeActionCard: {
+      backgroundColor: theme.colors.background,
+      borderRadius: radius.xl,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 8,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      width: '85%',
+    },
+    handsFreeTimerText: {
+      ...theme.typography.h2,
+      color: theme.colors.foreground,
+      marginBottom: spacing.md,
+      fontWeight: 'bold',
+    },
+    handsFreeActionButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      width: '100%',
+      gap: spacing.sm,
+    },
+    handsFreeBtn: {
+      flex: 1,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    handsFreeBtnPrimary: {
+      backgroundColor: theme.colors.primary,
+    },
+    handsFreeBtnSecondary: {
+      backgroundColor: theme.colors.muted,
+    },
+    handsFreeBtnTextPrimary: {
+      ...theme.typography.label,
+      color: theme.colors.primaryForeground,
+      fontWeight: '600',
+    },
+    handsFreeBtnTextSecondary: {
+      ...theme.typography.label,
+      color: theme.colors.foreground,
+      fontWeight: '600',
     },
     // Unified Tool Execution Card styles - compact left-accent design matching desktop
     toolExecutionCard: {

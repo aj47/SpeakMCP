@@ -128,17 +128,20 @@ export class ActiveConversationSync {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
-    this.conversationId = null;
-    this.onUpdate = null;
-    this.onStateChange = null;
     this.isPolling = false;
 
+    // Emit the inactive state BEFORE clearing callbacks so callers
+    // observe the transition and can update UI (e.g., hide sync indicator)
     if (this.state.isActive) {
       this.updateState({
         ...this.state,
         isActive: false,
       });
     }
+
+    this.conversationId = null;
+    this.onUpdate = null;
+    this.onStateChange = null;
   }
 
   /**
@@ -191,11 +194,12 @@ export class ActiveConversationSync {
     try {
       const status = await this.client.getConversationStatus(this.conversationId);
 
+      // Only update lastCheckAt here — don't reset errorCount yet.
+      // A successful status check followed by a failed full fetch should
+      // still count errors. errorCount is reset in fetchAndDeliver on success.
       this.updateState({
         ...this.state,
         lastCheckAt: Date.now(),
-        errorCount: 0,
-        lastError: null,
       });
 
       // Check if server state differs from what we know
@@ -205,6 +209,13 @@ export class ActiveConversationSync {
 
       if (hasChanged) {
         await this.fetchAndDeliver();
+      } else {
+        // No change detected and no fetch needed — status check was fully successful
+        this.updateState({
+          ...this.state,
+          errorCount: 0,
+          lastError: null,
+        });
       }
     } catch (err: any) {
       const errorCount = this.state.errorCount + 1;
@@ -249,6 +260,8 @@ export class ActiveConversationSync {
       this.updateState({
         ...this.state,
         lastUpdateAt: Date.now(),
+        errorCount: 0,
+        lastError: null,
       });
 
       // Deliver to caller (re-check in case stop() was called during await)

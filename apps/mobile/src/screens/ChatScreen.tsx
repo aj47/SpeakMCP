@@ -735,14 +735,16 @@ export default function ChatScreen({ route, navigation }: any) {
         toolResults: msg.toolResults as any,
       }));
 
-      // Only update if messages actually differ (check all messages, not just the last)
+      // Only update if messages actually differ (check all fields including toolCalls/toolResults)
       setMessages(currentMessages => {
         if (currentMessages.length === convertedMessages.length) {
-          // Same count - check if all messages match (detects edits to any message)
-          const allMatch = currentMessages.every((msg, i) =>
-            msg.role === convertedMessages[i].role &&
-            msg.content === convertedMessages[i].content
-          );
+          const allMatch = currentMessages.every((msg, i) => {
+            const server = convertedMessages[i];
+            return msg.role === server.role &&
+              msg.content === server.content &&
+              JSON.stringify(msg.toolCalls) === JSON.stringify(server.toolCalls) &&
+              JSON.stringify(msg.toolResults) === JSON.stringify(server.toolResults);
+          });
           if (allMatch) {
             return currentMessages; // No change
           }
@@ -754,7 +756,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
       // Persist synced messages to the session store so they survive app restart.
       // skipNextPersistRef prevents the setMessages effect from double-persisting.
-      if (currentSession && update.messages.length > 0) {
+      if (currentSession) {
         void sessionStore.setMessagesForSession(currentSession.id, convertedMessages);
       }
     };
@@ -796,10 +798,13 @@ export default function ChatScreen({ route, navigation }: any) {
 
           setMessages(currentMessages => {
             if (currentMessages.length === convertedMessages.length) {
-              const allMatch = currentMessages.every((msg, i) =>
-                msg.role === convertedMessages[i].role &&
-                msg.content === convertedMessages[i].content
-              );
+              const allMatch = currentMessages.every((msg, i) => {
+                const server = convertedMessages[i];
+                return msg.role === server.role &&
+                  msg.content === server.content &&
+                  JSON.stringify(msg.toolCalls) === JSON.stringify(server.toolCalls) &&
+                  JSON.stringify(msg.toolResults) === JSON.stringify(server.toolResults);
+              });
               if (allMatch) {
                 return currentMessages;
               }
@@ -809,7 +814,7 @@ export default function ChatScreen({ route, navigation }: any) {
           });
 
           // Persist synced messages to the session store so they survive app restart
-          if (currentSession && update.messages.length > 0) {
+          if (currentSession) {
             void sessionStore.setMessagesForSession(currentSession.id, convertedMessages);
           }
         };

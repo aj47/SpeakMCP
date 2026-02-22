@@ -460,11 +460,11 @@ export class ExtendedSettingsApiClient extends SettingsApiClient {
   // ============================================
 
   async getSkills(): Promise<SkillsResponse> {
-    return this.request<SkillsResponse>('/v1/skills');
+    return this.request<SkillsResponse>('/skills');
   }
 
   async toggleSkillForProfile(skillId: string): Promise<{ success: boolean; skillId: string; enabledForProfile: boolean }> {
-    return this.request(`/v1/skills/${encodeURIComponent(skillId)}/toggle-profile`, {
+    return this.request(`/skills/${encodeURIComponent(skillId)}/toggle-profile`, {
       method: 'POST',
     });
   }
@@ -475,11 +475,11 @@ export class ExtendedSettingsApiClient extends SettingsApiClient {
 
   async getMemories(profileId?: string): Promise<MemoriesResponse> {
     const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
-    return this.request<MemoriesResponse>(`/v1/memories${query}`);
+    return this.request<MemoriesResponse>(`/memories${query}`);
   }
 
   async deleteMemory(id: string): Promise<{ success: boolean; id: string }> {
-    return this.request(`/v1/memories/${encodeURIComponent(id)}`, {
+    return this.request(`/memories/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }
@@ -489,11 +489,11 @@ export class ExtendedSettingsApiClient extends SettingsApiClient {
   // ============================================
 
   async getAgentProfiles(): Promise<AgentProfilesResponse> {
-    return this.request<AgentProfilesResponse>('/v1/agent-profiles');
+    return this.request<AgentProfilesResponse>('/agent-profiles');
   }
 
   async toggleAgentProfile(id: string): Promise<{ success: boolean; id: string; enabled: boolean }> {
-    return this.request(`/v1/agent-profiles/${encodeURIComponent(id)}/toggle`, {
+    return this.request(`/agent-profiles/${encodeURIComponent(id)}/toggle`, {
       method: 'POST',
     });
   }
@@ -503,17 +503,17 @@ export class ExtendedSettingsApiClient extends SettingsApiClient {
   // ============================================
 
   async getLoops(): Promise<LoopsResponse> {
-    return this.request<LoopsResponse>('/v1/loops');
+    return this.request<LoopsResponse>('/loops');
   }
 
   async toggleLoop(id: string): Promise<{ success: boolean; id: string; enabled: boolean }> {
-    return this.request(`/v1/loops/${encodeURIComponent(id)}/toggle`, {
+    return this.request(`/loops/${encodeURIComponent(id)}/toggle`, {
       method: 'POST',
     });
   }
 
   async runLoop(id: string): Promise<{ success: boolean; id: string }> {
-    return this.request(`/v1/loops/${encodeURIComponent(id)}/run`, {
+    return this.request(`/loops/${encodeURIComponent(id)}/run`, {
       method: 'POST',
     });
   }

@@ -409,8 +409,11 @@ export default function SettingsScreen({ navigation }: any) {
   }, []);
 
   // Toggle section collapse state
+  // Note: LayoutAnimation is not properly supported on web, so we skip it there
   const toggleSection = useCallback((section: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (Platform.OS !== 'web') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
 

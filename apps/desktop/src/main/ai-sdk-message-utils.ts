@@ -233,6 +233,18 @@ export function convertMessagesToAISDK(
       continue
     }
 
+    // Skip empty assistant messages without tool calls.
+    // Some providers reject empty assistant content, and these messages can also
+    // incorrectly break tool-call ↔ tool-result pairing in legacy history.
+    if (role === "assistant") {
+      const llmMsg = msg as LLMMessageLike
+      const hasToolCalls = Boolean(llmMsg.toolCalls && llmMsg.toolCalls.length > 0)
+      const content = llmMsg.content || ""
+      if (!hasToolCalls && !content.trim()) {
+        continue
+      }
+    }
+
     // Any non-tool message means the previous tool-call batch is over.
     if (role !== "tool") {
       flushMissingResultsIfNeeded()
@@ -268,7 +280,7 @@ export function convertMessagesToAISDK(
         }
         coreMessages.push(assistantMsg)
       } else {
-        coreMessages.push({ role: "assistant", content: (msg as any).content || "" })
+        coreMessages.push({ role: "assistant", content: llmMsg.content || "" })
       }
       continue
     }

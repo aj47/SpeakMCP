@@ -1505,10 +1505,13 @@ Return ONLY JSON per schema.`,
                 })),
               }
             }
-            // Plain assistant message without tool calls
+            // Plain assistant message without tool calls.
+            // Avoid emitting empty assistant messages - some providers/adapters reject them.
+            const content = entry.content || ""
+            if (!content.trim()) return null
             return {
               role: "assistant",
-              content: entry.content || "",
+              content,
             }
           }
 

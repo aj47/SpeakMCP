@@ -214,6 +214,59 @@ describe("ai-sdk-message-utils", () => {
       expect(toolMsg.content[1].toolName).toBe(sanitizeToolName("tool:b"))
     })
 
+    it("skips empty assistant messages without tool calls", () => {
+      const { system, messages } = convertMessagesToAISDK(
+        [
+          { role: "system", content: "sys" },
+          { role: "user", content: "hi" },
+          { role: "assistant", content: "" },
+          { role: "assistant", content: "   " },
+          { role: "assistant", content: "", toolCalls: [] },
+          { role: "assistant", content: "ok" },
+        ],
+        { ensureEndsWithUserMessage: false },
+      )
+
+      expect(system).toBe("sys")
+      expect(messages).toEqual([
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "ok" },
+      ])
+    })
+
+    it("does not let empty assistant messages break tool-call <-> tool-result pairing", () => {
+      const { messages } = convertMessagesToAISDK(
+        [
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ name: "tool:test", arguments: {}, toolCallId: "call_1" }],
+          },
+          // Spurious empty assistant message (legacy/partially-migrated history)
+          { role: "assistant", content: "" },
+          {
+            role: "tool",
+            content: "",
+            toolResults: [
+              { toolCallId: "call_1", toolName: "tool:test", content: "ok", success: true },
+            ],
+          },
+        ],
+        { ensureEndsWithUserMessage: false },
+      )
+
+      // Should remain a clean tool-call -> tool-result pairing with no synthesized "missing" result.
+      expect(messages).toHaveLength(2)
+      expect(messages[0].role).toBe("assistant")
+      expect(
+        (messages[0] as any).content.some(
+          (p: any) => p.type === "tool-call" && p.toolCallId === "call_1",
+        ),
+      ).toBe(true)
+      expect(messages[1].role).toBe("tool")
+      expect((messages[1] as any).content[0].toolCallId).toBe("call_1")
+    })
+
     it("detects error indicators in legacy tool messages and emits error-text output", () => {
       const { messages: messagesWithError } = convertMessagesToAISDK(
         [

@@ -189,7 +189,7 @@ export async function processTranscriptWithTools(
     relevantMemories,
   )
 
-  const messages = [
+  const messages: LLMMessage[] = [
     {
       role: "system",
       content: systemPrompt,
@@ -1599,7 +1599,17 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, activeTools)
+
+      llmResponse = await makeLLMCall(
+        shrunkMessages,
+        config,
+        onRetryProgress,
+        onStreamingUpdate,
+        currentSessionId,
+        activeTools,
+        // Use the full known tool set for stable tool-name restoration (even when tools are excluded)
+        uniqueAvailableTools,
+      )
 
       // Clear streaming state after response is complete
       emit({
@@ -2097,6 +2107,49 @@ Return ONLY JSON per schema.`,
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
 
+    // Execution allowlist gating:
+    // - tool-name restoration can still yield unknown names (e.g. proxy_*), and
+    // - circuit-breaker exclusion means some tools are not currently active.
+    // In both cases we must NOT attempt execution.
+    const knownToolNames = new Set(uniqueAvailableTools.map((t) => t.name))
+    const activeToolNames = new Set(activeTools.map((t) => t.name))
+    const blockedToolNames = new Set<string>()
+
+    const executeToolCallAllowlisted = async (
+      toolCall: MCPToolCall,
+      onProgress?: (message: string) => void,
+    ): Promise<MCPToolResult> => {
+      const toolName = toolCall?.name
+      if (!toolName || typeof toolName !== "string") {
+        blockedToolNames.add("unknown")
+        const msg = "Tool call blocked: missing tool name."
+        onProgress?.(msg)
+        return { content: [{ type: "text", text: msg }], isError: true }
+      }
+
+      if (!knownToolNames.has(toolName)) {
+        blockedToolNames.add(toolName)
+        const msg = `Tool call blocked: unknown tool "${toolName}". Please use one of the tools listed in the system prompt.`
+        onProgress?.(msg)
+        if (isDebugTools()) {
+          logTools("Blocked unknown tool call", toolCall)
+        }
+        return { content: [{ type: "text", text: msg }], isError: true }
+      }
+
+      if (!activeToolNames.has(toolName)) {
+        blockedToolNames.add(toolName)
+        const msg = `Tool call blocked: tool "${toolName}" is currently disabled due to repeated failures. Please choose an alternative approach.`
+        onProgress?.(msg)
+        if (isDebugTools()) {
+          logTools("Blocked excluded tool call", toolCall)
+        }
+        return { content: [{ type: "text", text: msg }], isError: true }
+      }
+
+      return executeToolCall(toolCall, onProgress)
+    }
+
     // Add assistant response with tool calls to conversation history BEFORE executing tools
     // This ensures the tool call request is visible immediately in the UI
     addMessage("assistant", llmResponse.content || "", llmResponse.toolCalls || [])
@@ -2186,7 +2239,7 @@ Return ONLY JSON per schema.`,
 
         const execResult = await executeToolWithRetries(
           toolCall,
-          executeToolCall,
+          executeToolCallAllowlisted,
           currentSessionId,
           onToolProgress,
           2, // maxRetries
@@ -2321,7 +2374,7 @@ Return ONLY JSON per schema.`,
 
         const execResult = await executeToolWithRetries(
           toolCall,
-          executeToolCall,
+          executeToolCallAllowlisted,
           currentSessionId,
           onToolProgress,
           2, // maxRetries
@@ -2547,6 +2600,8 @@ Return ONLY JSON per schema.`,
         if (result.isError) {
           // Get the tool name from toolCallsArray by index
           const toolName = toolCallsArray[i]?.name || "unknown"
+          // Do not count policy-blocked calls (unknown/excluded) as tool failures.
+          if (blockedToolNames.has(toolName)) continue
           const currentCount = toolFailureCount.get(toolName) || 0
           toolFailureCount.set(toolName, currentCount + 1)
 
@@ -2987,6 +3042,11 @@ async function makeLLMCall(
   onStreamingUpdate?: StreamingCallback,
   sessionId?: string,
   tools?: MCPTool[],
+  /**
+   * Full known tool set for stable tool-name restoration.
+   * In agent mode this should be `uniqueAvailableTools` (not the active subset).
+   */
+  allToolsForNameMap?: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -3060,7 +3120,14 @@ async function makeLLMCall(
       // Wrap in try/finally to ensure streaming is cleaned up even if the call fails
       let result: LLMToolCallResponse
       try {
-        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
+        result = await makeLLMCallWithFetch(
+          messages,
+          chatProviderId,
+          onRetryProgress,
+          sessionId,
+          tools,
+          allToolsForNameMap,
+        )
       } finally {
         // Signal streaming to stop IMMEDIATELY
         streamingAborted = true
@@ -3103,7 +3170,15 @@ async function makeLLMCall(
     }
 
     // Non-streaming path
-    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
+
+    const result = await makeLLMCallWithFetch(
+      messages,
+      chatProviderId,
+      onRetryProgress,
+      sessionId,
+      tools,
+      allToolsForNameMap,
+    )
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

@@ -377,6 +377,64 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.toolCalls![0].arguments).toEqual({ url: 'https://example.com' })
   })
 
+  it('should restore proxy_-prefixed tool names using the full tool registry even when not in the active subset', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: 'Navigating to the page.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'proxy_playwright__COLON__browser_navigate',
+          input: { url: 'https://example.com' },
+          toolCallId: 'call_proxy_1',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    // Simulate agent mode where the active tool subset doesn't include the tool the model called,
+    // but we still have it in the full known tool list for name restoration.
+    const activeTools = [
+      {
+        name: 'some_other_tool',
+        description: 'Some other tool',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]
+
+    const allToolsForNameMap = [
+      ...activeTools,
+      {
+        name: 'playwright:browser_navigate',
+        description: 'Navigate to a URL',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'go to example.com' }],
+      'openai',
+      undefined,
+      undefined,
+      activeTools,
+      allToolsForNameMap,
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('playwright:browser_navigate')
+    expect(result.toolCalls![0].arguments).toEqual({ url: 'https://example.com' })
+  })
+
   it('should not incorrectly restore tool names with double underscores that are not from sanitization', async () => {
     const { generateText } = await import('ai')
     const generateTextMock = vi.mocked(generateText)

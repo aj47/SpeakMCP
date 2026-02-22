@@ -151,7 +151,7 @@ describe("processTranscriptWithAgentMode", () => {
     const result = await processTranscriptWithAgentMode(
       "Summarize these notes",
       [{ name: "dummy_tool", description: "Dummy", inputSchema: {} }],
-      vi.fn(async () => ({ content: [{ type: "text", text: "ok" }], isError: false })),
+      vi.fn(async () => ({ content: [{ type: "text" as const, text: "ok" }], isError: false })),
       5,
       undefined,
       undefined,
@@ -161,5 +161,90 @@ describe("processTranscriptWithAgentMode", () => {
     expect(makeLLMCallWithFetchMock).toHaveBeenCalledTimes(2)
     expect(result.content).toBe("Here's the summary you asked for.")
     expect(result.content).not.toContain("I couldn't complete the request")
+  })
+
+  it("blocks unknown tool calls (e.g. proxy_*) without executing them", async () => {
+    const { makeLLMCallWithFetch } = await import("./llm-fetch")
+    const makeLLMCallWithFetchMock = vi.mocked(makeLLMCallWithFetch)
+
+    makeLLMCallWithFetchMock
+      .mockResolvedValueOnce({
+        content: "Attempting a tool...",
+        toolCalls: [
+          {
+            name: "proxy_iterm:write_to_terminal",
+            arguments: { text: "hello" },
+            toolCallId: "call_1",
+          },
+        ],
+      } as any)
+      .mockResolvedValueOnce({ content: "Done." } as any)
+
+    const { processTranscriptWithAgentMode } = await import("./llm")
+
+    const executeToolCallMock = vi.fn(async () => ({
+      content: [{ type: "text" as const, text: "ok" }],
+      isError: false,
+    }))
+
+    const result = await processTranscriptWithAgentMode(
+      "Say hello",
+      [{ name: "iterm:write_to_terminal", description: "Write", inputSchema: {} }],
+      executeToolCallMock,
+      5,
+      undefined,
+      undefined,
+      "test-session",
+    )
+
+    expect(makeLLMCallWithFetchMock).toHaveBeenCalledTimes(2)
+    expect(executeToolCallMock).not.toHaveBeenCalled()
+    expect(result.content).toBe("Done.")
+  })
+
+  it("blocks tool calls to excluded tools after repeated failures (circuit breaker)", async () => {
+    const { makeLLMCallWithFetch } = await import("./llm-fetch")
+    const makeLLMCallWithFetchMock = vi.mocked(makeLLMCallWithFetch)
+
+    // 4 tool-call iterations + final answer
+    makeLLMCallWithFetchMock
+      .mockResolvedValueOnce({
+        content: "Trying tool...",
+        toolCalls: [{ name: "flaky_tool", arguments: {}, toolCallId: "call_1" }],
+      } as any)
+      .mockResolvedValueOnce({
+        content: "Trying tool again...",
+        toolCalls: [{ name: "flaky_tool", arguments: {}, toolCallId: "call_2" }],
+      } as any)
+      .mockResolvedValueOnce({
+        content: "Trying tool again...",
+        toolCalls: [{ name: "flaky_tool", arguments: {}, toolCallId: "call_3" }],
+      } as any)
+      .mockResolvedValueOnce({
+        content: "Trying tool again...",
+        toolCalls: [{ name: "flaky_tool", arguments: {}, toolCallId: "call_4" }],
+      } as any)
+      .mockResolvedValueOnce({ content: "Recovered." } as any)
+
+    const { processTranscriptWithAgentMode } = await import("./llm")
+
+    const executeToolCallMock = vi.fn(async () => ({
+      content: [{ type: "text" as const, text: "boom" }],
+      isError: true,
+    }))
+
+    const result = await processTranscriptWithAgentMode(
+      "Do the thing",
+      [{ name: "flaky_tool", description: "Flaky", inputSchema: {} }],
+      executeToolCallMock,
+      10,
+      undefined,
+      undefined,
+      "test-session",
+    )
+
+    // First 3 calls execute and fail; the 4th call is blocked because the tool is excluded.
+    expect(executeToolCallMock).toHaveBeenCalledTimes(3)
+    expect(result.content).toBe("Recovered.")
   })
 })

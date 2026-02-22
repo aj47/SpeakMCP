@@ -21,7 +21,7 @@ import {
   type ProviderType,
 } from "./ai-sdk-provider"
 import { configStore } from "./config"
-import type { LLMToolCallResponse, MCPTool, MCPToolCall } from "./mcp-service"
+import type { LLMToolCallResponse, MCPTool, MCPToolCall, MCPToolResult } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
@@ -30,7 +30,9 @@ import {
   endLLMGeneration,
   isLangfuseEnabled,
 } from "./langfuse-service"
-import type { ToolResult } from "@shared/types"
+import type { ToolResult as SharedToolResult } from "@shared/types"
+
+export type LLMToolResult = SharedToolResult | MCPToolResult
 
 import {
   convertMessagesToAISDK,
@@ -48,7 +50,7 @@ export interface LLMMessage {
   /** Tool calls made by the assistant (only for role="assistant") */
   toolCalls?: MCPToolCall[]
   /** Tool results (only for role="tool") */
-  toolResults?: Array<ToolResult & { toolCallId?: string; toolName?: string }>
+  toolResults?: LLMToolResult[]
 }
 
 /**
@@ -86,51 +88,89 @@ interface ConvertedTools {
   originalToolNameToProviderToolName: Map<string, string>
 }
 
+interface ToolNameRegistry {
+  /** Map from provider-safe (sanitized) tool name back to canonical MCP tool name */
+  nameMap: Map<string, string>
+  /** Map from canonical MCP tool name to provider-safe (sanitized) tool name */
+  originalToolNameToProviderToolName: Map<string, string>
+}
+
 /**
- * Convert MCP tools to AI SDK tool format
- * Uses dynamicTool pattern since MCP tool schemas are JSON Schema, not Zod
- * Returns both the tools and a map for restoring original names
+ * Build a stable tool-name registry for provider compatibility.
+ *
+ * Important: this mapping MUST be independent of the current “active tools” subset.
+ * Otherwise, if the active set changes (e.g. circuit breaker/exclusions), the mapping
+ * can no longer restore provider tool-call names back to canonical MCP names.
+ *
+ * We sort by canonical tool name so collision resolution is deterministic.
  */
-function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
-  const tools: Record<string, ReturnType<typeof aiTool>> = {}
+function buildToolNameRegistry(mcpTools: MCPTool[]): ToolNameRegistry {
   const nameMap = new Map<string, string>()
   const originalToolNameToProviderToolName = new Map<string, string>()
-  // Track collision counts for disambiguation
+
+  // Track collision counts per *base* sanitized name
   const collisionCount = new Map<string, number>()
+  const usedProviderNames = new Set<string>()
 
-  for (const mcpTool of mcpTools) {
-    // Sanitize tool name to avoid provider compatibility issues
-    // (OpenAI/Groq reject tool names containing ':')
-    let sanitizedName = sanitizeToolName(mcpTool.name)
+  const sortedTools = [...mcpTools].sort((a, b) => a.name.localeCompare(b.name))
+  for (const mcpTool of sortedTools) {
+    const baseSanitizedName = sanitizeToolName(mcpTool.name)
+    let providerName = baseSanitizedName
 
-    // Handle collision: if this sanitized name already exists with a different original name,
-    // add a deterministic disambiguation suffix to make it unique
-    if (nameMap.has(sanitizedName) && nameMap.get(sanitizedName) !== mcpTool.name) {
-      const existingOriginal = nameMap.get(sanitizedName)
-      logLLM(`⚠️ Tool name collision detected: "${mcpTool.name}" and "${existingOriginal}" both sanitize to "${sanitizedName}"`)
+    // Handle collision: if this provider name is already used, add a deterministic suffix.
+    // We ensure uniqueness even if the suffixed candidate collides with an existing tool.
+    if (usedProviderNames.has(providerName) && nameMap.get(providerName) !== mcpTool.name) {
+      const existingOriginal = nameMap.get(providerName)
+      logLLM(
+        `⚠️ Tool name collision detected: "${mcpTool.name}" and "${existingOriginal}" both sanitize to "${providerName}"`,
+      )
 
-      // Get or initialize collision counter for this base name
-      const count = (collisionCount.get(sanitizedName) || 0) + 1
-      collisionCount.set(sanitizedName, count)
+      let count = collisionCount.get(baseSanitizedName) || 0
+      do {
+        count += 1
+        providerName = sanitizeToolName(mcpTool.name, String(count))
+      } while (usedProviderNames.has(providerName) && nameMap.get(providerName) !== mcpTool.name)
 
-      // Generate a unique name with numeric suffix
-      sanitizedName = sanitizeToolName(mcpTool.name, String(count))
-      logLLM(`   Disambiguated to: "${sanitizedName}"`)
+      collisionCount.set(baseSanitizedName, count)
+      logLLM(`   Disambiguated to: "${providerName}"`)
     }
 
-    // Store the mapping from sanitized name to original name
-    nameMap.set(sanitizedName, mcpTool.name)
-    originalToolNameToProviderToolName.set(mcpTool.name, sanitizedName)
+    usedProviderNames.add(providerName)
+    nameMap.set(providerName, mcpTool.name)
+    originalToolNameToProviderToolName.set(mcpTool.name, providerName)
+  }
 
-    // Create AI SDK tool with JSON schema (not Zod)
-    tools[sanitizedName] = aiTool({
+  return { nameMap, originalToolNameToProviderToolName }
+}
+
+/**
+ * Convert an (active) subset of MCP tools to AI SDK tool definitions, using a stable
+ * provider-name registry derived from the full known tool set.
+ */
+function convertMCPToolsToAISDKTools(
+  mcpTools: MCPTool[],
+  registry: ToolNameRegistry,
+): ConvertedTools {
+  const tools: Record<string, ReturnType<typeof aiTool>> = {}
+
+  for (const mcpTool of mcpTools) {
+    const providerName =
+      registry.originalToolNameToProviderToolName.get(mcpTool.name) ||
+      // Defensive fallback (should not happen when registry is built from the full tool set)
+      sanitizeToolName(mcpTool.name)
+
+    tools[providerName] = aiTool({
       description: mcpTool.description || `Tool: ${mcpTool.name}`,
       inputSchema: jsonSchema(mcpTool.inputSchema || { type: "object", properties: {} }),
       // No execute function - we handle execution separately via MCP
     })
   }
 
-  return { tools, nameMap, originalToolNameToProviderToolName }
+  return {
+    tools,
+    nameMap: registry.nameMap,
+    originalToolNameToProviderToolName: registry.originalToolNameToProviderToolName,
+  }
 }
 
 /**
@@ -570,7 +610,12 @@ export async function makeLLMCallWithFetch(
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
   sessionId?: string,
-  tools?: MCPTool[]
+  tools?: MCPTool[],
+  /**
+   * Full known tool set for stable tool-name restoration.
+   * In agent mode, this should be the full available tool list (not the active subset).
+   */
+  allToolsForNameMap?: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
@@ -589,9 +634,18 @@ export async function makeLLMCallWithFetch(
           abortController.abort()
         }
 
-        // Convert MCP tools to AI SDK format if provided
-        const convertedTools = tools && tools.length > 0
-          ? convertMCPToolsToAISDKTools(tools)
+        // Convert MCP tools to AI SDK format if provided.
+        // IMPORTANT: build the provider-name registry from the full known tool set so that
+        // tool-name restoration remains stable even when the active tool subset changes.
+        const registrySource = (allToolsForNameMap && allToolsForNameMap.length > 0)
+          ? allToolsForNameMap
+          : tools
+        const registry = registrySource && registrySource.length > 0
+          ? buildToolNameRegistry(registrySource)
+          : undefined
+
+        const convertedTools = tools && tools.length > 0 && registry
+          ? convertMCPToolsToAISDKTools(tools, registry)
           : undefined
         const { system, messages: convertedMessages } = convertMessages(messages, {
           originalToolNameToProviderToolName: convertedTools?.originalToolNameToProviderToolName,

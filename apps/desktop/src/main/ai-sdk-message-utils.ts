@@ -7,11 +7,12 @@
  */
 
 import type {
-  CoreAssistantMessage,
-  CoreMessage,
-  CoreToolMessage,
+  AssistantModelMessage,
+  ModelMessage,
+  ToolModelMessage,
   ToolCallPart,
   ToolResultPart,
+  TextPart,
 } from "ai"
 import { randomUUID } from "crypto"
 
@@ -182,12 +183,12 @@ function makeToolResultPart(
 }
 
 /**
- * Convert app messages into AI SDK v6 CoreMessage[] + separate system prompt.
+ * Convert app messages into AI SDK v6 ModelMessage[] + separate system prompt.
  */
 export function convertMessagesToAISDK(
   messages: Array<LLMMessageLike | { role: string; content: string }>,
   opts: ConvertMessagesOptions = {},
-): { system: string | undefined; messages: CoreMessage[] } {
+): { system: string | undefined; messages: ModelMessage[] } {
   const options: Required<Pick<ConvertMessagesOptions,
     "treatLegacyToolMessagesAsUser" | "ensureEndsWithUserMessage" | "missingToolResultText"
   >> & ConvertMessagesOptions = {
@@ -200,7 +201,7 @@ export function convertMessagesToAISDK(
   }
 
   const systemMessages: string[] = []
-  const coreMessages: CoreMessage[] = []
+  const coreMessages: ModelMessage[] = []
 
   let pendingToolCalls: PendingToolCall[] = []
 
@@ -212,7 +213,7 @@ export function convertMessagesToAISDK(
       .filter(p => !p.resolved)
       .map(p => makeMissingToolResultPart(p, options.missingToolResultText))
     pendingToolCalls = []
-    const toolMsg: CoreToolMessage = { role: "tool", content: toolResultParts }
+    const toolMsg: ToolModelMessage = { role: "tool", content: toolResultParts }
     coreMessages.push(toolMsg)
   }
 
@@ -240,7 +241,7 @@ export function convertMessagesToAISDK(
     if (role === "assistant") {
       const llmMsg = msg as LLMMessageLike
       if (llmMsg.toolCalls && llmMsg.toolCalls.length > 0) {
-        const contentParts: ({ type: "text"; text: string } | ToolCallPart)[] = []
+        const contentParts: Array<TextPart | ToolCallPart> = []
         if (llmMsg.content?.trim()) {
           contentParts.push({ type: "text" as const, text: llmMsg.content })
         }
@@ -255,13 +256,13 @@ export function convertMessagesToAISDK(
             type: "tool-call",
             toolCallId,
             toolName,
-            args: tc.arguments ?? {},
+            input: tc.arguments ?? {},
           }
           contentParts.push(toolCallPart)
           pendingToolCalls.push({ toolCallId, toolName, resolved: false })
         }
 
-        const assistantMsg: CoreAssistantMessage = {
+        const assistantMsg: AssistantModelMessage = {
           role: "assistant",
           content: contentParts,
         }

@@ -21,7 +21,7 @@ import {
   type ProviderType,
 } from "./ai-sdk-provider"
 import { configStore } from "./config"
-import type { LLMToolCallResponse, MCPTool } from "./mcp-service"
+import type { LLMToolCallResponse, MCPTool, MCPToolCall, MCPToolResult } from "./mcp-service"
 import { diagnosticsService } from "./diagnostics"
 import { isDebugLLM, logLLM } from "./debug"
 import { state, agentSessionStateManager, llmRequestAbortManager } from "./state"
@@ -30,6 +30,28 @@ import {
   endLLMGeneration,
   isLangfuseEnabled,
 } from "./langfuse-service"
+import type { ToolResult as SharedToolResult } from "@shared/types"
+
+export type LLMToolResult = SharedToolResult | MCPToolResult
+
+import {
+  convertMessagesToAISDK,
+  restoreToolName,
+  sanitizeToolName,
+} from "./ai-sdk-message-utils"
+
+/**
+ * Extended message type that supports both simple string content and structured tool data.
+ * This is used to pass conversation history to the LLM with proper tool call/result linking.
+ */
+export interface LLMMessage {
+  role: "system" | "user" | "assistant" | "tool"
+  content: string
+  /** Tool calls made by the assistant (only for role="assistant") */
+  toolCalls?: MCPToolCall[]
+  /** Tool results (only for role="tool") */
+  toolResults?: LLMToolResult[]
+}
 
 /**
  * Build token usage object for Langfuse, only including it when at least one token field is present.
@@ -56,123 +78,99 @@ function buildTokenUsage(usage?: { inputTokens?: number; outputTokens?: number }
 }
 
 /**
- * Sanitize tool name for provider compatibility.
- * Providers require tool names matching pattern: ^[a-zA-Z0-9_-]{1,128}$
- * MCP tool names often include server prefixes like "server:tool_name" and may
- * contain spaces or other special characters.
- * We replace ':' with '__COLON__' and other invalid characters with '__'
- * to ensure compatibility while maintaining reversibility through the nameMap.
- *
- * @param name - Original tool name
- * @param suffix - Optional disambiguation suffix for collision handling
- */
-function sanitizeToolName(name: string, suffix?: string): string {
-  // First replace colons with __COLON__ to preserve server prefix distinction
-  let sanitized = name.replace(/:/g, "__COLON__")
-  // Replace any remaining characters that don't match [a-zA-Z0-9_-] with underscore
-  sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, "_")
-
-  // If we have a suffix, ensure it survives truncation by reserving space for it
-  // The suffix is added after truncation to prevent it from being cut off
-  if (suffix) {
-    const suffixStr = `_${suffix}`
-    const maxBaseLength = 128 - suffixStr.length
-    if (sanitized.length > maxBaseLength) {
-      sanitized = sanitized.substring(0, maxBaseLength)
-    }
-    sanitized = `${sanitized}${suffixStr}`
-  } else {
-    // No suffix - simple truncation
-    if (sanitized.length > 128) {
-      sanitized = sanitized.substring(0, 128)
-    }
-  }
-
-  return sanitized
-}
-
-/**
- * Restore original tool name from sanitized version using the provided map.
- * Falls back to simple replacement if no map is provided (for JSON response parsing).
- *
- * Note: Some LLM proxies (e.g., certain OpenAI-compatible gateways) may prepend
- * "proxy_" to tool names in responses. We strip this prefix only when we have
- * a toolNameMap to verify the mapping, to avoid conflicts with legitimate tools
- * whose names actually start with "proxy_".
- */
-function restoreToolName(sanitizedName: string, toolNameMap?: Map<string, string>): string {
-  // First, try exact match with the sanitized name (handles legitimate "proxy_" prefixed tools)
-  if (toolNameMap && toolNameMap.has(sanitizedName)) {
-    return toolNameMap.get(sanitizedName)!
-  }
-
-  // If no exact match, we have a map, and name starts with "proxy_", try stripping the prefix
-  // This handles LLM proxies that prepend "proxy_" to tool names in responses
-  // We only do this when toolNameMap is provided so we can verify the stripped name exists
-  if (toolNameMap && sanitizedName.startsWith("proxy_")) {
-    const cleanedName = sanitizedName.slice(6) // Remove "proxy_" prefix (6 chars)
-    if (toolNameMap.has(cleanedName)) {
-      return toolNameMap.get(cleanedName)!
-    }
-  }
-
-  // Fallback: reverse the sanitization for JSON responses where we don't have the map
-  // We don't strip "proxy_" here since we can't verify if it's a legitimate tool name
-  return sanitizedName.replace(/__COLON__/g, ":")
-}
-
-/**
  * Result of converting MCP tools to AI SDK format
  */
 interface ConvertedTools {
   tools: Record<string, ReturnType<typeof aiTool>>
   /** Map from sanitized name back to original MCP tool name */
   nameMap: Map<string, string>
+  /** Map from original MCP tool name to provider-safe (sanitized) tool name */
+  originalToolNameToProviderToolName: Map<string, string>
+}
+
+interface ToolNameRegistry {
+  /** Map from provider-safe (sanitized) tool name back to canonical MCP tool name */
+  nameMap: Map<string, string>
+  /** Map from canonical MCP tool name to provider-safe (sanitized) tool name */
+  originalToolNameToProviderToolName: Map<string, string>
 }
 
 /**
- * Convert MCP tools to AI SDK tool format
- * Uses dynamicTool pattern since MCP tool schemas are JSON Schema, not Zod
- * Returns both the tools and a map for restoring original names
+ * Build a stable tool-name registry for provider compatibility.
+ *
+ * Important: this mapping MUST be independent of the current “active tools” subset.
+ * Otherwise, if the active set changes (e.g. circuit breaker/exclusions), the mapping
+ * can no longer restore provider tool-call names back to canonical MCP names.
+ *
+ * We sort by canonical tool name so collision resolution is deterministic.
  */
-function convertMCPToolsToAISDKTools(mcpTools: MCPTool[]): ConvertedTools {
-  const tools: Record<string, ReturnType<typeof aiTool>> = {}
+function buildToolNameRegistry(mcpTools: MCPTool[]): ToolNameRegistry {
   const nameMap = new Map<string, string>()
-  // Track collision counts for disambiguation
+  const originalToolNameToProviderToolName = new Map<string, string>()
+
+  // Track collision counts per *base* sanitized name
   const collisionCount = new Map<string, number>()
+  const usedProviderNames = new Set<string>()
 
-  for (const mcpTool of mcpTools) {
-    // Sanitize tool name to avoid provider compatibility issues
-    // (OpenAI/Groq reject tool names containing ':')
-    let sanitizedName = sanitizeToolName(mcpTool.name)
+  const sortedTools = [...mcpTools].sort((a, b) => a.name.localeCompare(b.name))
+  for (const mcpTool of sortedTools) {
+    const baseSanitizedName = sanitizeToolName(mcpTool.name)
+    let providerName = baseSanitizedName
 
-    // Handle collision: if this sanitized name already exists with a different original name,
-    // add a deterministic disambiguation suffix to make it unique
-    if (nameMap.has(sanitizedName) && nameMap.get(sanitizedName) !== mcpTool.name) {
-      const existingOriginal = nameMap.get(sanitizedName)
-      logLLM(`⚠️ Tool name collision detected: "${mcpTool.name}" and "${existingOriginal}" both sanitize to "${sanitizedName}"`)
+    // Handle collision: if this provider name is already used, add a deterministic suffix.
+    // We ensure uniqueness even if the suffixed candidate collides with an existing tool.
+    if (usedProviderNames.has(providerName) && nameMap.get(providerName) !== mcpTool.name) {
+      const existingOriginal = nameMap.get(providerName)
+      logLLM(
+        `⚠️ Tool name collision detected: "${mcpTool.name}" and "${existingOriginal}" both sanitize to "${providerName}"`,
+      )
 
-      // Get or initialize collision counter for this base name
-      const count = (collisionCount.get(sanitizedName) || 0) + 1
-      collisionCount.set(sanitizedName, count)
+      let count = collisionCount.get(baseSanitizedName) || 0
+      do {
+        count += 1
+        providerName = sanitizeToolName(mcpTool.name, String(count))
+      } while (usedProviderNames.has(providerName) && nameMap.get(providerName) !== mcpTool.name)
 
-      // Generate a unique name with numeric suffix
-      sanitizedName = sanitizeToolName(mcpTool.name, String(count))
-      logLLM(`   Disambiguated to: "${sanitizedName}"`)
+      collisionCount.set(baseSanitizedName, count)
+      logLLM(`   Disambiguated to: "${providerName}"`)
     }
 
-    // Store the mapping from sanitized name to original name
-    nameMap.set(sanitizedName, mcpTool.name)
+    usedProviderNames.add(providerName)
+    nameMap.set(providerName, mcpTool.name)
+    originalToolNameToProviderToolName.set(mcpTool.name, providerName)
+  }
 
-    // Create AI SDK tool with JSON schema (not Zod)
-    tools[sanitizedName] = aiTool({
+  return { nameMap, originalToolNameToProviderToolName }
+}
+
+/**
+ * Convert an (active) subset of MCP tools to AI SDK tool definitions, using a stable
+ * provider-name registry derived from the full known tool set.
+ */
+function convertMCPToolsToAISDKTools(
+  mcpTools: MCPTool[],
+  registry: ToolNameRegistry,
+): ConvertedTools {
+  const tools: Record<string, ReturnType<typeof aiTool>> = {}
+
+  for (const mcpTool of mcpTools) {
+    const providerName =
+      registry.originalToolNameToProviderToolName.get(mcpTool.name) ||
+      // Defensive fallback (should not happen when registry is built from the full tool set)
+      sanitizeToolName(mcpTool.name)
+
+    tools[providerName] = aiTool({
       description: mcpTool.description || `Tool: ${mcpTool.name}`,
       inputSchema: jsonSchema(mcpTool.inputSchema || { type: "object", properties: {} }),
       // No execute function - we handle execution separately via MCP
     })
   }
 
-  return { tools, nameMap }
+  return {
+    tools,
+    nameMap: registry.nameMap,
+    originalToolNameToProviderToolName: registry.originalToolNameToProviderToolName,
+  }
 }
 
 /**
@@ -532,40 +530,20 @@ async function withRetry<T>(
  * OpenAI-compatible APIs (including OpenRouter) do not support "assistant
  * message prefill" and require the conversation to end with a user message.
  * See: https://github.com/aj47/SpeakMCP/issues/1035
+ *
+ * When messages contain toolCalls or toolResults, they are converted to proper AI SDK format:
+ * - Assistant messages with toolCalls become messages with tool-call parts
+ * - Tool messages with toolResults become CoreToolMessage with tool-result parts
  */
-function convertMessages(messages: Array<{ role: string; content: string }>): {
-  system: string | undefined
-  messages: Array<{ role: "user" | "assistant"; content: string }>
-} {
-  const systemMessages: string[] = []
-  const otherMessages: Array<{ role: "user" | "assistant"; content: string }> =
-    []
-
-  for (const msg of messages) {
-    if (msg.role === "system") {
-      systemMessages.push(msg.content)
-    } else {
-      otherMessages.push({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })
-    }
+function convertMessages(
+  messages: Array<LLMMessage | { role: string; content: string }>,
+  options?: {
+    originalToolNameToProviderToolName?: Map<string, string>
   }
-
-  // Ensure the conversation doesn't end with an assistant message.
-  // Some providers (e.g., OpenRouter proxying to Claude models) don't support
-  // assistant message prefill and require the last message to be from the user.
-  if (otherMessages.length > 0 && otherMessages[otherMessages.length - 1].role === "assistant") {
-    otherMessages.push({
-      role: "user",
-      content: "Continue from your most recent step using the existing context. Do not restart.",
-    })
-  }
-
-  return {
-    system: systemMessages.length > 0 ? systemMessages.join("\n\n") : undefined,
-    messages: otherMessages,
-  }
+) {
+  return convertMessagesToAISDK(messages, {
+    originalToolNameToProviderToolName: options?.originalToolNameToProviderToolName,
+  })
 }
 
 /**
@@ -578,7 +556,7 @@ function createSessionAbortController(sessionId?: string): AbortController {
   } else {
     llmRequestAbortManager.register(controller)
   }
-return controller
+  return controller
 }
 
 /**
@@ -621,14 +599,23 @@ function extractJsonObject(str: string): any | null {
 
 /**
  * Main function to make LLM calls using AI SDK with automatic retry
- * Now supports native AI SDK tool calling when tools are provided
+ * Now supports native AI SDK tool calling when tools are provided.
+ *
+ * Messages can include proper tool call/result structures:
+ * - Assistant messages with toolCalls array are converted to AI SDK tool-call parts
+ * - Tool messages with toolResults array are converted to AI SDK tool-result parts
  */
 export async function makeLLMCallWithFetch(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<LLMMessage | { role: string; content: string }>,
   providerId?: string,
   onRetryProgress?: RetryProgressCallback,
   sessionId?: string,
-  tools?: MCPTool[]
+  tools?: MCPTool[],
+  /**
+   * Full known tool set for stable tool-name restoration.
+   * In agent mode, this should be the full available tool list (not the active subset).
+   */
+  allToolsForNameMap?: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
@@ -636,7 +623,6 @@ export async function makeLLMCallWithFetch(
   return withRetry(
     async () => {
       const model = createLanguageModel(effectiveProviderId)
-      const { system, messages: convertedMessages } = convertMessages(messages)
       const abortController = createSessionAbortController(sessionId)
 
       try {
@@ -648,10 +634,22 @@ export async function makeLLMCallWithFetch(
           abortController.abort()
         }
 
-        // Convert MCP tools to AI SDK format if provided
-        const convertedTools = tools && tools.length > 0
-          ? convertMCPToolsToAISDKTools(tools)
+        // Convert MCP tools to AI SDK format if provided.
+        // IMPORTANT: build the provider-name registry from the full known tool set so that
+        // tool-name restoration remains stable even when the active tool subset changes.
+        const registrySource = (allToolsForNameMap && allToolsForNameMap.length > 0)
+          ? allToolsForNameMap
+          : tools
+        const registry = registrySource && registrySource.length > 0
+          ? buildToolNameRegistry(registrySource)
           : undefined
+
+        const convertedTools = tools && tools.length > 0 && registry
+          ? convertMCPToolsToAISDKTools(tools, registry)
+          : undefined
+        const { system, messages: convertedMessages } = convertMessages(messages, {
+          originalToolNameToProviderToolName: convertedTools?.originalToolNameToProviderToolName,
+        })
 
         const modelName = getCurrentModelName(effectiveProviderId)
 
@@ -716,9 +714,11 @@ export async function makeLLMCallWithFetch(
 
           // Convert AI SDK tool calls to our MCPToolCall format
           // Restore original tool names using the nameMap for accurate lookup
+          // Preserve toolCallId for proper linking between tool calls and results
           const toolCalls = result.toolCalls.map(tc => ({
             name: restoreToolName(tc.toolName, convertedTools?.nameMap),
             arguments: tc.input,
+            toolCallId: tc.toolCallId,
           }))
 
           // End Langfuse generation with tool calls
@@ -767,12 +767,14 @@ export async function makeLLMCallWithFetch(
           // Restore original tool names using nameMap if available, otherwise fallback to pattern replacement.
           // Filter out malformed items (missing/non-string name) so a bad model JSON response
           // can't crash the fetch layer.
+          // Generate toolCallId if missing (for JSON fallback responses from models that don't support native tool calling).
           if (response.toolCalls) {
             response.toolCalls = response.toolCalls
               .filter(tc => tc && typeof tc.name === "string" && tc.name.length > 0)
               .map(tc => ({
                 ...tc,
                 name: restoreToolName(tc.name, convertedTools?.nameMap),
+                toolCallId: tc.toolCallId || `call_${randomUUID()}`,
               }))
           }
           // End Langfuse generation with JSON response
@@ -820,10 +822,114 @@ export async function makeLLMCallWithFetch(
 }
 
 /**
+ * Strip structured tool parts from messages, converting them to plain text.
+ * This is needed for streaming calls which don't pass a tools registry.
+ * 
+ * Converts:
+ * - system/user messages: keep content as-is
+ * - assistant messages: drop toolCalls, keep content (or use placeholder if empty but toolCalls exist)
+ * - tool messages: convert to user messages with formatted tool result text
+ */
+function stripToolPartsFromMessages(
+  messages: Array<LLMMessage | { role: string; content: string }>
+): Array<{ role: string; content: string }> {
+  const stripped: Array<{ role: string; content: string }> = []
+
+  for (const msg of messages) {
+    const role = msg.role as string
+
+    if (role === "system" || role === "user") {
+      // Keep system and user messages as-is
+      stripped.push({
+        role,
+        content: msg.content,
+      })
+      continue
+    }
+
+    if (role === "assistant") {
+      const llmMsg = msg as LLMMessage
+      // Drop toolCalls, keep content
+      // If content is empty but toolCalls exist, use a placeholder
+      let content = llmMsg.content || ""
+      if (!content.trim() && llmMsg.toolCalls && llmMsg.toolCalls.length > 0) {
+        const toolNames = llmMsg.toolCalls.map(tc => tc.name).join(", ")
+        content = `[Calling tools: ${toolNames}]`
+      }
+      stripped.push({
+        role: "assistant",
+        content,
+      })
+      continue
+    }
+
+    if (role === "tool") {
+      const llmMsg = msg as LLMMessage
+      // Convert tool message to user message with formatted text
+      let textContent = ""
+
+      if (llmMsg.toolResults && llmMsg.toolResults.length > 0) {
+        // Format tool results as text
+        const formattedResults = llmMsg.toolResults.map(tr => {
+          const toolName = tr.toolName || "unknown"
+          let resultText = ""
+
+          // Extract content from both string and array formats
+          if (Array.isArray(tr.content)) {
+            resultText = (tr.content as Array<{ type?: string; text?: string }>)
+              .map(c => c?.text ?? "")
+              .join("\n")
+          } else if (typeof tr.content === "string") {
+            resultText = tr.content
+          } else if (tr.content != null) {
+            try {
+              resultText = JSON.stringify(tr.content)
+            } catch {
+              resultText = String(tr.content)
+            }
+          }
+
+
+	          // Check if error (supports both SharedToolResult and MCPToolResult)
+	          const isError =
+	            ("success" in tr && typeof tr.success === "boolean" && !tr.success) ||
+	            ("isError" in tr && typeof tr.isError === "boolean" && tr.isError) ||
+	            ("error" in tr && typeof tr.error === "string" && tr.error.length > 0)
+
+          const prefix = isError ? `[${toolName}] ERROR: ` : `[${toolName}] `
+          return `${prefix}${resultText}`
+        })
+        textContent = formattedResults.join("\n")
+      } else if (llmMsg.content) {
+        // Fallback to plain content if no structured results
+        textContent = llmMsg.content
+      }
+
+      if (textContent.trim()) {
+        stripped.push({
+          role: "user",
+          content: textContent,
+        })
+      }
+      continue
+    }
+
+    // Unknown role: treat as user
+    stripped.push({
+      role: "user",
+      content: msg.content,
+    })
+  }
+
+  return stripped
+}
+
+
+/**
  * Make a streaming LLM call using AI SDK
  */
 export async function makeLLMCallWithStreaming(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<LLMMessage | { role: string; content: string }>,
   onChunk: StreamingCallback,
   providerId?: string,
   sessionId?: string,
@@ -832,7 +938,10 @@ export async function makeLLMCallWithStreaming(
   const effectiveProviderId = (providerId ||
     getCurrentProviderId()) as ProviderType
   const model = createLanguageModel(effectiveProviderId)
-  const { system, messages: convertedMessages } = convertMessages(messages)
+  
+  // Strip tool parts from messages since streaming doesn't pass a tools registry
+  const strippedMessages = stripToolPartsFromMessages(messages)
+  const { system, messages: convertedMessages } = convertMessages(strippedMessages)
 
   // Use external controller if provided, otherwise create and register one
   // This ensures stopSession() / emergency stop can abort in-flight streams

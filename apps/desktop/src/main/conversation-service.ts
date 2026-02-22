@@ -572,8 +572,8 @@ export class ConversationService {
     conversationId: string,
     content: string,
     role: "user" | "assistant" | "tool",
-    toolCalls?: Array<{ name: string; arguments: any }>,
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>,
+    toolCalls?: Array<{ name: string; arguments: any; toolCallId?: string }>,
+    toolResults?: Array<{ success: boolean; content: string; error?: string; toolCallId?: string; toolName?: string }>,
   ): Promise<Conversation | null> {
     return this.enqueueConversationMutation(conversationId, async () => {
       try {

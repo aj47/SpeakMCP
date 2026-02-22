@@ -9,6 +9,7 @@ import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMe
 import { diagnosticsService } from "./diagnostics"
 
 import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
+import type { LLMMessage } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -33,6 +34,7 @@ import {
 import { memoryService } from "./memory-service"
 import { clearSessionUserResponse, getSessionUserResponse } from "./session-user-response-store"
 import {
+  BUILTIN_SERVER_NAME,
   MARK_WORK_COMPLETE_TOOL,
   RESPOND_TO_USER_TOOL,
   INTERNAL_COMPLETION_NUDGE_TEXT,
@@ -187,7 +189,7 @@ export async function processTranscriptWithTools(
     relevantMemories,
   )
 
-  const messages = [
+  const messages: LLMMessage[] = [
     {
       role: "system",
       content: systemPrompt,
@@ -535,6 +537,7 @@ export async function processTranscriptWithAgentMode(
 
     try {
       // Convert toolResults from MCPToolResult format to stored format
+      // Preserve toolCallId and toolName for proper AI SDK format linking
       const convertedToolResults = toolResults?.map(tr => ({
         success: !tr.isError,
         content: Array.isArray(tr.content)
@@ -542,7 +545,9 @@ export async function processTranscriptWithAgentMode(
           : String(tr.content || ""),
         error: tr.isError
           ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
-          : undefined
+          : undefined,
+        toolCallId: tr.toolCallId,
+        toolName: tr.toolName,
       }))
 
       await conversationService.addMessageToConversation(
@@ -594,6 +599,7 @@ export async function processTranscriptWithAgentMode(
       toolCalls: toolCalls?.map(tc => ({
         name: tc.name,
         arguments: tc.arguments,
+        toolCallId: tc.toolCallId,
       })),
       toolResults: toolResults?.map(tr => ({
         success: !tr.isError,
@@ -603,6 +609,8 @@ export async function processTranscriptWithAgentMode(
         error: tr.isError
           ? (Array.isArray(tr.content) ? tr.content.map(c => c.text).join("\n") : String(tr.content || ""))
           : undefined,
+        toolCallId: tr.toolCallId,
+        toolName: tr.toolName,
       })),
       assistantResponse,
       recentMessages: conversationHistory.slice(-5).map(m => ({
@@ -1363,6 +1371,12 @@ Return ONLY JSON per schema.`,
     iteration++
     currentIterationRef = iteration // Update ref for retry progress callback
 
+    // Clear any stale respond_to_user value from the session store at the start of
+    // each iteration. The store is session-wide, so a value from a previous iteration
+    // (e.g. a mid-task acknowledgment) could linger and cause the emit() helper or
+    // post-verify paths to finalize with a stale response instead of the current one.
+    clearSessionUserResponse(currentSessionId)
+
     // Filter out tools that have failed too many times - compute at start of iteration
     // so the same filtered list is used consistently throughout (LLM call + heuristics)
     const activeTools = uniqueAvailableTools.filter(tool => {
@@ -1447,41 +1461,67 @@ Return ONLY JSON per schema.`,
       conversationHistory: formatConversationForProgress(conversationHistory),
     })
 
-    // Build messages for LLM call
-    const messages = [
+    // Build messages for LLM call using proper AI SDK format with tool calls/results
+    const messages: LLMMessage[] = [
       { role: "system", content: currentSystemPrompt },
       ...conversationHistory
-        .map((entry) => {
+        .map((entry): LLMMessage | null => {
+          // Handle tool result messages - convert to proper tool role with toolResults
           if (entry.role === "tool") {
+            // If we have structured toolResults, use them directly
+            if (entry.toolResults && entry.toolResults.length > 0) {
+              return {
+                role: "tool",
+                content: entry.content || "",
+                toolResults: entry.toolResults.map(tr => ({
+                  ...tr,
+                  toolCallId: tr.toolCallId,
+                  toolName: tr.toolName,
+                })),
+              }
+            }
+            // Fallback: legacy format with just content string
+            // Skip empty tool results
             const text = (entry.content || "").trim()
             if (!text) return null
-            // Tool results already contain tool name prefix (format: [toolName] content...)
-            // Pass through directly without adding redundant wrapper
             return {
-              role: "user" as const,
+              role: "tool",
               content: text,
+              // Note: Without toolCallId, this will get a generated ID in convertMessages
             }
           }
-          // For assistant messages, ensure non-empty content
-          // Anthropic API requires all messages to have non-empty content
-          // except for the optional final assistant message
-          let content = entry.content
-          if (entry.role === "assistant" && !content?.trim()) {
-            // If assistant message has tool calls but no content, describe the tool calls
+
+          // Handle assistant messages - preserve tool calls structure
+          if (entry.role === "assistant") {
+            // If assistant has tool calls, include them in proper format
             if (entry.toolCalls && entry.toolCalls.length > 0) {
-              const toolNames = entry.toolCalls.map(tc => tc.name).join(", ")
-              content = `[Calling tools: ${toolNames}]`
-            } else {
-              // Fallback for empty assistant messages without tool calls
-              content = "[Processing...]"
+              return {
+                role: "assistant",
+                content: entry.content || "",
+                toolCalls: entry.toolCalls.map(tc => ({
+                  name: tc.name,
+                  arguments: tc.arguments,
+                  toolCallId: tc.toolCallId,
+                })),
+              }
+            }
+            // Plain assistant message without tool calls.
+            // Avoid emitting empty assistant messages - some providers/adapters reject them.
+            const content = entry.content || ""
+            if (!content.trim()) return null
+            return {
+              role: "assistant",
+              content,
             }
           }
+
+          // Handle user messages
           return {
-            role: entry.role as "user" | "assistant",
-            content,
+            role: entry.role as "user",
+            content: entry.content || "",
           }
         })
-        .filter(Boolean as any),
+        .filter((msg): msg is LLMMessage => msg !== null),
     ]
 
     // Apply context budget management before the agent LLM call
@@ -1562,7 +1602,17 @@ Return ONLY JSON per schema.`,
         })
       }
 
-      llmResponse = await makeLLMCall(shrunkMessages, config, onRetryProgress, onStreamingUpdate, currentSessionId, activeTools)
+
+      llmResponse = await makeLLMCall(
+        shrunkMessages,
+        config,
+        onRetryProgress,
+        onStreamingUpdate,
+        currentSessionId,
+        activeTools,
+        // Use the full known tool set for stable tool-name restoration (even when tools are excluded)
+        uniqueAvailableTools,
+      )
 
       // Clear streaming state after response is complete
       emit({
@@ -1818,7 +1868,8 @@ Return ONLY JSON per schema.`,
       // - accepted directly for no-tool/simple flows, or
       // - treated as in-progress status for tool-driven flows until explicit completion.
       if (hasSubstantiveResponse) {
-        const canBypassVerification = !config.mcpVerifyCompletionEnabled || !hasToolsAvailable
+        const canBypassVerification =
+          !config.mcpVerifyCompletionEnabled || !hasToolsAvailable
 
         if (canBypassVerification) {
           finalContent = contentText
@@ -1839,7 +1890,7 @@ Return ONLY JSON per schema.`,
           // (noOpCount >= 2), so we don't churn until maxIterations when the model
           // keeps returning substantive text but never calls mark_work_complete.
           const noOpThresholdReached = noOpCount >= 2
-          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS && !noOpThresholdReached) {
+          if (completionSignalHintCount < MAX_COMPLETION_SIGNAL_HINTS && !noOpThresholdReached && hasToolResultsInCurrentTurn) {
             // In tool-driven tasks, substantive text without explicit completion is usually
             // a progress/status update. Keep iterating and reserve verifier calls for explicit
             // completion signals from mark_work_complete.
@@ -2009,7 +2060,10 @@ Return ONLY JSON per schema.`,
       }
 
       // Nudge path for non-deliverable/no-progress responses.
-      if (config.mcpVerifyCompletionEnabled && (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1))) {
+      // Important: this must work even when verification is disabled, otherwise the agent can
+      // prematurely exit on a short "progress update" (e.g. "Let me read your notes...")
+      // without ever calling tools or producing a final deliverable.
+      if (noOpCount >= 2 || (hasToolsAvailable && noOpCount >= 1)) {
         if (totalNudgeCount >= MAX_NUDGES) {
           finalContent = buildIncompleteTaskFallback(contentText)
           addMessage("assistant", finalContent)
@@ -2038,20 +2092,10 @@ Return ONLY JSON per schema.`,
         continue
       }
 
-      // With verification disabled and no substantive completion candidate, exit as incomplete.
-      if (!config.mcpVerifyCompletionEnabled) {
-        finalContent = buildIncompleteTaskFallback(contentText)
-        addMessage("assistant", finalContent)
-        emit({
-          currentIteration: iteration,
-          maxIterations,
-          steps: progressSteps.slice(-3),
-          isComplete: true,
-          finalContent,
-          conversationHistory: formatConversationForProgress(conversationHistory),
-        })
-        break
-      }
+      // Still no tool calls and still no deliverable content.
+      // Keep iterating (bounded by maxIterations / MAX_NUDGES) rather than falling through into
+      // tool execution with an empty toolCallsArray.
+      continue
     } else {
       // Reset no-op counter when tools are called
       noOpCount = 0
@@ -2065,6 +2109,49 @@ Return ONLY JSON per schema.`,
     // Execute tool calls with enhanced error handling
     const toolResults: MCPToolResult[] = []
     const failedTools: string[] = []
+
+    // Execution allowlist gating:
+    // - tool-name restoration can still yield unknown names (e.g. proxy_*), and
+    // - circuit-breaker exclusion means some tools are not currently active.
+    // In both cases we must NOT attempt execution.
+    const knownToolNames = new Set(uniqueAvailableTools.map((t) => t.name))
+    const activeToolNames = new Set(activeTools.map((t) => t.name))
+    const blockedToolNames = new Set<string>()
+
+    const executeToolCallAllowlisted = async (
+      toolCall: MCPToolCall,
+      onProgress?: (message: string) => void,
+    ): Promise<MCPToolResult> => {
+      const toolName = toolCall?.name
+      if (!toolName || typeof toolName !== "string") {
+        blockedToolNames.add("unknown")
+        const msg = "Tool call blocked: missing tool name."
+        onProgress?.(msg)
+        return { content: [{ type: "text", text: msg }], isError: true }
+      }
+
+      if (!knownToolNames.has(toolName)) {
+        blockedToolNames.add(toolName)
+        const msg = `Tool call blocked: unknown tool "${toolName}". Please use one of the tools listed in the system prompt.`
+        onProgress?.(msg)
+        if (isDebugTools()) {
+          logTools("Blocked unknown tool call", toolCall)
+        }
+        return { content: [{ type: "text", text: msg }], isError: true }
+      }
+
+      if (!activeToolNames.has(toolName)) {
+        blockedToolNames.add(toolName)
+        const msg = `Tool call blocked: tool "${toolName}" is currently disabled due to repeated failures. Please choose an alternative approach.`
+        onProgress?.(msg)
+        if (isDebugTools()) {
+          logTools("Blocked excluded tool call", toolCall)
+        }
+        return { content: [{ type: "text", text: msg }], isError: true }
+      }
+
+      return executeToolCall(toolCall, onProgress)
+    }
 
     // Add assistant response with tool calls to conversation history BEFORE executing tools
     // This ensures the tool call request is visible immediately in the UI
@@ -2155,7 +2242,7 @@ Return ONLY JSON per schema.`,
 
         const execResult = await executeToolWithRetries(
           toolCall,
-          executeToolCall,
+          executeToolCallAllowlisted,
           currentSessionId,
           onToolProgress,
           2, // maxRetries
@@ -2290,7 +2377,7 @@ Return ONLY JSON per schema.`,
 
         const execResult = await executeToolWithRetries(
           toolCall,
-          executeToolCall,
+          executeToolCallAllowlisted,
           currentSessionId,
           onToolProgress,
           2, // maxRetries
@@ -2397,23 +2484,31 @@ Return ONLY JSON per schema.`,
     // Always add a tool message if any tools were executed, even if results are empty
     // This ensures the verifier sees tool execution evidence in conversationHistory
     if (processedToolResults.length > 0) {
-      // For each result, use "[No output]" if the content is empty and not an error
-      const resultsWithPlaceholders = processedToolResults.map((result) => {
+      // For each result, add toolCallId and toolName for proper AI SDK format linking
+      // Also use "[No output]" if the content is empty and not an error
+      const resultsWithPlaceholders = processedToolResults.map((result, i) => {
+        const toolCall = toolCallsArray[i]
         const contentText = result.content?.map((c) => c.text).join("").trim() || ""
+        const baseResult = {
+          ...result,
+          // Link this result to its originating tool call
+          toolCallId: toolCall?.toolCallId || result.toolCallId,
+          toolName: toolCall?.name || result.toolName || 'unknown',
+        }
         if (!result.isError && contentText.length === 0) {
           return {
-            ...result,
+            ...baseResult,
             content: [{ type: "text" as const, text: "[No output]" }],
           }
         }
-        return result
+        return baseResult
       })
 
       // Format tool results with tool name prefix for better context preservation
       // Format: [toolName] content... or [toolName] ERROR: content...
       const toolResultsText = resultsWithPlaceholders
-        .map((result, i) => {
-          const toolName = toolCallsArray[i]?.name || 'unknown'
+        .map((result) => {
+          const toolName = result.toolName || 'unknown'
           const content = result.content.map((c) => c.text).join("\n")
           const prefix = result.isError ? `[${toolName}] ERROR: ` : `[${toolName}] `
           return `${prefix}${content}`
@@ -2430,6 +2525,50 @@ Return ONLY JSON per schema.`,
         isComplete: false,
         conversationHistory: formatConversationForProgress(conversationHistory),
       })
+    }
+
+    // If respond_to_user was called during this tool batch, deliver the response immediately
+    // and stop iterating — BUT only when respond_to_user is acting as the FINAL response,
+    // not as a mid-task acknowledgment ("Got it, I'll look into that!") alongside work tools.
+    //
+    // Rule: break early only when every tool in this batch was a response/completion tool.
+    // If the LLM also called a real work tool in the same batch it is providing an
+    // acknowledgment while kicking off work — keep iterating so that work can finish.
+    //
+    // Important: only check the session store when respond_to_user/speak_to_user was actually
+    // called in THIS batch. The store is session-wide, so a value from a previous iteration
+    // (e.g. a mid-task acknowledgment) could linger and cause a later mark_work_complete-only
+    // batch to finalize with a stale response.
+    const RESPONSE_OR_COMPLETION_TOOLS = new Set([
+      RESPOND_TO_USER_TOOL,
+      `${BUILTIN_SERVER_NAME}:speak_to_user`, // deprecated alias that sets the same store
+      MARK_WORK_COMPLETE_TOOL,
+    ])
+    const respondToUserCalledInBatch = toolCallsArray.some(
+      (tc) => tc.name === RESPOND_TO_USER_TOOL || tc.name === `${BUILTIN_SERVER_NAME}:speak_to_user`
+    )
+    const userResponseSetAfterTools = respondToUserCalledInBatch
+      ? getSessionUserResponse(currentSessionId)
+      : undefined
+    if (userResponseSetAfterTools?.trim().length) {
+      const hasWorkToolsInBatch = toolCallsArray.some((tc) => !RESPONSE_OR_COMPLETION_TOOLS.has(tc.name))
+
+      if (!hasWorkToolsInBatch) {
+        // All tools in this batch were response/completion tools — this is the final response.
+        finalContent = userResponseSetAfterTools
+        addMessage("assistant", finalContent)
+        emit({
+          currentIteration: iteration,
+          maxIterations,
+          steps: progressSteps.slice(-3),
+          isComplete: true,
+          finalContent,
+          conversationHistory: formatConversationForProgress(conversationHistory),
+        })
+        break
+      }
+      // Otherwise: respond_to_user was an intermediate acknowledgment alongside work tools.
+      // Do NOT break — continue the loop so the remaining work can be completed.
     }
 
     // Generate step summary after tool execution (if dual-model enabled)
@@ -2464,6 +2603,8 @@ Return ONLY JSON per schema.`,
         if (result.isError) {
           // Get the tool name from toolCallsArray by index
           const toolName = toolCallsArray[i]?.name || "unknown"
+          // Do not count policy-blocked calls (unknown/excluded) as tool failures.
+          if (blockedToolNames.has(toolName)) continue
           const currentCount = toolFailureCount.get(toolName) || 0
           toolFailureCount.set(toolName, currentCount + 1)
 
@@ -2506,22 +2647,9 @@ Return ONLY JSON per schema.`,
         }
       }
 
-      // Add clean error summary to conversation history for LLM context
-      const errorSummary = failedTools
-        .map((toolName, idx) => {
-          const failedResult = toolResults.filter((r) => r.isError)[idx]
-          const rawError = failedResult?.content.map((c) => c.text).join(" ") || "Unknown error"
-          const cleanedError = cleanErrorMessage(rawError)
-          const failureCount = toolFailureCount.get(toolName) || 1
-          return `TOOL FAILED: ${toolName} (attempt ${failureCount}/${MAX_TOOL_FAILURES})\nError: ${cleanedError}`
-        })
-        .join("\n\n")
-
-      conversationHistory.push({
-        role: "tool",
-        content: errorSummary,
-        timestamp: Date.now(),
-      })
+      // Skip adding a separate error summary - the error info is already in the tool results
+      // Adding a separate tool message with no matching toolCallId breaks the AI SDK schema
+      // which requires tool results to have corresponding tool calls in the previous message
     }
 
     // Check if agent indicated completion after executing tools.
@@ -2535,7 +2663,14 @@ Return ONLY JSON per schema.`,
       const hasMinimalContent = lastAssistantContent.trim().length < 50
 
       // Skip summary generation if respond_to_user already provided a response (#1084)
-      const existingUserResponse = getSessionUserResponse(currentSessionId)
+      // Only use the stored response if respond_to_user/speak_to_user was called in THIS batch,
+      // not from a stale value left over from a previous iteration's mid-task acknowledgment.
+      const respondToUserInCompletionBatch = toolCallsArray.some(
+        (tc) => tc.name === RESPOND_TO_USER_TOOL || tc.name === `${BUILTIN_SERVER_NAME}:speak_to_user`
+      )
+      const existingUserResponse = respondToUserInCompletionBatch
+        ? getSessionUserResponse(currentSessionId)
+        : undefined
       let respondToUserAlreadyInHistory = false
       if (existingUserResponse?.trim().length) {
         finalContent = existingUserResponse
@@ -2910,6 +3045,11 @@ async function makeLLMCall(
   onStreamingUpdate?: StreamingCallback,
   sessionId?: string,
   tools?: MCPTool[],
+  /**
+   * Full known tool set for stable tool-name restoration.
+   * In agent mode this should be `uniqueAvailableTools` (not the active subset).
+   */
+  allToolsForNameMap?: MCPTool[],
 ): Promise<LLMToolCallResponse> {
   const chatProviderId = config.mcpToolsProviderId
 
@@ -2983,7 +3123,14 @@ async function makeLLMCall(
       // Wrap in try/finally to ensure streaming is cleaned up even if the call fails
       let result: LLMToolCallResponse
       try {
-        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
+        result = await makeLLMCallWithFetch(
+          messages,
+          chatProviderId,
+          onRetryProgress,
+          sessionId,
+          tools,
+          allToolsForNameMap,
+        )
       } finally {
         // Signal streaming to stop IMMEDIATELY
         streamingAborted = true
@@ -3026,7 +3173,15 @@ async function makeLLMCall(
     }
 
     // Non-streaming path
-    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
+
+    const result = await makeLLMCallWithFetch(
+      messages,
+      chatProviderId,
+      onRetryProgress,
+      sessionId,
+      tools,
+      allToolsForNameMap,
+    )
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

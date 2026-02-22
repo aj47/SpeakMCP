@@ -377,6 +377,64 @@ describe('LLM Fetch with AI SDK', () => {
     expect(result.toolCalls![0].arguments).toEqual({ url: 'https://example.com' })
   })
 
+  it('should restore proxy_-prefixed tool names using the full tool registry even when not in the active subset', async () => {
+    const { generateText } = await import('ai')
+    const generateTextMock = vi.mocked(generateText)
+
+    generateTextMock.mockResolvedValue({
+      text: 'Navigating to the page.',
+      finishReason: 'tool-calls',
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toolCalls: [
+        {
+          toolName: 'proxy_playwright__COLON__browser_navigate',
+          input: { url: 'https://example.com' },
+          toolCallId: 'call_proxy_1',
+        },
+      ],
+    } as any)
+
+    const { makeLLMCallWithFetch } = await import('./llm-fetch')
+
+    // Simulate agent mode where the active tool subset doesn't include the tool the model called,
+    // but we still have it in the full known tool list for name restoration.
+    const activeTools = [
+      {
+        name: 'some_other_tool',
+        description: 'Some other tool',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]
+
+    const allToolsForNameMap = [
+      ...activeTools,
+      {
+        name: 'playwright:browser_navigate',
+        description: 'Navigate to a URL',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+        },
+      },
+    ]
+
+    const result = await makeLLMCallWithFetch(
+      [{ role: 'user', content: 'go to example.com' }],
+      'openai',
+      undefined,
+      undefined,
+      activeTools,
+      allToolsForNameMap,
+    )
+
+    expect(result.toolCalls).toBeDefined()
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls![0].name).toBe('playwright:browser_navigate')
+    expect(result.toolCalls![0].arguments).toEqual({ url: 'https://example.com' })
+  })
+
   it('should not incorrectly restore tool names with double underscores that are not from sanitization', async () => {
     const { generateText } = await import('ai')
     const generateTextMock = vi.mocked(generateText)
@@ -763,5 +821,193 @@ describe('LLM Fetch with AI SDK', () => {
 
     isRegisteredSpy.mockRestore()
     shouldStopSpy.mockRestore()
+  })
+
+  it('should strip tool parts from messages before calling streamText', async () => {
+    const { streamText } = await import('ai')
+    const streamTextMock = vi.mocked(streamText)
+
+    // Mock streamText to return an async iterable
+    const mockTextStream = (async function* () {
+      yield 'Hello '
+      yield 'world'
+    })()
+
+    streamTextMock.mockReturnValue({
+      textStream: mockTextStream,
+    } as any)
+
+    const { makeLLMCallWithStreaming } = await import('./llm-fetch')
+
+    // Messages with tool calls and tool results
+    const messagesWithTools: any[] = [
+      { role: 'user', content: 'Do something' },
+      {
+        role: 'assistant',
+        content: 'I will search for that',
+        toolCalls: [
+          { name: 'search', arguments: { query: 'test' }, toolCallId: 'call_1' },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        toolResults: [
+          {
+            toolCallId: 'call_1',
+            toolName: 'search',
+            content: 'Found results',
+            success: true,
+          },
+        ],
+      },
+    ]
+
+    const chunks: string[] = []
+    await makeLLMCallWithStreaming(
+      messagesWithTools,
+      (chunk) => chunks.push(chunk),
+      'openai'
+    )
+
+    // Verify streamText was called
+    expect(streamTextMock).toHaveBeenCalled()
+
+    // Get the messages argument passed to streamText
+    const callArgs = streamTextMock.mock.calls[0][0]
+    const passedMessages = callArgs.messages
+    expect(passedMessages).toBeDefined()
+    const messages = passedMessages as any[]
+
+    // Verify that tool parts were stripped
+    // Should have user, assistant (without toolCalls), and user (converted from tool)
+    expect(messages.length).toBeGreaterThan(0)
+
+    // Check that no tool-role messages exist
+    const hasToolRole = messages.some((msg: any) => msg.role === 'tool')
+    expect(hasToolRole).toBe(false)
+
+    // Check that assistant message doesn't have toolCalls
+    const assistantMsg = messages.find((msg: any) => msg.role === 'assistant')
+    expect(assistantMsg).toBeDefined()
+    const assistant = assistantMsg as any
+
+    // Content should be a string, not an array with tool-call parts
+    expect(typeof assistant.content).toBe('string')
+    // Should not have tool-call parts
+    if (Array.isArray(assistant.content)) {
+      const hasToolCallParts = assistant.content.some(
+        (part: any) => part.type === 'tool-call'
+      )
+      expect(hasToolCallParts).toBe(false)
+    }
+
+    // Verify streaming worked
+    expect(chunks).toEqual(['Hello ', 'world'])
+  })
+
+  it('should convert tool results to user message text in streaming', async () => {
+    const { streamText } = await import('ai')
+    const streamTextMock = vi.mocked(streamText)
+
+    const mockTextStream = (async function* () {
+      yield 'Response'
+    })()
+
+    streamTextMock.mockReturnValue({
+      textStream: mockTextStream,
+    } as any)
+
+    const { makeLLMCallWithStreaming } = await import('./llm-fetch')
+
+    const messagesWithTools: any[] = [
+      { role: 'user', content: 'Search for something' },
+      {
+        role: 'assistant',
+        content: 'Searching...',
+        toolCalls: [
+          { name: 'search', arguments: { query: 'test' }, toolCallId: 'call_1' },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        toolResults: [
+          {
+            toolCallId: 'call_1',
+            toolName: 'search',
+            content: 'Found 5 results',
+            success: true,
+          },
+        ],
+      },
+    ]
+
+    await makeLLMCallWithStreaming(
+      messagesWithTools,
+      () => {},
+      'openai'
+    )
+
+    const callArgs = streamTextMock.mock.calls[0][0]
+    const passedMessages = callArgs.messages
+    expect(passedMessages).toBeDefined()
+    const messages = passedMessages as any[]
+
+    // Find the user message that was converted from tool message
+    const userMessages = messages.filter((msg: any) => msg.role === 'user')
+
+    // Should have at least 2 user messages: original + converted from tool
+    expect(userMessages.length).toBeGreaterThanOrEqual(2)
+
+    // The last user message should contain the tool result text
+    const lastUserMsg = userMessages[userMessages.length - 1]
+    expect(lastUserMsg.content).toContain('search')
+    expect(lastUserMsg.content).toContain('Found 5 results')
+  })
+
+  it('should use placeholder text when assistant has toolCalls but no content', async () => {
+    const { streamText } = await import('ai')
+    const streamTextMock = vi.mocked(streamText)
+
+    const mockTextStream = (async function* () {
+      yield 'Done'
+    })()
+
+    streamTextMock.mockReturnValue({
+      textStream: mockTextStream,
+    } as any)
+
+    const { makeLLMCallWithStreaming } = await import('./llm-fetch')
+
+    const messagesWithTools: any[] = [
+      { role: 'user', content: 'Do something' },
+      {
+        role: 'assistant',
+        content: '', // Empty content
+        toolCalls: [
+          { name: 'tool_a', arguments: {}, toolCallId: 'call_1' },
+          { name: 'tool_b', arguments: {}, toolCallId: 'call_2' },
+        ],
+      },
+    ]
+
+    await makeLLMCallWithStreaming(
+      messagesWithTools,
+      () => {},
+      'openai'
+    )
+
+    const callArgs = streamTextMock.mock.calls[0][0]
+    const passedMessages = callArgs.messages
+    expect(passedMessages).toBeDefined()
+    const messages = passedMessages as any[]
+
+    const assistantMsg = messages.find((msg: any) => msg.role === 'assistant')
+    expect(assistantMsg).toBeDefined()
+    const assistant = assistantMsg as any
+    expect(assistant.content).toContain('[Calling tools:')
+    expect(assistant.content).toContain('tool_a')
+    expect(assistant.content).toContain('tool_b')
   })
 })

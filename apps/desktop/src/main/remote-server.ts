@@ -1312,6 +1312,40 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
     }
   })
 
+  // GET /v1/conversations/:id/status - Lightweight state check for active sync polling
+  // Returns only updatedAt + messageCount so mobile can cheaply detect changes
+  // without fetching the full conversation payload every 3 seconds.
+  fastify.get("/v1/conversations/:id/status", async (req, reply) => {
+    try {
+      const params = req.params as { id: string }
+      const conversationId = params.id
+
+      if (!conversationId || typeof conversationId !== "string") {
+        return reply.code(400).send({ error: "Missing or invalid conversation ID" })
+      }
+
+      const conversationIdError = getConversationIdValidationError(conversationId)
+      if (conversationIdError) {
+        return reply.code(400).send({ error: conversationIdError })
+      }
+
+      const conversation = await conversationService.loadConversation(conversationId)
+
+      if (!conversation) {
+        return reply.code(404).send({ error: "Conversation not found" })
+      }
+
+      return reply.send({
+        id: conversation.id,
+        updatedAt: conversation.updatedAt,
+        messageCount: conversation.messages.length,
+      })
+    } catch (error: any) {
+      diagnosticsService.logError("remote-server", "Failed to fetch conversation status", error)
+      return reply.code(500).send({ error: error?.message || "Failed to fetch conversation status" })
+    }
+  })
+
   // ============================================
   // Push Notification Endpoints (for mobile app)
   // ============================================

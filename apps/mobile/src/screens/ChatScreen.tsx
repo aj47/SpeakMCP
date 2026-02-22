@@ -32,7 +32,8 @@ import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
-import { SettingsApiClient } from '../lib/settingsApi';
+import { SettingsApiClient, ServerConversationMessage } from '../lib/settingsApi';
+import { ActiveConversationSync, ActiveSyncState, ConversationUpdate } from '../lib/activeConversationSync';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
@@ -664,6 +665,163 @@ export default function ChatScreen({ route, navigation }: any) {
       setMessages([]);
     }
   }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size, config.baseUrl, config.apiKey]);
+
+  // ============================================
+  // Active Conversation Sync - 3-second polling for current conversation
+  // Ensures mobile messages stay in sync with the server (within ~3s).
+  // Uses a lightweight status endpoint to detect changes before fetching full data.
+  // ============================================
+  const activeSyncRef = useRef<ActiveConversationSync | null>(null);
+  const [activeSyncState, setActiveSyncState] = useState<ActiveSyncState | null>(null);
+  // Track whether we're currently in a send() to avoid the active sync from
+  // overwriting messages that are being streamed via SSE.
+  const respondingRef = useRef(false);
+  useEffect(() => { respondingRef.current = responding; }, [responding]);
+  // Track whether the active sync is paused due to responding
+  const activeSyncPausedRef = useRef(false);
+
+  useEffect(() => {
+    const hasServerAuth = !!config.baseUrl && !!config.apiKey;
+    if (!hasServerAuth) return;
+
+    // Create the sync instance once
+    if (!activeSyncRef.current) {
+      const client = new SettingsApiClient(config.baseUrl, config.apiKey);
+      activeSyncRef.current = new ActiveConversationSync(client);
+    } else {
+      // Update client if credentials changed
+      const client = new SettingsApiClient(config.baseUrl, config.apiKey);
+      activeSyncRef.current.updateClient(client);
+    }
+
+    return () => {
+      activeSyncRef.current?.stop();
+    };
+  }, [config.baseUrl, config.apiKey]);
+
+  // Start/stop active sync when session or serverConversationId changes
+  useEffect(() => {
+    const sync = activeSyncRef.current;
+    if (!sync) return;
+
+    const currentSession = sessionStore.getCurrentSession();
+    const serverConversationId = currentSession?.serverConversationId;
+
+    if (!serverConversationId) {
+      sync.stop();
+      setActiveSyncState(null);
+      return;
+    }
+
+    // Don't start sync while responding - the SSE stream handles live updates
+    if (respondingRef.current) {
+      activeSyncPausedRef.current = true;
+      return;
+    }
+    activeSyncPausedRef.current = false;
+
+    // Convert server messages to ChatMessage format for the UI
+    const handleUpdate = (update: ConversationUpdate) => {
+      // Don't apply sync updates while actively streaming a response
+      if (respondingRef.current) return;
+
+      // Don't apply if the session changed since we started syncing
+      if (currentSessionIdRef.current !== sessionStore.currentSessionId) return;
+
+      const convertedMessages: ChatMessage[] = update.messages.map((msg: ServerConversationMessage) => ({
+        role: msg.role,
+        content: msg.content,
+        toolCalls: msg.toolCalls as any,
+        toolResults: msg.toolResults as any,
+      }));
+
+      // Only update if messages actually differ (by count or content of last message)
+      setMessages(currentMessages => {
+        if (currentMessages.length === convertedMessages.length) {
+          // Same count - check if the last message content matches
+          const lastCurrent = currentMessages[currentMessages.length - 1];
+          const lastServer = convertedMessages[convertedMessages.length - 1];
+          if (lastCurrent?.content === lastServer?.content &&
+              lastCurrent?.role === lastServer?.role) {
+            return currentMessages; // No change
+          }
+        }
+        // Mark as synced from server to skip re-persisting
+        skipNextPersistRef.current = true;
+        return convertedMessages;
+      });
+
+      // Also update the session store with the latest messages
+      if (currentSession && update.messages.length > 0) {
+        skipNextPersistRef.current = true;
+      }
+    };
+
+    sync.start(
+      serverConversationId,
+      currentSession?.updatedAt || 0,
+      currentSession?.messages.length || 0,
+      handleUpdate,
+      (state) => setActiveSyncState(state),
+    );
+
+    return () => {
+      sync.stop();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStore.currentSessionId, sessionStore.sessions]);
+
+  // Resume active sync when a response finishes (responding goes from true→false)
+  useEffect(() => {
+    if (!responding && activeSyncPausedRef.current) {
+      activeSyncPausedRef.current = false;
+      const sync = activeSyncRef.current;
+      const currentSession = sessionStore.getCurrentSession();
+      const serverConversationId = currentSession?.serverConversationId;
+
+      if (sync && serverConversationId) {
+        // Force an immediate sync to pick up any changes from the response
+        const handleUpdate = (update: ConversationUpdate) => {
+          if (respondingRef.current) return;
+          if (currentSessionIdRef.current !== sessionStore.currentSessionId) return;
+
+          const convertedMessages: ChatMessage[] = update.messages.map((msg: ServerConversationMessage) => ({
+            role: msg.role,
+            content: msg.content,
+            toolCalls: msg.toolCalls as any,
+            toolResults: msg.toolResults as any,
+          }));
+
+          setMessages(currentMessages => {
+            if (currentMessages.length === convertedMessages.length) {
+              const lastCurrent = currentMessages[currentMessages.length - 1];
+              const lastServer = convertedMessages[convertedMessages.length - 1];
+              if (lastCurrent?.content === lastServer?.content &&
+                  lastCurrent?.role === lastServer?.role) {
+                return currentMessages;
+              }
+            }
+            skipNextPersistRef.current = true;
+            return convertedMessages;
+          });
+        };
+
+        // Update known state with current messages before restarting
+        sync.updateKnownState(
+          currentSession?.updatedAt || 0,
+          messagesRef.current.length,
+        );
+
+        sync.start(
+          serverConversationId,
+          currentSession?.updatedAt || 0,
+          messagesRef.current.length,
+          handleUpdate,
+          (state) => setActiveSyncState(state),
+        );
+      }
+    }
+  }, [responding]);
 
   // Auto-send initialMessage from route params (e.g. from rapid fire mode in SessionListScreen)
   const initialMessageRef = useRef<string | null>(route?.params?.initialMessage ?? null);
@@ -1334,6 +1492,11 @@ export default function ChatScreen({ route, navigation }: any) {
       });
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
+
+      // Update active sync known state so it doesn't re-fetch what we just got
+      if (activeSyncRef.current) {
+        activeSyncRef.current.updateKnownState(Date.now(), messagesRef.current.length);
+      }
 
       // Decrement active request count in the connection manager
       if (requestSessionId) {
@@ -2440,6 +2603,32 @@ export default function ChatScreen({ route, navigation }: any) {
               <Text style={styles.debugText}>{debugInfo}</Text>
             </View>
           )}
+          {/* Active sync status - subtle indicator showing last sync time */}
+          {activeSyncState && activeSyncState.isActive && !responding && (
+            <TouchableOpacity
+              style={styles.syncStatusBar}
+              onPress={() => {
+                activeSyncRef.current?.forceSync();
+              }}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Force sync with server"
+            >
+              <Text style={styles.syncStatusText}>
+                {activeSyncState.lastError
+                  ? `Sync error (tap to retry)`
+                  : activeSyncState.lastUpdateAt
+                    ? `Synced ${Math.round((Date.now() - activeSyncState.lastUpdateAt) / 1000)}s ago`
+                    : 'Syncing...'}
+              </Text>
+              <Text style={[
+                styles.syncStatusDot,
+                activeSyncState.lastError && { color: theme.colors.danger }
+              ]}>
+                {'●'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
         {/* Scroll to bottom button - appears when user scrolls up */}
         {!shouldAutoScroll && (
@@ -2909,6 +3098,26 @@ function createStyles(theme: Theme, screenHeight: number) {
       fontSize: 12,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    syncStatusBar: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      paddingVertical: 4,
+      paddingHorizontal: spacing.md,
+      marginHorizontal: spacing.md,
+      marginBottom: 4,
+    },
+    syncStatusText: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      opacity: 0.7,
+    },
+    syncStatusDot: {
+      fontSize: 8,
+      marginLeft: 4,
+      color: theme.colors.success || theme.colors.primary,
+      opacity: 0.7,
     },
     connectionBanner: {
       paddingHorizontal: spacing.md,

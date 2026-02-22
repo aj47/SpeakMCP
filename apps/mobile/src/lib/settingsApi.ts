@@ -162,6 +162,13 @@ export interface UpdateConversationRequest {
   updatedAt?: number;
 }
 
+// Lightweight status for active conversation polling
+export interface ConversationStatus {
+  id: string;
+  updatedAt: number;
+  messageCount: number;
+}
+
 export interface SettingsUpdate {
   // MCP Tools Model Configuration
   mcpToolsProviderId?: 'openai' | 'groq' | 'gemini';
@@ -342,6 +349,11 @@ export class SettingsApiClient {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  // Lightweight status check - returns only updatedAt + messageCount (no message payload)
+  async getConversationStatus(id: string): Promise<ConversationStatus> {
+    return this.request<ConversationStatus>(`/conversations/${encodeURIComponent(id)}/status`);
   }
 }
 

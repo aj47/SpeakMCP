@@ -735,14 +735,15 @@ export default function ChatScreen({ route, navigation }: any) {
         toolResults: msg.toolResults as any,
       }));
 
-      // Only update if messages actually differ (by count or content of last message)
+      // Only update if messages actually differ (check all messages, not just the last)
       setMessages(currentMessages => {
         if (currentMessages.length === convertedMessages.length) {
-          // Same count - check if the last message content matches
-          const lastCurrent = currentMessages[currentMessages.length - 1];
-          const lastServer = convertedMessages[convertedMessages.length - 1];
-          if (lastCurrent?.content === lastServer?.content &&
-              lastCurrent?.role === lastServer?.role) {
+          // Same count - check if all messages match (detects edits to any message)
+          const allMatch = currentMessages.every((msg, i) =>
+            msg.role === convertedMessages[i].role &&
+            msg.content === convertedMessages[i].content
+          );
+          if (allMatch) {
             return currentMessages; // No change
           }
         }
@@ -751,9 +752,10 @@ export default function ChatScreen({ route, navigation }: any) {
         return convertedMessages;
       });
 
-      // Also update the session store with the latest messages
+      // Persist synced messages to the session store so they survive app restart.
+      // skipNextPersistRef prevents the setMessages effect from double-persisting.
       if (currentSession && update.messages.length > 0) {
-        skipNextPersistRef.current = true;
+        void sessionStore.setMessagesForSession(currentSession.id, convertedMessages);
       }
     };
 
@@ -769,7 +771,7 @@ export default function ChatScreen({ route, navigation }: any) {
       sync.stop();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStore.currentSessionId, sessionStore.sessions]);
+  }, [sessionStore.currentSessionId, sessionStore.sessions, responding]);
 
   // Resume active sync when a response finishes (responding goes from true→false)
   useEffect(() => {
@@ -794,16 +796,22 @@ export default function ChatScreen({ route, navigation }: any) {
 
           setMessages(currentMessages => {
             if (currentMessages.length === convertedMessages.length) {
-              const lastCurrent = currentMessages[currentMessages.length - 1];
-              const lastServer = convertedMessages[convertedMessages.length - 1];
-              if (lastCurrent?.content === lastServer?.content &&
-                  lastCurrent?.role === lastServer?.role) {
+              const allMatch = currentMessages.every((msg, i) =>
+                msg.role === convertedMessages[i].role &&
+                msg.content === convertedMessages[i].content
+              );
+              if (allMatch) {
                 return currentMessages;
               }
             }
             skipNextPersistRef.current = true;
             return convertedMessages;
           });
+
+          // Persist synced messages to the session store so they survive app restart
+          if (currentSession && update.messages.length > 0) {
+            void sessionStore.setMessagesForSession(currentSession.id, convertedMessages);
+          }
         };
 
         // Update known state with current messages before restarting
@@ -821,6 +829,7 @@ export default function ChatScreen({ route, navigation }: any) {
         );
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [responding]);
 
   // Auto-send initialMessage from route params (e.g. from rapid fire mode in SessionListScreen)
@@ -1493,9 +1502,13 @@ export default function ChatScreen({ route, navigation }: any) {
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
 
-      // Update active sync known state so it doesn't re-fetch what we just got
+      // Update active sync known message count so it doesn't re-fetch what we just got.
+      // Only update messageCount — don't set updatedAt to local Date.now() because
+      // clock skew between mobile and server could mask future server updates.
+      // The status check will still detect changes via the server's own updatedAt.
       if (activeSyncRef.current) {
-        activeSyncRef.current.updateKnownState(Date.now(), messagesRef.current.length);
+        const syncState = activeSyncRef.current.getKnownState();
+        activeSyncRef.current.updateKnownState(syncState.updatedAt, messagesRef.current.length);
       }
 
       // Decrement active request count in the connection manager

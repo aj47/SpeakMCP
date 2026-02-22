@@ -161,6 +161,14 @@ export class ActiveConversationSync {
   }
 
   /**
+   * Get the current known server state (for callers that need to
+   * update only part of the known state without introducing clock skew).
+   */
+  getKnownState(): { updatedAt: number; messageCount: number } {
+    return { updatedAt: this.knownUpdatedAt, messageCount: this.knownMessageCount };
+  }
+
+  /**
    * Get current sync state.
    */
   getState(): ActiveSyncState {
@@ -218,10 +226,21 @@ export class ActiveConversationSync {
   }
 
   private async fetchAndDeliver(): Promise<void> {
-    if (!this.conversationId || !this.onUpdate) return;
+    // Snapshot conversation ID and callback before the async operation
+    // so we can discard stale results if the user switches conversations mid-fetch
+    const targetConversationId = this.conversationId;
+    const targetOnUpdate = this.onUpdate;
+
+    if (!targetConversationId || !targetOnUpdate) return;
 
     try {
-      const fullConv = await this.client.getConversation(this.conversationId);
+      const fullConv = await this.client.getConversation(targetConversationId);
+
+      // Discard if the active conversation changed while we were fetching
+      if (this.conversationId !== targetConversationId) {
+        console.log('[ActiveConversationSync] Discarding stale fetch result for', targetConversationId);
+        return;
+      }
 
       // Update known state
       this.knownUpdatedAt = fullConv.updatedAt;
@@ -232,17 +251,30 @@ export class ActiveConversationSync {
         lastUpdateAt: Date.now(),
       });
 
-      // Deliver to caller
-      this.onUpdate({
-        conversationId: fullConv.id,
-        messages: fullConv.messages,
-        title: fullConv.title,
-        updatedAt: fullConv.updatedAt,
-        messageCount: fullConv.messages.length,
-      });
+      // Deliver to caller (re-check in case stop() was called during await)
+      if (this.onUpdate) {
+        this.onUpdate({
+          conversationId: fullConv.id,
+          messages: fullConv.messages,
+          title: fullConv.title,
+          updatedAt: fullConv.updatedAt,
+          messageCount: fullConv.messages.length,
+        });
+      }
     } catch (err: any) {
+      const errorCount = this.state.errorCount + 1;
+      this.updateState({
+        ...this.state,
+        errorCount,
+        lastError: `Fetch failed: ${err.message || 'Unknown error'}`,
+      });
       console.error('[ActiveConversationSync] Failed to fetch full conversation:', err.message);
-      // Don't update knownState on fetch failure - we'll retry next poll
+
+      // Full-fetch errors also count toward the 5-error stop threshold
+      if (errorCount >= 5) {
+        console.warn('[ActiveConversationSync] Too many fetch errors, stopping polling');
+        this.stop();
+      }
     }
   }
 

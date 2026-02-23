@@ -54,18 +54,8 @@ export function PredefinedPromptsMenu({
     queryKey: ["skills"],
     queryFn: () => tipcClient.getSkills(),
   })
-  const profileQuery = useQuery({
-    queryKey: ["current-profile"],
-    queryFn: () => tipcClient.getCurrentProfile(),
-  })
-  const profileId = profileQuery.data?.id
-  const enabledSkillIdsQuery = useQuery({
-    queryKey: ["enabled-skill-ids", profileId],
-    queryFn: () => tipcClient.getEnabledSkillIdsForProfile({ profileId: profileId! }),
-    enabled: !!profileId,
-  })
   const enabledSkills = (skillsQuery.data ?? []).filter(
-    (skill) => skill.enabled && (enabledSkillIdsQuery.data ?? []).includes(skill.id)
+    (skill) => skill.enabled
   )
 
   const handleSelectPrompt = (prompt: PredefinedPrompt) => {

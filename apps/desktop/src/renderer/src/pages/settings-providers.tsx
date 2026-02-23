@@ -19,7 +19,7 @@ import { Config, ModelPreset } from "@shared/types"
 import { ModelPresetManager } from "@renderer/components/model-preset-manager"
 import { ProviderModelSelector } from "@renderer/components/model-selector"
 import { PresetModelSelector } from "@renderer/components/preset-model-selector"
-import { ProfileBadgeCompact } from "@renderer/components/profile-badge"
+
 import { Mic, Bot, Volume2, FileText, CheckCircle2, ChevronDown, ChevronRight, Brain, Zap, BookOpen, Settings2, Cpu, Download, Loader2 } from "lucide-react"
 
 import {
@@ -963,8 +963,8 @@ export function Component() {
           />
 
           <ProviderSelector
-            label={<span className="flex items-center gap-1.5">Agent/MCP Tools <ProfileBadgeCompact /></span>}
-            tooltip="Choose which provider to use for agent mode and MCP tool calling. This setting is saved per-profile."
+            label="Agent/MCP Tools"
+            tooltip="Choose which provider to use for agent mode and MCP tool calling."
             value={configQuery.data.mcpToolsProviderId || "openai"}
             onChange={(value) => saveConfig({ mcpToolsProviderId: value as CHAT_PROVIDER_ID })}
             providers={CHAT_PROVIDERS}

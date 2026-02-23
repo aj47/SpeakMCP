@@ -1,6 +1,7 @@
 import { app } from "electron"
 import path from "path"
 import fs from "fs"
+import os from "os"
 import { Config, ModelPreset } from "@shared/types"
 import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 
@@ -21,7 +22,12 @@ export const conversationsFolder = path.join(dataFolder, "conversations")
 
 export const configPath = path.join(dataFolder, "config.json")
 
-export const globalAgentsFolder = path.join(dataFolder, ".agents")
+// Global agents folder: ~/.agents — the canonical, shareable location for all agent config.
+// Everything lives here so it's easy to version-control, share, or distribute as a profile pack.
+export const globalAgentsFolder = path.join(os.homedir(), ".agents")
+
+// Legacy location (app-data/.agents) — used only for one-time migration.
+const legacyAppDataAgentsFolder = path.join(dataFolder, ".agents")
 
 const legacyBackupsFolder = path.join(dataFolder, ".backups")
 
@@ -70,16 +76,73 @@ function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
 }
 
 export function resolveWorkspaceAgentsFolder(): string | null {
+  const globalResolved = path.resolve(globalAgentsFolder)
+
   const envWorkspaceRoot = process.env.SPEAKMCP_WORKSPACE_DIR
   if (envWorkspaceRoot && envWorkspaceRoot.trim()) {
     const resolvedRoot = path.isAbsolute(envWorkspaceRoot)
       ? envWorkspaceRoot
       : path.resolve(process.cwd(), envWorkspaceRoot)
-    return path.join(resolvedRoot, ".agents")
+    const candidate = path.join(resolvedRoot, ".agents")
+    // Don't return the same directory as the global layer
+    if (path.resolve(candidate) === globalResolved) return null
+    return candidate
   }
 
   // Safe-by-default: only treat a directory as a workspace if a `.agents` folder already exists.
-  return findAgentsDirUpward(process.cwd())
+  const found = findAgentsDirUpward(process.cwd())
+  if (!found) return null
+  // Don't return the same directory as the global layer
+  if (path.resolve(found) === globalResolved) return null
+  return found
+}
+
+/**
+ * One-time migration: copy files from the old app-data/.agents location to ~/.agents.
+ * Only copies files that don't already exist at the destination.
+ * Skills are intentionally skipped — ~/.agents/skills already has user-authored skills.
+ */
+function migrateAgentsFolderToHome(): void {
+  if (!fs.existsSync(legacyAppDataAgentsFolder)) return
+
+  const copyIfMissing = (src: string, dst: string) => {
+    try {
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.mkdirSync(path.dirname(dst), { recursive: true })
+        fs.copyFileSync(src, dst)
+      }
+    } catch {
+      // best-effort
+    }
+  }
+
+  // Top-level config files
+  for (const file of ["speakmcp-settings.json", "mcp.json", "models.json", "system-prompt.md", "agents.md"]) {
+    copyIfMissing(
+      path.join(legacyAppDataAgentsFolder, file),
+      path.join(globalAgentsFolder, file),
+    )
+  }
+
+  // layouts/ui.json
+  copyIfMissing(
+    path.join(legacyAppDataAgentsFolder, "layouts", "ui.json"),
+    path.join(globalAgentsFolder, "layouts", "ui.json"),
+  )
+
+  // memories/ — copy individual .md files
+  const srcMemories = path.join(legacyAppDataAgentsFolder, "memories")
+  const dstMemories = path.join(globalAgentsFolder, "memories")
+  try {
+    if (fs.existsSync(srcMemories) && fs.statSync(srcMemories).isDirectory()) {
+      fs.mkdirSync(dstMemories, { recursive: true })
+      for (const file of fs.readdirSync(srcMemories)) {
+        copyIfMissing(path.join(srcMemories, file), path.join(dstMemories, file))
+      }
+    }
+  } catch {
+    // best-effort
+  }
 }
 
 type LoadedConfig = {
@@ -344,6 +407,13 @@ class ConfigStore {
   config: Config | undefined
 
   constructor() {
+    // One-time migration: move files from old app-data/.agents → ~/.agents
+    try {
+      migrateAgentsFolderToHome()
+    } catch {
+      // best-effort
+    }
+
     const loaded = getConfig()
     // Sync active preset credentials to legacy fields on startup
     this.config = syncPresetToLegacyFields(loaded.config) as Config

@@ -75,7 +75,7 @@ export function SettingsAgents() {
 
   const loadAgents = async () => {
     const all = await tipcClient.getAgentProfiles()
-    setAgents(all.filter(p => !p.isUserProfile))
+    setAgents(all)
   }
   const loadServers = async () => {
     try { const s = await tipcClient.getMcpServerStatus(); setServerStatus(s as Record<string, ServerInfo>) } catch {}

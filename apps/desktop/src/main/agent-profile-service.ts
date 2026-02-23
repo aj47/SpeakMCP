@@ -197,40 +197,17 @@ interface AgentProfileConversationsData {
 }
 
 /**
- * Default built-in profiles.
+ * Default built-in agents.
+ * The "main-agent" is the primary agent that handles all user interactions.
+ * Its guidelines come from `.agents/agents.md` via config.mcpToolsSystemPrompt.
  */
 const DEFAULT_PROFILES: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">[] = [
   {
-    name: "default",
-    displayName: "Default",
-    description: "Default user profile",
+    name: "main-agent",
+    displayName: "Main Agent",
+    description: "The primary agent that handles all user interactions",
+    systemPrompt: "You are a helpful assistant. Answer questions clearly and assist with a wide variety of tasks.",
     guidelines: "",
-    connection: { type: "internal" },
-    role: "user-profile",
-    enabled: true,
-    isBuiltIn: true,
-    isUserProfile: true,
-    isAgentTarget: false,
-    isDefault: true,
-  },
-  {
-    name: "general-assistant",
-    displayName: "General Assistant",
-    description: "Handles general tasks when no specialized agent matches",
-    systemPrompt: "You are a helpful general assistant. Answer questions clearly and assist with a wide variety of tasks.",
-    guidelines: "Be helpful, clear, and concise. If you don't know something, say so.",
-    toolConfig: {
-      enabledServers: [],
-      disabledTools: [],
-      enabledBuiltinTools: [],
-    },
-    modelConfig: {
-      mcpToolsProviderId: "openai",
-      mcpToolsOpenaiModel: "gpt-4o",
-    },
-    skillsConfig: {
-      enabledSkillIds: [],
-    },
     connection: { type: "internal" },
     isStateful: false,
     role: "delegation-target",
@@ -238,6 +215,7 @@ const DEFAULT_PROFILES: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">[] =
     isBuiltIn: true,
     isUserProfile: false,
     isAgentTarget: true,
+    isDefault: true,
   },
 ]
 
@@ -562,12 +540,12 @@ class AgentProfileService {
   }
 
   /**
-   * Set the current active profile.
+   * Set the current active agent profile.
    */
   setCurrentProfile(id: string): void {
     if (!this.profilesData) return
     const profile = this.getById(id)
-    if (profile && (profile.isUserProfile || profile.role === "user-profile")) {
+    if (profile) {
       this.profilesData.currentProfileId = id
       this.saveProfiles()
     }
@@ -917,10 +895,10 @@ class AgentProfileService {
         guidelines: importData.guidelines || "",
         systemPrompt: importData.systemPrompt,
         connection: { type: "internal" },
-        role: "user-profile",
+        role: "delegation-target",
         enabled: true,
-        isUserProfile: true,
-        isAgentTarget: false,
+        isUserProfile: false,
+        isAgentTarget: true,
         toolConfig: {
           disabledServers: allServerNames,
           disabledTools: builtinToolNames,
@@ -1036,7 +1014,7 @@ class AgentProfileService {
   }
 
   /**
-   * Create a user profile with legacy-style parameters.
+   * Create an agent with legacy-style parameters.
    * Used by backward-compatible IPC handlers and builtin tools.
    */
   createUserProfile(name: string, guidelines: string, systemPrompt?: string): AgentProfile {
@@ -1050,10 +1028,10 @@ class AgentProfileService {
       guidelines,
       systemPrompt,
       connection: { type: "internal" },
-      role: "user-profile",
+      role: "delegation-target",
       enabled: true,
-      isUserProfile: true,
-      isAgentTarget: false,
+      isUserProfile: false,
+      isAgentTarget: true,
       toolConfig: {
         disabledServers: allServerNames,
         disabledTools: builtinToolNames,

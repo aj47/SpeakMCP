@@ -43,30 +43,7 @@ export function Component() {
     },
   })
 
-  // Get current profile for per-profile skill enabling
-  const currentProfileQuery = useQuery({
-    queryKey: ["current-profile"],
-    queryFn: async () => {
-      return await tipcClient.getCurrentProfile()
-    },
-  })
-
-  // Get enabled skill IDs for the current profile
-  const enabledSkillIdsQuery = useQuery({
-    queryKey: ["enabled-skill-ids", currentProfileQuery.data?.id],
-    queryFn: async () => {
-      if (!currentProfileQuery.data?.id) return []
-      return await tipcClient.getEnabledSkillIdsForProfile({ profileId: currentProfileQuery.data.id })
-    },
-    enabled: !!currentProfileQuery.data?.id,
-  })
-
   const skills = skillsQuery.data || []
-  const currentProfileId = currentProfileQuery.data?.id
-  const enabledSkillIds = enabledSkillIdsQuery.data || []
-
-  // Check if a skill is enabled for the current profile
-  const isSkillEnabled = (skillId: string) => enabledSkillIds.includes(skillId)
 
   // Listen for skills folder changes from the main process (file watcher)
   useEffect(() => {
@@ -76,7 +53,6 @@ export function Component() {
         const importedSkills = await tipcClient.scanSkillsFolder()
         queryClient.invalidateQueries({ queryKey: ["skills"] })
         if (importedSkills && importedSkills.length > 0) {
-          queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
           toast.success(`Auto-imported ${importedSkills.length} skill(s)`)
         }
       } catch (error) {
@@ -85,7 +61,7 @@ export function Component() {
       }
     })
     return () => unsubscribe()
-  }, [queryClient, currentProfileId])
+  }, [queryClient])
 
   const createSkillMutation = useMutation({
     mutationFn: async ({ name, description, instructions }: { name: string; description: string; instructions: string }) => {
@@ -93,8 +69,6 @@ export function Component() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["skills"] })
-      // Also invalidate enabled-skill-ids since new skills are auto-enabled for current profile
-      queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
       setIsCreateDialogOpen(false)
       resetNewSkillForm()
       toast.success("Skill created successfully")
@@ -132,14 +106,13 @@ export function Component() {
     },
   })
 
-  // Toggle skill for current profile (per-profile enable/disable)
-  const toggleProfileSkillMutation = useMutation({
+  // Toggle skill enabled/disabled globally
+  const toggleSkillMutation = useMutation({
     mutationFn: async (skillId: string) => {
-      if (!currentProfileId) throw new Error("No profile selected")
-      return await tipcClient.toggleProfileSkill({ profileId: currentProfileId, skillId })
+      return await tipcClient.toggleSkill({ id: skillId })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
+      queryClient.invalidateQueries({ queryKey: ["skills"] })
     },
     onError: (error: Error) => {
       toast.error(`Failed to toggle skill: ${error.message}`)
@@ -153,8 +126,6 @@ export function Component() {
     onSuccess: (skill: AgentSkill | null) => {
       if (skill) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
-        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
-        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
         toast.success(`Skill "${skill.name}" imported successfully`)
       }
     },
@@ -171,8 +142,6 @@ export function Component() {
     onSuccess: (skill: AgentSkill | null) => {
       if (skill) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
-        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
-        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
         toast.success(`Skill "${skill.name}" imported successfully`)
       }
     },
@@ -189,10 +158,7 @@ export function Component() {
     onSuccess: (result: { imported: AgentSkill[]; skipped: string[]; errors: Array<{ folder: string; error: string }> } | null) => {
       if (result) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
-        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
-        if (result.imported.length > 0) {
-          queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
-        }
+
         const messages: string[] = []
         if (result.imported.length > 0) {
           messages.push(`Imported ${result.imported.length} skill(s)`)
@@ -245,9 +211,7 @@ export function Component() {
     },
     onSuccess: (importedSkills: AgentSkill[]) => {
       queryClient.invalidateQueries({ queryKey: ["skills"] })
-      // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
       if (importedSkills.length > 0) {
-        queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
         toast.success(`Imported ${importedSkills.length} skill(s) from folder`)
       } else {
         toast.info("No new skills found in folder")
@@ -266,9 +230,7 @@ export function Component() {
     onSuccess: (result) => {
       if (result) {
         queryClient.invalidateQueries({ queryKey: ["skills"] })
-        // Also invalidate enabled-skill-ids since imported skills are auto-enabled for current profile
         if (result.imported.length > 0) {
-          queryClient.invalidateQueries({ queryKey: ["enabled-skill-ids", currentProfileId] })
           toast.success(`Imported ${result.imported.length} skill(s) from GitHub: ${result.imported.map(s => s.name).join(", ")}`)
         } else if (result.errors.length > 0) {
           toast.error(`Failed to import: ${result.errors.join("; ")}`)
@@ -440,9 +402,8 @@ export function Component() {
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <Switch
-                    checked={isSkillEnabled(skill.id)}
-                    onCheckedChange={() => toggleProfileSkillMutation.mutate(skill.id)}
-                    disabled={!currentProfileId}
+                    checked={skill.enabled}
+                    onCheckedChange={() => toggleSkillMutation.mutate(skill.id)}
                   />
                   <span className="font-medium truncate">{skill.name}</span>
                 </div>

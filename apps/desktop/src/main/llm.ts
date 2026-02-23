@@ -147,12 +147,12 @@ export async function processTranscriptWithTools(
 
   const userGuidelines = config.mcpToolsSystemPrompt
   // Load enabled agent skills instructions for non-agent mode too
-  // Use the current profile's skills config
+  // Uses the Main Agent's skills config if available, otherwise globally enabled skills
   const { skillsService } = await import("./skills-service")
   const { agentProfileService } = await import("./agent-profile-service")
-  const currentProfileId = config.mcpCurrentProfileId
-  const enabledSkillIds = currentProfileId
-    ? agentProfileService.getEnabledSkillIdsForProfile(currentProfileId)
+  const mainAgent = agentProfileService.getCurrentProfile()
+  const enabledSkillIds = mainAgent
+    ? agentProfileService.getEnabledSkillIdsForProfile(mainAgent.id)
     : []
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 

@@ -27,6 +27,7 @@ import {
   Loader2,
   AlertCircle,
   FileText,
+  Bot,
   FolderOpen,
   FolderUp,
   Pencil,
@@ -50,15 +51,17 @@ function MemoryCard({
   onEdit,
   isSelected,
   onToggleSelect,
+  agentName,
 }: {
   memory: AgentMemory
   onDelete: (id: string) => void
   onEdit: (memory: AgentMemory) => void
   isSelected: boolean
   onToggleSelect: (id: string) => void
+  agentName?: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
-  
+
   const formattedDate = new Date(memory.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -95,7 +98,7 @@ function MemoryCard({
         <button className="mt-0.5 text-muted-foreground hover:text-foreground">
           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-medium text-sm truncate">{memory.title}</h3>
@@ -103,18 +106,24 @@ function MemoryCard({
               {memory.importance}
             </Badge>
           </div>
-          
+
           <p className="text-xs text-muted-foreground line-clamp-2">{memory.content}</p>
-          
+
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               {formattedDate}
             </span>
+            {agentName && (
+              <span className="flex items-center gap-1 max-w-[150px]">
+                <Bot className="h-3 w-3" />
+                <span className="truncate">{agentName}</span>
+              </span>
+            )}
             {memory.conversationTitle && (
-              <span className="flex items-center gap-1 truncate max-w-[200px]">
+              <span className="flex items-center gap-1 max-w-[200px]">
                 <FileText className="h-3 w-3" />
-                {memory.conversationTitle}
+                <span className="truncate">{memory.conversationTitle}</span>
               </span>
             )}
           </div>
@@ -226,6 +235,13 @@ export function Component() {
     queryFn: async () => {
       return await tipcClient.getMemoriesForCurrentProfile()
     },
+  })
+  const agentProfilesQuery = useQuery({
+    queryKey: ["agentProfiles"],
+    queryFn: async () => {
+      return await tipcClient.getAgentProfiles()
+    },
+    staleTime: Infinity,
   })
 
   const agentsFoldersQuery = useQuery({
@@ -600,16 +616,23 @@ Optional notes go here (saved as userNotes).
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredMemories.map((memory) => (
-              <MemoryCard
-                key={memory.id}
-                memory={memory}
-                onDelete={(id) => setDeleteConfirmId(id)}
-                onEdit={handleEdit}
-                isSelected={selectedIds.has(memory.id)}
-                onToggleSelect={handleToggleSelect}
-              />
-            ))}
+            {filteredMemories.map((memory) => {
+              const agentName = memory.profileId
+                ? agentProfilesQuery.data?.find(p => p.id === memory.profileId)?.displayName || memory.profileId
+                : undefined
+
+              return (
+                <MemoryCard
+                  key={memory.id}
+                  memory={memory}
+                  onDelete={(id) => setDeleteConfirmId(id)}
+                  onEdit={handleEdit}
+                  isSelected={selectedIds.has(memory.id)}
+                  onToggleSelect={handleToggleSelect}
+                  agentName={agentName}
+                />
+              )
+            })}
           </div>
         )}
       </div>

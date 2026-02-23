@@ -734,6 +734,7 @@ export default function ChatScreen({ route, navigation }: any) {
       }));
 
       // Only update if messages actually differ (check all fields including toolCalls/toolResults)
+      let messagesChanged = false;
       setMessages(currentMessages => {
         if (currentMessages.length === convertedMessages.length) {
           const allMatch = currentMessages.every((msg, i) => {
@@ -749,13 +750,16 @@ export default function ChatScreen({ route, navigation }: any) {
         }
         // Mark as synced from server to skip re-persisting
         skipNextPersistRef.current = true;
+        messagesChanged = true;
         return convertedMessages;
       });
 
-      // Persist synced messages to the session store so they survive app restart.
-      // skipNextPersistRef prevents the setMessages effect from double-persisting.
-      // Always persist even if messages.length is 0 (server-side clear should be respected).
-      void sessionStore.setMessagesForSession(sessionId, convertedMessages);
+      // Persist synced messages to the session store only if messages actually changed.
+      // This prevents unnecessary store updates that would regenerate message IDs/timestamps
+      // and create local timestamp drift.
+      if (messagesChanged) {
+        void sessionStore.setMessagesForSession(sessionId, convertedMessages);
+      }
     };
 
     // Use 0 as initialUpdatedAt to avoid clock skew issues - let the first poll
@@ -2377,9 +2381,7 @@ export default function ChatScreen({ route, navigation }: any) {
             const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
             const hasToolExtras = toolCallCount > 0 || toolResultCount > 0;
             const textContent = m.content ? m.content.trim() : '';
-            if (hasToolExtras) {
-              console.log('TOOL MESSAGE CONTENT:', JSON.stringify(textContent));
-            }
+
             const isPureTool = hasToolExtras && (
               m.role === 'tool' ||
               textContent === '' ||
@@ -2685,7 +2687,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 <View style={styles.handsFreeActionButtons}>
                   <TouchableOpacity
                     style={[styles.handsFreeBtn, styles.handsFreeBtnSecondary]}
-                    onPress={handsFreePaused ? () => setHandsFreePaused(false) : pauseHandsFreeTimer}
+                    onPress={handsFreePaused ? scheduleHandsFreeSend : pauseHandsFreeTimer}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.handsFreeBtnTextSecondary}>

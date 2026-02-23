@@ -190,9 +190,11 @@ export async function processTranscriptWithTools(
   const skillsIndex = extractSkillsIndexForMinimalPrompt(skillsInstructions)
 
   // Load memories for context (works independently of dual-model summarization)
-  // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
+  // Only load if both memoriesEnabled and injectMemories are true
   let relevantMemories: AgentMemory[] = []
-  if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
+  const memoriesEnabled = mainAgent?.memoryConfig?.memoriesEnabled !== false
+  const injectMemories = mainAgent?.memoryConfig?.injectMemories === true
+  if (memoriesEnabled && injectMemories) {
     const allMemories = await memoryService.getAllMemories()
     // Sort by importance first (critical > high > medium > low), then by recency, before capping
     const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
@@ -666,7 +668,9 @@ export async function processTranscriptWithAgentMode(
 
         // Auto-save all summaries if enabled (no importance threshold)
         // Associate memory with the session's profile for profile-scoped memories
-        if (config.memoriesEnabled !== false && config.dualModelAutoSaveImportant) {
+        const memoriesEnabled = effectiveProfileSnapshot?.memoryConfig?.memoriesEnabled !== false
+        const autoSaveImportant = effectiveProfileSnapshot?.memoryConfig?.autoSaveImportant === true
+        if (memoriesEnabled && autoSaveImportant) {
           const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
 	          const memory = memoryService.createMemoryFromSummary(
             summary,
@@ -830,9 +834,11 @@ export async function processTranscriptWithAgentMode(
 
   // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
-  // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
+  // Only load if both memoriesEnabled and injectMemories are true
   let relevantMemories: AgentMemory[] = []
-  if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
+  const memoriesEnabledAgent = effectiveProfileSnapshot?.memoryConfig?.memoriesEnabled !== false
+  const injectMemoriesAgent = effectiveProfileSnapshot?.memoryConfig?.injectMemories === true
+  if (memoriesEnabledAgent && injectMemoriesAgent) {
     const allMemories = await memoryService.getAllMemories()
     // Sort by importance first (critical > high > medium > low), then by recency, before capping
     const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }

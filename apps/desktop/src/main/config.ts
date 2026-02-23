@@ -307,11 +307,6 @@ const getConfig = (): LoadedConfig => {
     dualModelEnabled: false,
     dualModelSummarizationFrequency: "every_response",
     dualModelSummaryDetailLevel: "compact",
-    dualModelAutoSaveImportant: false,
-    dualModelInjectMemories: false,
-
-    // Memory System defaults - enabled by default for backwards compatibility
-    memoriesEnabled: true,
 
     // ACP Tool Injection - when true, injects SpeakMCP builtin tools into ACP agent sessions
     // This allows ACP agents to use delegation, settings management, etc.

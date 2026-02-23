@@ -43,6 +43,14 @@ export function Component() {
     },
   })
 
+  const agentsFoldersQuery = useQuery({
+    queryKey: ["agentsFolders"],
+    queryFn: async () => {
+      return await tipcClient.getAgentsFolders()
+    },
+    staleTime: Infinity,
+  })
+
   const skills = skillsQuery.data || []
 
   // Listen for skills folder changes from the main process (file watcher)
@@ -203,6 +211,28 @@ export function Component() {
     mutationFn: async () => {
       return await tipcClient.openSkillsFolder()
     },
+    onSuccess: (result) => {
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to open skills folder")
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to open skills folder: ${error.message}`)
+    },
+  })
+
+  const openWorkspaceSkillsFolderMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.openWorkspaceSkillsFolder()
+    },
+    onSuccess: (result) => {
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to open workspace skills folder")
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to open workspace skills folder: ${error.message}`)
+    },
   })
 
   const scanSkillsFolderMutation = useMutation({
@@ -297,6 +327,17 @@ export function Component() {
     setIsEditDialogOpen(true)
   }
 
+  const skillsFileTemplate = `---
+kind: skill
+id: my-skill
+name: My Skill
+description: A short description
+enabled: true
+---
+
+Write your skill instructions here.
+`
+
   return (
     <div className="modern-panel h-full min-w-0 overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="min-w-0 space-y-6">
@@ -315,6 +356,16 @@ export function Component() {
             >
               <FolderOpen className="h-3 w-3" />
               Open Folder
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => openWorkspaceSkillsFolderMutation.mutate()}
+              disabled={!agentsFoldersQuery.data?.workspace?.skillsDir || openWorkspaceSkillsFolderMutation.isPending}
+            >
+              <FolderUp className="h-3 w-3" />
+              Workspace
             </Button>
             <Button
               variant="outline"
@@ -374,8 +425,35 @@ export function Component() {
             Skills are specialized instructions that improve AI performance on specific tasks.
             Enable skills to include their instructions in the system prompt.
           </p>
-
         </div>
+
+        <details className="rounded-lg border bg-card">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+            Modular config (.agents) file template
+          </summary>
+          <div className="px-4 pb-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              You can hand-author skills in <span className="font-mono">.agents/skills/&lt;id&gt;/skill.md</span>. Frontmatter
+              uses simple <span className="font-mono">key: value</span> lines (not YAML). If a workspace <span className="font-mono">.agents</span>
+              folder exists, it can override the global layer by skill <span className="font-mono">id</span>.
+            </p>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">
+                Global: <span className="font-mono break-all">{agentsFoldersQuery.data?.global?.skillsDir ?? "~/.agents/skills"}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Workspace:{" "}
+                <span className="font-mono break-all">
+                  {agentsFoldersQuery.data?.workspace?.skillsDir ?? "Not detected"}
+                  {agentsFoldersQuery.data?.workspace?.skillsDir && agentsFoldersQuery.data?.workspaceSource
+                    ? ` (${agentsFoldersQuery.data.workspaceSource})`
+                    : ""}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">{skillsFileTemplate}</div>
+          </div>
+        </details>
 
         {/* Skills List */}
         <div className="space-y-1">

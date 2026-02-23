@@ -1811,19 +1811,7 @@ export function Component() {
                         </SelectContent>
                       </Select>
                     </Control>
-                    <Control
-                      label={
-                        <ControlLabel
-                          label="Auto-save Important"
-                          tooltip="Automatically save high and critical importance summaries to memory"
-                        />
-                      }
-                    >
-                      <Switch
-                        checked={config.dualModelAutoSaveImportant ?? false}
-                        onCheckedChange={(checked) => saveConfig({ dualModelAutoSaveImportant: checked })}
-                      />
-                    </Control>
+
                   </div>
                 </>
               )}

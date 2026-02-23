@@ -58,39 +58,39 @@ export function Component() {
     staleTime: Infinity, // Only check once per session
   })
 
-	const agentsFoldersQuery = useQuery({
-		queryKey: ["agentsFolders"],
-		queryFn: async () => {
-			return await tipcClient.getAgentsFolders()
-		},
-		staleTime: Infinity,
-	})
+  const agentsFoldersQuery = useQuery({
+    queryKey: ["agentsFolders"],
+    queryFn: async () => {
+      return tipcClient.getAgentsFolders()
+    },
+    staleTime: Infinity,
+  })
 
   const isLangfuseInstalled = langfuseInstalledQuery.data ?? true // Default to true while loading
 
-	const openGlobalAgentsFolder = useCallback(async () => {
-		try {
-			const result = await tipcClient.openAgentsFolder()
-			if (!result?.success) {
-				toast.error(result?.error || "Failed to open global .agents folder")
-			}
-		} catch (error) {
-			console.error("Failed to open global .agents folder:", error)
-			toast.error("Failed to open global .agents folder")
-		}
-	}, [])
+  const openGlobalAgentsFolder = useCallback(async () => {
+    try {
+      const result = await tipcClient.openAgentsFolder()
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to open global .agents folder")
+      }
+    } catch (error) {
+      console.error("Failed to open global .agents folder:", error)
+      toast.error("Failed to open global .agents folder")
+    }
+  }, [])
 
-	const openWorkspaceAgentsFolder = useCallback(async () => {
-		try {
-			const result = await tipcClient.openWorkspaceAgentsFolder()
-			if (!result?.success) {
-				toast.error(result?.error || "Failed to open workspace .agents folder")
-			}
-		} catch (error) {
-			console.error("Failed to open workspace .agents folder:", error)
-			toast.error("Failed to open workspace .agents folder")
-		}
-	}, [])
+  const openWorkspaceAgentsFolder = useCallback(async () => {
+    try {
+      const result = await tipcClient.openWorkspaceAgentsFolder()
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to open workspace .agents folder")
+      }
+    } catch (error) {
+      console.error("Failed to open workspace .agents folder:", error)
+      toast.error("Failed to open workspace .agents folder")
+    }
+  }, [])
 
   const saveConfig = useCallback(
     (config: Partial<Config>) => {
@@ -201,68 +201,63 @@ export function Component() {
           )}
         </ControlGroup>
 
-				<ControlGroup
-					title="Modular config (.agents)"
-					endDescription={
-						<div>
-							Workspace overlay is enabled when a <span className="font-mono">.agents</span> folder exists in your workspace
-							(or when <span className="font-mono">SPEAKMCP_WORKSPACE_DIR</span> is set).
-						</div>
-					}
-				>
-					<div className="px-3 py-2 text-sm text-muted-foreground">
-						Advanced configuration can be stored as files in <span className="font-mono">.agents</span>. Skills live in{" "}
-						<span className="font-mono">skills/&lt;id&gt;/skill.md</span> and memories in{" "}
-						<span className="font-mono">memories/&lt;id&gt;.md</span>. Frontmatter uses simple{" "}
-						<span className="font-mono">key: value</span> lines (not YAML).
-					</div>
-					<Control label="Global folder" className="px-3">
-						<div className="text-right font-mono text-xs text-muted-foreground break-all">
-							{agentsFoldersQuery.data?.global?.agentsDir ?? "Loading..."}
-						</div>
-					</Control>
-					<Control
-						label={
-							<ControlLabel
-								label="Workspace folder"
-								tooltip="Optional overlay layer. When present, it overrides the global .agents layer."
-							/>
-						}
-						className="px-3"
-					>
-						<div className="text-right font-mono text-xs text-muted-foreground break-all">
-							{agentsFoldersQuery.isLoading
-								? "Loading..."
-								: agentsFoldersQuery.data?.workspace?.agentsDir ?? "Not detected"}
-							{agentsFoldersQuery.data?.workspace?.agentsDir && agentsFoldersQuery.data?.workspaceSource
-								? ` (${agentsFoldersQuery.data.workspaceSource})`
-								: ""}
-						</div>
-					</Control>
-					<Control label="Open" className="px-3">
-						<div className="flex flex-wrap justify-end gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								className="gap-1.5"
-								onClick={openGlobalAgentsFolder}
-							>
-								<FolderOpen className="h-3 w-3" />
-								Open Global
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								className="gap-1.5"
-								onClick={openWorkspaceAgentsFolder}
-								disabled={!agentsFoldersQuery.data?.workspace?.agentsDir}
-							>
-								<FolderUp className="h-3 w-3" />
-								Open Workspace
-							</Button>
-						</div>
-					</Control>
-				</ControlGroup>
+        <ControlGroup
+          title="Modular config (.agents)"
+          endDescription={
+            <div>
+              Workspace overlay is enabled when a <span className="font-mono">.agents</span> folder exists in your workspace
+              (or when <span className="font-mono">SPEAKMCP_WORKSPACE_DIR</span> is set).
+            </div>
+          }
+        >
+          <div className="px-3 py-2 text-sm text-muted-foreground">
+            Advanced configuration can be stored as files in <span className="font-mono">.agents</span>. Skills live in{" "}
+            <span className="font-mono">skills/&lt;id&gt;/skill.md</span> and memories in{" "}
+            <span className="font-mono">memories/&lt;id&gt;.md</span>. Frontmatter uses simple{" "}
+            <span className="font-mono">key: value</span> lines (not YAML).
+          </div>
+          <Control label="Global folder" className="px-3">
+            <div className="text-right font-mono text-xs text-muted-foreground break-all">
+              {agentsFoldersQuery.data?.global?.agentsDir ?? "Loading..."}
+            </div>
+          </Control>
+          <Control
+            label={
+              <ControlLabel
+                label="Workspace folder"
+                tooltip="Optional overlay layer. When present, it overrides the global .agents layer."
+              />
+            }
+            className="px-3"
+          >
+            <div className="text-right font-mono text-xs text-muted-foreground break-all">
+              {agentsFoldersQuery.isLoading
+                ? "Loading..."
+                : agentsFoldersQuery.data?.workspace?.agentsDir ?? "Not detected"}
+              {agentsFoldersQuery.data?.workspace?.agentsDir && agentsFoldersQuery.data?.workspaceSource
+                ? ` (${agentsFoldersQuery.data.workspaceSource})`
+                : ""}
+            </div>
+          </Control>
+          <Control label="Open" className="px-3">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={openGlobalAgentsFolder}>
+                <FolderOpen className="h-3 w-3" />
+                Open Global
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={openWorkspaceAgentsFolder}
+                disabled={!agentsFoldersQuery.data?.workspace?.agentsDir}
+              >
+                <FolderUp className="h-3 w-3" />
+                Open Workspace
+              </Button>
+            </div>
+          </Control>
+        </ControlGroup>
 
         <ControlGroup title="Appearance">
           <Control label="Theme" className="px-3">
@@ -991,21 +986,7 @@ export function Component() {
             />
           </Control>
 
-          <Control label={<ControlLabel label="Enable Memory System" tooltip="When disabled, all memory features are turned off: the save_memory tool, memory injection, auto-save, and the Memories page." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.memoriesEnabled !== false}
-              onCheckedChange={(value) => saveConfig({ memoriesEnabled: value })}
-            />
-          </Control>
 
-          {configQuery.data?.memoriesEnabled !== false && (
-            <Control label={<ControlLabel label="Inject Memories" tooltip="Include saved memories in agent context. Memories will be added to the system prompt." />} className="px-3 pl-6">
-              <Switch
-                checked={configQuery.data?.dualModelInjectMemories ?? false}
-                onCheckedChange={(value) => saveConfig({ dualModelInjectMemories: value })}
-              />
-            </Control>
-          )}
 
           <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer. Disabled when Unlimited Iterations is enabled." />} className="px-3">
             <Input

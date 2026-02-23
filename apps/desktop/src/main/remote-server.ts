@@ -1057,10 +1057,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         mcpMessageQueueEnabled: cfg.mcpMessageQueueEnabled ?? true,
         mcpVerifyCompletionEnabled: cfg.mcpVerifyCompletionEnabled ?? true,
         mcpFinalSummaryEnabled: cfg.mcpFinalSummaryEnabled ?? false,
-        memoriesEnabled: cfg.memoriesEnabled ?? true,
-        dualModelInjectMemories: cfg.dualModelInjectMemories ?? false,
         dualModelEnabled: cfg.dualModelEnabled ?? false,
-        dualModelAutoSaveImportant: cfg.dualModelAutoSaveImportant ?? false,
         mcpUnlimitedIterations: cfg.mcpUnlimitedIterations ?? false,
         // Tool Execution
         mcpContextReductionEnabled: cfg.mcpContextReductionEnabled ?? true,
@@ -1180,18 +1177,11 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       if (typeof body.mcpFinalSummaryEnabled === "boolean") {
         updates.mcpFinalSummaryEnabled = body.mcpFinalSummaryEnabled
       }
-      if (typeof body.memoriesEnabled === "boolean") {
-        updates.memoriesEnabled = body.memoriesEnabled
-      }
-      if (typeof body.dualModelInjectMemories === "boolean") {
-        updates.dualModelInjectMemories = body.dualModelInjectMemories
-      }
+
       if (typeof body.dualModelEnabled === "boolean") {
         updates.dualModelEnabled = body.dualModelEnabled
       }
-      if (typeof body.dualModelAutoSaveImportant === "boolean") {
-        updates.dualModelAutoSaveImportant = body.dualModelAutoSaveImportant
-      }
+
       if (typeof body.mcpUnlimitedIterations === "boolean") {
         updates.mcpUnlimitedIterations = body.mcpUnlimitedIterations
       }

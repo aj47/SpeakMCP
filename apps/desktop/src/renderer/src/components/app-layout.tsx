@@ -27,7 +27,6 @@ export const Component = () => {
   const configQuery = useConfigQuery()
 
   const whatsappEnabled = configQuery.data?.whatsappEnabled ?? false
-  const memoriesEnabled = configQuery.data?.memoriesEnabled !== false // default true
 
   const settingsNavLinks: NavLinkItem[] = [
     {
@@ -40,16 +39,11 @@ export const Component = () => {
       href: "/settings/models",
       icon: "i-mingcute-brain-line",
     },
-    // Only show Memories when enabled
-    ...(memoriesEnabled
-      ? [
-          {
-            text: "Memories",
-            href: "/memories",
-            icon: "i-mingcute-book-2-line",
-          },
-        ]
-      : []),
+    {
+      text: "Memories",
+      href: "/memories",
+      icon: "i-mingcute-book-2-line",
+    },
 
     {
       text: "MCP Tools",

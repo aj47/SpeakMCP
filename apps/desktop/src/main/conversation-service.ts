@@ -451,6 +451,64 @@ export class ConversationService {
     }
   }
 
+  /**
+   * Get lightweight status information for a conversation (updatedAt and messageCount).
+   * This is optimized for polling scenarios where only metadata is needed.
+   *
+   * First checks the in-memory index cache (which already contains updatedAt and messageCount).
+   * Only if not found in index, falls back to a lightweight read of just the metadata fields
+   * from the conversation file (not loading all messages).
+   *
+   * @param conversationId - The ID of the conversation
+   * @returns Object with id, updatedAt, and messageCount, or null if not found
+   */
+  async getConversationStatus(conversationId: string): Promise<{ id: string; updatedAt: number; messageCount: number } | null> {
+    try {
+      // First, check the in-memory index cache (fast path)
+      const index = await this.ensureIndexLoaded()
+      const indexItem = index.find((item) => item.id === conversationId)
+
+      if (indexItem) {
+        return {
+          id: indexItem.id,
+          updatedAt: indexItem.updatedAt,
+          messageCount: indexItem.messageCount,
+        }
+      }
+
+      // Fallback: lightweight read of just metadata from the conversation file
+      // This handles the case where the conversation exists but isn't in the index yet
+      const conversationPath = this.getConversationPath(conversationId)
+      let conversationData: string
+      try {
+        conversationData = await fsPromises.readFile(conversationPath, "utf8")
+      } catch {
+        // File doesn't exist
+        return null
+      }
+
+      try {
+        const conversation = JSON.parse(conversationData) as unknown
+        if (!this.isValidConversationShape(conversation)) {
+          return null
+        }
+        const conv = conversation as Conversation
+        return {
+          id: conv.id,
+          updatedAt: conv.updatedAt,
+          messageCount: conv.messages.length,
+        }
+      } catch {
+        // Failed to parse - return null rather than attempting repair
+        // (repair is only done in loadConversationFromDisk for full loads)
+        return null
+      }
+    } catch (error) {
+      logApp("[ConversationService] Error getting conversation status:", error)
+      return null
+    }
+  }
+
   async getConversationHistory(): Promise<ConversationHistoryItem[]> {
     try {
       const index = await this.ensureIndexLoaded()

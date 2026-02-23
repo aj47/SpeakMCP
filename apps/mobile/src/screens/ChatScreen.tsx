@@ -32,7 +32,8 @@ import { useTunnelConnection } from '../store/tunnelConnection';
 import { useProfile } from '../store/profile';
 import { ConnectionStatusIndicator } from '../ui/ConnectionStatusIndicator';
 import { ChatMessage, AgentProgressUpdate } from '../lib/openaiClient';
-import { SettingsApiClient } from '../lib/settingsApi';
+import { SettingsApiClient, ServerConversationMessage } from '../lib/settingsApi';
+import { ActiveConversationSync, ActiveSyncState, ConversationUpdate } from '../lib/activeConversationSync';
 import { RecoveryState, formatConnectionStatus } from '../lib/connectionRecovery';
 import * as Speech from 'expo-speech';
 import {
@@ -40,6 +41,7 @@ import {
   shouldCollapseMessage,
   formatToolArguments,
   getToolResultsSummary,
+  COLLAPSED_LINES,
 } from '@speakmcp/shared';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useTheme } from '../ui/ThemeProvider';
@@ -300,28 +302,6 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={toggleHandsFree}
-            accessibilityRole="button"
-            accessibilityLabel={`Toggle hands-free (currently ${handsFree ? 'on' : 'off'})`}
-            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
-          >
-            <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 18 }}>🎙️</Text>
-              {!handsFree && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    width: 20,
-                    height: 2,
-                    backgroundColor: theme.colors.danger,
-                    transform: [{ rotate: '45deg' }],
-                    borderRadius: 1,
-                  }}
-                />
-              )}
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             accessibilityRole="button"
             accessibilityLabel="Settings"
@@ -362,6 +342,9 @@ export default function ChatScreen({ route, navigation }: any) {
 		listeningRef.current = v;
 		setListening(v);
 	}, []);
+  const [handsFreeCountdown, setHandsFreeCountdown] = useState<number | null>(null);
+  const [handsFreePaused, setHandsFreePaused] = useState(false);
+  const handsFreeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [sttPreview, setSttPreview] = useState('');
   const sttPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -665,6 +648,141 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   }, [sessionStore.currentSessionId, sessionStore, sessionStore.deletingSessionIds.size, config.baseUrl, config.apiKey]);
 
+  // ============================================
+  // Active Conversation Sync - 3-second polling for current conversation
+  // Ensures mobile messages stay in sync with the server (within ~3s).
+  // Uses a lightweight status endpoint to detect changes before fetching full data.
+  // ============================================
+  const activeSyncRef = useRef<ActiveConversationSync | null>(null);
+  const [activeSyncState, setActiveSyncState] = useState<ActiveSyncState | null>(null);
+  // Track whether we're currently in a send() to avoid the active sync from
+  // overwriting messages that are being streamed via SSE.
+  const respondingRef = useRef(false);
+  useEffect(() => { respondingRef.current = responding; }, [responding]);
+  // Track whether the active sync is paused due to responding
+  const activeSyncPausedRef = useRef(false);
+
+  useEffect(() => {
+    const hasServerAuth = !!config.baseUrl && !!config.apiKey;
+    if (!hasServerAuth) return;
+
+    // Create the sync instance once
+    if (!activeSyncRef.current) {
+      const client = new SettingsApiClient(config.baseUrl, config.apiKey);
+      activeSyncRef.current = new ActiveConversationSync(client);
+    } else {
+      // Update client if credentials changed
+      const client = new SettingsApiClient(config.baseUrl, config.apiKey);
+      activeSyncRef.current.updateClient(client);
+    }
+
+    return () => {
+      activeSyncRef.current?.stop();
+    };
+  }, [config.baseUrl, config.apiKey]);
+
+  // Memoize serverConversationId to avoid re-triggering effect on every session update.
+  // This prevents stop/start churn when handleUpdate calls setMessagesForSession.
+  const currentSession = sessionStore.getCurrentSession();
+  const serverConversationIdRef = useRef<string | undefined>(currentSession?.serverConversationId);
+  useEffect(() => {
+    serverConversationIdRef.current = currentSession?.serverConversationId;
+  }, [currentSession?.serverConversationId]);
+
+  // Start/stop active sync when session or serverConversationId changes.
+  // Note: We only depend on currentSessionId and serverConversationId (via currentSession),
+  // NOT on sessionStore.sessions, to avoid stop/start churn when messages update.
+  useEffect(() => {
+    const sync = activeSyncRef.current;
+    if (!sync) return;
+
+    const session = sessionStore.getCurrentSession();
+    const serverConversationId = session?.serverConversationId;
+
+    if (!serverConversationId) {
+      sync.stop();
+      setActiveSyncState(null);
+      return;
+    }
+
+    // Don't start sync while responding - the SSE stream handles live updates.
+    // Also stop any existing sync to prevent it from polling during SSE streaming.
+    if (respondingRef.current) {
+      activeSyncPausedRef.current = true;
+      sync.stop();
+      setActiveSyncState(null);
+      return;
+    }
+    activeSyncPausedRef.current = false;
+
+    // Capture session id for closure to avoid stale references
+    const sessionId = session.id;
+
+    // Convert server messages to ChatMessage format for the UI
+    const handleUpdate = (update: ConversationUpdate) => {
+      // Don't apply sync updates while actively streaming a response
+      if (respondingRef.current) return;
+
+      // Don't apply if the session changed since we started syncing
+      if (currentSessionIdRef.current !== sessionId) return;
+
+      const convertedMessages: ChatMessage[] = update.messages.map((msg: ServerConversationMessage) => ({
+        role: msg.role,
+        content: msg.content,
+        toolCalls: msg.toolCalls as any,
+        toolResults: msg.toolResults as any,
+      }));
+
+      // Only update if messages actually differ (check all fields including toolCalls/toolResults)
+      let messagesChanged = false;
+      setMessages(currentMessages => {
+        if (currentMessages.length === convertedMessages.length) {
+          const allMatch = currentMessages.every((msg, i) => {
+            const server = convertedMessages[i];
+            return msg.role === server.role &&
+              msg.content === server.content &&
+              JSON.stringify(msg.toolCalls) === JSON.stringify(server.toolCalls) &&
+              JSON.stringify(msg.toolResults) === JSON.stringify(server.toolResults);
+          });
+          if (allMatch) {
+            return currentMessages; // No change
+          }
+        }
+        // Mark as synced from server to skip re-persisting
+        skipNextPersistRef.current = true;
+        messagesChanged = true;
+        return convertedMessages;
+      });
+
+      // Persist synced messages to the session store only if messages actually changed.
+      // This prevents unnecessary store updates that would regenerate message IDs/timestamps
+      // and create local timestamp drift.
+      if (messagesChanged) {
+        void sessionStore.setMessagesForSession(sessionId, convertedMessages);
+      }
+    };
+
+    // Use 0 as initialUpdatedAt to avoid clock skew issues - let the first poll
+    // determine the current server state. The status check uses server timestamps.
+    sync.start(
+      serverConversationId,
+      0, // Always start with 0 to avoid local vs server clock skew
+      messagesRef.current.length,
+      handleUpdate,
+      (state) => setActiveSyncState(state),
+    );
+
+    return () => {
+      sync.stop();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStore.currentSessionId, currentSession?.serverConversationId, responding]);
+
+  // Note: The main sync effect above already handles responding changes since
+  // `responding` is in its dependency array. When responding goes from true→false,
+  // the effect will re-run and restart the sync automatically.
+  // This separate effect is no longer needed and was causing duplicate restarts.
+
   // Auto-send initialMessage from route params (e.g. from rapid fire mode in SessionListScreen)
   const initialMessageRef = useRef<string | null>(route?.params?.initialMessage ?? null);
   const initialMessageSentRef = useRef(false);
@@ -817,7 +935,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const userReleasedButtonRef = useRef(false);
 
-  const handsFreeDebounceMs = 1500;
+  const handsFreeDebounceMs = 5000;
   const handsFreeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingHandsFreeFinalRef = useRef<string>('');
 
@@ -831,12 +949,68 @@ export default function ChatScreen({ route, navigation }: any) {
   useEffect(() => {
     return () => {
       cleanupNativeSubs();
-      if (handsFreeDebounceRef.current) {
-        clearTimeout(handsFreeDebounceRef.current);
-      }
+      if (handsFreeDebounceRef.current) clearTimeout(handsFreeDebounceRef.current);
+      if (handsFreeIntervalRef.current) clearInterval(handsFreeIntervalRef.current);
     };
   }, []);
 
+  const clearHandsFreeTimer = useCallback(() => {
+    if (handsFreeDebounceRef.current) clearTimeout(handsFreeDebounceRef.current);
+    if (handsFreeIntervalRef.current) clearInterval(handsFreeIntervalRef.current);
+    handsFreeDebounceRef.current = null;
+    handsFreeIntervalRef.current = null;
+    setHandsFreeCountdown(null);
+  }, []);
+
+  const pauseHandsFreeTimer = useCallback(() => {
+    clearHandsFreeTimer();
+    setHandsFreePaused(true);
+  }, [clearHandsFreeTimer]);
+
+  const sendHandsFreeEarly = useCallback(() => {
+    clearHandsFreeTimer();
+    setHandsFreePaused(false);
+    const toSend = pendingHandsFreeFinalRef.current.trim();
+    pendingHandsFreeFinalRef.current = '';
+    nativeFinalRef.current = '';
+    webFinalRef.current = '';
+    setLiveTranscriptValue('');
+    if (toSend) {
+      setSttPreviewWithExpiry(toSend);
+      void sendRef.current(toSend);
+    }
+  }, [clearHandsFreeTimer, setLiveTranscriptValue, setSttPreviewWithExpiry]);
+
+  const scheduleHandsFreeSend = useCallback(() => {
+    clearHandsFreeTimer();
+    setHandsFreePaused(false);
+
+    const endTime = Date.now() + handsFreeDebounceMs;
+    setHandsFreeCountdown(handsFreeDebounceMs);
+
+    handsFreeIntervalRef.current = setInterval(() => {
+      const remaining = endTime - Date.now();
+      if (remaining <= 0) {
+        if (handsFreeIntervalRef.current) clearInterval(handsFreeIntervalRef.current);
+        setHandsFreeCountdown(null);
+      } else {
+        setHandsFreeCountdown(remaining);
+      }
+    }, 100);
+
+    handsFreeDebounceRef.current = setTimeout(() => {
+      const toSend = pendingHandsFreeFinalRef.current.trim();
+      pendingHandsFreeFinalRef.current = '';
+      nativeFinalRef.current = '';
+      webFinalRef.current = '';
+      setLiveTranscriptValue('');
+      setHandsFreeCountdown(null);
+      if (toSend) {
+        setSttPreviewWithExpiry(toSend);
+        void sendRef.current(toSend);
+      }
+    }, handsFreeDebounceMs);
+  }, [handsFreeDebounceMs, clearHandsFreeTimer, setLiveTranscriptValue, setSttPreviewWithExpiry]);
 
   const convoRef = useRef<string | undefined>(undefined);
 
@@ -1335,6 +1509,15 @@ export default function ChatScreen({ route, navigation }: any) {
     } finally {
       console.log('[ChatScreen] Chat request finished, requestId:', thisRequestId);
 
+      // Update active sync known message count so it doesn't re-fetch what we just got.
+      // Only update messageCount — don't set updatedAt to local Date.now() because
+      // clock skew between mobile and server could mask future server updates.
+      // The status check will still detect changes via the server's own updatedAt.
+      if (activeSyncRef.current) {
+        const syncState = activeSyncRef.current.getKnownState();
+        activeSyncRef.current.updateKnownState(syncState.updatedAt, messagesRef.current.length);
+      }
+
       // Decrement active request count in the connection manager
       if (requestSessionId) {
         connectionManager.decrementActiveRequests(requestSessionId);
@@ -1723,28 +1906,25 @@ export default function ChatScreen({ route, navigation }: any) {
 					final: finalText?.trim(),
 					handsFree: handsFreeRef.current,
 				});
+        if (handsFreeRef.current) {
+          if (interim && !finalText) {
+            clearHandsFreeTimer();
+            if (handsFreePaused) setHandsFreePaused(false);
+          }
+        }
 	        // Update our running final transcript, then compute a preview that
 	        // includes both final + interim so the overlay shows *all* words.
 	        if (finalText) {
 	          if (handsFreeRef.current) {
-            if (handsFreeDebounceRef.current) {
-              clearTimeout(handsFreeDebounceRef.current);
+            if (handsFreePaused) {
+              setHandsFreePaused(false);
             }
             const final = finalText.trim();
             if (final) {
               pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
                 ? `${pendingHandsFreeFinalRef.current} ${final}`
                 : final;
-              handsFreeDebounceRef.current = setTimeout(() => {
-                const toSend = pendingHandsFreeFinalRef.current.trim();
-                pendingHandsFreeFinalRef.current = '';
-                webFinalRef.current = '';
-	                setLiveTranscriptValue('');
-	                if (toSend) {
-	                  setSttPreviewWithExpiry(toSend);
-	                  void sendRef.current(toSend);
-	                }
-              }, handsFreeDebounceMs);
+              scheduleHandsFreeSend();
             }
           } else {
 	            webFinalRef.current = mergeVoiceText(webFinalRef.current, finalText);
@@ -1770,10 +1950,7 @@ export default function ChatScreen({ route, navigation }: any) {
 					webFinal: webFinalRef.current,
 					live: liveTranscriptRef.current,
 				});
-        if (handsFreeDebounceRef.current) {
-          clearTimeout(handsFreeDebounceRef.current);
-          handsFreeDebounceRef.current = null;
-        }
+        clearHandsFreeTimer();
 
         if (!handsFreeRef.current && !userReleasedButtonRef.current && webRecognitionRef.current) {
 					voiceLog('web:onend -> attempting restart (user still holding)');
@@ -1866,10 +2043,7 @@ export default function ChatScreen({ route, navigation }: any) {
 	      webFinalRef.current = '';
       pendingHandsFreeFinalRef.current = '';
       userReleasedButtonRef.current = false;
-      if (handsFreeDebounceRef.current) {
-        clearTimeout(handsFreeDebounceRef.current);
-        handsFreeDebounceRef.current = null;
-      }
+      clearHandsFreeTimer();
       if (e) startYRef.current = e.nativeEvent.pageY;
 
       if (Platform.OS !== 'web') {
@@ -1889,26 +2063,23 @@ export default function ChatScreen({ route, navigation }: any) {
 								isFinal: event?.isFinal,
 								transcript: t,
 							});
+              if (handsFreeRef.current) {
+                if (!event?.isFinal && t) {
+                  clearHandsFreeTimer();
+                  if (handsFreePaused) setHandsFreePaused(false);
+                }
+              }
 	              if (event?.isFinal && t) {
                 if (handsFreeRef.current) {
-                  if (handsFreeDebounceRef.current) {
-                    clearTimeout(handsFreeDebounceRef.current);
+                  if (handsFreePaused) {
+                    setHandsFreePaused(false);
                   }
                   const final = t.trim();
                   if (final) {
                     pendingHandsFreeFinalRef.current = pendingHandsFreeFinalRef.current
                       ? `${pendingHandsFreeFinalRef.current} ${final}`
                       : final;
-                    handsFreeDebounceRef.current = setTimeout(() => {
-                      const toSend = pendingHandsFreeFinalRef.current.trim();
-                      pendingHandsFreeFinalRef.current = '';
-                      nativeFinalRef.current = '';
-	                          setLiveTranscriptValue('');
-	                          if (toSend) {
-	                            setSttPreviewWithExpiry(toSend);
-	                            void sendRef.current(toSend);
-	                          }
-                    }, handsFreeDebounceMs);
+                    scheduleHandsFreeSend();
                   }
                 } else {
 	                  nativeFinalRef.current = mergeVoiceText(nativeFinalRef.current, t);
@@ -1942,10 +2113,7 @@ export default function ChatScreen({ route, navigation }: any) {
 								nativeFinal: nativeFinalRef.current,
 								live: liveTranscriptRef.current,
 							});
-              if (handsFreeDebounceRef.current) {
-                clearTimeout(handsFreeDebounceRef.current);
-                handsFreeDebounceRef.current = null;
-              }
+              clearHandsFreeTimer();
 
               if (!handsFreeRef.current && !userReleasedButtonRef.current) {
 								voiceLog('native:end -> attempting restart (user still holding)');
@@ -2185,18 +2353,41 @@ export default function ChatScreen({ route, navigation }: any) {
             </View>
           )}
           {messages.map((m, i) => {
-            const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, m.toolResults);
+            // Check if this is a redundant tool message (results handled by preceding assistant msg)
+            const prevMsg = i > 0 ? messages[i - 1] : null;
+            const isRedundantTool = m.role === 'tool' && prevMsg?.role === 'assistant' && (prevMsg.toolCalls?.length ?? 0) > 0;
+            if (isRedundantTool) return null;
+
+            // If assistant has tool calls, pull results from next tool message if present
+            let activeToolResults = m.toolResults;
+            if (m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0 && (!activeToolResults || activeToolResults.length === 0)) {
+              const nextMsg = messages[i + 1];
+              if (nextMsg?.role === 'tool' && nextMsg.toolResults) {
+                activeToolResults = nextMsg.toolResults;
+              }
+            }
+
+            const shouldCollapse = shouldCollapseMessage(m.content, m.toolCalls, activeToolResults);
             // expandedMessages is auto-updated via useEffect to expand the last assistant message
             // and persist the expansion state so it doesn't collapse when new messages arrive
             const isExpanded = expandedMessages[i] ?? false;
 
             const toolCallCount = m.toolCalls?.length ?? 0;
-            const toolResultCount = m.toolResults?.length ?? 0;
+            const toolResultCount = activeToolResults?.length ?? 0;
             const hasToolResults = toolResultCount > 0;
-            const allSuccess = hasToolResults && m.toolResults!.every(r => r.success);
-            const hasErrors = hasToolResults && m.toolResults!.some(r => !r.success);
+            const allSuccess = hasToolResults && activeToolResults!.every(r => r.success);
+            const hasErrors = hasToolResults && activeToolResults!.some(r => !r.success);
             // isPending is true when there are more tool calls than results (including partial completion)
             const isPending = toolCallCount > 0 && toolCallCount > toolResultCount;
+            const hasToolExtras = toolCallCount > 0 || toolResultCount > 0;
+            const textContent = m.content ? m.content.trim() : '';
+
+            const isPureTool = hasToolExtras && (
+              m.role === 'tool' ||
+              textContent === '' ||
+              textContent.startsWith('[') ||
+              (m.role === 'assistant' && textContent.length < 150 && !textContent.includes('\n'))
+            );
 
             return (
               <View
@@ -2204,10 +2395,12 @@ export default function ChatScreen({ route, navigation }: any) {
                 style={[
                   styles.msg,
                   m.role === 'user' ? styles.user : styles.assistant,
+                  isPureTool && styles.msgPureTool,
+                  isPureTool && !isExpanded && styles.msgPureToolCollapsed
                 ]}
               >
                 {/* Compact message header - no role labels, just tap to expand */}
-                {shouldCollapse && (
+                {shouldCollapse && !isPureTool && (
                   <Pressable
                     onPress={() => toggleMessageExpansion(i)}
                     accessibilityRole="button"
@@ -2227,7 +2420,7 @@ export default function ChatScreen({ route, navigation }: any) {
                   </Pressable>
                 )}
 
-                {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !m.toolResults ? (
+                {m.role === 'assistant' && (!m.content || m.content.length === 0) && !m.toolCalls && !activeToolResults ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Image
                       source={isDark ? darkSpinner : lightSpinner}
@@ -2242,12 +2435,12 @@ export default function ChatScreen({ route, navigation }: any) {
                       isExpanded || !shouldCollapse ? (
                         <MarkdownRenderer content={m.content} />
                       ) : (
-                        // Only show collapsed content preview if there are NO tool calls
-                        // Tool calls have their own compact summary row, so don't duplicate
-                        !((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                        // Only show collapsed content preview if it's not purely a tool execution.
+                        // Pure tool calls have their own compact summary row, so don't duplicate.
+                        !isPureTool && (
                           <Text
                             style={{ color: theme.colors.foreground, fontSize: 13, lineHeight: 18 }}
-                            numberOfLines={1}
+                            numberOfLines={COLLAPSED_LINES}
                           >
                             {m.content}
                           </Text>
@@ -2256,10 +2449,10 @@ export default function ChatScreen({ route, navigation }: any) {
                     ) : null}
 
                     {/* Unified Tool Execution Display - show when there are toolCalls OR toolResults */}
-                    {((m.toolCalls?.length ?? 0) > 0 || (m.toolResults?.length ?? 0) > 0) && (
+                    {hasToolExtras && (
                       <>
                         {/* Collapsed view - single line summary for all tools */}
-                        {!isExpanded && (
+                        {(!isExpanded || isPureTool) && (
                           <Pressable
                             onPress={() => toggleMessageExpansion(i)}
                             style={({ pressed }) => [
@@ -2268,6 +2461,7 @@ export default function ChatScreen({ route, navigation }: any) {
                               allSuccess && styles.toolCallCompactSuccess,
                               hasErrors && styles.toolCallCompactError,
                               pressed && styles.toolCallCompactPressed,
+                              isExpanded && { marginBottom: spacing.xs } // add space below when expanded
                             ]}
                           >
                             <Text style={[
@@ -2296,15 +2490,15 @@ export default function ChatScreen({ route, navigation }: any) {
                               {isPending ? '⏳' : allSuccess ? '✓' : '✗'}
                             </Text>
                             {/* Result preview - show truncated result content like desktop */}
-                            {!isPending && m.toolResults && m.toolResults.length > 0 && (
+                            {!isPending && activeToolResults && activeToolResults.length > 0 && !isExpanded && (
                               <Text
                                 style={styles.toolCallCompactPreview}
                                 numberOfLines={1}
                               >
-                                {getToolResultsSummary(m.toolResults)}
+                                {getToolResultsSummary(activeToolResults)}
                               </Text>
                             )}
-                            <Text style={styles.toolCallCompactChevron}>▶</Text>
+                            <Text style={styles.toolCallCompactChevron}>{isExpanded ? '▼' : '▶'}</Text>
                           </Pressable>
                         )}
 
@@ -2317,8 +2511,8 @@ export default function ChatScreen({ route, navigation }: any) {
                             hasErrors && styles.toolExecutionError,
                           ]}>
                             {m.toolCalls?.map((toolCall, idx) => {
-                              const result = m.toolResults?.[idx];
-                              const isResultPending = !result && idx >= (m.toolResults?.length ?? 0);
+                              const result = activeToolResults?.[idx];
+                              const isResultPending = !result && idx >= (activeToolResults?.length ?? 0);
                               // Use message id or fallback to array index to ensure stable, unique keys
                               // that won't collide when m.id is undefined (which is common)
                               const stableMessageKey = m.id ?? String(i);
@@ -2406,7 +2600,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 )}
 
                 {/* Per-message Read Aloud button for assistant messages with content (#1078) */}
-                {m.role === 'assistant' && m.content && m.content.trim().length > 0 && config.ttsEnabled !== false && (
+                {m.role === 'assistant' && !isPureTool && m.content && m.content.trim().length > 0 && config.ttsEnabled !== false && (
                   <TouchableOpacity
                     onPress={() => speakMessage(i, m.content!)}
                     style={[
@@ -2440,6 +2634,32 @@ export default function ChatScreen({ route, navigation }: any) {
               <Text style={styles.debugText}>{debugInfo}</Text>
             </View>
           )}
+          {/* Active sync status - subtle indicator showing last sync time */}
+          {activeSyncState && activeSyncState.isActive && !responding && (
+            <TouchableOpacity
+              style={styles.syncStatusBar}
+              onPress={() => {
+                activeSyncRef.current?.forceSync();
+              }}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Force sync with server"
+            >
+              <Text style={styles.syncStatusText}>
+                {activeSyncState.lastError
+                  ? `Sync error (tap to retry)`
+                  : activeSyncState.lastUpdateAt
+                    ? `Synced ${Math.round((Date.now() - activeSyncState.lastUpdateAt) / 1000)}s ago`
+                    : 'Syncing...'}
+              </Text>
+              <Text style={[
+                styles.syncStatusDot,
+                activeSyncState.lastError && { color: theme.colors.danger }
+              ]}>
+                {'●'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
         {/* Scroll to bottom button - appears when user scrolls up */}
         {!shouldAutoScroll && (
@@ -2458,10 +2678,38 @@ export default function ChatScreen({ route, navigation }: any) {
           </TouchableOpacity>
         )}
 	        {listening && (
-	          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents="none">
-            <Text style={styles.overlayText}>
-              {handsFree ? 'Listening...' : (willCancel ? 'Release to edit' : 'Release to send')}
-            </Text>
+	          <View style={[styles.overlay, { bottom: 72 + insets.bottom }]} pointerEvents={handsFreeCountdown !== null || handsFreePaused ? 'box-none' : 'none'}>
+            {handsFreeCountdown !== null || handsFreePaused ? (
+              <View style={styles.handsFreeActionCard}>
+                <Text style={styles.handsFreeTimerText}>
+                  {handsFreePaused ? 'Paused' : `Sending in ${Math.ceil(handsFreeCountdown! / 1000)}s...`}
+                </Text>
+                <View style={styles.handsFreeActionButtons}>
+                  <TouchableOpacity
+                    style={[styles.handsFreeBtn, styles.handsFreeBtnSecondary]}
+                    onPress={handsFreePaused ? scheduleHandsFreeSend : pauseHandsFreeTimer}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.handsFreeBtnTextSecondary}>
+                      {handsFreePaused ? '\u25b6 Resume' : '\u23f8 Pause'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.handsFreeBtn, styles.handsFreeBtnPrimary]}
+                    onPress={sendHandsFreeEarly}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.handsFreeBtnTextPrimary}>
+                      Send Now
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.overlayText}>
+                {handsFree ? 'Listening...' : (willCancel ? 'Release to edit' : 'Release to send')}
+              </Text>
+            )}
             {!!liveTranscript && (
 	              <Text style={styles.overlayTranscript}>
                 {liveTranscript}
@@ -2666,6 +2914,30 @@ export default function ChatScreen({ route, navigation }: any) {
             >
               <Text style={styles.ttsToggleText}>{ttsEnabled ? '🔊' : '🔇'}</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.ttsToggle, handsFree && styles.ttsToggleOn, handsFree && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + '20' }]}
+              onPress={toggleHandsFree}
+              activeOpacity={0.7}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: handsFree }}
+              accessibilityLabel={`Hands-free (currently ${handsFree ? 'on' : 'off'})`}
+            >
+              <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={styles.ttsToggleText}>🎙️</Text>
+                {!handsFree && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      width: 20,
+                      height: 2,
+                      backgroundColor: theme.colors.danger,
+                      transform: [{ rotate: '45deg' }],
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
 	            {!handsFree && (
 	              <TouchableOpacity
 	                style={[styles.ttsToggle, willCancel && styles.ttsToggleOn]}
@@ -2753,37 +3025,53 @@ export default function ChatScreen({ route, navigation }: any) {
 }
 
 function createStyles(theme: Theme, screenHeight: number) {
-  const micButtonHeight = Math.round(screenHeight * 0.2);
   return StyleSheet.create({
     // Compact desktop-style messages: left-border accent, full width, no bubbles
     msg: {
-      paddingLeft: spacing.xs,
-      paddingVertical: 2,
-      marginBottom: 0,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
       width: '100%',
+      borderRadius: radius.md,
+    },
+    msgPureTool: {
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    msgPureToolCollapsed: {
+      marginBottom: 0,
     },
     user: {
-      // User messages: subtle left border accent
-      borderLeftWidth: 2,
-      borderLeftColor: hexToRgba(theme.colors.info, 0.4),
-      paddingLeft: spacing.xs,
+      // User messages: nice primary tint with border
+      backgroundColor: hexToRgba(theme.colors.primary, 0.03),
+      borderLeftWidth: 3,
+      borderLeftColor: theme.colors.primary,
     },
     assistant: {
-      // Assistant messages: subtle left-border accent like desktop
-      borderLeftWidth: 2,
-      borderLeftColor: hexToRgba(theme.colors.mutedForeground, 0.3),
-      paddingLeft: spacing.xs,
+      // Assistant messages: modern card style
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      shadowColor: '#000',
+      shadowOpacity: theme.isDark ? 0.3 : 0.05,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: theme.isDark ? 3 : 1,
     },
     messageHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: 2,
-      marginBottom: 1,
-      paddingVertical: 1,
-      marginHorizontal: -1,
-      paddingHorizontal: 1,
-      borderRadius: radius.sm,
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.05),
+      borderRadius: radius.md,
+      marginBottom: spacing.xs,
+      minHeight: 44,
     },
     messageHeaderClickable: {
       // Visual hint that header is clickable
@@ -2793,13 +3081,13 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     expandButton: {
       marginLeft: 'auto',
-      paddingHorizontal: 2,
-      paddingVertical: 1,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     expandButtonText: {
-      fontSize: 8,
+      fontSize: 14,
       color: theme.colors.primary,
-      fontWeight: '500',
+      fontWeight: '600',
     },
 
     inputArea: {
@@ -2845,34 +3133,35 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     mic: {
       width: '100%' as any,
-      height: micButtonHeight,
-      borderRadius: radius.xl,
-      borderWidth: 1.5,
+      height: 56,
+      borderRadius: radius.full,
+      borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.card,
       alignItems: 'center',
       justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
     },
     micOn: {
       backgroundColor: theme.colors.primary,
       borderColor: theme.colors.primary,
     },
     micText: {
-      fontSize: 32,
+      fontSize: 24,
     },
     micLabel: {
-      fontSize: 13,
+      fontSize: 14,
       color: theme.colors.mutedForeground,
-      marginTop: 4,
       fontWeight: '600',
     },
     micLabelOn: {
       color: theme.colors.primaryForeground,
     },
     ttsToggle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.muted,
@@ -2884,18 +3173,20 @@ function createStyles(theme: Theme, screenHeight: number) {
       borderColor: theme.colors.primary,
     },
     ttsToggleText: {
-      fontSize: 14,
+      fontSize: 18,
     },
     sendButton: {
       backgroundColor: theme.colors.primary,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.full,
+      minHeight: 44,
+      justifyContent: 'center',
     },
     sendButtonText: {
       color: theme.colors.primaryForeground,
       fontWeight: '600',
-      fontSize: 13,
+      fontSize: 14,
     },
     debugInfo: {
       backgroundColor: theme.colors.muted,
@@ -2909,6 +3200,26 @@ function createStyles(theme: Theme, screenHeight: number) {
       fontSize: 12,
       color: theme.colors.mutedForeground,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    syncStatusBar: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      paddingVertical: 4,
+      paddingHorizontal: spacing.md,
+      marginHorizontal: spacing.md,
+      marginBottom: 4,
+    },
+    syncStatusText: {
+      fontSize: 11,
+      color: theme.colors.mutedForeground,
+      opacity: 0.7,
+    },
+    syncStatusDot: {
+      fontSize: 8,
+      marginLeft: 4,
+      color: theme.colors.success || theme.colors.primary,
+      opacity: 0.7,
     },
     connectionBanner: {
       paddingHorizontal: spacing.md,
@@ -3006,6 +3317,57 @@ function createStyles(theme: Theme, screenHeight: number) {
       borderRadius: radius.lg,
       maxWidth: '90%',
     },
+    handsFreeActionCard: {
+      backgroundColor: theme.colors.background,
+      borderRadius: radius.xl,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 8,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      width: '85%',
+    },
+    handsFreeTimerText: {
+      ...theme.typography.h2,
+      color: theme.colors.foreground,
+      marginBottom: spacing.md,
+      fontWeight: 'bold',
+    },
+    handsFreeActionButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      width: '100%',
+      gap: spacing.sm,
+    },
+    handsFreeBtn: {
+      flex: 1,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    handsFreeBtnPrimary: {
+      backgroundColor: theme.colors.primary,
+    },
+    handsFreeBtnSecondary: {
+      backgroundColor: theme.colors.muted,
+    },
+    handsFreeBtnTextPrimary: {
+      ...theme.typography.label,
+      color: theme.colors.primaryForeground,
+      fontWeight: '600',
+    },
+    handsFreeBtnTextSecondary: {
+      ...theme.typography.label,
+      color: theme.colors.foreground,
+      fontWeight: '600',
+    },
     // Unified Tool Execution Card styles - compact left-accent design matching desktop
     toolExecutionCard: {
       marginTop: 2,
@@ -3030,10 +3392,11 @@ function createStyles(theme: Theme, screenHeight: number) {
     toolCallCompactRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 2,
-      paddingHorizontal: 3,
-      borderRadius: radius.sm,
-      gap: 3,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.md,
+      gap: spacing.xs,
+      minHeight: 36,
     },
     toolCallCompactPending: {
       backgroundColor: hexToRgba(theme.colors.info, 0.05),
@@ -3048,7 +3411,7 @@ function createStyles(theme: Theme, screenHeight: number) {
       opacity: 0.7,
     },
     toolCallCompactIcon: {
-      fontSize: 8,
+      fontSize: 12,
     },
     toolCallCompactIconPending: {
       // uses default
@@ -3061,7 +3424,7 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     toolCallCompactName: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: '500',
       flexShrink: 1,
     },
@@ -3075,7 +3438,7 @@ function createStyles(theme: Theme, screenHeight: number) {
       color: theme.colors.mutedForeground,
     },
     toolCallCompactStatus: {
-      fontSize: 9,
+      fontSize: 11,
       marginLeft: 1,
     },
     toolCallCompactStatusPending: {
@@ -3088,13 +3451,13 @@ function createStyles(theme: Theme, screenHeight: number) {
       color: theme.colors.mutedForeground,
     },
     toolCallCompactChevron: {
-      fontSize: 8,
+      fontSize: 12,
       color: theme.colors.mutedForeground,
       opacity: 0.4,
       marginLeft: 'auto',
     },
     toolCallCompactPreview: {
-      fontSize: 9,
+      fontSize: 11,
       color: theme.colors.mutedForeground,
       opacity: 0.6,
       flex: 1,
@@ -3127,26 +3490,30 @@ function createStyles(theme: Theme, screenHeight: number) {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       fontWeight: '600',
       color: theme.colors.primary,
-      fontSize: 10,
+      fontSize: 12,
       flex: 1,
     },
     toolCallHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.05),
+      borderRadius: radius.sm,
       marginBottom: spacing.xs,
+      minHeight: 44,
     },
     toolCallHeaderPressed: {
       opacity: 0.7,
     },
     toolCallExpandHint: {
-      fontSize: 9,
+      fontSize: 11,
       color: theme.colors.mutedForeground,
       fontWeight: '500',
     },
     toolSectionLabel: {
-      fontSize: 8,
+      fontSize: 10,
       fontWeight: '600',
       color: theme.colors.mutedForeground,
       marginBottom: 2,
@@ -3165,10 +3532,10 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     toolParamsCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.muted,
-      padding: 3,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     toolResponseSection: {
@@ -3185,14 +3552,14 @@ function createStyles(theme: Theme, screenHeight: number) {
       // No background - let parent handle it
     },
     toolResponseSectionTitle: {
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: '600',
       color: theme.colors.mutedForeground,
       marginBottom: 2,
       opacity: 0.7,
     },
     toolResponsePendingText: {
-      fontSize: 9,
+      fontSize: 11,
       fontStyle: 'italic',
       color: theme.colors.mutedForeground,
       textAlign: 'center',
@@ -3208,16 +3575,16 @@ function createStyles(theme: Theme, screenHeight: number) {
       marginBottom: 1,
     },
     toolResultCharCount: {
-      fontSize: 8,
+      fontSize: 10,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       color: theme.colors.mutedForeground,
       opacity: 0.6,
     },
     toolResultBadge: {
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: '600',
-      paddingHorizontal: 4,
-      paddingVertical: 1,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 2,
       borderRadius: radius.sm,
     },
     toolResultBadgeSuccess: {
@@ -3240,44 +3607,48 @@ function createStyles(theme: Theme, screenHeight: number) {
     },
     toolResultCode: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.foreground,
       backgroundColor: theme.colors.muted,
-      padding: 3,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     toolResultErrorSection: {
       marginTop: 1,
     },
     toolResultErrorLabel: {
-      fontSize: 8,
+      fontSize: 10,
       fontWeight: '500',
       color: theme.colors.destructive,
       marginBottom: 1,
     },
     toolResultErrorText: {
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.destructive,
       backgroundColor: hexToRgba(theme.colors.destructive, 0.06),
-      padding: 3,
+      padding: spacing.xs,
       borderRadius: radius.sm,
     },
     // Per-message TTS button styles (#1078)
     speakButton: {
       alignSelf: 'flex-start',
-      paddingHorizontal: spacing.xs,
-      paddingVertical: 2,
-      marginTop: 4,
-      borderRadius: radius.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginTop: spacing.sm,
+      borderRadius: radius.full,
+      minHeight: 36,
       backgroundColor: hexToRgba(theme.colors.mutedForeground, 0.1),
     } as const,
     speakButtonActive: {
       backgroundColor: hexToRgba(theme.colors.primary, 0.15),
     } as const,
     speakButtonText: {
-      fontSize: 12,
+      fontSize: 14,
       color: theme.colors.mutedForeground,
+      fontWeight: '500',
     } as const,
     speakButtonTextActive: {
       color: theme.colors.primary,

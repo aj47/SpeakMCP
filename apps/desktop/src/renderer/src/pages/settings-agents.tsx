@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@renderer/components/ui/tabs"
-import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2 } from "lucide-react"
+import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight } from "lucide-react"
 import { Facehash } from "facehash"
 
 // Curated palette of vivid colors to pick from deterministically
@@ -84,9 +84,14 @@ export function SettingsAgents() {
   const [skills, setSkills] = useState<AgentSkill[]>([])
   const [newPropKey, setNewPropKey] = useState("")
   const [newPropValue, setNewPropValue] = useState("")
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false)
+  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("")
   const avatarFileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadAgents() }, [])
+  useEffect(() => {
+    loadAgents()
+    tipcClient.getDefaultSystemPrompt().then(setDefaultSystemPrompt).catch(console.error)
+  }, [])
   useEffect(() => { if (editing) { loadServers(); loadSkills() } }, [!!editing])
 
   const loadAgents = async () => {
@@ -430,16 +435,33 @@ export function SettingsAgents() {
                   </p>
                 </div>
                 <div className="space-y-2 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="systemPrompt">Base System Prompt (Advanced)</Label>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setEditing({ ...editing, systemPrompt: "" })} disabled={!editing.systemPrompt}>
-                      Reset to Default
-                    </Button>
+                  <div
+                    className="flex items-center gap-2 cursor-pointer select-none"
+                    onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+                  >
+                    {showSystemPrompt ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                    <Label className="cursor-pointer font-semibold">Base System Prompt (Advanced)</Label>
                   </div>
-                  <Textarea id="systemPrompt" value={editing.systemPrompt} onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })} rows={4} placeholder="Leave empty to use the default tool-calling system prompt..." className="font-mono text-sm" />
-                  <p className="text-xs text-muted-foreground text-amber-600 dark:text-amber-500">
-                    Not recommended to change. This replaces the core tool-calling instructions. Leave empty to use the default.
-                  </p>
+
+                  {showSystemPrompt && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground text-amber-600 dark:text-amber-500">
+                          Not recommended to change. This replaces the core tool-calling instructions. Leave empty to use the default.
+                        </p>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setEditing({ ...editing, systemPrompt: "" })} disabled={!editing.systemPrompt}>
+                          Reset to Default
+                        </Button>
+                      </div>
+                      <Textarea
+                        id="systemPrompt"
+                        value={editing.systemPrompt || defaultSystemPrompt}
+                        onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })}
+                        rows={12}
+                        className={`font-mono text-xs resize-y min-h-[180px] max-h-[500px] ${!editing.systemPrompt ? "text-muted-foreground" : ""}`}
+                      />
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             )}

@@ -329,6 +329,7 @@ export function useSessions(): SessionStore {
       timestamp: now + idx,
       toolCalls: m.toolCalls,
       toolResults: m.toolResults,
+      images: m.images,
     }));
 
     const firstUserMsg = messages.find(m => m.role === 'user');
@@ -379,6 +380,7 @@ export function useSessions(): SessionStore {
       timestamp: now + idx,
       toolCalls: m.toolCalls,
       toolResults: m.toolResults,
+      images: m.images,
     }));
 
     const firstUserMsg = messages.find(m => m.role === 'user');

@@ -37,6 +37,8 @@ export type LLMMessageLike = {
   content: string
   toolCalls?: ToolCallLike[]
   toolResults?: ToolResultLike[]
+  /** Base64-encoded images to include as visual content */
+  images?: Array<{ base64: string; mimeType: string }>
 }
 
 export type ConvertMessagesOptions = {
@@ -286,7 +288,20 @@ export function convertMessagesToAISDK(
     }
 
     if (role === "user") {
-      coreMessages.push({ role: "user", content: msg.content })
+      const llmMsg = msg as LLMMessageLike
+      if (llmMsg.images && llmMsg.images.length > 0) {
+        // Build multimodal content with text + images for vision-capable models
+        const parts: Array<TextPart | { type: "image"; image: string; mimeType?: string }> = []
+        if (msg.content?.trim()) {
+          parts.push({ type: "text" as const, text: msg.content })
+        }
+        for (const img of llmMsg.images) {
+          parts.push({ type: "image" as const, image: img.base64, mimeType: img.mimeType })
+        }
+        coreMessages.push({ role: "user", content: parts } as any)
+      } else {
+        coreMessages.push({ role: "user", content: msg.content })
+      }
       continue
     }
 
@@ -366,6 +381,18 @@ export function convertMessagesToAISDK(
       // Keep any orphan tool results as user-visible context rather than tool parts.
       if (orphanTexts.length > 0) {
         coreMessages.push({ role: "user", content: orphanTexts.join("\n") })
+      }
+
+      // If tool message has images, inject a user message with them so vision-capable
+      // models can see the visual content returned by the tool.
+      if (llmMsg.images && llmMsg.images.length > 0) {
+        const imageParts: Array<TextPart | { type: "image"; image: string; mimeType?: string }> = [
+          { type: "text" as const, text: "Tool returned the following image(s):" },
+        ]
+        for (const img of llmMsg.images) {
+          imageParts.push({ type: "image" as const, image: img.base64, mimeType: img.mimeType })
+        }
+        coreMessages.push({ role: "user", content: imageParts } as any)
       }
 
       // If all pending tool calls are resolved, clear the batch.

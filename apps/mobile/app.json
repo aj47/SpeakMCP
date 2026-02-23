@@ -19,7 +19,9 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app uses the microphone for voice input.",
         "NSSpeechRecognitionUsageDescription": "This app uses speech recognition to transcribe your voice.",
-        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for configuration.",
+        "NSCameraUsageDescription": "This app uses the camera to take photos for conversations.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to attach images to conversations.",
+        "NSPhotoLibraryAddUsageDescription": "This app saves images from conversations to your photo library.",
         "NSUserNotificationsUsageDescription": "This app sends notifications when new messages arrive from your AI assistant.",
         "UIBackgroundModes": ["remote-notification"]
       }
@@ -33,7 +35,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "RECORD_AUDIO",
-        "CAMERA"
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.aj47.speakmcp"
     },
@@ -45,7 +49,22 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to take photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach images to conversations.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera to take photos for conversations."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to save images from conversations.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save images from conversations to your photo library.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       [

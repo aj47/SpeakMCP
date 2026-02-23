@@ -19,7 +19,7 @@ export interface MessageQueueStore {
   queues: Map<string, QueuedMessage[]>;
   
   /** Add a message to the queue for a conversation */
-  enqueue: (conversationId: string, text: string) => QueuedMessage;
+  enqueue: (conversationId: string, text: string, images?: QueuedMessage['images']) => QueuedMessage;
   
   /** Get all queued messages for a conversation */
   getQueue: (conversationId: string) => QueuedMessage[];
@@ -66,13 +66,14 @@ export function useMessageQueue(): MessageQueueStore {
     });
   }, []);
 
-  const enqueue = useCallback((conversationId: string, text: string): QueuedMessage => {
+  const enqueue = useCallback((conversationId: string, text: string, images?: QueuedMessage['images']): QueuedMessage => {
     const message: QueuedMessage = {
       id: generateMessageId(),
       conversationId,
       text,
       createdAt: Date.now(),
       status: 'pending',
+      images: images && images.length > 0 ? images : undefined,
     };
 
     updateQueues(prev => {

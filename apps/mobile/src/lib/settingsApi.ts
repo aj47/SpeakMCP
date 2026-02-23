@@ -128,6 +128,8 @@ export interface ServerConversationMessage {
   timestamp?: number;
   toolCalls?: unknown[];
   toolResults?: unknown[];
+  /** Images from MCP tool results or user attachments */
+  images?: Array<{ base64: string; mimeType: string }>;
 }
 
 export interface ServerConversation {

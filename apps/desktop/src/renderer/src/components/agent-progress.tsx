@@ -47,6 +47,8 @@ interface AgentProgressProps {
 // Enhanced conversation message component
 
 // Types for unified tool execution display items
+type ImageData = { base64: string; mimeType: string }
+
 type DisplayItem =
   | { kind: "message"; id: string; data: {
       role: "user" | "assistant" | "tool"
@@ -55,19 +57,20 @@ type DisplayItem =
       timestamp: number
       isThinking: boolean
       toolCalls?: Array<{ name: string; arguments: any }>
-      toolResults?: Array<{ success: boolean; content: string; error?: string }>
+      toolResults?: Array<{ success: boolean; content: string; error?: string; images?: ImageData[] }>
+      images?: ImageData[]
     } }
   | { kind: "tool_execution"; id: string; data: {
       timestamp: number
       calls: Array<{ name: string; arguments: any }>
-      results: Array<{ success: boolean; content: string; error?: string }>
+      results: Array<{ success: boolean; content: string; error?: string; images?: ImageData[] }>
     } }
   | { kind: "assistant_with_tools"; id: string; data: {
       thought: string
       timestamp: number
       isComplete: boolean
       calls: Array<{ name: string; arguments: any }>
-      results: Array<{ success: boolean; content: string; error?: string }>
+      results: Array<{ success: boolean; content: string; error?: string; images?: ImageData[] }>
       executionStats?: {
         durationMs?: number
         totalTokens?: number
@@ -94,6 +97,49 @@ type DisplayItem =
   | { kind: "delegation"; id: string; data: ACPDelegationProgress }
 
 
+// Inline image gallery for displaying images from tool results or message attachments
+const ImageGallery: React.FC<{ images: ImageData[] }> = ({ images }) => {
+  const [expandedImage, setExpandedImage] = useState<string | null>(null)
+
+  if (!images || images.length === 0) return null
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {images.map((img, idx) => {
+          const src = `data:${img.mimeType};base64,${img.base64}`
+          return (
+            <button
+              key={idx}
+              onClick={() => setExpandedImage(src)}
+              className="block rounded-md overflow-hidden border border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer bg-transparent p-0"
+            >
+              <img
+                src={src}
+                alt={`Image ${idx + 1}`}
+                className="max-w-[200px] max-h-[150px] object-contain"
+              />
+            </button>
+          )
+        })}
+      </div>
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 cursor-pointer"
+          onClick={() => setExpandedImage(null)}
+        >
+          <img
+            src={expandedImage}
+            alt="Expanded view"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
+
 // Compact message component for space efficiency
 const CompactMessage: React.FC<{
   message: {
@@ -102,7 +148,8 @@ const CompactMessage: React.FC<{
     isComplete?: boolean
     isThinking?: boolean
     toolCalls?: Array<{ name: string; arguments: any }>
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string; images?: ImageData[] }>
+    images?: ImageData[]
     timestamp: number
   }
   ttsText?: string
@@ -366,6 +413,14 @@ const CompactMessage: React.FC<{
           )}>
           <MarkdownRenderer content={(message.content ?? "").trim()} />
           </div>
+          {/* Show images from message or tool results inline (always visible) */}
+          {(() => {
+            const allImages = [
+              ...(message.images || []),
+              ...(message.toolResults?.flatMap(r => r.images || []) || []),
+            ]
+            return allImages.length > 0 ? <ImageGallery images={allImages} /> : null
+          })()}
           {hasExtras && isExpanded && (
             <div className="mt-2 space-y-2 text-left">
               {message.toolCalls && message.toolCalls.length > 0 && (
@@ -539,7 +594,7 @@ const ToolExecutionBubble: React.FC<{
   execution: {
     timestamp: number
     calls: Array<{ name: string; arguments: any }>
-    results: Array<{ success: boolean; content: string; error?: string }>
+    results: Array<{ success: boolean; content: string; error?: string; images?: ImageData[] }>
   }
   isExpanded: boolean
   onToggleExpand: () => void
@@ -649,6 +704,9 @@ const ToolExecutionBubble: React.FC<{
                         No content
                       </pre>
                     )}
+                    {result.images && result.images.length > 0 && (
+                      <ImageGallery images={result.images} />
+                    )}
                   </>
                 )}
                 {callIsPending && (
@@ -672,7 +730,7 @@ const AssistantWithToolsBubble: React.FC<{
     timestamp: number
     isComplete: boolean
     calls: Array<{ name: string; arguments: any }>
-    results: Array<{ success: boolean; content: string; error?: string }>
+    results: Array<{ success: boolean; content: string; error?: string; images?: ImageData[] }>
     executionStats?: {
       durationMs?: number
       totalTokens?: number
@@ -836,6 +894,9 @@ const AssistantWithToolsBubble: React.FC<{
                             No content
                           </pre>
                         )}
+                        {result.images && result.images.length > 0 && (
+                          <ImageGallery images={result.images} />
+                        )}
                       </>
                     )}
                   </div>
@@ -846,6 +907,12 @@ const AssistantWithToolsBubble: React.FC<{
               )}
             </div>
           )}
+
+          {/* Show images from all tool results inline (always visible) */}
+          {(() => {
+            const allResultImages = data.results.flatMap(r => r.images || [])
+            return allResultImages.length > 0 ? <ImageGallery images={allResultImages} /> : null
+          })()}
         </div>
       </div>
     </div>
@@ -1806,7 +1873,8 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
     timestamp: number
     isThinking: boolean
     toolCalls?: Array<{ name: string; arguments: any }>
-    toolResults?: Array<{ success: boolean; content: string; error?: string }>
+    toolResults?: Array<{ success: boolean; content: string; error?: string; images?: Array<{ base64: string; mimeType: string }> }>
+    images?: Array<{ base64: string; mimeType: string }>
   }> = []
 
   if (conversationHistory && conversationHistory.length > 0) {
@@ -1838,6 +1906,7 @@ export const AgentProgress: React.FC<AgentProgressProps> = ({
         isThinking: false,
         toolCalls: entry.toolCalls,
         toolResults: entry.toolResults,
+        images: entry.images,
       }))
 
     // Add any in-progress thinking from current steps (only when not complete)

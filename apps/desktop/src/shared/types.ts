@@ -1,7 +1,7 @@
 import type { CHAT_PROVIDER_ID, STT_PROVIDER_ID, TTS_PROVIDER_ID, OPENAI_COMPATIBLE_PRESET_ID } from "."
-import type { ToolCall, ToolResult } from '@speakmcp/shared'
+import type { ToolCall, ToolResult, ImageContent } from '@speakmcp/shared'
 
-export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse } from '@speakmcp/shared'
+export type { ToolCall, ToolResult, BaseChatMessage, ConversationHistoryMessage, ChatApiResponse, ImageContent } from '@speakmcp/shared'
 
 export type RecordingHistoryItem = {
   id: string
@@ -218,6 +218,7 @@ export interface AgentProgressUpdate {
     content: string
     toolCalls?: ToolCall[]
     toolResults?: ToolResult[]
+    images?: ImageContent[]
     timestamp?: number
   }>
   sessionStartIndex?: number
@@ -362,6 +363,8 @@ export interface ConversationMessage {
   timestamp: number
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
+  /** Images attached to this message (from MCP tools, user uploads, etc.) */
+  images?: ImageContent[]
   /**
    * When true, this message is a compaction summary that replaces older messages.
    * Messages before a summary message have been discarded to save context space.

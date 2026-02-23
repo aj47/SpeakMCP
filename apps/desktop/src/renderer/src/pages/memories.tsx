@@ -27,8 +27,8 @@ import {
   Loader2,
   AlertCircle,
   FileText,
-	  FolderOpen,
-	  FolderUp,
+  FolderOpen,
+  FolderUp,
   Pencil,
   X,
   CheckSquare,
@@ -228,13 +228,13 @@ export function Component() {
     },
   })
 
-	  const agentsFoldersQuery = useQuery({
-	    queryKey: ["agentsFolders"],
-	    queryFn: async () => {
-	      return await tipcClient.getAgentsFolders()
-	    },
-	    staleTime: Infinity,
-	  })
+  const agentsFoldersQuery = useQuery({
+    queryKey: ["agentsFolders"],
+    queryFn: async () => {
+      return await tipcClient.getAgentsFolders()
+    },
+    staleTime: Infinity,
+  })
 
   // Search also uses the current profile filter on the backend
   const searchMutation = useMutation({
@@ -302,33 +302,33 @@ export function Component() {
     },
   })
 
-	  const openMemoriesFolderMutation = useMutation({
-	    mutationFn: async () => {
-	      return await tipcClient.openMemoriesFolder()
-	    },
-	    onSuccess: (result) => {
-	      if (!result?.success) {
-	        toast.error(result?.error || "Failed to open memories folder")
-	      }
-	    },
-	    onError: (error: Error) => {
-	      toast.error(`Failed to open memories folder: ${error.message}`)
-	    },
-	  })
+  const openMemoriesFolderMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.openMemoriesFolder()
+    },
+    onSuccess: (result) => {
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to open memories folder")
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to open memories folder: ${error.message}`)
+    },
+  })
 
-	  const openWorkspaceMemoriesFolderMutation = useMutation({
-	    mutationFn: async () => {
-	      return await tipcClient.openWorkspaceMemoriesFolder()
-	    },
-	    onSuccess: (result) => {
-	      if (!result?.success) {
-	        toast.error(result?.error || "Failed to open workspace memories folder")
-	      }
-	    },
-	    onError: (error: Error) => {
-	      toast.error(`Failed to open workspace memories folder: ${error.message}`)
-	    },
-	  })
+  const openWorkspaceMemoriesFolderMutation = useMutation({
+    mutationFn: async () => {
+      return await tipcClient.openWorkspaceMemoriesFolder()
+    },
+    onSuccess: (result) => {
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to open workspace memories folder")
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to open workspace memories folder: ${error.message}`)
+    },
+  })
 
   const memories = memoriesQuery.data || []
   const searchResults = searchMutation.data
@@ -402,7 +402,7 @@ export function Component() {
   const allSelected = filteredMemories.length > 0 && visibleSelectedCount === filteredMemories.length
   const someSelected = visibleSelectedCount > 0 && visibleSelectedCount < filteredMemories.length
 
-	  const memoryFileTemplate = `---
+  const memoryFileTemplate = `---
 kind: memory
 id: my-memory
 title: My Memory
@@ -418,67 +418,67 @@ Optional notes go here (saved as userNotes).
   return (
     <div className="modern-panel h-full overflow-auto px-6 py-4">
       <div className="space-y-6">
-	        {/* Header */}
-	        <div className="flex items-start justify-between gap-4">
-	          <div>
-	            <div className="flex items-center gap-2">
-	              <h1 className="text-2xl font-bold">Memories</h1>
-	            </div>
-	            <p className="text-sm text-muted-foreground mt-1">Saved insights and findings from agent sessions</p>
-	          </div>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">Memories</h1>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">Saved insights and findings from agent sessions</p>
+          </div>
 
-	          <div className="flex gap-2">
-	            <Button
-	              variant="outline"
-	              size="sm"
-	              className="gap-2"
-	              onClick={() => openMemoriesFolderMutation.mutate()}
-	              disabled={openMemoriesFolderMutation.isPending}
-	            >
-	              <FolderOpen className="h-4 w-4" />
-	              Open Folder
-	            </Button>
-	            <Button
-	              variant="outline"
-	              size="sm"
-	              className="gap-2"
-	              onClick={() => openWorkspaceMemoriesFolderMutation.mutate()}
-	              disabled={!agentsFoldersQuery.data?.workspace?.memoriesDir || openWorkspaceMemoriesFolderMutation.isPending}
-	            >
-	              <FolderUp className="h-4 w-4" />
-	              Workspace
-	            </Button>
-	          </div>
-	        </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => openMemoriesFolderMutation.mutate()}
+              disabled={openMemoriesFolderMutation.isPending}
+            >
+              <FolderOpen className="h-4 w-4" />
+              Open Folder
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => openWorkspaceMemoriesFolderMutation.mutate()}
+              disabled={!agentsFoldersQuery.data?.workspace?.memoriesDir || openWorkspaceMemoriesFolderMutation.isPending}
+            >
+              <FolderUp className="h-4 w-4" />
+              Workspace
+            </Button>
+          </div>
+        </div>
 
-	        <details className="rounded-lg border bg-card">
-	          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
-	            Modular config (.agents) file template
-	          </summary>
-	          <div className="px-4 pb-4 space-y-3">
-	            <p className="text-sm text-muted-foreground">
-	              You can hand-author memories in <span className="font-mono">.agents/memories/&lt;id&gt;.md</span>. Frontmatter uses simple{" "}
-	              <span className="font-mono">key: value</span> lines (not YAML). The <span className="font-mono">content</span> field is required and must be a
-	              single line; the markdown body is optional notes (<span className="font-mono">userNotes</span>). If a workspace <span className="font-mono">.agents</span>
-	              folder exists, it can override the global layer by memory <span className="font-mono">id</span>.
-	            </p>
-	            <div className="space-y-1">
-	              <div className="text-xs text-muted-foreground">
-	                Global: <span className="font-mono break-all">{agentsFoldersQuery.data?.global?.memoriesDir ?? "~/.agents/memories"}</span>
-	              </div>
-	              <div className="text-xs text-muted-foreground">
-	                Workspace:{" "}
-	                <span className="font-mono break-all">
-	                  {agentsFoldersQuery.data?.workspace?.memoriesDir ?? "Not detected"}
-	                  {agentsFoldersQuery.data?.workspace?.memoriesDir && agentsFoldersQuery.data?.workspaceSource
-	                    ? ` (${agentsFoldersQuery.data.workspaceSource})`
-	                    : ""}
-	                </span>
-	              </div>
-	            </div>
-	            <div className="rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">{memoryFileTemplate}</div>
-	          </div>
-	        </details>
+        <details className="rounded-lg border bg-card">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+            Modular config (.agents) file template
+          </summary>
+          <div className="px-4 pb-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              You can hand-author memories in <span className="font-mono">.agents/memories/&lt;id&gt;.md</span>. Frontmatter uses simple{" "}
+              <span className="font-mono">key: value</span> lines (not YAML). The <span className="font-mono">content</span> field is required and must be a
+              single line; the markdown body is optional notes (<span className="font-mono">userNotes</span>). If a workspace <span className="font-mono">.agents</span>
+              folder exists, it can override the global layer by memory <span className="font-mono">id</span>.
+            </p>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">
+                Global: <span className="font-mono break-all">{agentsFoldersQuery.data?.global?.memoriesDir ?? "~/.agents/memories"}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Workspace:{" "}
+                <span className="font-mono break-all">
+                  {agentsFoldersQuery.data?.workspace?.memoriesDir ?? "Not detected"}
+                  {agentsFoldersQuery.data?.workspace?.memoriesDir && agentsFoldersQuery.data?.workspaceSource
+                    ? ` (${agentsFoldersQuery.data.workspaceSource})`
+                    : ""}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">{memoryFileTemplate}</div>
+          </div>
+        </details>
 
         {/* Stats */}
         {memories.length > 0 && (

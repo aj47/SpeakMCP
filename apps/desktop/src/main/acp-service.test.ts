@@ -4,6 +4,15 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
+// Mock electron (agent-profile-service reads app.getPath("userData") at import time)
+vi.mock("electron", () => ({
+  app: {
+    getPath: vi.fn(() => {
+      return process.env.TMPDIR || process.env.TEMP || process.env.TMP || "/tmp"
+    }),
+  },
+}))
+
 // Mock child_process
 const mockSpawn = vi.fn()
 vi.mock("child_process", () => ({
@@ -78,6 +87,9 @@ vi.mock("./config", () => ({
   configStore: {
     get: () => mockConfig,
   },
+  // AgentProfileService imports these from ./config
+  globalAgentsFolder: process.env.TMPDIR || process.env.TEMP || process.env.TMP || "/tmp",
+  resolveWorkspaceAgentsFolder: () => null,
 }))
 
 // Mock debug

@@ -20,8 +20,8 @@ import { agentSessionStateManager } from '../state';
 import { agentSessionTracker } from '../agent-session-tracker';
 import { emitAgentProgress } from '../emit-agent-progress';
 import { skillsService } from '../skills-service';
-import { agentProfileService } from '../agent-profile-service';
-import type { AgentProgressUpdate, SessionProfileSnapshot, ACPDelegationProgress, ACPSubAgentMessage, ConversationMessage, AgentProfile, ProfileMcpServerConfig } from '../../shared/types';
+import { agentProfileService, createSessionSnapshotFromProfile } from '../agent-profile-service';
+import type { AgentProgressUpdate, SessionProfileSnapshot, ACPDelegationProgress, ACPSubAgentMessage, ConversationMessage, AgentProfile } from '../../shared/types';
 import type { MCPToolCall, MCPToolResult } from '../mcp-service';
 
 const logSubSession = (...args: unknown[]) => {
@@ -295,36 +295,8 @@ export interface SubSessionResult {
   duration: number;
 }
 
-/**
- * Create a SessionProfileSnapshot from an AgentProfile.
- * Converts AgentProfile configuration into the format expected by session management.
- */
-function createProfileSnapshotFromAgentProfile(
-  profile: AgentProfile,
-  skillsInstructions?: string
-): SessionProfileSnapshot {
-  // Convert AgentProfile toolConfig to ProfileMcpServerConfig format
-  // AgentProfile uses enabledServers (whitelist) approach
-  const mcpServerConfig: ProfileMcpServerConfig | undefined = profile.toolConfig ? {
-    allServersDisabledByDefault: profile.toolConfig.allServersDisabledByDefault ?? true,
-    enabledServers: profile.toolConfig.enabledServers,
-    disabledServers: profile.toolConfig.disabledServers,
-    disabledTools: profile.toolConfig.disabledTools,
-    enabledBuiltinTools: profile.toolConfig.enabledBuiltinTools,
-  } : undefined;
-
-  return {
-    profileId: `agent_${profile.id}`,
-    profileName: profile.displayName,
-    guidelines: profile.guidelines ?? '',
-    systemPrompt: profile.systemPrompt,
-    mcpServerConfig,
-    modelConfig: profile.modelConfig,
-    skillsInstructions,
-    agentProperties: profile.properties,
-    skillsConfig: profile.skillsConfig,
-  };
-}
+// Use the canonical createSessionSnapshotFromProfile from agent-profile-service.ts
+// to avoid inconsistencies (e.g., allServersDisabledByDefault defaulting to true).
 
 /**
  * Run an internal sub-session.
@@ -419,7 +391,7 @@ export async function runInternalSubSession(
       logSubSession(`Loaded ${agentProfile.skillsConfig!.enabledSkillIds!.length} skill(s) for AgentProfile "${agentProfile.name}"`);
     }
 
-    effectiveProfileSnapshot = createProfileSnapshotFromAgentProfile(agentProfile, skillsInstructions);
+    effectiveProfileSnapshot = createSessionSnapshotFromProfile(agentProfile, skillsInstructions);
   }
   // Priority 2: Look up by name in agent profile service
   else if (personaName) {
@@ -451,7 +423,7 @@ export async function runInternalSubSession(
         logSubSession(`Loaded ${unifiedProfile.skillsConfig!.enabledSkillIds!.length} skill(s) for AgentProfile "${personaName}"`);
       }
 
-      effectiveProfileSnapshot = createProfileSnapshotFromAgentProfile(unifiedProfile, skillsInstructions);
+      effectiveProfileSnapshot = createSessionSnapshotFromProfile(unifiedProfile, skillsInstructions);
     }
 
     // If not found, log and fall back to parent profile

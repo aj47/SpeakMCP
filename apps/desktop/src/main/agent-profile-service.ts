@@ -535,8 +535,11 @@ class AgentProfileService {
     if (currentId) {
       return this.getById(currentId)
     }
-    // Fall back to any default profile (user profiles no longer exist)
-    return this.getAll().find((p) => p.isDefault)
+    // Fall back to any default profile
+    const defaultProfile = this.getAll().find((p) => p.isDefault)
+    if (defaultProfile) return defaultProfile
+    // Fall back to the built-in profile (handles migrated data without isDefault set)
+    return this.getAll().find((p) => p.isBuiltIn)
   }
 
   /**

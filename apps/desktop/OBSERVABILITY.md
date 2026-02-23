@@ -57,7 +57,7 @@ Once configured, all agent interactions will appear in your Langfuse dashboard:
   - All LLM generations with token counts
   - All MCP tool calls with inputs/outputs
   - Final output/response
-  - Profile tags (e.g., `profile:General Assistant`)
+  - Agent tags (e.g., `agent:General Assistant`)
 
 - **Generations**: Individual LLM API calls showing:
   - Model used (e.g., `gpt-4o`, `gemini-2.0-flash`)
@@ -79,7 +79,7 @@ Once configured, all agent interactions will appear in your Langfuse dashboard:
 |---------|------------------|
 | **Sessions** | Conversation ID - groups all agent interactions in a conversation |
 | **Traces** | Agent Session ID - individual agent run with all LLM/tool calls |
-| **Tags** | Profile name (e.g., `profile:General Assistant`) for filtering |
+| **Tags** | Agent name (e.g., `agent:General Assistant`) for filtering |
 | **Generations** | Individual LLM API calls with token usage |
 | **Spans** | MCP tool executions with inputs/outputs |
 

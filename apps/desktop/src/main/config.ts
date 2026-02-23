@@ -263,18 +263,24 @@ const getConfig = (): LoadedConfig => {
     DEFAULT_SYSTEM_PROMPT,
   )
 
-  if (hasAnyAgentsFiles) {
-    const mergedConfig = { ...defaultConfig, ...mergedAgents }
+  // 2) Always load legacy config.json as the base layer (it holds API keys, preferences, etc.)
+  const savedConfig = safeReadJsonFileSync<Partial<Config>>(configPath, {
+    backupDir: legacyBackupsFolder,
+    defaultValue: {},
+  })
 
-    // Migration: Remove deprecated mode-specific panel sizes (these were never used)
-    delete (mergedConfig as any).panelNormalModeSize
-    delete (mergedConfig as any).panelAgentModeSize
-    delete (mergedConfig as any).panelTextInputModeSize
+  // Merge order: defaults ← config.json ← .agents (if present)
+  // This ensures existing settings (API keys etc.) from config.json are always preserved,
+  // while .agents files can selectively override specific values.
+  const mergedConfig = hasAnyAgentsFiles
+    ? { ...defaultConfig, ...savedConfig, ...mergedAgents }
+    : { ...defaultConfig, ...savedConfig }
 
-    return { config: migrateGroqTtsConfig(mergedConfig), source: "agents" }
-  }
+  // Migration: Remove deprecated mode-specific panel sizes (these were never used)
+  delete (mergedConfig as any).panelNormalModeSize
+  delete (mergedConfig as any).panelAgentModeSize
+  delete (mergedConfig as any).panelTextInputModeSize
 
-  // 2) Legacy fallback: single config.json
   const legacyExists = (() => {
     try {
       return fs.existsSync(configPath)
@@ -283,21 +289,9 @@ const getConfig = (): LoadedConfig => {
     }
   })()
 
-  const savedConfig = safeReadJsonFileSync<Partial<Config>>(configPath, {
-    backupDir: legacyBackupsFolder,
-    defaultValue: {},
-  })
-
-  const mergedConfig = { ...defaultConfig, ...savedConfig }
-
-  // Migration: Remove deprecated mode-specific panel sizes (these were never used)
-  delete (mergedConfig as any).panelNormalModeSize
-  delete (mergedConfig as any).panelAgentModeSize
-  delete (mergedConfig as any).panelTextInputModeSize
-
   return {
     config: migrateGroqTtsConfig(mergedConfig),
-    source: legacyExists ? "legacy" : "defaults",
+    source: hasAnyAgentsFiles ? "agents" : legacyExists ? "legacy" : "defaults",
   }
 }
 

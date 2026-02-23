@@ -43,6 +43,7 @@ interface EditingAgent {
   connectionCommand?: string
   connectionArgs?: string
   connectionBaseUrl?: string
+  connectionCwd?: string
   enabled: boolean
   autoSpawn?: boolean
   modelConfig?: ProfileModelConfig
@@ -116,6 +117,7 @@ export function SettingsAgents() {
       connectionCommand: agent.connection.command,
       connectionArgs: agent.connection.args?.join(" "),
       connectionBaseUrl: agent.connection.baseUrl,
+      connectionCwd: agent.connection.cwd,
       enabled: agent.enabled, autoSpawn: agent.autoSpawn,
       modelConfig: agent.modelConfig ? { ...agent.modelConfig } : undefined,
       toolConfig: agent.toolConfig ? { ...agent.toolConfig } : undefined,
@@ -131,6 +133,7 @@ export function SettingsAgents() {
       type: editing.connectionType, command: editing.connectionCommand,
       args: editing.connectionArgs?.split(" ").filter(Boolean),
       baseUrl: editing.connectionBaseUrl,
+      cwd: editing.connectionCwd,
     }
     const data: any = {
       name: editing.name, displayName: editing.displayName,
@@ -401,6 +404,10 @@ export function SettingsAgents() {
                   <div className="space-y-2">
                     <Label htmlFor="args">Arguments (space-separated)</Label>
                     <Input id="args" value={editing.connectionArgs ?? ""} onChange={e => setEditing({ ...editing, connectionArgs: e.target.value })} placeholder="e.g., --acp" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cwd">Working Directory (optional)</Label>
+                    <Input id="cwd" value={editing.connectionCwd ?? ""} onChange={e => setEditing({ ...editing, connectionCwd: e.target.value })} placeholder="e.g., /path/to/project or leave empty" />
                   </div>
                 </>
               )}

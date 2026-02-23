@@ -15,6 +15,7 @@ import { dirname } from "path"
 import { configStore } from "./config"
 import { ACPAgentConfig } from "../shared/types"
 import { toolApprovalManager } from "./state"
+import { agentProfileService } from "./agent-profile-service"
 import { emitAgentProgress } from "./emit-agent-progress"
 import { logACP } from "./debug"
 import { getSpeakMcpSessionForAcpSession } from "./acp-session-state"
@@ -442,7 +443,32 @@ class ACPService extends EventEmitter {
    */
   async spawnAgent(agentName: string): Promise<void> {
     const config = configStore.get()
-    const agentConfig = config.acpAgents?.find(a => a.name === agentName)
+
+    // First try to find it in the unified AgentProfile system
+    const profile = agentProfileService.getByName(agentName)
+    let agentConfig: ACPAgentConfig | undefined
+
+    if (profile && (profile.connection.type === "acp" || profile.connection.type === "stdio")) {
+      agentConfig = {
+        name: profile.name,
+        displayName: profile.displayName,
+        description: profile.description,
+        enabled: profile.enabled,
+        autoSpawn: profile.autoSpawn,
+        isInternal: profile.isBuiltIn,
+        connection: {
+          type: "stdio",
+          command: profile.connection.command,
+          args: profile.connection.args,
+          env: profile.connection.env,
+          cwd: profile.connection.cwd,
+          baseUrl: profile.connection.baseUrl,
+        }
+      }
+    } else {
+      // Fallback to legacy config.acpAgents
+      agentConfig = config.acpAgents?.find(a => a.name === agentName)
+    }
 
     if (!agentConfig) {
       throw new Error(`Agent ${agentName} not found in configuration`)

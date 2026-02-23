@@ -5,6 +5,7 @@ import {
   createPanelWindow,
   createSetupWindow,
   makePanelWindowClosable,
+  setAppQuitting,
   WINDOWS,
 } from "./window"
 import { listenToKeyboardEvents } from "./keyboard"
@@ -357,7 +358,11 @@ app.whenReady().then(async () => {
 
   app.on("activate", function () {
     if (accessibilityGranted) {
-      if (!WINDOWS.get("main")) {
+      const mainWin = WINDOWS.get("main")
+      if (mainWin) {
+        // Window exists (may be hidden on macOS close-to-hide) — just show it
+        mainWin.show()
+      } else {
         // Check if onboarding has been completed
         // Skip for existing users who have already configured models (pre-onboarding installs)
         const cfg = configStore.get()
@@ -383,6 +388,7 @@ app.whenReady().then(async () => {
   const CLEANUP_TIMEOUT_MS = 5000 // 5 second timeout for graceful cleanup
 
   app.on("before-quit", async (event) => {
+    setAppQuitting()
     makePanelWindowClosable()
     loopService.stopAllLoops()
 

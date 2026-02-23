@@ -20,6 +20,17 @@ type WINDOW_ID = "main" | "panel" | "setup"
 
 export const WINDOWS = new Map<WINDOW_ID, BrowserWindow>()
 
+// macOS: track whether the app is quitting so we allow the main window to actually close.
+// Without this, the main window hides on close (standard macOS behavior) to stay in Cmd+Tab.
+let isAppQuitting = false
+
+/**
+ * Call from `before-quit` to allow windows to actually close during app quit.
+ */
+export function setAppQuitting() {
+  isAppQuitting = true
+}
+
 // Notify renderer of panel size changes from main process
 function notifyPanelSizeChanged(width: number, height: number) {
   const win = WINDOWS.get("panel")
@@ -225,7 +236,21 @@ export function createMainWindow({ url }: { url?: string } = {}) {
   })
 
   if (process.env.IS_MAC) {
-    win.on("close", () => {
+    // macOS: hide the main window instead of destroying it when the user closes it.
+    // This keeps the app in the Cmd+Tab switcher and dock. The window is re-shown
+    // via dock click (app "activate" event) or hotkey. Only allow actual close
+    // during app quit (isAppQuitting).
+    win.on("close", (e) => {
+      if (!isAppQuitting) {
+        e.preventDefault()
+        win.hide()
+        if (configStore.get().hideDockIcon) {
+          app.setActivationPolicy("accessory")
+          app.dock.hide()
+        }
+        return
+      }
+      // App is quitting — allow the close to proceed
       if (configStore.get().hideDockIcon) {
         app.setActivationPolicy("accessory")
         app.dock.hide()

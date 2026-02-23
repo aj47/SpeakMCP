@@ -3845,10 +3845,19 @@ export const router = {
     }),
 
   openSkillsFolder: t.procedure.action(async () => {
-    const { skillsFolder } = await import("./skills-service")
-    // Ensure folder exists
-    fs.mkdirSync(skillsFolder, { recursive: true })
-    await shell.openPath(skillsFolder)
+    const { globalAgentsFolder, resolveWorkspaceAgentsFolder } = await import("./config")
+    const { getAgentsLayerPaths } = await import("./agents-files/modular-config")
+    const { getAgentsSkillsDir } = await import("./agents-files/skills")
+
+    // Prefer workspace .agents/skills if available, else global .agents/skills
+    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+    const layer = workspaceAgentsFolder
+      ? getAgentsLayerPaths(workspaceAgentsFolder)
+      : getAgentsLayerPaths(globalAgentsFolder)
+    const skillsDir = getAgentsSkillsDir(layer)
+
+    fs.mkdirSync(skillsDir, { recursive: true })
+    await shell.openPath(skillsDir)
   }),
 
   scanSkillsFolder: t.procedure.action(async () => {

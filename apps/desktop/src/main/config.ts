@@ -4,6 +4,15 @@ import fs from "fs"
 import { Config, ModelPreset } from "@shared/types"
 import { getBuiltInModelPresets, DEFAULT_MODEL_PRESET_ID } from "@shared/index"
 
+import { DEFAULT_SYSTEM_PROMPT } from "./system-prompts-default"
+import {
+  findAgentsDirUpward,
+  getAgentsLayerPaths,
+  loadMergedAgentsConfig,
+  writeAgentsLayerFromConfig,
+} from "./agents-files/modular-config"
+import { safeReadJsonFileSync, safeWriteJsonFileSync } from "./agents-files/safe-file"
+
 export const dataFolder = path.join(app.getPath("appData"), process.env.APP_ID)
 
 export const recordingsFolder = path.join(dataFolder, "recordings")
@@ -11,6 +20,10 @@ export const recordingsFolder = path.join(dataFolder, "recordings")
 export const conversationsFolder = path.join(dataFolder, "conversations")
 
 export const configPath = path.join(dataFolder, "config.json")
+
+export const globalAgentsFolder = path.join(dataFolder, ".agents")
+
+const legacyBackupsFolder = path.join(dataFolder, ".backups")
 
 // Valid Orpheus voices - used for migration validation
 const ORPHEUS_ENGLISH_VOICES = ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
@@ -56,7 +69,25 @@ function migrateGroqTtsConfig(config: Partial<Config>): Partial<Config> {
   return config
 }
 
-const getConfig = () => {
+export function resolveWorkspaceAgentsFolder(): string | null {
+  const envWorkspaceRoot = process.env.SPEAKMCP_WORKSPACE_DIR
+  if (envWorkspaceRoot && envWorkspaceRoot.trim()) {
+    const resolvedRoot = path.isAbsolute(envWorkspaceRoot)
+      ? envWorkspaceRoot
+      : path.resolve(process.cwd(), envWorkspaceRoot)
+    return path.join(resolvedRoot, ".agents")
+  }
+
+  // Safe-by-default: only treat a directory as a workspace if a `.agents` folder already exists.
+  return findAgentsDirUpward(process.cwd())
+}
+
+type LoadedConfig = {
+  config: Partial<Config>
+  source: "agents" | "legacy" | "defaults"
+}
+
+const getConfig = (): LoadedConfig => {
   // Platform-specific defaults
   const isWindows = process.platform === 'win32'
 
@@ -225,21 +256,48 @@ const getConfig = () => {
 
   }
 
-  try {
-    const savedConfig = JSON.parse(
-      fs.readFileSync(configPath, "utf8"),
-    ) as Config
-    // Apply migration for deprecated Groq TTS settings
-    const mergedConfig = { ...defaultConfig, ...savedConfig }
+  // 1) Preferred: modular `.agents` format (global + optional workspace overlay)
+  const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+  const { merged: mergedAgents, hasAnyAgentsFiles } = loadMergedAgentsConfig(
+    { globalAgentsDir: globalAgentsFolder, workspaceAgentsDir: workspaceAgentsFolder },
+    DEFAULT_SYSTEM_PROMPT,
+  )
+
+  if (hasAnyAgentsFiles) {
+    const mergedConfig = { ...defaultConfig, ...mergedAgents }
 
     // Migration: Remove deprecated mode-specific panel sizes (these were never used)
     delete (mergedConfig as any).panelNormalModeSize
     delete (mergedConfig as any).panelAgentModeSize
     delete (mergedConfig as any).panelTextInputModeSize
 
-    return migrateGroqTtsConfig(mergedConfig)
-  } catch {
-    return defaultConfig
+    return { config: migrateGroqTtsConfig(mergedConfig), source: "agents" }
+  }
+
+  // 2) Legacy fallback: single config.json
+  const legacyExists = (() => {
+    try {
+      return fs.existsSync(configPath)
+    } catch {
+      return false
+    }
+  })()
+
+  const savedConfig = safeReadJsonFileSync<Partial<Config>>(configPath, {
+    backupDir: legacyBackupsFolder,
+    defaultValue: {},
+  })
+
+  const mergedConfig = { ...defaultConfig, ...savedConfig }
+
+  // Migration: Remove deprecated mode-specific panel sizes (these were never used)
+  delete (mergedConfig as any).panelNormalModeSize
+  delete (mergedConfig as any).panelAgentModeSize
+  delete (mergedConfig as any).panelTextInputModeSize
+
+  return {
+    config: migrateGroqTtsConfig(mergedConfig),
+    source: legacyExists ? "legacy" : "defaults",
   }
 }
 
@@ -292,9 +350,22 @@ class ConfigStore {
   config: Config | undefined
 
   constructor() {
-    const loadedConfig = getConfig()
+    const loaded = getConfig()
     // Sync active preset credentials to legacy fields on startup
-    this.config = syncPresetToLegacyFields(loadedConfig) as Config
+    this.config = syncPresetToLegacyFields(loaded.config) as Config
+
+    // Ensure global `.agents` files exist so users/agents can edit them even if
+    // we loaded from legacy config.json or defaults.
+    try {
+      const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+      writeAgentsLayerFromConfig(globalLayer, this.config, DEFAULT_SYSTEM_PROMPT, {
+        // Avoid rewriting user-managed files on startup; only create missing files.
+        onlyIfMissing: true,
+        maxBackups: 10,
+      })
+    } catch {
+      // best-effort
+    }
   }
 
   get(): Config {
@@ -304,8 +375,27 @@ class ConfigStore {
   save(config: Config) {
     // Sync active preset credentials before saving
     this.config = syncPresetToLegacyFields(config) as Config
-    fs.mkdirSync(dataFolder, { recursive: true })
-    fs.writeFileSync(configPath, JSON.stringify(this.config))
+
+    // Canonical: write modular `.agents` config (global layer)
+    try {
+      const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+      writeAgentsLayerFromConfig(globalLayer, this.config, DEFAULT_SYSTEM_PROMPT, {
+        maxBackups: 10,
+      })
+    } catch {
+      // best-effort
+    }
+
+    // Shadow: keep legacy config.json updated for backward compatibility
+    try {
+      safeWriteJsonFileSync(configPath, this.config, {
+        backupDir: legacyBackupsFolder,
+        maxBackups: 10,
+        pretty: false,
+      })
+    } catch {
+      // best-effort
+    }
   }
 }
 

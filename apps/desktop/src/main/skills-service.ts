@@ -10,6 +10,21 @@ import { promisify } from "util"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import type { RendererHandlers } from "./renderer-handlers"
 import { WINDOWS } from "./window"
+import { globalAgentsFolder, resolveWorkspaceAgentsFolder } from "./config"
+import { getAgentsLayerPaths, type AgentsLayerPaths } from "./agents-files/modular-config"
+import {
+  getAgentsSkillsBackupDir,
+  getAgentsSkillsDir,
+  loadAgentsSkillsLayer,
+  skillIdToFilePath,
+  writeAgentsSkillFile,
+} from "./agents-files/skills"
+import { readTextFileIfExistsSync, safeWriteFileSync } from "./agents-files/safe-file"
+
+type SkillOrigin = {
+  layer: "global" | "workspace"
+  filePath: string
+}
 
 const execAsync = promisify(exec)
 
@@ -373,8 +388,12 @@ export function initializeBundledSkills(): { copied: string[]; skipped: string[]
   const bundledPath = getBundledSkillsPath()
   const result = { copied: [] as string[], skipped: [] as string[], errors: [] as string[] }
 
+  // Canonical destination: global .agents/skills/
+  const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+  const destSkillsDir = getAgentsSkillsDir(globalLayer)
+
   logApp(`Initializing bundled skills from: ${bundledPath}`)
-  logApp(`Skills folder (App Data): ${skillsFolder}`)
+  logApp(`Canonical skills destination: ${destSkillsDir}`)
 
   // Check if bundled skills directory exists
   if (!fs.existsSync(bundledPath)) {
@@ -382,11 +401,11 @@ export function initializeBundledSkills(): { copied: string[]; skipped: string[]
     return result
   }
 
-  // Ensure skills folder exists in App Data
-  fs.mkdirSync(skillsFolder, { recursive: true })
+  // Ensure canonical skills folder exists
+  fs.mkdirSync(destSkillsDir, { recursive: true })
 
   try {
-    // Recursively find all skill directories (directories containing SKILL.md)
+    // Recursively find all skill directories (directories containing SKILL.md or skill.md)
     const processDirectory = (dirPath: string, relativePath: string = "") => {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true })
 
@@ -395,11 +414,15 @@ export function initializeBundledSkills(): { copied: string[]; skipped: string[]
 
         const entryPath = path.join(dirPath, entry.name)
         const entryRelativePath = relativePath ? path.join(relativePath, entry.name) : entry.name
-        const skillMdPath = path.join(entryPath, "SKILL.md")
+        const skillMdPath = fs.existsSync(path.join(entryPath, "SKILL.md"))
+          ? path.join(entryPath, "SKILL.md")
+          : fs.existsSync(path.join(entryPath, "skill.md"))
+            ? path.join(entryPath, "skill.md")
+            : null
 
-        if (fs.existsSync(skillMdPath)) {
-          // This is a skill directory - copy it if it doesn't exist
-          const destPath = path.join(skillsFolder, entryRelativePath)
+        if (skillMdPath) {
+          // This is a skill directory - copy it if it doesn't exist in .agents/skills/
+          const destPath = path.join(destSkillsDir, entryRelativePath)
 
           if (fs.existsSync(destPath)) {
             result.skipped.push(entryRelativePath)
@@ -488,59 +511,174 @@ ${skill.instructions}
 }
 
 class SkillsService {
-  private skillsData: AgentSkillsData | undefined
+  private skills: AgentSkill[] = []
+  private originById: Map<string, SkillOrigin> = new Map()
+  private initialized = false
 
   constructor() {
-    this.loadSkills()
+    // Synchronous initialization to preserve existing call sites.
+    this.loadFromDisk({ migrateLegacy: true })
   }
 
-  private loadSkills(): AgentSkillsData {
+  private ensureInitialized(): void {
+    if (this.initialized) return
+    this.loadFromDisk({ migrateLegacy: true })
+  }
+
+  private getLayers(): { globalLayer: AgentsLayerPaths; workspaceLayer: AgentsLayerPaths | null } {
+    const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+    const workspaceLayer = workspaceAgentsFolder ? getAgentsLayerPaths(workspaceAgentsFolder) : null
+    return { globalLayer, workspaceLayer }
+  }
+
+  private sortSkillsStable(skillsArr: AgentSkill[]): AgentSkill[] {
+    return skillsArr
+      .slice()
+      .sort((a, b) => {
+        const createdDiff = (a.createdAt ?? 0) - (b.createdAt ?? 0)
+        if (createdDiff !== 0) return createdDiff
+        const nameDiff = (a.name ?? "").localeCompare(b.name ?? "")
+        if (nameDiff !== 0) return nameDiff
+        return (a.id ?? "").localeCompare(b.id ?? "")
+      })
+  }
+
+  private normalizeLegacySkill(raw: Partial<AgentSkill> & { id?: unknown }): AgentSkill | null {
+    const id = typeof raw.id === "string" ? raw.id.trim() : ""
+    if (!id) return null
+
+    const now = Date.now()
+    const createdAt = typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt) ? raw.createdAt : now
+    const updatedAt = typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt) ? raw.updatedAt : createdAt
+    const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true
+
+    const sourceRaw = typeof raw.source === "string" ? raw.source : ""
+    const source = sourceRaw === "local" || sourceRaw === "imported" ? sourceRaw : undefined
+
+    const filePath = typeof raw.filePath === "string" && raw.filePath.trim() ? raw.filePath.trim() : undefined
+
+    return {
+      id,
+      name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : id,
+      description: typeof raw.description === "string" ? raw.description.trim() : "",
+      instructions: typeof raw.instructions === "string" ? raw.instructions.trim() : "",
+      enabled,
+      createdAt,
+      updatedAt,
+      source,
+      filePath,
+    }
+  }
+
+  private migrateLegacySkillsJsonToAgents(globalLayer: AgentsLayerPaths, existingSkillIds: Set<string>): number {
+    if (!fs.existsSync(skillsPath)) return 0
+
+    let data: AgentSkillsData | null = null
     try {
-      if (fs.existsSync(skillsPath)) {
-        const data = JSON.parse(fs.readFileSync(skillsPath, "utf8")) as AgentSkillsData
-        this.skillsData = data
-        return data
-      }
+      data = JSON.parse(fs.readFileSync(skillsPath, "utf8")) as AgentSkillsData
     } catch (error) {
-      logApp("Error loading skills:", error)
+      logApp("[SkillsService] Failed to parse legacy skills.json:", error)
+      return 0
     }
 
-    // Initialize with empty skills array
-    this.skillsData = { skills: [] }
-    this.saveSkills()
-    return this.skillsData
+    if (!data || !Array.isArray(data.skills)) return 0
+
+    let migrated = 0
+    for (const candidate of data.skills) {
+      const normalized = this.normalizeLegacySkill(candidate)
+      if (!normalized) continue
+      if (existingSkillIds.has(normalized.id)) continue
+
+      try {
+        const targetFilePath = skillIdToFilePath(globalLayer, normalized.id)
+        writeAgentsSkillFile(globalLayer, normalized, { filePathOverride: targetFilePath })
+        existingSkillIds.add(normalized.id)
+        migrated++
+      } catch (error) {
+        logApp(`[SkillsService] Failed migrating legacy skill ${String((candidate as unknown as Record<string, unknown>)?.id ?? "")}:`, error)
+      }
+    }
+
+    return migrated
   }
 
-  private saveSkills(): void {
-    if (!this.skillsData) return
+  private loadFromDisk(options: { migrateLegacy?: boolean } = {}): void {
+    const { globalLayer, workspaceLayer } = this.getLayers()
 
     try {
-      const dataFolder = path.dirname(skillsPath)
-      fs.mkdirSync(dataFolder, { recursive: true })
-      fs.writeFileSync(skillsPath, JSON.stringify(this.skillsData, null, 2))
+      const globalBefore = loadAgentsSkillsLayer(globalLayer)
+      const existingSkillIds = new Set(globalBefore.skills.map((s) => s.id))
+
+      if (options.migrateLegacy !== false) {
+        const migratedCount = this.migrateLegacySkillsJsonToAgents(globalLayer, existingSkillIds)
+        if (migratedCount > 0) {
+          logApp(`[SkillsService] Migrated ${migratedCount} legacy skills into .agents`)
+        }
+      }
+
+      const globalAfter = loadAgentsSkillsLayer(globalLayer)
+      const workspaceLoaded = workspaceLayer ? loadAgentsSkillsLayer(workspaceLayer) : null
+
+      const mergedById = new Map<string, AgentSkill>()
+      const mergedOriginById = new Map<string, SkillOrigin>()
+
+      for (const skill of globalAfter.skills) {
+        mergedById.set(skill.id, skill)
+        const origin = globalAfter.originById.get(skill.id)
+        if (origin) mergedOriginById.set(skill.id, { layer: "global", filePath: origin.filePath })
+      }
+
+      if (workspaceLoaded) {
+        for (const skill of workspaceLoaded.skills) {
+          mergedById.set(skill.id, skill)
+          const origin = workspaceLoaded.originById.get(skill.id)
+          if (origin) mergedOriginById.set(skill.id, { layer: "workspace", filePath: origin.filePath })
+        }
+      }
+
+      this.skills = this.sortSkillsStable(Array.from(mergedById.values()))
+      this.originById = mergedOriginById
+      this.initialized = true
     } catch (error) {
-      logApp("Error saving skills:", error)
-      throw new Error(`Failed to save skills: ${error instanceof Error ? error.message : String(error)}`)
+      logApp("[SkillsService] Error loading skills from disk:", error)
+      this.skills = []
+      this.originById = new Map()
+      this.initialized = true
+    }
+  }
+
+  private backupThenDeleteFileSync(filePath: string, backupDir: string): void {
+    const raw = readTextFileIfExistsSync(filePath, "utf8")
+    if (raw !== null) {
+      safeWriteFileSync(filePath, raw, {
+        encoding: "utf8",
+        backupDir,
+        maxBackups: 10,
+      })
+    }
+    try {
+      fs.unlinkSync(filePath)
+    } catch {
+      // best-effort
     }
   }
 
   getSkills(): AgentSkill[] {
-    if (!this.skillsData) {
-      this.loadSkills()
-    }
-    return this.skillsData?.skills || []
+    this.ensureInitialized()
+    return this.skills
   }
 
   getEnabledSkills(): AgentSkill[] {
-    return this.getSkills().filter(skill => skill.enabled)
+    return this.getSkills().filter((skill) => skill.enabled)
   }
 
   getSkill(id: string): AgentSkill | undefined {
-    return this.getSkills().find(s => s.id === id)
+    return this.getSkills().find((s) => s.id === id)
   }
 
   getSkillByFilePath(filePath: string): AgentSkill | undefined {
-    return this.getSkills().find(s => s.filePath === filePath)
+    return this.getSkills().find((s) => s.filePath === filePath)
   }
 
   createSkill(
@@ -549,78 +687,102 @@ class SkillsService {
     instructions: string,
     options?: { source?: "local" | "imported"; filePath?: string }
   ): AgentSkill {
-    if (!this.skillsData) {
-      this.loadSkills()
-    }
+    this.ensureInitialized()
+
+    const { globalLayer } = this.getLayers()
+    const id = randomUUID()
+    const originFilePath = skillIdToFilePath(globalLayer, id)
+    const now = Date.now()
 
     const newSkill: AgentSkill = {
-      id: randomUUID(),
+      id,
       name,
       description,
       instructions,
       enabled: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
       source: options?.source ?? "local",
-      filePath: options?.filePath,
+      // Runtime execution context for execute_command.
+      filePath: options?.filePath ?? originFilePath,
     }
 
-    this.skillsData!.skills.push(newSkill)
-    this.saveSkills()
+    writeAgentsSkillFile(globalLayer, newSkill, { filePathOverride: originFilePath })
+
+    // Update in-memory view.
+    this.skills = this.sortSkillsStable([...this.skills, newSkill])
+    this.originById.set(id, { layer: "global", filePath: originFilePath })
     return newSkill
   }
 
   updateSkill(id: string, updates: Partial<Pick<AgentSkill, "name" | "description" | "instructions" | "enabled">>): AgentSkill {
-    if (!this.skillsData) {
-      this.loadSkills()
-    }
+    this.ensureInitialized()
 
-    const skill = this.getSkill(id)
-    if (!skill) {
+    const index = this.skills.findIndex((s) => s.id === id)
+    if (index < 0) {
       throw new Error(`Skill with id ${id} not found`)
     }
 
-    const updatedSkill = {
-      ...skill,
+    const previousSkill = this.skills[index]
+    const previousOrigin = this.originById.get(id)
+
+    const now = Date.now()
+    const updatedSkill: AgentSkill = {
+      ...previousSkill,
       ...updates,
-      updatedAt: Date.now(),
+      updatedAt: now,
     }
 
-    const index = this.skillsData!.skills.findIndex(s => s.id === id)
-    this.skillsData!.skills[index] = updatedSkill
-    this.saveSkills()
-    return updatedSkill
+    const { globalLayer, workspaceLayer } = this.getLayers()
+    const targetLayerName = previousOrigin?.layer === "workspace" && workspaceLayer ? "workspace" : "global"
+    const targetLayer = targetLayerName === "workspace" && workspaceLayer ? workspaceLayer : globalLayer
+    const originFilePath = previousOrigin?.filePath ?? skillIdToFilePath(targetLayer, id)
+
+    try {
+      writeAgentsSkillFile(targetLayer, updatedSkill, { filePathOverride: originFilePath })
+
+      this.skills[index] = updatedSkill
+      this.skills = this.sortSkillsStable(this.skills)
+      this.originById.set(id, { layer: targetLayerName, filePath: originFilePath })
+      return updatedSkill
+    } catch (error) {
+      // Roll back in-memory state only.
+      this.skills[index] = previousSkill
+      if (previousOrigin) this.originById.set(id, previousOrigin)
+      else this.originById.delete(id)
+      throw error
+    }
   }
 
   deleteSkill(id: string): boolean {
-    if (!this.skillsData) {
-      this.loadSkills()
-    }
+    this.ensureInitialized()
 
-    const skill = this.getSkill(id)
-    if (!skill) {
+    const index = this.skills.findIndex((s) => s.id === id)
+    if (index < 0) {
       return false
     }
 
-    // If the skill was loaded from a file inside the managed skills folder,
-    // delete the folder from disk so the file watcher doesn't re-import it.
-    if (skill.filePath) {
-      try {
-        const skillDir = path.dirname(skill.filePath)
-        // Only delete if it lives inside the managed skills folder (safety check)
-        if (skillDir.startsWith(skillsFolder) && skillDir !== skillsFolder) {
-          fs.rmSync(skillDir, { recursive: true, force: true })
-          logApp(`Deleted skill folder from disk: ${skillDir}`)
-        }
-      } catch (error) {
-        logApp(`Failed to delete skill folder for "${skill.name}":`, error)
-        // Non-fatal: still remove from skills.json
-      }
-    }
+    const deletedSkill = this.skills[index]
+    const origin = this.originById.get(id)
 
-    this.skillsData!.skills = this.skillsData!.skills.filter(s => s.id !== id)
-    this.saveSkills()
-    return true
+    const { globalLayer, workspaceLayer } = this.getLayers()
+    const layerName = origin?.layer === "workspace" && workspaceLayer ? "workspace" : "global"
+    const layer = layerName === "workspace" && workspaceLayer ? workspaceLayer : globalLayer
+    const wrapperFilePath = origin?.filePath ?? skillIdToFilePath(layer, id)
+    const backupDir = getAgentsSkillsBackupDir(layer)
+
+    try {
+      this.backupThenDeleteFileSync(wrapperFilePath, backupDir)
+      this.skills.splice(index, 1)
+      this.originById.delete(id)
+      return true
+    } catch (error) {
+      // Roll back in-memory state.
+      this.skills.splice(index, 0, deletedSkill)
+      if (origin) this.originById.set(id, origin)
+      logApp("[SkillsService] Error deleting skill:", error)
+      return false
+    }
   }
 
   toggleSkill(id: string): AgentSkill {
@@ -762,39 +924,36 @@ class SkillsService {
   getEnabledSkillsInstructions(): string {
     const enabledSkills = this.getEnabledSkills()
 
+    const { globalLayer, workspaceLayer } = this.getLayers()
+    const globalSkillsDir = path.join(globalLayer.agentsDir, "skills")
+    const workspaceSkillsDir = workspaceLayer ? path.join(workspaceLayer.agentsDir, "skills") : null
+
     // Always include skills folder info so agent can create/manage skills via filesystem
     let result = `
 # Agent Skills
 
-## Skills Installation Directory
-**IMPORTANT**: All skills MUST be installed to this ABSOLUTE path:
-\`${skillsFolder}\`
+Skills are custom instruction modules that can be enabled/disabled.
 
-When creating or installing skills, ALWAYS use this exact absolute path. Do NOT use relative paths like \`skills/\` or \`./skills/\`.
+## Canonical Skills Folders
+- Global: \`${globalSkillsDir}\`${workspaceSkillsDir ? `\n- Workspace: \`${workspaceSkillsDir}\` (overrides global)` : ""}
 
-### Creating New Skills
-To create a new skill, write a SKILL.md file to a subdirectory of the skills folder:
+### Creating a New Skill
+Create a new folder in one of the skills directories with a \`skill.md\` file.
+
 \`\`\`bash
-# Example: Creating a new skill called "my-skill"
-mkdir -p "${skillsFolder}/my-skill"
-# Then create the SKILL.md file in that directory
+mkdir -p "${globalSkillsDir}/my-skill"
+# Create skill.md in that folder
 \`\`\`
 
-SKILL.md format:
+skill.md format:
 \`\`\`
 ---
-name: skill-name
+id: my-skill-id
+name: My Skill
 description: What this skill does
 ---
 
 Your instructions here in markdown...
-\`\`\`
-
-### Installing Skills from GitHub
-When downloading skills from GitHub or other sources, always install to the skills folder:
-\`\`\`bash
-cd "${skillsFolder}"
-# Then clone or download the skill here
 \`\`\`
 
 After creating a skill file, it will be available on the next agent session.
@@ -855,6 +1014,10 @@ ${skillsContent}
       return `- **${skill.name}** (ID: \`${skill.id}\`): ${skill.description || 'No description'}`
     }).join("\n")
 
+    const { globalLayer, workspaceLayer } = this.getLayers()
+    const globalSkillsDir = path.join(globalLayer.agentsDir, "skills")
+    const workspaceSkillsDir = workspaceLayer ? path.join(workspaceLayer.agentsDir, "skills") : null
+
     return `
 # Available Agent Skills
 
@@ -863,7 +1026,7 @@ The following skills are available. To use a skill, call \`speakmcp-settings:loa
 ${skillsContent}
 
 ## Skills Installation Directory
-Skills can be installed to: \`${skillsFolder}\`
+Skills can be installed to: \`${workspaceSkillsDir ?? globalSkillsDir}\`${workspaceSkillsDir ? `\n(Global fallback): \`${globalSkillsDir}\`` : ""}
 Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in that skill's directory.
 `
   }
@@ -1154,24 +1317,32 @@ Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in t
    * Update a skill's file path (internal method for upgrading GitHub skills)
    */
   private updateSkillFilePath(id: string, newFilePath: string): AgentSkill {
-    if (!this.skillsData) {
-      this.loadSkills()
-    }
+    this.ensureInitialized()
 
-    const skill = this.getSkill(id)
-    if (!skill) {
+    const index = this.skills.findIndex((s) => s.id === id)
+    if (index < 0) {
       throw new Error(`Skill with id ${id} not found`)
     }
 
-    const updatedSkill = {
-      ...skill,
+    const previousSkill = this.skills[index]
+    const previousOrigin = this.originById.get(id)
+
+    const updatedSkill: AgentSkill = {
+      ...previousSkill,
       filePath: newFilePath,
       updatedAt: Date.now(),
     }
 
-    const index = this.skillsData!.skills.findIndex(s => s.id === id)
-    this.skillsData!.skills[index] = updatedSkill
-    this.saveSkills()
+    const { globalLayer, workspaceLayer } = this.getLayers()
+    const targetLayerName = previousOrigin?.layer === "workspace" && workspaceLayer ? "workspace" : "global"
+    const targetLayer = targetLayerName === "workspace" && workspaceLayer ? workspaceLayer : globalLayer
+    const originFilePath = previousOrigin?.filePath ?? skillIdToFilePath(targetLayer, id)
+
+    writeAgentsSkillFile(targetLayer, updatedSkill, { filePathOverride: originFilePath })
+
+    this.skills[index] = updatedSkill
+    this.skills = this.sortSkillsStable(this.skills)
+    this.originById.set(id, { layer: targetLayerName, filePath: originFilePath })
     return updatedSkill
   }
 
@@ -1181,6 +1352,11 @@ Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in t
    * Recursively scans nested directories to find skills at any depth.
    */
   scanSkillsFolder(): AgentSkill[] {
+    this.ensureInitialized()
+
+    // Reload from .agents first to pick up any manual edits.
+    this.loadFromDisk({ migrateLegacy: false })
+
     const importedSkills: AgentSkill[] = []
 
     try {
@@ -1189,7 +1365,7 @@ Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in t
         return importedSkills
       }
 
-      // Recursively scan for SKILL.md files
+      // Recursively scan legacy skills folder for SKILL.md files and import any new ones.
       const scanDirectory = (dirPath: string) => {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true })
 
@@ -1199,33 +1375,26 @@ Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in t
             const skillPath = path.join(entryPath, "SKILL.md")
 
             if (fs.existsSync(skillPath)) {
-              // This directory contains a SKILL.md - import it
               if (this.getSkillByFilePath(skillPath)) {
-                logApp(`Skill already imported, skipping: ${entry.name}`)
                 continue
               }
               try {
                 const skill = this.importSkillFromFile(skillPath)
                 importedSkills.push(skill)
-                logApp(`Imported skill from folder: ${entry.name}`)
               } catch (error) {
                 logApp(`Failed to import skill from ${skillPath}:`, error)
               }
             } else {
-              // No SKILL.md here, recurse into subdirectory
               scanDirectory(entryPath)
             }
           } else if (entry.name.endsWith(".md") && dirPath === skillsFolder) {
-            // Import standalone .md files only at the top level
             const skillPath = path.join(dirPath, entry.name)
             if (this.getSkillByFilePath(skillPath)) {
-              logApp(`Skill already imported, skipping: ${entry.name}`)
               continue
             }
             try {
               const skill = this.importSkillFromFile(skillPath)
               importedSkills.push(skill)
-              logApp(`Imported skill from file: ${entry.name}`)
             } catch (error) {
               logApp(`Failed to import skill from ${skillPath}:`, error)
             }
@@ -1236,6 +1405,11 @@ Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in t
       scanDirectory(skillsFolder)
     } catch (error) {
       logApp("Error scanning skills folder:", error)
+    }
+
+    // Reload again to ensure merged state reflects any newly written .agents skill files.
+    if (importedSkills.length > 0) {
+      this.loadFromDisk({ migrateLegacy: false })
     }
 
     return importedSkills
@@ -1319,99 +1493,108 @@ function setupWatcher(dirPath: string): fs.FSWatcher | null {
 }
 
 /**
+ * Returns the canonical .agents/skills directories to watch (global + workspace if present).
+ */
+function getCanonicalSkillsDirs(): string[] {
+  const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+  const globalSkillsDir = getAgentsSkillsDir(globalLayer)
+  const dirs = [globalSkillsDir]
+
+  const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+  if (workspaceAgentsFolder) {
+    const workspaceLayer = getAgentsLayerPaths(workspaceAgentsFolder)
+    const workspaceSkillsDir = getAgentsSkillsDir(workspaceLayer)
+    dirs.push(workspaceSkillsDir)
+  }
+
+  return dirs
+}
+
+/**
  * Refresh subdirectory watchers on Linux.
  * Called when directory structure changes to pick up new skill folders.
  */
 function refreshLinuxSubdirectoryWatchers(): void {
   if (process.platform !== "linux") return
 
-  // Close all existing watchers except the first one (root folder)
-  const rootWatcher = skillsWatchers[0]
-  for (let i = 1; i < skillsWatchers.length; i++) {
-    try {
-      skillsWatchers[i].close()
-    } catch {
-      // Ignore close errors
-    }
-  }
-  skillsWatchers = rootWatcher ? [rootWatcher] : []
+  // Stop all existing watchers and rebuild from scratch.
+  stopSkillsFolderWatcher()
 
-  // Re-scan and add watchers for subdirectories
-  try {
-    const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const subDirPath = path.join(skillsFolder, entry.name)
-        const watcher = setupWatcher(subDirPath)
-        if (watcher) {
-          skillsWatchers.push(watcher)
+  const dirs = getCanonicalSkillsDirs()
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue
+    const rootWatcher = setupWatcher(dir)
+    if (rootWatcher) skillsWatchers.push(rootWatcher)
+
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const subDirPath = path.join(dir, entry.name)
+          const watcher = setupWatcher(subDirPath)
+          if (watcher) skillsWatchers.push(watcher)
         }
       }
+    } catch {
+      // best-effort
     }
-    logApp(`Linux: Refreshed watchers, now watching ${skillsWatchers.length} directories`)
-  } catch (error) {
-    logApp("Failed to refresh Linux subdirectory watchers:", error)
   }
+  logApp(`Linux: Refreshed watchers, now watching ${skillsWatchers.length} directories`)
 }
 
 /**
- * Start watching the skills folder for changes.
+ * Start watching the canonical .agents/skills directories for changes.
+ * Watches both global and workspace skill dirs (if workspace is set).
  * Automatically notifies the renderer when new skills are added or modified.
  *
  * Note: On Linux, fs.watch({ recursive: true }) is not supported, so we set up
- * individual watchers for the root folder and each skill subdirectory.
+ * individual watchers for each root folder and its subdirectories.
  */
 export function startSkillsFolderWatcher(): void {
-  // Ensure folder exists
-  if (!fs.existsSync(skillsFolder)) {
-    fs.mkdirSync(skillsFolder, { recursive: true })
-  }
-
   // Don't start duplicate watchers
   if (skillsWatchers.length > 0) {
     logApp("Skills folder watcher already running")
     return
   }
 
-  try {
-    const isLinux = process.platform === "linux"
+  const dirs = getCanonicalSkillsDirs()
 
-    if (isLinux) {
-      // Linux: Set up non-recursive watcher for root folder
-      const rootWatcher = setupWatcher(skillsFolder)
-      if (rootWatcher) {
-        skillsWatchers.push(rootWatcher)
-      }
+  for (const dir of dirs) {
+    // Ensure folder exists
+    fs.mkdirSync(dir, { recursive: true })
 
-      // Also watch each existing skill subdirectory (one level deep)
-      const entries = fs.readdirSync(skillsFolder, { withFileTypes: true })
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const subDirPath = path.join(skillsFolder, entry.name)
-          const watcher = setupWatcher(subDirPath)
-          if (watcher) {
-            skillsWatchers.push(watcher)
+    try {
+      const isLinux = process.platform === "linux"
+
+      if (isLinux) {
+        const rootWatcher = setupWatcher(dir)
+        if (rootWatcher) skillsWatchers.push(rootWatcher)
+
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const subDirPath = path.join(dir, entry.name)
+            const watcher = setupWatcher(subDirPath)
+            if (watcher) skillsWatchers.push(watcher)
           }
         }
+      } else {
+        // macOS and Windows: Use recursive watching
+        const watcher = fs.watch(dir, { recursive: true }, (eventType, filename) => {
+          handleWatcherEvent(eventType, filename)
+        })
+
+        watcher.on("error", (error) => {
+          logApp(`Skills folder watcher error for ${dir}:`, error)
+        })
+
+        skillsWatchers.push(watcher)
       }
 
-      logApp(`Started watching skills folder (Linux mode): ${skillsFolder} with ${skillsWatchers.length} watchers`)
-    } else {
-      // macOS and Windows: Use recursive watching
-      const watcher = fs.watch(skillsFolder, { recursive: true }, (eventType, filename) => {
-        handleWatcherEvent(eventType, filename)
-      })
-
-      watcher.on("error", (error) => {
-        logApp("Skills folder watcher error:", error)
-        stopSkillsFolderWatcher()
-      })
-
-      skillsWatchers.push(watcher)
-      logApp(`Started watching skills folder: ${skillsFolder}`)
+      logApp(`Started watching skills folder: ${dir}`)
+    } catch (error) {
+      logApp(`Failed to start skills folder watcher for ${dir}:`, error)
     }
-  } catch (error) {
-    logApp("Failed to start skills folder watcher:", error)
   }
 }
 

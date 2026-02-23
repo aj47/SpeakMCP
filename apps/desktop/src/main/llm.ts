@@ -8,7 +8,7 @@ import {
 import { AgentProgressStep, AgentProgressUpdate, SessionProfileSnapshot, AgentMemory } from "../shared/types"
 import { diagnosticsService } from "./diagnostics"
 
-import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreaming, StreamingCallback } from "./llm-fetch"
+import { makeLLMCallWithFetch, makeTextCompletionWithFetch, verifyCompletionWithFetch, RetryProgressCallback, makeLLMCallWithStreamingAndTools, StreamingCallback } from "./llm-fetch"
 import { constructSystemPrompt } from "./system-prompts"
 import { state, agentSessionStateManager } from "./state"
 import { isDebugLLM, logLLM, isDebugTools, logTools } from "./debug"
@@ -2921,104 +2921,23 @@ async function makeLLMCall(
       }
     }
 
-    // If streaming callback is provided and provider supports it, use streaming
-    // Note: Streaming is only for display purposes - we still need the full response for tool calls
+    // Single call: streamText with tools for streaming providers, generateText for others.
+    // This eliminates the previous two-call pattern (parallel streaming + generateText) which
+    // caused divergence between what the user saw streaming and what tool actually executed.
+    let result: LLMToolCallResponse
     if (onStreamingUpdate && chatProviderId !== "gemini") {
-      // Create abort controller for streaming - we'll abort when structured call completes
-      const streamingAbortController = new AbortController()
-
-      // Register with session manager so user-initiated stop will also cancel streaming
-      if (sessionId) {
-        agentSessionStateManager.registerAbortController(sessionId, streamingAbortController)
-      }
-
-      // Track whether streaming should be aborted (when structured call completes)
-      // This prevents late streaming updates from appearing after the response is ready
-      let streamingAborted = false
-
-      // Track the last accumulated streaming content to use as the final text
-      // This ensures the user sees the same content they watched stream in
-      let lastStreamedContent = ""
-
-      // Track whether streaming failed - if so, we should not use partial/stale content
-      // to overwrite the full structured response
-      let streamingFailed = false
-
-      // Wrap the callback to ignore updates after the structured call completes
-      // and track the accumulated content for consistency
-      const wrappedOnStreamingUpdate = (chunk: string, accumulated: string) => {
-        if (!streamingAborted) {
-          lastStreamedContent = accumulated
-          onStreamingUpdate(chunk, accumulated)
-        }
-      }
-
-      // Start a parallel streaming call for real-time display
-      // This runs alongside the structured call to provide live feedback
-      const streamingPromise = makeLLMCallWithStreaming(
+      result = await makeLLMCallWithStreamingAndTools(
         messages,
-        wrappedOnStreamingUpdate,
+        onStreamingUpdate,
         chatProviderId,
+        onRetryProgress,
         sessionId,
-        streamingAbortController,
-      ).catch(err => {
-        // Streaming errors are non-fatal - we still have the structured call
-        // Mark streaming as failed so we don't use partial/stale content
-        streamingFailed = true
-        if (isDebugLLM()) {
-          logLLM("Streaming call failed (non-fatal):", err)
-        }
-        return null
-      })
-
-      // Make the structured call for the actual response
-      // Wrap in try/finally to ensure streaming is cleaned up even if the call fails
-      let result: LLMToolCallResponse
-      try {
-        result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
-      } finally {
-        // Signal streaming to stop IMMEDIATELY
-        streamingAborted = true
-        streamingAbortController.abort()
-
-        // Wait briefly for streaming to acknowledge the abort (prevents race)
-        // This ensures streaming callbacks don't fire after we return
-        await Promise.race([
-          streamingPromise,
-          new Promise(resolve => setTimeout(resolve, 100))  // 100ms max wait
-        ]).catch(() => {}) // Ignore any errors
-
-        // Unregister after streaming has stopped
-        if (sessionId) {
-          agentSessionStateManager.unregisterAbortController(sessionId, streamingAbortController)
-        }
-      }
-
-      // Use the streamed content for display consistency if:
-      // 1. We have streamed content AND
-      // 2. Streaming didn't fail (to avoid using partial/stale content) AND
-      // 3. There are no tool calls (to maintain consistency between content and toolCalls)
-      // This ensures what the user saw streaming is what they get at the end for text-only responses.
-      // When tool calls are present, we keep the structured response content to maintain
-      // consistency between content and toolCalls in the conversation history.
-      // This prevents downstream agent logic from seeing mismatched text content and tool calls.
-      const hasToolCalls = result.toolCalls && result.toolCalls.length > 0
-      if (lastStreamedContent && !streamingFailed && !hasToolCalls) {
-        result = {
-          ...result,
-          content: lastStreamedContent,
-        }
-      }
-
-      if (isDebugLLM()) {
-        logLLM("Response ←", result)
-        logLLM("=== LLM CALL END ===")
-      }
-      return result
+        tools,
+      )
+    } else {
+      result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
     }
 
-    // Non-streaming path
-    const result = await makeLLMCallWithFetch(messages, chatProviderId, onRetryProgress, sessionId, tools)
     if (isDebugLLM()) {
       logLLM("Response ←", result)
       logLLM("=== LLM CALL END ===")

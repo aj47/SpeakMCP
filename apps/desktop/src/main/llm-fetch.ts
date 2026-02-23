@@ -917,6 +917,154 @@ export async function makeLLMCallWithStreaming(
 }
 
 /**
+ * Make a streaming LLM call with tool support using AI SDK.
+ *
+ * Replaces the previous two-call pattern (parallel streaming + generateText) with a
+ * single streamText call that delivers both real-time text streaming AND tool calls from
+ * the same model response. This eliminates the divergence between what the user sees
+ * streaming and what actually executes.
+ */
+export async function makeLLMCallWithStreamingAndTools(
+  messages: Array<{ role: string; content: string }>,
+  onChunk: StreamingCallback,
+  providerId?: string,
+  onRetryProgress?: RetryProgressCallback,
+  sessionId?: string,
+  tools?: MCPTool[]
+): Promise<LLMToolCallResponse> {
+  const effectiveProviderId = (providerId || getCurrentProviderId()) as ProviderType
+
+  return withRetry(
+    async () => {
+      const model = createLanguageModel(effectiveProviderId)
+      const { system, messages: convertedMessages } = convertMessages(messages)
+      const abortController = createSessionAbortController(sessionId)
+
+      const convertedTools = tools && tools.length > 0
+        ? convertMCPToolsToAISDKTools(tools)
+        : undefined
+
+      const modelName = getCurrentModelName(effectiveProviderId)
+
+      if (isDebugLLM()) {
+        logLLM("🚀 AI SDK streamText+tools call", {
+          provider: effectiveProviderId,
+          messagesCount: messages.length,
+          hasSystem: !!system,
+          hasTools: !!convertedTools,
+          toolCount: tools?.length || 0,
+        })
+      }
+
+      const generationId = isLangfuseEnabled() ? randomUUID() : null
+      if (generationId) {
+        createLLMGeneration(sessionId || null, generationId, {
+          name: "Streaming LLM Call",
+          model: modelName,
+          modelParameters: {
+            provider: effectiveProviderId,
+            hasTools: !!convertedTools,
+            toolCount: tools?.length || 0,
+          },
+          input: { system, messages: convertedMessages },
+        })
+      }
+
+      try {
+        if (
+          state.shouldStopAgent ||
+          (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+        ) {
+          abortController.abort()
+        }
+
+        const streamResult = streamText({
+          model,
+          system,
+          messages: convertedMessages,
+          abortSignal: abortController.signal,
+          tools: convertedTools?.tools,
+          toolChoice: convertedTools?.tools ? "auto" : undefined,
+        })
+
+        let accumulated = ""
+        const collectedToolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = []
+        let finishUsage: { inputTokens?: number; outputTokens?: number } | undefined
+
+        for await (const event of streamResult.fullStream) {
+          if (
+            state.shouldStopAgent ||
+            (sessionId && agentSessionStateManager.shouldStopSession(sessionId))
+          ) {
+            abortController.abort()
+            break
+          }
+
+          if (event.type === "text-delta") {
+            accumulated += event.text
+            onChunk(event.text, accumulated)
+          } else if (event.type === "tool-call") {
+            collectedToolCalls.push({
+              name: restoreToolName(event.toolName, convertedTools?.nameMap),
+              arguments: event.input as Record<string, unknown>,
+            })
+          } else if (event.type === "finish") {
+            finishUsage = event.totalUsage
+          } else if (event.type === "error") {
+            throw event.error
+          }
+        }
+
+        if (isDebugLLM()) {
+          if (collectedToolCalls.length > 0) {
+            logLLM("✅ AI SDK streamText+tools: tool calls", {
+              toolCallCount: collectedToolCalls.length,
+              toolNames: collectedToolCalls.map(tc => tc.name),
+              textContent: accumulated.substring(0, 100),
+            })
+          } else {
+            logLLM("✅ AI SDK streamText+tools: text response", {
+              textLength: accumulated.length,
+              textPreview: accumulated.substring(0, 200),
+            })
+          }
+        }
+
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            output: collectedToolCalls.length > 0
+              ? JSON.stringify({ content: accumulated, toolCalls: collectedToolCalls })
+              : accumulated,
+            usage: buildTokenUsage(finishUsage),
+          })
+        }
+
+        if (!accumulated && collectedToolCalls.length === 0) {
+          throw new Error("LLM returned empty response")
+        }
+
+        return {
+          content: accumulated || undefined,
+          toolCalls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+        }
+      } catch (error: any) {
+        if (generationId) {
+          endLLMGeneration(generationId, {
+            level: "ERROR",
+            statusMessage: error?.message || "Streaming+tools LLM call failed",
+          })
+        }
+        throw error
+      } finally {
+        unregisterSessionAbortController(abortController, sessionId)
+      }
+    },
+    { onRetryProgress, sessionId }
+  )
+}
+
+
+/**
  * Make a simple text completion call using AI SDK
  * Used for transcript post-processing and similar text completion tasks.
  * Includes automatic retry with exponential backoff for transient failures.

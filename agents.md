@@ -125,11 +125,44 @@ export const myService = MyService.getInstance()
 
 ## Config System
 
+### Legacy config.json
 Config is a flat JSON object persisted at `~/Library/Application Support/app.speakmcp/config.json` (macOS).
 - Read: `configStore.get()` returns full `Config` object
 - Write: `configStore.set(partial)` merges partial updates
 - Migration logic in `config.ts` handles schema evolution (e.g., Groq TTS model renames)
 - Config type defined in `src/shared/types.ts` as `Config` interface
+
+### .agents/ modular config (canonical)
+Skills and memories are stored as discrete `.md` files in a `.agents/` directory with simple `key: value` frontmatter.
+
+**Two layers** with overlay semantics (workspace overrides global by ID):
+- **Global**: `<appData>/<APP_ID>/.agents/` — via `globalAgentsFolder` from `config.ts`
+- **Workspace** (optional): resolved by `resolveWorkspaceAgentsFolder()` — uses `SPEAKMCP_WORKSPACE_DIR` env var or upward search
+
+**Directory structure:**
+```
+.agents/
+├── skills/<skill-id>/skill.md    # frontmatter: id, name, description, enabled, createdAt, updatedAt
+├── memories/<memory-id>.md       # frontmatter: id, content summary
+├── .backups/                     # timestamped backups (auto-rotated)
+│   ├── skills/
+│   └── memories/
+└── (future: mcp.json, models.json, speakmcp-settings.json, agents.md, system-prompt.md, loops.md)
+```
+
+**Infrastructure** (`apps/desktop/src/main/agents-files/`):
+- `frontmatter.ts` — simple `key: value` parser/serializer (no YAML dependency)
+- `safe-file.ts` — atomic writes (temp+rename), timestamped backups with rotation, auto-recovery
+- `modular-config.ts` — `AgentsLayerPaths` type, layer path calculations
+- `skills.ts` — skill `.md` read/write, directory scanning, `writeAgentsSkillFile()`
+- `memories.ts` — memory `.md` read/write
+
+**Key functions:**
+- `getAgentsLayerPaths(agentsDir)` → `AgentsLayerPaths` (agentsDir, backupsDir)
+- `loadAgentsSkillsLayer(layer)` → scans `.agents/skills/` recursively for `skill.md`/`SKILL.md`
+- `writeAgentsSkillFile(layer, skill)` → atomic write with backup
+- `safeWriteFileSync(path, data, opts)` → atomic temp+rename, optional backup+rotation
+- `safeReadJsonFileSync(path)` → parse + auto-recover from backup on failure
 
 ## Key Type Hierarchy
 
@@ -146,6 +179,11 @@ src/shared/types.ts (apps/desktop/src/shared/types.ts)
   └─ ConversationMessage, Conversation
   └─ AgentMemory, AgentStepSummary
   └─ SessionProfileSnapshot, ModelPreset
+
+src/main/agents-files/ (layer types)
+  └─ AgentsLayerPaths (modular-config.ts)
+  └─ AgentsSkillOrigin, LoadedAgentsSkillsLayer (skills.ts)
+  └─ SkillOrigin { layer, filePath } (skills-service.ts — private)
 ```
 
 ## Vercel AI SDK Usage

@@ -108,6 +108,7 @@ function isValidMcpServerConfig(config: unknown): config is Partial<ProfileMcpSe
   if (c.disabledServers !== undefined && !isStringArray(c.disabledServers)) return false
   if (c.disabledTools !== undefined && !isStringArray(c.disabledTools)) return false
   if (c.enabledServers !== undefined && !isStringArray(c.enabledServers)) return false
+  if (c.enabledBuiltinTools !== undefined && !isStringArray(c.enabledBuiltinTools)) return false
   if (c.allServersDisabledByDefault !== undefined && typeof c.allServersDisabledByDefault !== "boolean") return false
   return true
 }
@@ -685,7 +686,12 @@ class AgentProfileService {
       ...(mcpServerConfig.disabledTools !== undefined && { disabledTools: mcpServerConfig.disabledTools }),
       ...(mcpServerConfig.allServersDisabledByDefault !== undefined && { allServersDisabledByDefault: mcpServerConfig.allServersDisabledByDefault }),
       ...(mcpServerConfig.enabledServers !== undefined && { enabledServers: mcpServerConfig.enabledServers }),
-      ...(mcpServerConfig.enabledBuiltinTools !== undefined && { enabledBuiltinTools: mcpServerConfig.enabledBuiltinTools }),
+      ...(mcpServerConfig.enabledBuiltinTools !== undefined && {
+        // Empty array is treated as "not configured" (allow all built-ins) — clear persisted whitelist.
+        enabledBuiltinTools: mcpServerConfig.enabledBuiltinTools.length > 0
+          ? mcpServerConfig.enabledBuiltinTools
+          : undefined,
+      }),
     }
 
     return this.update(id, { toolConfig: mergedToolConfig })
@@ -694,11 +700,18 @@ class AgentProfileService {
   /**
    * Save current MCP state to a profile.
    */
-  saveCurrentMcpStateToProfile(id: string, disabledServers: string[], disabledTools: string[], enabledServers?: string[]): AgentProfile | undefined {
+  saveCurrentMcpStateToProfile(
+    id: string,
+    disabledServers: string[],
+    disabledTools: string[],
+    enabledServers?: string[],
+    enabledBuiltinTools?: string[],
+  ): AgentProfile | undefined {
     return this.updateProfileMcpConfig(id, {
       disabledServers,
       disabledTools,
       ...(enabledServers !== undefined && { enabledServers }),
+      ...(enabledBuiltinTools !== undefined && { enabledBuiltinTools }),
     })
   }
 

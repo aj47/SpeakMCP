@@ -880,7 +880,8 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         mcpServerConfig?.disabledServers,
         mcpServerConfig?.disabledTools,
         mcpServerConfig?.allServersDisabledByDefault,
-        mcpServerConfig?.enabledServers
+        mcpServerConfig?.enabledServers,
+        mcpServerConfig?.enabledBuiltinTools,
       )
       diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.displayName || profile.name}`)
       return reply.send({
@@ -1705,10 +1706,13 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   // POST /mcp/tools/list - List all available builtin tools
   fastify.post("/mcp/tools/list", async (_req, reply) => {
     try {
-      const { builtinTools } = await import("./builtin-tools")
+      const { isBuiltinTool } = await import("./builtin-tools")
 
       // Convert to MCP format
-      const tools = builtinTools.map((tool) => ({
+      const tools = mcpService
+        .getAvailableTools()
+        .filter((tool) => isBuiltinTool(tool.name))
+        .map((tool) => ({
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema,
@@ -1733,15 +1737,15 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         return reply.code(400).send({ error: "Missing or invalid 'name' parameter" })
       }
 
-      const { executeBuiltinTool, isBuiltinTool } = await import("./builtin-tools")
+      const { isBuiltinTool } = await import("./builtin-tools")
 
       // Validate that this is a builtin tool
       if (!isBuiltinTool(name)) {
         return reply.code(400).send({ error: `Unknown builtin tool: ${name}` })
       }
 
-      // Execute the tool
-      const result = await executeBuiltinTool(name, args || {})
+      // Execute the tool (go through MCPService so allowlist/disabled checks are enforced)
+      const result = await mcpService.executeToolCall({ name, arguments: args || {} } as any, undefined, false)
 
       if (!result) {
         return reply.code(500).send({ error: "Tool execution returned null" })

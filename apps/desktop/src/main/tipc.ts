@@ -3045,7 +3045,8 @@ export const router = {
         mcpServerConfig?.disabledServers ?? [],
         mcpServerConfig?.disabledTools ?? [],
         mcpServerConfig?.allServersDisabledByDefault ?? false,
-        mcpServerConfig?.enabledServers ?? []
+	        mcpServerConfig?.enabledServers ?? [],
+	        mcpServerConfig?.enabledBuiltinTools ?? [],
       )
 
       return agentProfileService.getProfileLegacy(profile.id)
@@ -3073,18 +3074,20 @@ export const router = {
         input.profileId,
         currentState.disabledServers,
         currentState.disabledTools,
-        currentState.enabledServers
+	        currentState.enabledServers,
+	        currentState.enabledBuiltinTools,
       )
     }),
 
   // Update profile MCP server configuration
   updateProfileMcpConfig: t.procedure
-    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[] }>()
+	    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[]; enabledBuiltinTools?: string[] }>()
     .action(async ({ input }) => {
         return agentProfileService.updateProfileMcpConfig(input.profileId, {
         disabledServers: input.disabledServers,
         disabledTools: input.disabledTools,
         enabledServers: input.enabledServers,
+	        enabledBuiltinTools: input.enabledBuiltinTools,
       })
     }),
 

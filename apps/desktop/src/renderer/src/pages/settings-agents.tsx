@@ -234,55 +234,55 @@ export function SettingsAgents() {
 
   function renderAgentList() {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pb-12">
         {agents.map(agent => (
           <Card key={agent.id} className={`overflow-hidden flex flex-col transition-all hover:shadow-md ${!agent.enabled ? "opacity-60 grayscale-[0.5]" : ""}`}>
-            <div className="h-24 bg-gradient-to-r from-muted/80 to-muted flex items-end justify-center relative border-b">
-              <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-                {agent.isBuiltIn && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shadow-sm">Built-in</Badge>}
-                {agent.isDefault && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shadow-sm">Default</Badge>}
-                {!agent.enabled && <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-background/50 shadow-sm">Disabled</Badge>}
-              </div>
-              <div className="w-20 h-20 rounded-xl border-4 border-background shadow-sm absolute -bottom-10 bg-background/80 flex items-center justify-center overflow-hidden">
+            <CardHeader className="p-3 pb-2 flex flex-row items-start gap-3 flex-none relative">
+              <div className="w-10 h-10 rounded-md shadow-sm flex items-center justify-center overflow-hidden shrink-0 bg-muted">
                 {agent.avatarDataUrl
                   ? <img src={agent.avatarDataUrl} alt={agent.displayName || agent.name} className="w-full h-full object-cover" />
-                  : <Facehash name={agent.id || agent.name} size={80} colors={agentColors(agent.id || agent.name)} />
+                  : <Facehash name={agent.id || agent.name} size={40} colors={agentColors(agent.id || agent.name)} />
                 }
               </div>
-            </div>
-            <CardHeader className="pb-2 pt-12 text-center flex-none">
-              <CardTitle className="text-lg flex items-center justify-center gap-2">
-                {agent.displayName || agent.name}
-              </CardTitle>
-              <CardDescription className="line-clamp-2 mt-1 min-h-[2.5rem] text-sm">
-                {agent.description || agent.guidelines?.slice(0, 100) || "No description provided."}
-              </CardDescription>
+              <div className="flex flex-col min-w-0 flex-1 pr-14">
+                <CardTitle className="text-sm font-semibold truncate leading-none mt-0.5">
+                  {agent.displayName || agent.name}
+                </CardTitle>
+                <CardDescription className="line-clamp-2 mt-1 text-[11px] leading-tight min-h-[1.75rem]">
+                  {agent.description || agent.guidelines?.slice(0, 100) || "No description provided."}
+                </CardDescription>
+              </div>
+              <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                {agent.isBuiltIn && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 shadow-sm font-medium">Built-in</Badge>}
+                {agent.isDefault && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 shadow-sm font-medium">Default</Badge>}
+                {!agent.enabled && <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 bg-background/50 shadow-sm font-medium">Disabled</Badge>}
+              </div>
             </CardHeader>
-            <CardContent className="flex-grow flex flex-col justify-end pt-2">
-              <div className="flex gap-1.5 flex-wrap justify-center mb-4">
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30">{agent.connection.type}</Badge>
+            <CardContent className="flex-grow flex flex-col justify-end pt-1 pb-2 px-3">
+              <div className="flex gap-1 flex-wrap mb-2.5">
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-muted/30 font-normal">{agent.connection.type}</Badge>
                 {agent.modelConfig?.mcpToolsProviderId && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 truncate max-w-[100px] bg-muted/30" title={agent.modelConfig.mcpToolsProviderId}>{agent.modelConfig.mcpToolsProviderId}</Badge>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 truncate max-w-[80px] bg-muted/30 font-normal" title={agent.modelConfig.mcpToolsProviderId}>{agent.modelConfig.mcpToolsProviderId}</Badge>
                 )}
                 {(agent.toolConfig?.enabledServers?.length ?? 0) > 0 && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30"><Server className="h-3 w-3 mr-1 text-muted-foreground" />{agent.toolConfig!.enabledServers!.length}</Badge>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-muted/30 font-normal"><Server className="h-2.5 w-2.5 mr-0.5 text-muted-foreground" />{agent.toolConfig!.enabledServers!.length}</Badge>
                 )}
                 {(agent.skillsConfig?.enabledSkillIds?.length ?? 0) > 0 && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30"><Sparkles className="h-3 w-3 mr-1 text-muted-foreground" />{agent.skillsConfig!.enabledSkillIds!.length}</Badge>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-muted/30 font-normal"><Sparkles className="h-2.5 w-2.5 mr-0.5 text-muted-foreground" />{agent.skillsConfig!.enabledSkillIds!.length}</Badge>
                 )}
                 {agent.properties && Object.keys(agent.properties).length > 0 && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30">{Object.keys(agent.properties).length} props</Badge>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-muted/30 font-normal">{Object.keys(agent.properties).length} props</Badge>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-2 pt-3 border-t mt-auto">
-                <Button variant="ghost" size="sm" className="w-full flex gap-2 h-8 text-muted-foreground hover:text-foreground" onClick={() => handleEdit(agent)}>
-                  <Edit2 className="h-3.5 w-3.5" /> Edit
+              <div className="flex items-center gap-1 pt-2 border-t mt-auto">
+                <Button variant="ghost" size="sm" className="flex-1 h-6 text-[11px] text-muted-foreground hover:text-foreground px-0" onClick={() => handleEdit(agent)}>
+                  <Edit2 className="h-3 w-3 mr-1" /> Edit
                 </Button>
                 {!agent.isBuiltIn && !agent.isDefault && (
                   <>
-                    <div className="w-[1px] h-4 bg-border"></div>
-                    <Button variant="ghost" size="sm" className="w-full flex gap-2 h-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(agent.id)}>
-                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    <div className="w-[1px] h-3 bg-border"></div>
+                    <Button variant="ghost" size="sm" className="flex-1 h-6 text-[11px] text-destructive/80 hover:text-destructive hover:bg-destructive/10 px-0" onClick={() => handleDelete(agent.id)}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Delete
                     </Button>
                   </>
                 )}
@@ -373,6 +373,7 @@ export function SettingsAgents() {
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Input id="description" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} placeholder="What this agent does..." />
+                <p className="text-[11px] text-muted-foreground">Shown only in the UI. Not visible to the agent—use Guidelines for instructions.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="connectionType">Connection Type</Label>
@@ -421,16 +422,24 @@ export function SettingsAgents() {
             {/* ── Behavior Tab (internal only) ── */}
             {isInternal && (
               <TabsContent value="behavior" className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Define the agent&apos;s system prompt and behavioral guidelines. These are injected into every conversation.
-                </p>
                 <div className="space-y-2">
-                  <Label htmlFor="systemPrompt">System Prompt</Label>
-                  <Textarea id="systemPrompt" value={editing.systemPrompt} onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })} rows={6} placeholder="You are a helpful assistant..." className="font-mono text-sm" />
+                  <Label htmlFor="guidelines">Guidelines (Recommended)</Label>
+                  <Textarea id="guidelines" value={editing.guidelines} onChange={e => setEditing({ ...editing, guidelines: e.target.value })} rows={6} placeholder="e.g. You are an expert in React. Always check types before writing code..." className="font-mono text-sm" />
+                  <p className="text-xs text-muted-foreground">
+                    Additional instructions for this agent. These are appended to the core tool-calling system prompt.
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="guidelines">Guidelines</Label>
-                  <Textarea id="guidelines" value={editing.guidelines} onChange={e => setEditing({ ...editing, guidelines: e.target.value })} rows={4} placeholder="Additional behavioral guidelines..." className="font-mono text-sm" />
+                <div className="space-y-2 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="systemPrompt">Base System Prompt (Advanced)</Label>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setEditing({ ...editing, systemPrompt: "" })} disabled={!editing.systemPrompt}>
+                      Reset to Default
+                    </Button>
+                  </div>
+                  <Textarea id="systemPrompt" value={editing.systemPrompt} onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })} rows={4} placeholder="Leave empty to use the default tool-calling system prompt..." className="font-mono text-sm" />
+                  <p className="text-xs text-muted-foreground text-amber-600 dark:text-amber-500">
+                    Not recommended to change. This replaces the core tool-calling instructions. Leave empty to use the default.
+                  </p>
                 </div>
               </TabsContent>
             )}

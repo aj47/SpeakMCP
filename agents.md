@@ -1,15 +1,17 @@
 # agents.md
 
-Practical guide for AI coding agents working in this codebase. Read CLAUDE.md first for architecture overview.
+Practical guide for AI coding agents working in this codebase.
 
 ## Critical Rules
 
 1. **pnpm only** - Never use npm/yarn. The lockfile is `pnpm-lock.yaml`.
 2. **Path aliases** - Main process uses `@shared/*`, renderer uses `@renderer/*` or `~/*`. Never use relative paths like `../../shared/`.
-3. **No circular imports** - Check dependency direction before adding imports. See "Circular Import Avoidance" in CLAUDE.md.
+3. **No circular imports** - Check dependency direction before adding imports.
 4. **Singleton pattern** - Services use `static getInstance()`. Don't create new instances; use the exported singleton.
-5. **Types in `src/shared/types.ts`** - Types used by BOTH main and renderer go here (~1510 lines). Types only for shared package go in `packages/shared/src/types.ts`.
+5. **Types in `src/shared/types.ts`** - Types used by BOTH main and renderer go here. Types only for shared package go in `packages/shared/src/types.ts`.
 6. **Build shared first** - After changing `packages/shared`, run `pnpm build:shared` before `pnpm dev`.
+7. **No user profiles** - User profiles have been eliminated. Settings (guidelines, model config, MCP config, skills) are global via `config.json`. The concept of "current profile" no longer exists for end users.
+8. **Agents, not Personas** - What was previously called "Persona" is now called "Agent". Use "agent" in all user-facing text, comments, and new code.
 
 ## How to Add a New IPC Handler
 
@@ -101,7 +103,7 @@ export const myService = MyService.getInstance()
 
 ### Import Errors
 - **"Cannot find module @shared/..."**: You're in a renderer file using main-process alias. Use `import from "../../shared/..."` or check which tsconfig applies.
-- **Circular dependency**: `builtin-tools.ts` ↔ `profile-service.ts` was a past issue. Schemas go in `builtin-tool-definitions.ts` (no deps), handlers in `builtin-tools.ts`.
+- **Circular dependency**: `builtin-tools.ts` ↔ service files was a past issue. Schemas go in `builtin-tool-definitions.ts` (no deps), handlers in `builtin-tools.ts`.
 
 ### Type Mismatches Between Processes
 - Main and renderer are SEPARATE TypeScript compilations (`tsconfig.node.json` vs `tsconfig.web.json`).
@@ -123,14 +125,34 @@ export const myService = MyService.getInstance()
 - Panel window may not exist. Always null-check.
 - Panel has special resize logic (`resizePanelForAgentMode`, `resizePanelToNormal`).
 
+## Agents (formerly Personas)
+
+The app uses a unified **Agent** concept (`AgentProfile` type) for all specialized AI assistants.
+- **No user profiles** — user settings (guidelines, model config, MCP servers, skills) are global in `config.json`
+- **Agents** replace what was previously called "Personas" and "External Agents"
+- Each agent has: name, system prompt, guidelines, connection type, model config, skills config, tool config
+- Connection types: `internal` (built-in LLM), `acp` (external ACP agent), `stdio`, `remote`
+- Managed by `AgentProfileService` singleton (`agent-profile-service.ts`)
+- UI: single flat list at `/settings/agents` (`settings-agents.tsx`)
+- Legacy types (`Persona`, `Profile`, `ACPAgentConfig`) kept for migration only
+
+### Memories
+
+Memories are **global** (not scoped to profiles/agents):
+- `memoryService.getAllMemories()` — returns all memories
+- `memoryService.deleteMemory(id)` — deletes by ID, no ownership check
+- The `profileId` field on `AgentMemory` exists for future per-agent scoping but is not required
+- Built-in tools (`save_memory`, `list_memories`, `delete_memory`, etc.) operate globally
+
 ## Config System
 
-### Legacy config.json
+### config.json (global settings)
 Config is a flat JSON object persisted at `~/Library/Application Support/app.speakmcp/config.json` (macOS).
 - Read: `configStore.get()` returns full `Config` object
 - Write: `configStore.set(partial)` merges partial updates
 - Migration logic in `config.ts` handles schema evolution (e.g., Groq TTS model renames)
-- Config type defined in `src/shared/types.ts` as `Config` interface
+- Config type defined in `src/shared/types.ts` as `Config`
+- **Config merge order**: `defaults ← config.json ← .agents` (config.json is always loaded as base)
 
 ### .agents/ modular config (canonical)
 Skills and memories are stored as discrete `.md` files in a `.agents/` directory with simple `key: value` frontmatter.
@@ -147,7 +169,7 @@ Skills and memories are stored as discrete `.md` files in a `.agents/` directory
 ├── .backups/                     # timestamped backups (auto-rotated)
 │   ├── skills/
 │   └── memories/
-└── (future: mcp.json, models.json, speakmcp-settings.json, agents.md, system-prompt.md, loops.md)
+└── (future: agents/*.md, mcp.json, models.json, speakmcp-settings.json)
 ```
 
 **Infrastructure** (`apps/desktop/src/main/agents-files/`):
@@ -156,13 +178,6 @@ Skills and memories are stored as discrete `.md` files in a `.agents/` directory
 - `modular-config.ts` — `AgentsLayerPaths` type, layer path calculations
 - `skills.ts` — skill `.md` read/write, directory scanning, `writeAgentsSkillFile()`
 - `memories.ts` — memory `.md` read/write
-
-**Key functions:**
-- `getAgentsLayerPaths(agentsDir)` → `AgentsLayerPaths` (agentsDir, backupsDir)
-- `loadAgentsSkillsLayer(layer)` → scans `.agents/skills/` recursively for `skill.md`/`SKILL.md`
-- `writeAgentsSkillFile(layer, skill)` → atomic write with backup
-- `safeWriteFileSync(path, data, opts)` → atomic temp+rename, optional backup+rotation
-- `safeReadJsonFileSync(path)` → parse + auto-recover from backup on failure
 
 ## Key Type Hierarchy
 
@@ -173,17 +188,16 @@ Skills and memories are stored as discrete `.md` files in a `.agents/` directory
 src/shared/types.ts (apps/desktop/src/shared/types.ts)
   └─ Re-exports from @speakmcp/shared
   └─ Config, MCPConfig, MCPServerConfig, OAuthConfig
-  └─ AgentProgressStep, AgentProgressUpdate
-  └─ ACPAgentConfig, ACPDelegationProgress
-  └─ AgentProfile, Persona, Profile (unified as AgentProfile)
-  └─ ConversationMessage, Conversation
+  └─ AgentProfile (unified agent type — replaces Profile, Persona, ACPAgentConfig)
+  └─ AgentProfileConnection, AgentProfileConnectionType, AgentProfileToolConfig
   └─ AgentMemory, AgentStepSummary
   └─ SessionProfileSnapshot, ModelPreset
+  └─ Persona, Profile, PersonasData (legacy — kept for migration only)
+  └─ ConversationMessage, Conversation
 
 src/main/agents-files/ (layer types)
   └─ AgentsLayerPaths (modular-config.ts)
   └─ AgentsSkillOrigin, LoadedAgentsSkillsLayer (skills.ts)
-  └─ SkillOrigin { layer, filePath } (skills-service.ts — private)
 ```
 
 ## Vercel AI SDK Usage
@@ -210,4 +224,3 @@ pnpm install && pnpm build-rs && pnpm dev
 # First run will show onboarding flow
 # Need at least one API key (OpenAI/Groq/Gemini) configured to use agent mode
 ```
-

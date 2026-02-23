@@ -90,7 +90,7 @@ For complex skills, create additional files:
 ### Step 5: Skill is Auto-Imported
 Skills are automatically detected when you save the SKILL.md file - no restart needed!
 The app watches the skills folder and auto-imports new skills in real-time.
-New skills are auto-enabled for the current profile.
+New skills are auto-enabled by default.
 
 ### Step 6: Test the Skill
 - Check Settings > Skills to verify it appears

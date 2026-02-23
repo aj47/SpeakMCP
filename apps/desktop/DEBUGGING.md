@@ -85,7 +85,7 @@ window.electron.ipcRenderer.invoke('getAgentSessions')
 window.electron.ipcRenderer.invoke('emergencyStopAgent')
 window.electron.ipcRenderer.invoke('createMcpTextInput', { text: 'hi', conversationId: null })
 
-// Agents (profiles)
+// Agents
 window.electron.ipcRenderer.invoke('getAgentProfiles')
 window.electron.ipcRenderer.invoke('getCurrentAgentProfile')
 

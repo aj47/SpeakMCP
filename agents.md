@@ -136,6 +136,13 @@ The app uses a unified **Agent** concept (`AgentProfile` type) for all specializ
 - UI: single flat list at `/settings/agents` (`settings-agents.tsx`)
 - Legacy types (`Persona`, `Profile`, `ACPAgentConfig`) kept for migration only
 
+### MCP tool config semantics (Option B)
+
+- Built-in MCP tools (`speakmcp-settings:*` and `speakmcp-builtin:*`) are controlled via `AgentProfile.toolConfig.enabledBuiltinTools` (allowlist).
+  - `enabledBuiltinTools: []` is treated as **unconfigured** → allow all built-ins.
+  - Essential built-in is always enabled: `speakmcp-settings:mark_work_complete`.
+- External MCP tools are controlled via `disabledTools` / `config.mcpDisabledTools` (denylist).
+
 ### Memories
 
 Memories are **global** (not scoped to profiles/agents):

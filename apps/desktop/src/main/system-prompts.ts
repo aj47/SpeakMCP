@@ -43,33 +43,36 @@ export function getEffectiveSystemPrompt(customSystemPrompt?: string): string {
 
 export const AGENT_MODE_ADDITIONS = `
 
-AGENT MODE (iterative tool use):
-- You can see tool results and make follow-up tool calls.
-- Decide first: if you can answer from the user's message + existing context, respond directly (no tools).
-- If you need external data/actions, call the minimum necessary tools; batch independent tool calls.
+AGENT MODE: You can see tool results and make follow-up tool calls. Continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up.
 
-USER COMMUNICATION:
-- Use speakmcp-settings:respond_to_user(text) for any user-visible message. Regular assistant text may be internal.
-- Avoid speakmcp-settings:speak_to_user (deprecated alias).
+RESPONDING TO USER:
+- Use speakmcp-settings:respond_to_user whenever you want to communicate directly with the user
+- On voice interfaces this will be spoken aloud; on messaging channels (mobile, WhatsApp) it will be sent as a message
+- Write respond_to_user text naturally and conversationally (no markdown, code blocks, or formatting)
+- If respond_to_user is unavailable, provide your final user-facing answer in normal assistant text
 
 SKILLS:
 - Skills are optional instruction modules listed below.
 - Before using a skill, ALWAYS call speakmcp-settings:load_skill_instructions(skillId). Do not guess a skill's contents from its name/description.
 
-TOOLS:
-- Use exact tool names and parameter keys.
-- If unsure about a tool's parameters/behavior, call speakmcp-settings:get_tool_schema(toolName) before using it.
-- To browse tools by server: speakmcp-settings:list_mcp_servers → speakmcp-settings:list_server_tools(serverName).
+COMPLETION SIGNAL:
+- When all requested work is fully complete:
+  - If speakmcp-settings:respond_to_user is available, call it with the final user-facing response first
+  - Then call speakmcp-settings:mark_work_complete with a concise completion summary (if available)
+- If mark_work_complete is not available, provide a complete final user-facing answer directly
+- Do not call mark_work_complete while work is still in progress or partially done
 
-SHELL / FILES:
-- Use speakmcp-settings:execute_command(command[, skillId]) for shell commands and file I/O.
+AGENT FILE & COMMAND EXECUTION:
+- Use speakmcp-settings:execute_command as your primary tool for shell commands, file I/O, and automation
+- Read files: execute_command with "cat path/to/file"
+- Write files: execute_command with "cat > path/to/file << 'EOF'\\n...content...\\nEOF" or "echo 'content' > file"
+- List directories: execute_command with "ls -la path/"
+- Create directories: execute_command with "mkdir -p path/to/dir"
+- Run scripts: execute_command with "./script.sh" or "python script.py" etc.
+- For skills: pass skillId to run commands in the skill's directory automatically
 
 MEMORIES (optional):
-- Use speakmcp-settings:save_memory(content, importance) to store durable preferences/patterns (single line, ~80 chars).
-
-COMPLETION:
-- Do not signal completion while work is still in progress.
-- When everything is finished: (1) call speakmcp-settings:respond_to_user with the final user-facing response (2) then call speakmcp-settings:mark_work_complete(summary[, confidence]) if available.`
+- Use speakmcp-settings:save_memory(content, importance) to store durable preferences/patterns (single line, ~80 chars).`
 
 /**
  * Group tools by server and generate a brief description for each server
@@ -319,17 +322,16 @@ export function constructMinimalSystemPrompt(
 ): string {
   // IMPORTANT: This prompt is a last-resort fallback used when the full system prompt
   // cannot fit in the model context window. It must preserve the core policies:
-  // - Prefer answering directly (no tools) when possible
-  // - Use tools only when necessary
+  // - Use tools proactively to complete tasks
+  // - Work iteratively until goals are fully achieved
   // - Preserve skills discoverability (IDs) so skills aren't silently dropped
   let prompt =
-    "You are an assistant with optional MCP tools. Decide first: if you can answer from the user's message + existing context, respond directly (no tools). " +
-    "Use tools only when necessary to fetch external information or take actions. " +
-    "If required input is missing, ask a clarifying question rather than guessing or searching. " +
+    "You are an autonomous AI assistant that uses tools to complete tasks. Work iteratively until goals are fully achieved. " +
+    "Use tools proactively - prefer tools over asking users for information you can gather yourself. " +
     "When calling tools, use exact tool names and parameter keys. Be concise. Batch independent tool calls when possible."
 
   if (isAgentMode) {
-    prompt += " Agent mode: you may iterate with tools, but stop once you have a complete user-facing answer."
+    prompt += " Agent mode: continue calling tools until the task is completely resolved. If a tool fails, try alternative approaches before giving up."
   }
 
   // Preserve skills policy + IDs under Tier-3 shrinking.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -9,6 +9,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@rend
 import { Badge } from "@renderer/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@renderer/components/ui/tabs"
 import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2 } from "lucide-react"
+import { Facehash } from "facehash"
+
+// Curated palette of vivid colors to pick from deterministically
+const AVATAR_PALETTE = [
+  "#ef4444","#f97316","#eab308","#22c55e","#14b8a6",
+  "#3b82f6","#8b5cf6","#ec4899","#06b6d4","#84cc16",
+  "#f43f5e","#a855f7","#0ea5e9","#10b981","#f59e0b",
+  "#e11d48","#7c3aed","#0891b2","#059669","#d97706",
+]
+function agentColors(seed: string): string[] {
+  let h = 5381
+  for (let i = 0; i < seed.length; i++) h = ((h * 33) ^ seed.charCodeAt(i)) >>> 0
+  return [0, 7, 13].map(offset => AVATAR_PALETTE[(h + offset) % AVATAR_PALETTE.length])
+}
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { ModelSelector } from "@renderer/components/model-selector"
 import {
@@ -35,6 +49,7 @@ interface EditingAgent {
   toolConfig?: AgentProfileToolConfig
   skillsConfig?: ProfileSkillsConfig
   properties?: Record<string, string>
+  avatarDataUrl?: string | null
 }
 
 type ServerInfo = { connected: boolean; toolCount: number; runtimeEnabled?: boolean; configDisabled?: boolean }
@@ -69,6 +84,7 @@ export function SettingsAgents() {
   const [skills, setSkills] = useState<AgentSkill[]>([])
   const [newPropKey, setNewPropKey] = useState("")
   const [newPropValue, setNewPropValue] = useState("")
+  const avatarFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { loadAgents() }, [])
   useEffect(() => { if (editing) { loadServers(); loadSkills() } }, [!!editing])
@@ -100,6 +116,7 @@ export function SettingsAgents() {
       toolConfig: agent.toolConfig ? { ...agent.toolConfig } : undefined,
       skillsConfig: agent.skillsConfig ? { ...agent.skillsConfig } : { enabledSkillIds: [] },
       properties: agent.properties ? { ...agent.properties } : {},
+      avatarDataUrl: agent.avatarDataUrl ?? null,
     })
   }
 
@@ -122,6 +139,7 @@ export function SettingsAgents() {
       toolConfig: editing.toolConfig,
       skillsConfig: editing.skillsConfig,
       properties: editing.properties && Object.keys(editing.properties).length > 0 ? editing.properties : undefined,
+      avatarDataUrl: editing.avatarDataUrl ?? null,
     }
     if (isCreating) await tipcClient.createAgentProfile({ profile: data })
     else if (editing.id) await tipcClient.updateAgentProfile({ id: editing.id, updates: data })
@@ -190,6 +208,17 @@ export function SettingsAgents() {
     setEditing({ ...editing, modelConfig: { ...editing.modelConfig, ...updates } })
   }
 
+  // Avatar upload helper
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !editing) return
+    const reader = new FileReader()
+    reader.onload = () => setEditing({ ...editing, avatarDataUrl: reader.result as string })
+    reader.readAsDataURL(file)
+    // Reset so the same file can be re-selected
+    e.target.value = ""
+  }
+
   return (
     <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="flex items-center justify-between mb-6">
@@ -205,53 +234,64 @@ export function SettingsAgents() {
 
   function renderAgentList() {
     return (
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
         {agents.map(agent => (
-          <Card key={agent.id} className={!agent.enabled ? "opacity-60" : ""}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    {agent.displayName || agent.name}
-                    {agent.isBuiltIn && <Badge variant="secondary">Built-in</Badge>}
-                    {agent.isDefault && <Badge variant="secondary">Default</Badge>}
-                    {!agent.enabled && <Badge variant="outline">Disabled</Badge>}
-                  </CardTitle>
-                  <CardDescription>{agent.description || agent.guidelines?.slice(0, 100)}</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => handleEdit(agent)}>
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  {!agent.isBuiltIn && !agent.isDefault && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(agent.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+          <Card key={agent.id} className={`overflow-hidden flex flex-col transition-all hover:shadow-md ${!agent.enabled ? "opacity-60 grayscale-[0.5]" : ""}`}>
+            <div className="h-24 bg-gradient-to-r from-muted/80 to-muted flex items-end justify-center relative border-b">
+              <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                {agent.isBuiltIn && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shadow-sm">Built-in</Badge>}
+                {agent.isDefault && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shadow-sm">Default</Badge>}
+                {!agent.enabled && <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-background/50 shadow-sm">Disabled</Badge>}
               </div>
+              <div className="w-20 h-20 rounded-xl border-4 border-background shadow-sm absolute -bottom-10 bg-background/80 flex items-center justify-center overflow-hidden">
+                {agent.avatarDataUrl
+                  ? <img src={agent.avatarDataUrl} alt={agent.displayName || agent.name} className="w-full h-full object-cover" />
+                  : <Facehash name={agent.id || agent.name} size={80} colors={agentColors(agent.id || agent.name)} />
+                }
+              </div>
+            </div>
+            <CardHeader className="pb-2 pt-12 text-center flex-none">
+              <CardTitle className="text-lg flex items-center justify-center gap-2">
+                {agent.displayName || agent.name}
+              </CardTitle>
+              <CardDescription className="line-clamp-2 mt-1 min-h-[2.5rem] text-sm">
+                {agent.description || agent.guidelines?.slice(0, 100) || "No description provided."}
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-2 flex-wrap">
-                <Badge variant="outline">{agent.connection.type}</Badge>
+            <CardContent className="flex-grow flex flex-col justify-end pt-2">
+              <div className="flex gap-1.5 flex-wrap justify-center mb-4">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30">{agent.connection.type}</Badge>
                 {agent.modelConfig?.mcpToolsProviderId && (
-                  <Badge variant="outline">{agent.modelConfig.mcpToolsProviderId}</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 truncate max-w-[100px] bg-muted/30" title={agent.modelConfig.mcpToolsProviderId}>{agent.modelConfig.mcpToolsProviderId}</Badge>
                 )}
                 {(agent.toolConfig?.enabledServers?.length ?? 0) > 0 && (
-                  <Badge variant="outline"><Server className="h-3 w-3 mr-1" />{agent.toolConfig!.enabledServers!.length} servers</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30"><Server className="h-3 w-3 mr-1 text-muted-foreground" />{agent.toolConfig!.enabledServers!.length}</Badge>
                 )}
                 {(agent.skillsConfig?.enabledSkillIds?.length ?? 0) > 0 && (
-                  <Badge variant="outline"><Sparkles className="h-3 w-3 mr-1" />{agent.skillsConfig!.enabledSkillIds!.length} skills</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30"><Sparkles className="h-3 w-3 mr-1 text-muted-foreground" />{agent.skillsConfig!.enabledSkillIds!.length}</Badge>
                 )}
                 {agent.properties && Object.keys(agent.properties).length > 0 && (
-                  <Badge variant="outline">{Object.keys(agent.properties).length} props</Badge>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 bg-muted/30">{Object.keys(agent.properties).length} props</Badge>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-3 border-t mt-auto">
+                <Button variant="ghost" size="sm" className="w-full flex gap-2 h-8 text-muted-foreground hover:text-foreground" onClick={() => handleEdit(agent)}>
+                  <Edit2 className="h-3.5 w-3.5" /> Edit
+                </Button>
+                {!agent.isBuiltIn && !agent.isDefault && (
+                  <>
+                    <div className="w-[1px] h-4 bg-border"></div>
+                    <Button variant="ghost" size="sm" className="w-full flex gap-2 h-8 text-destructive/80 hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(agent.id)}>
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </Button>
+                  </>
                 )}
               </div>
             </CardContent>
           </Card>
         ))}
         {agents.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="col-span-full text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
             No agents yet. Click &quot;Add Agent&quot; to create one.
           </div>
         )}
@@ -283,6 +323,30 @@ export function SettingsAgents() {
 
             {/* ── General Tab ── */}
             <TabsContent value="general" className="space-y-4">
+              {/* Avatar upload */}
+              <div className="space-y-2">
+                <Label>Avatar</Label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl border-2 border-border overflow-hidden flex items-center justify-center bg-muted/40 flex-shrink-0">
+                    {editing.avatarDataUrl
+                      ? <img src={editing.avatarDataUrl} alt="avatar" className="w-full h-full object-cover" />
+                      : <Facehash name={editing.id || editing.name || "new"} size={64} colors={agentColors(editing.id || editing.name || "new")} />
+                    }
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <input ref={avatarFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
+                    <Button type="button" variant="outline" size="sm" onClick={() => avatarFileInputRef.current?.click()}>
+                      Upload photo
+                    </Button>
+                    {editing.avatarDataUrl && (
+                      <Button type="button" variant="ghost" size="sm" className="text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setEditing({ ...editing, avatarDataUrl: null })}>
+                        Remove photo
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
               {isCreating && (
                 <div className="space-y-2">
                   <Label>Quick Setup (Optional)</Label>

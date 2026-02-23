@@ -707,6 +707,8 @@ export type AgentProfile = {
   displayName: string
   /** Description of what this agent does */
   description?: string
+  /** Custom avatar as a base64 data URL. If absent, a deterministic face is generated. */
+  avatarDataUrl?: string | null
 
   // Behavior
   /** System prompt that defines the agent's behavior */

@@ -23,7 +23,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentSkill } from "@shared/types"
 import { toast } from "sonner"
 import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2, ChevronDown, FolderUp, Github } from "lucide-react"
-import { ProfileBadge } from "@renderer/components/profile-badge"
+
 
 export function Component() {
   const queryClient = useQueryClient()
@@ -412,7 +412,7 @@ export function Component() {
             Skills are specialized instructions that improve AI performance on specific tasks.
             Enable skills to include their instructions in the system prompt.
           </p>
-          <ProfileBadge />
+
         </div>
 
         {/* Skills List */}

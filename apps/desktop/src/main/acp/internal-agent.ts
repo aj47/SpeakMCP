@@ -321,7 +321,7 @@ function createProfileSnapshotFromAgentProfile(
     mcpServerConfig,
     modelConfig: profile.modelConfig,
     skillsInstructions,
-    personaProperties: profile.properties,
+    agentProperties: profile.properties,
     skillsConfig: profile.skillsConfig,
   };
 }

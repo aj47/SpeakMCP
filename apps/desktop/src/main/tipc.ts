@@ -3916,23 +3916,19 @@ export const router = {
     }),
 
   // Memory service handlers
-  // Get all memories - optionally filtered by profile
+  // Get all memories (optionally filtered by agentId for future per-agent scoping)
   getAllMemories: t.procedure
     .input<{ profileId?: string }>()
     .action(async ({ input }) => {
-      const profileId = input?.profileId
-      if (profileId) {
-        return memoryService.getMemoriesByProfile(profileId)
+      const agentId = input?.profileId
+      if (agentId) {
+        return memoryService.getMemoriesByProfile(agentId)
       }
       return memoryService.getAllMemories()
     }),
 
-  // Get memories for the current profile (convenience method)
+  // Get all memories (profiles no longer exist — returns all memories)
   getMemoriesForCurrentProfile: t.procedure.action(async () => {
-    const currentProfile = agentProfileService.getCurrentProfile()
-    if (currentProfile) {
-      return memoryService.getMemoriesByProfile(currentProfile.id)
-    }
     return memoryService.getAllMemories()
   }),
 
@@ -3953,8 +3949,7 @@ export const router = {
       profileId?: string
     }>()
     .action(async ({ input }) => {
-      // Use provided profileId, or fall back to current profile
-      const profileId = input.profileId ?? agentProfileService.getCurrentProfile()?.id
+      // profileId is optional — used for per-agent memory scoping if provided
       const memory = memoryService.createMemoryFromSummary(
         input.summary,
         input.title,
@@ -3962,7 +3957,7 @@ export const router = {
         input.tags,
         input.conversationTitle,
         input.conversationId,
-        profileId,
+        input.profileId,
       )
       if (!memory) {
         return { success: true, memory: null, reason: "no_durable_content" as const }
@@ -3989,11 +3984,7 @@ export const router = {
   deleteMultipleMemories: t.procedure
     .input<{ ids: string[] }>()
     .action(async ({ input }) => {
-      const profileId = agentProfileService.getCurrentProfile()?.id
-      if (!profileId) {
-        throw new Error("No current profile selected")
-      }
-      const result = await memoryService.deleteMultipleMemories(input.ids, profileId)
+      const result = await memoryService.deleteMultipleMemories(input.ids)
       if (result.error) {
         throw new Error(result.error)
       }
@@ -4002,11 +3993,7 @@ export const router = {
 
   deleteAllMemories: t.procedure
     .action(async () => {
-      const profileId = agentProfileService.getCurrentProfile()?.id
-      if (!profileId) {
-        throw new Error("No current profile selected")
-      }
-      const result = await memoryService.deleteAllMemories(profileId)
+      const result = await memoryService.deleteAllMemories()
       if (result.error) {
         throw new Error(result.error)
       }

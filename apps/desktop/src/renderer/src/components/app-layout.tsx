@@ -5,7 +5,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
-import { SidebarProfileSelector } from "@renderer/components/sidebar-profile-selector"
+
 import { PastSessionsDialog } from "@renderer/components/past-sessions-dialog"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
 import { useConfigQuery } from "@renderer/lib/query-client"
@@ -51,7 +51,7 @@ export const Component = () => {
         ]
       : []),
     {
-      text: "Profile",
+      text: "Settings",
       href: "/settings/tools",
       icon: "i-mingcute-user-setting-line",
     },
@@ -198,12 +198,7 @@ export const Component = () => {
             </button>
           </header>
 
-          {/* Profile Selector - quick access to switch profiles */}
-          {!isCollapsed && (
-            <div className="px-2 pb-2">
-              <SidebarProfileSelector />
-            </div>
-          )}
+
 
           {/* Scrollable area: Settings + Sessions scroll together */}
           {isCollapsed ? (

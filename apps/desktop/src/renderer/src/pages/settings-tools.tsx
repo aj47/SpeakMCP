@@ -4,22 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Label } from "@renderer/components/ui/label"
 import { Textarea } from "@renderer/components/ui/textarea"
-import { Input } from "@renderer/components/ui/input"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@renderer/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@renderer/components/ui/select"
 
 import {
   Tooltip,
@@ -27,12 +11,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
-import { Save, Info, ChevronDown, RotateCcw, Plus, Upload, Download } from "lucide-react"
+import { Save, Info, ChevronDown, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
-import { ProfileBadge } from "@renderer/components/profile-badge"
 
-import { Config, Profile } from "@shared/types"
+import { Config } from "@shared/types"
 
 const LabelWithTooltip = ({
   htmlFor,
@@ -86,33 +69,6 @@ export function Component() {
     },
   })
 
-  const currentProfileQuery = useQuery({
-    queryKey: ["current-profile"],
-    queryFn: async () => {
-      return await tipcClient.getCurrentProfile()
-    },
-  })
-
-  // Fetch all profiles for the dropdown
-  const profilesQuery = useQuery({
-    queryKey: ["profiles"],
-    queryFn: async () => {
-      return await tipcClient.getProfiles()
-    },
-  })
-
-  const profiles = profilesQuery.data || []
-
-  const updateProfileMutation = useMutation({
-    mutationFn: async ({ id, guidelines, systemPrompt }: { id: string; guidelines?: string; systemPrompt?: string }) => {
-      return await tipcClient.updateProfile({ id, guidelines, systemPrompt })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["profiles"] })
-      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
-    },
-  })
-
   const defaultSystemPromptQuery = useQuery({
     queryKey: ["default-system-prompt"],
     queryFn: async () => {
@@ -122,7 +78,6 @@ export function Component() {
   })
 
   const config = configQuery.data || {}
-  const currentProfile = currentProfileQuery.data
   const defaultSystemPrompt = defaultSystemPromptQuery.data || ""
 
   // Local state for additional guidelines to allow editing without auto-save
@@ -133,88 +88,6 @@ export function Component() {
   const [customSystemPrompt, setCustomSystemPrompt] = useState("")
   const [hasUnsavedSystemPromptChanges, setHasUnsavedSystemPromptChanges] = useState(false)
   const [isSystemPromptOpen, setIsSystemPromptOpen] = useState(false)
-
-  // Create profile dialog
-  const [isCreateProfileOpen, setIsCreateProfileOpen] = useState(false)
-  const [newProfileName, setNewProfileName] = useState("")
-  const [newProfileGuidelines, setNewProfileGuidelines] = useState("")
-
-  // Pending profile switch for confirmation dialog
-  const [pendingProfileSwitch, setPendingProfileSwitch] = useState<string | null>(null)
-
-  const setCurrentProfileMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await tipcClient.setCurrentProfile({ id })
-    },
-    onSuccess: (newProfile: Profile) => {
-      queryClient.invalidateQueries({ queryKey: ["config"] })
-      queryClient.invalidateQueries({ queryKey: ["profiles"] })
-      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
-      queryClient.invalidateQueries({ queryKey: ["mcp-server-status"] })
-      queryClient.invalidateQueries({ queryKey: ["mcp-initialization-status"] })
-      toast.success(`Switched to "${newProfile.name}"`)
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to switch profile: ${error.message}`)
-    },
-  })
-
-  const createProfileMutation = useMutation({
-    mutationFn: async ({ name, guidelines }: { name: string; guidelines: string }) => {
-      return await tipcClient.createProfile({ name, guidelines })
-    },
-    onSuccess: (profile: Profile) => {
-      queryClient.invalidateQueries({ queryKey: ["profiles"] })
-      queryClient.invalidateQueries({ queryKey: ["current-profile"] })
-
-      setIsCreateProfileOpen(false)
-      setNewProfileName("")
-      setNewProfileGuidelines("")
-
-      toast.success(`Profile "${profile.name}" created`)
-      setCurrentProfileMutation.mutate(profile.id)
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error)
-      toast.error(`Failed to create profile: ${message}`)
-    },
-  })
-
-  // Export profile mutation
-  const exportProfileMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await tipcClient.saveProfileFile({ id })
-    },
-    onSuccess: (success: boolean) => {
-      if (success) {
-        toast.success("Profile exported - review file before sharing (may contain sensitive data in args/URLs)")
-      } else {
-        toast.info("Export canceled")
-      }
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to export profile: ${error.message}`)
-    },
-  })
-
-  // Import profile mutation
-  const importProfileMutation = useMutation({
-    mutationFn: async () => {
-      return await tipcClient.loadProfileFile()
-    },
-    onSuccess: (profile: Profile | null) => {
-      if (profile) {
-        queryClient.invalidateQueries({ queryKey: ["profiles"] })
-        queryClient.invalidateQueries({ queryKey: ["current-profile"] })
-        toast.success(`Profile "${profile.name}" imported - configure MCP server credentials as needed`)
-      } else {
-        toast.info("Import canceled")
-      }
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to import profile: ${error.message}`)
-    },
-  })
 
   // Initialize local state when config loads
   useEffect(() => {
@@ -238,36 +111,18 @@ export function Component() {
     saveConfigMutation.mutate(newConfig)
   }
 
-  // Combined saving state for the guidelines save operation
-  // Also check if profile query is still loading to prevent saving before profile data is available
-  const isSavingGuidelines = saveConfigMutation.isPending || updateProfileMutation.isPending || setCurrentProfileMutation.isPending
-  const isProfileLoading = currentProfileQuery.isLoading
-
-  // Combined saving state for the system prompt save operation
-  const isSavingSystemPrompt = saveConfigMutation.isPending || updateProfileMutation.isPending || setCurrentProfileMutation.isPending
+  const isSavingGuidelines = saveConfigMutation.isPending
+  const isSavingSystemPrompt = saveConfigMutation.isPending
 
   // Check if currently using default system prompt (compare against the actual default)
   const isUsingDefaultSystemPrompt = customSystemPrompt.trim() === defaultSystemPrompt.trim()
 
   const saveAdditionalGuidelines = async () => {
     try {
-      // Save to config
       const newConfig = { ...config, mcpToolsSystemPrompt: additionalGuidelines }
       await saveConfigMutation.mutateAsync(newConfig)
-
-      // Also update the current profile's guidelines if it's a non-default profile
-      // This ensures the profile stays in sync with the saved guidelines
-      if (currentProfile && !currentProfile.isDefault) {
-        await updateProfileMutation.mutateAsync({
-          id: currentProfile.id,
-          guidelines: additionalGuidelines,
-        })
-      }
-
-      // Only clear unsaved changes if both operations succeeded
       setHasUnsavedChanges(false)
     } catch (error) {
-      // If either mutation fails, keep hasUnsavedChanges true so user can retry
       toast.error("Failed to save guidelines. Please try again.")
       console.error("Failed to save guidelines:", error)
     }
@@ -286,26 +141,15 @@ export function Component() {
   // System prompt handlers
   const handleSystemPromptChange = (value: string) => {
     setCustomSystemPrompt(value)
-    // Compare against the stored config value (or default if none stored)
     const storedValue = config.mcpCustomSystemPrompt || defaultSystemPrompt
     setHasUnsavedSystemPromptChanges(value !== storedValue)
   }
 
   const saveSystemPrompt = async () => {
     try {
-      // If the prompt matches the default, save empty string to indicate "use default"
       const valueToSave = customSystemPrompt.trim() === defaultSystemPrompt.trim() ? "" : customSystemPrompt
       const newConfig = { ...config, mcpCustomSystemPrompt: valueToSave }
       await saveConfigMutation.mutateAsync(newConfig)
-
-      // Also update the current profile's systemPrompt if it's a non-default profile
-      if (currentProfile && !currentProfile.isDefault) {
-        await updateProfileMutation.mutateAsync({
-          id: currentProfile.id,
-          systemPrompt: valueToSave,
-        })
-      }
-
       setHasUnsavedSystemPromptChanges(false)
       toast.success("System prompt saved")
     } catch (error) {
@@ -316,7 +160,6 @@ export function Component() {
 
   const restoreDefaultSystemPrompt = async () => {
     setCustomSystemPrompt(defaultSystemPrompt)
-    // Check if this is a change from the current stored value
     const storedValue = config.mcpCustomSystemPrompt || defaultSystemPrompt
     setHasUnsavedSystemPromptChanges(defaultSystemPrompt !== storedValue)
   }
@@ -324,45 +167,6 @@ export function Component() {
   const revertSystemPromptChanges = () => {
     setCustomSystemPrompt(config.mcpCustomSystemPrompt || defaultSystemPrompt)
     setHasUnsavedSystemPromptChanges(false)
-  }
-
-  const handleCreateProfile = () => {
-    if (createProfileMutation.isPending) {
-      return
-    }
-
-    const name = newProfileName.trim()
-    if (!name) {
-      toast.error("Profile name is required")
-      return
-    }
-
-    createProfileMutation.mutate({
-      name,
-      guidelines: newProfileGuidelines,
-    })
-  }
-
-  const handleProfileChange = (newProfileId: string) => {
-    // Check if there are unsaved changes
-    if (hasUnsavedChanges || hasUnsavedSystemPromptChanges) {
-      // Store the pending profile switch and show confirmation
-      setPendingProfileSwitch(newProfileId)
-    } else {
-      // No unsaved changes, switch immediately
-      setCurrentProfileMutation.mutate(newProfileId)
-    }
-  }
-
-  const confirmProfileSwitch = () => {
-    if (pendingProfileSwitch) {
-      setCurrentProfileMutation.mutate(pendingProfileSwitch)
-      setPendingProfileSwitch(null)
-    }
-  }
-
-  const cancelProfileSwitch = () => {
-    setPendingProfileSwitch(null)
   }
 
   const defaultAdditionalGuidelines = `CUSTOM GUIDELINES:
@@ -380,78 +184,13 @@ DOMAIN-SPECIFIC RULES:
 
       <div className="space-y-6">
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Agent Settings</h3>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1"
-                onClick={() => importProfileMutation.mutate()}
-                disabled={importProfileMutation.isPending}
-              >
-                <Upload className="h-4 w-4" />
-                Import
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1"
-                onClick={() => setIsCreateProfileOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Create Profile
-              </Button>
-            </div>
-          </div>
-
-          {/* Profile Selector Dropdown */}
-          <div className="space-y-2">
-            <Label>Active Profile</Label>
-            <div className="flex items-center gap-2">
-              <Select
-                value={currentProfile?.id || ""}
-                onValueChange={handleProfileChange}
-                disabled={setCurrentProfileMutation.isPending}
-              >
-                <SelectTrigger className="w-full max-w-xs">
-                  <SelectValue placeholder="Select a profile" />
-                </SelectTrigger>
-                <SelectContent>
-                  {profiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                      {profile.isDefault && " (Default)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {currentProfile && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => exportProfileMutation.mutate(currentProfile.id)}
-                  disabled={exportProfileMutation.isPending}
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Switch between profiles to use different agent configurations.
-            </p>
-          </div>
+          <h3 className="text-lg font-semibold">Agent Settings</h3>
 
           <div className="space-y-4">
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
-                  Additional Guidelines
-                </LabelWithTooltip>
-                <ProfileBadge />
-              </div>
+              <LabelWithTooltip htmlFor="mcp-additional-guidelines" tooltip="Optional additional rules and guidelines for the AI agent. The base system prompt with tool usage instructions is automatically included.">
+                Additional Guidelines
+              </LabelWithTooltip>
               <Textarea
                 id="mcp-additional-guidelines"
                 value={additionalGuidelines}
@@ -488,17 +227,11 @@ DOMAIN-SPECIFIC RULES:
                 <Button
                   size="sm"
                   onClick={saveAdditionalGuidelines}
-                  disabled={
-                    !hasUnsavedChanges || isSavingGuidelines || isProfileLoading
-                  }
+                  disabled={!hasUnsavedChanges || isSavingGuidelines}
                   className="gap-1"
                 >
                   <Save className="h-3 w-3" />
-                  {isSavingGuidelines
-                    ? "Saving..."
-                    : isProfileLoading
-                      ? "Loading..."
-                      : "Save Changes"}
+                  {isSavingGuidelines ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
               {hasUnsavedChanges && (
@@ -522,13 +255,12 @@ DOMAIN-SPECIFIC RULES:
                   ) : (
                     <span className="text-xs text-blue-500">(customized)</span>
                   )}
-                  <ProfileBadge />
                 </button>
                 {isSystemPromptOpen && (
                   <div className="space-y-3 pt-3">
                     <p className="text-xs text-muted-foreground">
                       The base system prompt defines the core behavior and instructions for the AI agent.
-                      Edit the prompt below or click "Use Default" to restore the default. Custom prompts are saved per-profile.
+                      Edit the prompt below or click &quot;Use Default&quot; to restore the default.
                     </p>
                     <Textarea
                       id="mcp-system-prompt"
@@ -560,7 +292,7 @@ DOMAIN-SPECIFIC RULES:
                       <Button
                         size="sm"
                         onClick={saveSystemPrompt}
-                        disabled={!hasUnsavedSystemPromptChanges || isSavingSystemPrompt || isProfileLoading}
+                        disabled={!hasUnsavedSystemPromptChanges || isSavingSystemPrompt}
                         className="gap-1"
                       >
                         <Save className="h-3 w-3" />
@@ -578,103 +310,6 @@ DOMAIN-SPECIFIC RULES:
             </div>
           </div>
         </div>
-
-        <Dialog
-          open={isCreateProfileOpen}
-          onOpenChange={(open) => {
-            setIsCreateProfileOpen(open)
-
-            if (!open) {
-              setNewProfileName("")
-              setNewProfileGuidelines("")
-            }
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Profile</DialogTitle>
-              <DialogDescription>
-                Create a new profile to save a different set of agent settings.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="new-profile-name">Name</Label>
-                <Input
-                  id="new-profile-name"
-                  value={newProfileName}
-                  onChange={(e) => setNewProfileName(e.target.value)}
-                  placeholder="e.g. Work, Personal, Coding"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="new-profile-guidelines">Guidelines (optional)</Label>
-                <Textarea
-                  id="new-profile-guidelines"
-                  value={newProfileGuidelines}
-                  onChange={(e) => setNewProfileGuidelines(e.target.value)}
-                  placeholder="Optional additional guidelines for this profile"
-                  rows={6}
-                  className="resize-y min-h-[100px] max-h-[300px]"
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsCreateProfileOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleCreateProfile}
-                disabled={!newProfileName.trim() || createProfileMutation.isPending}
-              >
-                {createProfileMutation.isPending ? "Creating..." : "Create Profile"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Unsaved Changes Confirmation Dialog */}
-        <Dialog
-          open={pendingProfileSwitch !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setPendingProfileSwitch(null)
-            }
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Unsaved Changes</DialogTitle>
-              <DialogDescription>
-                You have unsaved changes that will be lost if you switch profiles. Do you want to continue?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={cancelProfileSwitch}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={confirmProfileSwitch}
-              >
-                Discard Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
       </div>
     </div>

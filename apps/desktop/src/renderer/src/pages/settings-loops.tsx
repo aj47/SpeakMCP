@@ -4,14 +4,14 @@ import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
 import { Switch } from "@renderer/components/ui/switch"
 import { Textarea } from "@renderer/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@renderer/components/ui/select"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Trash2, Plus, Edit2, Save, X, Play, Clock } from "lucide-react"
 import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useQuery } from "@tanstack/react-query"
-import { LoopConfig, Profile } from "@shared/types"
+import { LoopConfig } from "@shared/types"
 import { toast } from "sonner"
 
 interface EditingLoop {
@@ -20,7 +20,6 @@ interface EditingLoop {
   prompt: string
   intervalMinutes: number
   enabled: boolean
-  profileId?: string
   runOnStartup: boolean
 }
 
@@ -78,10 +77,6 @@ export function SettingsLoops() {
   const [editing, setEditing] = useState<EditingLoop | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
-  const profilesQuery = useQuery({
-    queryKey: ["profiles"],
-    queryFn: async () => tipcClient.getProfiles() as Promise<Profile[]>,
-  })
   const loopStatusesQuery = useQuery({
     queryKey: ["loop-statuses"],
     queryFn: async () => tipcClient.getLoopStatuses() as Promise<LoopRuntimeStatus[]>,
@@ -89,7 +84,6 @@ export function SettingsLoops() {
   })
 
   const loops: LoopConfig[] = configQuery.data?.loops || []
-  const profiles: Profile[] = profilesQuery.data || []
   const statusByLoopId = new Map(
     (loopStatusesQuery.data || []).map((s) => [s.id, s] as const)
   )
@@ -118,7 +112,6 @@ export function SettingsLoops() {
       prompt: loop.prompt,
       intervalMinutes: loop.intervalMinutes,
       enabled: loop.enabled,
-      profileId: loop.profileId,
       runOnStartup: loop.runOnStartup ?? false,
     })
   }
@@ -156,7 +149,6 @@ export function SettingsLoops() {
       prompt: editing.prompt.trim(),
       intervalMinutes: sanitizedIntervalMinutes,
       enabled: editing.enabled,
-      profileId: editing.profileId || undefined,
       runOnStartup: editing.runOnStartup,
     }
 
@@ -283,9 +275,6 @@ export function SettingsLoops() {
                 <Clock className="h-3.5 w-3.5" />
                 Every {formatInterval(loop.intervalMinutes)}
               </div>
-              {loop.profileId && (
-                <div>Profile: {profiles.find(p => p.id === loop.profileId)?.name || loop.profileId}</div>
-              )}
               {loop.runOnStartup && <Badge variant="secondary">Run on startup</Badge>}
               {typeof nextRunAt === "number" && (
                 <div>Next run: {formatLastRun(nextRunAt)}</div>
@@ -368,25 +357,7 @@ export function SettingsLoops() {
                 ))}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="profile">Profile (Optional)</Label>
-              <Select
-                value={editing.profileId || "none"}
-                onValueChange={(v) => setEditing({ ...editing, profileId: v === "none" ? undefined : v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a profile..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Default Profile</SelectItem>
-                  {profiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
           </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center space-x-2">

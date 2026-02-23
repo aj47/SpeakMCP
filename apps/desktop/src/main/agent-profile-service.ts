@@ -184,7 +184,7 @@ export function createSessionSnapshotFromProfile(
     mcpServerConfig: toolConfigToMcpServerConfig(profile.toolConfig),
     modelConfig: profile.modelConfig,
     skillsInstructions,
-    personaProperties: profile.properties,
+    agentProperties: profile.properties,
     skillsConfig: profile.skillsConfig,
   }
 }
@@ -291,7 +291,7 @@ class AgentProfileService {
   }
 
   /**
-   * Migrate from legacy Profile, Persona, and ACPAgentConfig formats.
+   * Migrate from legacy Profile, Persona, and ACPAgentConfig formats (one-time migration).
    */
   private migrateFromLegacy(): AgentProfile[] {
     const migrated: AgentProfile[] = []
@@ -318,7 +318,7 @@ class AgentProfileService {
       logApp("Error migrating legacy profiles:", error)
     }
 
-    // Migrate legacy personas (agent targets)
+    // Migrate legacy personas/agents (agent targets)
     try {
       if (fs.existsSync(legacyPersonasPath)) {
         const data = JSON.parse(fs.readFileSync(legacyPersonasPath, "utf8")) as PersonasData
@@ -328,10 +328,10 @@ class AgentProfileService {
             seenIds.add(persona.id)
           }
         }
-        logApp(`Migrated ${data.personas.length} legacy personas`)
+        logApp(`Migrated ${data.personas.length} legacy agents (from personas.json)`)
       }
     } catch (error) {
-      logApp("Error migrating legacy personas:", error)
+      logApp("Error migrating legacy agents:", error)
     }
 
     // Migrate ACP agents from config
@@ -549,15 +549,16 @@ class AgentProfileService {
   }
 
   /**
-   * Get the current active profile.
+   * Get the current active agent profile.
+   * Falls back to the default agent if no current profile is set.
    */
   getCurrentProfile(): AgentProfile | undefined {
     const currentId = this.profilesData?.currentProfileId
     if (currentId) {
       return this.getById(currentId)
     }
-    // Fall back to default profile
-    return this.getAll().find((p) => p.isDefault && (p.isUserProfile || p.role === "user-profile"))
+    // Fall back to any default profile (user profiles no longer exist)
+    return this.getAll().find((p) => p.isDefault)
   }
 
   /**

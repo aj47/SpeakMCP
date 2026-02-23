@@ -157,14 +157,10 @@ export async function processTranscriptWithTools(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
 
   // Load memories for context (works independently of dual-model summarization)
-  // Memories are filtered by current profile
   // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
   let relevantMemories: AgentMemory[] = []
   if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
-    const currentProfileId = config.mcpCurrentProfileId
-    const allMemories = currentProfileId
-      ? await memoryService.getMemoriesByProfile(currentProfileId)
-      : await memoryService.getAllMemories()
+    const allMemories = await memoryService.getAllMemories()
     // Sort by importance first (critical > high > medium > low), then by recency, before capping
     const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
     const sortedMemories = [...allMemories].sort((a, b) => {
@@ -173,7 +169,7 @@ export async function processTranscriptWithTools(
       return b.createdAt - a.createdAt // More recent first as tiebreaker
     })
     relevantMemories = sortedMemories.slice(0, 10)
-    logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context (profile: ${currentProfileId || 'global'})`)
+    logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context`)
   }
 
   const systemPrompt = constructSystemPrompt(
@@ -183,7 +179,7 @@ export async function processTranscriptWithTools(
     undefined,
     config.mcpCustomSystemPrompt,
     skillsInstructions,
-    undefined, // personaProperties - not used in non-agent mode
+    undefined, // agentProperties - not used in non-agent mode
     relevantMemories,
   )
 
@@ -751,10 +747,10 @@ export async function processTranscriptWithAgentMode(
   // even if the global profile is changed during session execution
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
-  // Get skills instructions from profile snapshot (typically set by personas)
-  const personaSkillsInstructions = effectiveProfileSnapshot?.skillsInstructions
-  // Get persona properties from profile snapshot (dynamic key-value pairs)
-  const personaProperties = effectiveProfileSnapshot?.personaProperties
+  // Get skills instructions from profile snapshot (typically set by agents)
+  const agentSkillsInstructions = effectiveProfileSnapshot?.skillsInstructions
+  // Get agent properties from profile snapshot (dynamic key-value pairs)
+  const agentProperties = effectiveProfileSnapshot?.agentProperties
 
   // Load enabled agent skills instructions for the current profile
   // Skills provide specialized instructions that improve AI performance on specific tasks
@@ -765,19 +761,15 @@ export async function processTranscriptWithAgentMode(
   const profileSkillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
   logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${profileSkillsInstructions ? `${profileSkillsInstructions.length} chars` : 'none'}`)
 
-  // Combine persona-level and profile-level skills instructions
-  const skillsInstructions = [personaSkillsInstructions, profileSkillsInstructions].filter(Boolean).join('\n\n') || undefined
+  // Combine agent-level and profile-level skills instructions
+  const skillsInstructions = [agentSkillsInstructions, profileSkillsInstructions].filter(Boolean).join('\n\n') || undefined
 
   // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
-  // Memories are filtered by the session's profile
   // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
   let relevantMemories: AgentMemory[] = []
   if (config.memoriesEnabled !== false && config.dualModelInjectMemories) {
-    const profileIdForMemories = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
-    const allMemories = profileIdForMemories
-      ? await memoryService.getMemoriesByProfile(profileIdForMemories)
-      : await memoryService.getAllMemories()
+    const allMemories = await memoryService.getAllMemories()
     // Sort by importance first (critical > high > medium > low), then by recency, before capping
     const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
     const sortedMemories = [...allMemories].sort((a, b) => {
@@ -786,7 +778,7 @@ export async function processTranscriptWithAgentMode(
       return b.createdAt - a.createdAt // More recent first as tiebreaker
     })
     relevantMemories = sortedMemories.slice(0, 30) // Cap at 30 for agent mode
-    logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total, profile: ${profileIdForMemories || 'global'})`)
+    logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)
   }
 
   // Construct system prompt using the new approach
@@ -797,7 +789,7 @@ export async function processTranscriptWithAgentMode(
     undefined, // relevantTools removed - let LLM decide tool relevance
     customSystemPrompt, // custom base system prompt from profile snapshot or global config
     skillsInstructions, // agent skills instructions
-    personaProperties, // dynamic persona properties
+    agentProperties, // dynamic agent properties
     relevantMemories, // memories from previous sessions
   )
 
@@ -1031,7 +1023,7 @@ export async function processTranscriptWithAgentMode(
       undefined, // relevantTools removed
       customSystemPrompt, // Use session-bound custom system prompt
       skillsInstructions, // agent skills instructions
-      personaProperties, // dynamic persona properties
+      agentProperties, // dynamic agent properties
       relevantMemories, // memories from previous sessions
     )
 
@@ -2582,7 +2574,7 @@ Return ONLY JSON per schema.`,
           undefined, // relevantTools
           customSystemPrompt, // Use session-bound custom system prompt
           skillsInstructions, // agent skills instructions
-          personaProperties, // dynamic persona properties
+          agentProperties, // dynamic agent properties
           relevantMemories, // memories from previous sessions
         )
 

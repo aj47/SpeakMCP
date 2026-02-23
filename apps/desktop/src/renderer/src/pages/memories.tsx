@@ -29,7 +29,6 @@ import {
   FileText,
   Pencil,
   X,
-  User,
   CheckSquare,
   Square,
   MinusSquare,
@@ -214,23 +213,14 @@ export function Component() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
 
-  // Get current profile for display
-  const currentProfileQuery = useQuery({
-    queryKey: ["current-profile"],
-    queryFn: async () => {
-      return await tipcClient.getCurrentProfile()
-    },
-  })
-  const currentProfile = currentProfileQuery.data
-
-  // Clear selection when filters or profile change to avoid deleting non-visible items
+  // Clear selection when filters change to avoid deleting non-visible items
   useEffect(() => {
     setSelectedIds(new Set())
-  }, [searchQuery, importanceFilter, currentProfile?.id])
+  }, [searchQuery, importanceFilter])
 
-  // Get memories for the current profile (automatically filtered by profile on the backend)
+  // Get all memories
   const memoriesQuery = useQuery({
-    queryKey: ["memories", "currentProfile", currentProfile?.id],
+    queryKey: ["memories"],
     queryFn: async () => {
       return await tipcClient.getMemoriesForCurrentProfile()
     },
@@ -381,15 +371,9 @@ export function Component() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">Memories</h1>
-            {currentProfile && (
-              <Badge variant="outline" className="text-xs flex items-center gap-1">
-                <User className="h-3 w-3" />
-                {currentProfile.name}
-              </Badge>
-            )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Saved insights and findings from agent sessions for this profile
+            Saved insights and findings from agent sessions
           </p>
         </div>
 

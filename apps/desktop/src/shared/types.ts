@@ -316,8 +316,8 @@ export interface AgentMemory {
   createdAt: number
   updatedAt: number
 
-  // Profile association - memories are scoped per profile
-  // If undefined, memory is treated as global (legacy support)
+  // Agent association - memories can optionally be scoped to a specific agent
+  // If undefined, memory is global (default behavior)
   profileId?: string
 
   // Source info
@@ -417,7 +417,7 @@ export type ProfileMcpServerConfig = {
   // When allServersDisabledByDefault is true, this list contains servers that are explicitly ENABLED
   // (i.e., servers the user has opted-in to use for this profile)
   enabledServers?: string[]
-  // When set, only these builtin tools are enabled (whitelist approach for personas)
+  // When set, only these builtin tools are enabled (whitelist approach for agents)
   // If undefined, all builtin tools are available (default behavior)
   enabledBuiltinTools?: string[]
 }
@@ -480,40 +480,40 @@ export type SessionProfileSnapshot = {
   systemPrompt?: string
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
-  /** Skills instructions to inject into the system prompt (from persona's enabled skills) */
+  /** Skills instructions to inject into the system prompt (from agent's enabled skills) */
   skillsInstructions?: string
-  /** Dynamic persona properties exposed in system prompt (from persona's properties) */
-  personaProperties?: Record<string, string>
+  /** Dynamic agent properties exposed in system prompt (from agent's properties) */
+  agentProperties?: Record<string, string>
   skillsConfig?: ProfileSkillsConfig
 }
 
 // ============================================================================
-// Persona Management Types
+// Agent Management Types (legacy Persona types kept for backward compatibility)
 // ============================================================================
 
 /**
- * MCP server and tool access configuration for a persona.
- * Controls which MCP servers and tools the persona can access.
+ * MCP server and tool access configuration for an agent.
+ * Controls which MCP servers and tools the agent can access.
  */
 export type PersonaMcpServerConfig = {
-  /** MCP servers enabled for this persona */
+  /** MCP servers enabled for this agent */
   enabledServers: string[]
   /** Specific tools disabled within enabled servers */
   disabledTools?: string[]
-  /** Builtin tools enabled for this persona */
+  /** Builtin tools enabled for this agent */
   enabledBuiltinTools?: string[]
 }
 
 /**
- * Model configuration for a persona.
+ * Model configuration for an agent.
  * When using the built-in internal agent, this defines which LLM to use.
  * When using an external ACP agent, model config is handled by that agent.
  *
  * @deprecated Use ProfileModelConfig instead for full preset support.
- * Kept for backward compatibility with existing persona data.
+ * Kept for backward compatibility with existing agent data.
  */
 export type PersonaModelConfig = {
-  /** LLM provider for this persona */
+  /** LLM provider for this agent */
   providerId: "openai" | "groq" | "gemini"
   /** Model name/identifier */
   model: string
@@ -524,26 +524,26 @@ export type PersonaModelConfig = {
 }
 
 /**
- * Skills configuration for a persona.
- * Defines which skills are enabled for this persona.
+ * Skills configuration for an agent.
+ * Defines which skills are enabled for this agent.
  */
 export type PersonaSkillsConfig = {
-  /** Skill IDs enabled for this persona */
+  /** Skill IDs enabled for this agent */
   enabledSkillIds: string[]
 }
 
 /**
- * Connection configuration for a persona.
- * Defines how to connect to the persona's underlying agent.
+ * Connection configuration for an agent.
+ * Defines how to connect to the agent's underlying implementation.
  *
  * Two main modes:
- * 1. Built-in agent (type: "internal") - Uses SpeakMCP's internal agent with persona's model config
+ * 1. Built-in agent (type: "internal") - Uses SpeakMCP's internal agent with agent's model config
  * 2. External ACP agent (type: "acp-agent") - Delegates to a configured ACP agent by name
  */
 export type PersonaConnectionConfig = {
   /**
    * Connection type:
-   * - "internal": Uses built-in SpeakMCP agent (model config from persona)
+   * - "internal": Uses built-in SpeakMCP agent (model config from agent)
    * - "acp-agent": Uses an external ACP agent (model config from agent settings)
    * - "stdio": Direct stdio process (legacy, for advanced use)
    * - "remote": Remote HTTP endpoint (legacy, for advanced use)
@@ -564,32 +564,32 @@ export type PersonaConnectionConfig = {
 }
 
 /**
- * Dynamic properties for a persona.
+ * Dynamic properties for an agent.
  * Key-value pairs that are exposed in the system prompt.
  * Example: { "expertise": "Python, TypeScript", "style": "Concise and technical" }
  */
 export type PersonaProperties = Record<string, string>
 
 /**
- * Persona definition.
- * A persona represents a specialized AI assistant with specific capabilities,
+ * Legacy Persona definition (kept for backward compatibility / migration).
+ * An agent represents a specialized AI assistant with specific capabilities,
  * system prompts, and tool access configurations.
  */
 export type Persona = {
-  /** Unique identifier for the persona */
+  /** Unique identifier for the agent */
   id: string
   /** Internal name (used for referencing) */
   name: string
   /** Human-readable display name */
   displayName: string
-  /** Description of what this persona does */
+  /** Description of what this agent does */
   description: string
-  /** System prompt that defines the persona's behavior */
+  /** System prompt that defines the agent's behavior */
   systemPrompt: string
-  /** Additional guidelines for the persona */
+  /** Additional guidelines for the agent */
   guidelines: string
   /**
-   * Dynamic properties for this persona.
+   * Dynamic properties for this agent.
    * Exposed in the system prompt as "Property Name: Value" format.
    */
   properties?: PersonaProperties
@@ -610,13 +610,13 @@ export type Persona = {
   skillsConfig: PersonaSkillsConfig
   /** Connection configuration for the underlying agent */
   connection: PersonaConnectionConfig
-  /** Whether this persona maintains conversation state */
+  /** Whether this agent maintains conversation state */
   isStateful: boolean
-  /** Current conversation ID for stateful personas */
+  /** Current conversation ID for stateful agents */
   conversationId?: string
-  /** Whether this persona is enabled */
+  /** Whether this agent is enabled */
   enabled: boolean
-  /** Whether this is a built-in persona (cannot be deleted) */
+  /** Whether this is a built-in agent (cannot be deleted) */
   isBuiltIn?: boolean
   /** Creation timestamp */
   createdAt: number
@@ -625,16 +625,16 @@ export type Persona = {
 }
 
 /**
- * Storage format for personas data.
+ * Storage format for agents data (legacy format).
  */
 export type PersonasData = {
-  /** List of all personas */
+  /** List of all agents */
   personas: Persona[]
 }
 
 // ============================================================================
 // Unified Agent Profile Type
-// Consolidates Profile, Persona, and ACPAgentConfig into a single type
+// Consolidates legacy Profile, Persona, and ACPAgentConfig into a single Agent type
 // ============================================================================
 
 /**
@@ -808,10 +808,10 @@ export function profileToAgentProfile(profile: Profile): AgentProfile {
 }
 
 /**
- * Convert a legacy Persona to AgentProfile.
+ * Convert a legacy Persona to AgentProfile (for migration).
  */
 export function personaToAgentProfile(persona: Persona): AgentProfile {
-  // Map persona connection type to AgentProfile connection type
+  // Map legacy connection type to AgentProfile connection type
   const connectionType: AgentProfileConnectionType =
     persona.connection.type === "acp-agent" ? "acp" : persona.connection.type
 

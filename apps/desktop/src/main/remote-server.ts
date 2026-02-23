@@ -1876,7 +1876,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   })
 
   // ============================================
-  // Agent Personas Management Endpoints (for mobile app)
+  // Agent Management Endpoints (for mobile app)
   // ============================================
 
   // GET /v1/agent-profiles - List all agent profiles (supports ?role=user-profile|delegation-target|external-agent filter)

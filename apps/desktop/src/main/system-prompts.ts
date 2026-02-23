@@ -155,11 +155,11 @@ INTERNAL AGENT: Use \`delegate_to_agent\` with \`agentName: "internal"\` to spaw
 }
 
 /**
- * Generate prompt addition for available agent personas (delegation-targets).
- * These are internal personas that can be delegated to via delegate_to_agent.
+ * Generate prompt addition for available agents (delegation-targets).
+ * These are agents that can be delegated to via delegate_to_agent.
  * Similar format to tools/skills for easy discoverability.
  */
-export function getAgentPersonasPromptAddition(): string {
+export function getAgentsPromptAddition(): string {
   // Get enabled delegation-target profiles
   const delegationTargets = agentProfileService.getByRole('delegation-target')
     .filter(p => p.enabled)
@@ -168,17 +168,17 @@ export function getAgentPersonasPromptAddition(): string {
     return ''
   }
 
-  // Format personas in a compact, discoverable format similar to tools/skills
-  const personasList = delegationTargets.map(p => {
+  // Format agents in a compact, discoverable format similar to tools/skills
+  const agentsList = delegationTargets.map(p => {
     return `- **${p.name}**: ${p.description || p.displayName || 'No description'}`
   }).join('\n')
 
   return `
-AVAILABLE AGENT PERSONAS (${delegationTargets.length}):
-${personasList}
+AVAILABLE AGENTS (${delegationTargets.length}):
+${agentsList}
 
-To delegate: \`delegate_to_agent(agentName: "persona_name", task: "...")\`
-When user mentions a persona by name (e.g., "ask joker...", "have coder..."), delegate to that persona.
+To delegate: \`delegate_to_agent(agentName: "agent_name", task: "...")\`
+When user mentions an agent by name (e.g., "ask joker...", "have coder..."), delegate to that agent.
 `.trim()
 }
 
@@ -197,7 +197,7 @@ export function constructSystemPrompt(
   }>,
   customSystemPrompt?: string,
   skillsInstructions?: string,
-  personaProperties?: Record<string, string>,
+  agentProperties?: Record<string, string>,
   memories?: AgentMemory[],
 ): string {
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
@@ -211,10 +211,10 @@ export function constructSystemPrompt(
       prompt += '\n\n' + acpPromptAddition
     }
 
-    // Add agent personas (delegation-targets) in a discoverable format
-    const personasAddition = getAgentPersonasPromptAddition()
-    if (personasAddition) {
-      prompt += '\n\n' + personasAddition
+    // Add agents (delegation-targets) in a discoverable format
+    const agentsAddition = getAgentsPromptAddition()
+    if (agentsAddition) {
+      prompt += '\n\n' + agentsAddition
     }
 
     // Add internal sub-session instructions (always available in agent mode)
@@ -284,12 +284,12 @@ export function constructSystemPrompt(
     prompt += `\n\nUSER GUIDELINES:\n${userGuidelines.trim()}`
   }
 
-  // Add persona properties if provided (dynamic key-value pairs)
-  if (personaProperties && Object.keys(personaProperties).length > 0) {
-    const propertiesText = Object.entries(personaProperties)
+  // Add agent properties if provided (dynamic key-value pairs)
+  if (agentProperties && Object.keys(agentProperties).length > 0) {
+    const propertiesText = Object.entries(agentProperties)
       .map(([key, value]) => `${key}: ${value}`)
       .join('\n\n')
-    prompt += `\n\nPERSONA PROPERTIES:\n${propertiesText}`
+    prompt += `\n\nAGENT PROPERTIES:\n${propertiesText}`
   }
 
   return prompt

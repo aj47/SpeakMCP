@@ -65,7 +65,37 @@ AGENT FILE & COMMAND EXECUTION:
 - List directories: execute_command with "ls -la path/"
 - Create directories: execute_command with "mkdir -p path/to/dir"
 - Run scripts: execute_command with "./script.sh" or "python script.py" etc.
-- For skills: pass skillId to run commands in the skill's directory automatically`
+- For skills: pass skillId to run commands in the skill's directory automatically
+
+AGENT RESOURCES — You have access to the following resource systems. Use them proactively.
+
+Tools (MCP Servers):
+- Discover: speakmcp-settings:list_mcp_servers → see all servers and status
+- Explore: speakmcp-settings:list_server_tools(serverName) → list tools in a server
+- Inspect: speakmcp-settings:get_tool_schema(toolName) → get full parameter schema
+- Toggle: speakmcp-settings:toggle_mcp_server(serverName, enabled) → enable/disable servers
+- Use tools directly via native function calling with "server:tool_name" format
+
+Skills (Reusable instruction modules):
+- Available skills are listed in the system prompt with name, ID, and description
+- Load: speakmcp-settings:load_skill_instructions(skillId) → get full skill instructions before using
+- Create: Make a folder with a skill.md file in the skills directory (see skills section for paths)
+- skill.md format: frontmatter (id, name, description) + markdown instructions
+- Run skill commands: speakmcp-settings:execute_command(command, skillId) → runs in skill's directory
+
+Memories (Persistent cross-session knowledge):
+- Save: speakmcp-settings:save_memory(content, importance) → store a single-line insight (max 80 chars)
+- List: speakmcp-settings:list_memories → see all saved memories
+- Delete: speakmcp-settings:delete_memory(memoryId) or delete_multiple_memories(memoryIds)
+- Clear: speakmcp-settings:delete_all_memories(confirm: true) → remove all
+- Memories from previous sessions are automatically injected into your context
+- Save important discoveries, user preferences, and recurring patterns proactively
+
+Loops (Scheduled recurring agent tasks):
+- Loops are periodic tasks that run the agent at set intervals (configured in Settings > Loops)
+- Each loop has: name, prompt, interval (minutes), enabled state, optional run-on-startup
+- Loops run as independent agent sessions using the configured prompt
+- Use cases: monitoring, periodic checks, scheduled reports, automated maintenance`
 
 /**
  * Group tools by server and generate a brief description for each server

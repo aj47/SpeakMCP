@@ -38,6 +38,9 @@ import {
   INTERNAL_COMPLETION_NUDGE_TEXT,
 } from "../shared/builtin-tool-names"
 import { filterEphemeralMessages } from "./conversation-history-utils"
+import {
+  filterNamedItemsToAllowedTools,
+} from "./llm-tool-gating"
 
 /**
  * Clean error message by removing stack traces and noise
@@ -72,6 +75,35 @@ function cleanErrorMessage(errorText: string): string {
   }
 
   return cleaned
+}
+
+/**
+ * Extract a compact, ID-focused skills index suitable for Tier-3 minimal prompts.
+ *
+ * Why: Tier-3 context shrinking replaces the entire system prompt. If we drop skill IDs,
+ * the model cannot call load_skill_instructions and will tend to over-use MCP tools.
+ */
+function extractSkillsIndexForMinimalPrompt(skillsInstructions?: string): string | undefined {
+  const text = (skillsInstructions || "").trim()
+  if (!text) return undefined
+
+  const lines = text.split(/\r?\n/)
+  const skillLines = lines
+    .map((l) => l.trimEnd())
+    // Match the canonical index format from skills-service:
+    // - **Name** (ID: `skill-id`): description
+    .filter((l) => l.trim().startsWith("- **") && l.includes("(ID:"))
+
+  if (skillLines.length > 0) {
+    return skillLines.slice(0, 50).join("\n")
+  }
+
+  // Fallback: keep the top portion (drop folder paths/tips) and cap length.
+  const marker = "\n## Skills Folders"
+  const idx = text.indexOf(marker)
+  const cut = (idx >= 0 ? text.slice(0, idx) : text).trim()
+  if (!cut) return undefined
+  return cut.length > 1500 ? cut.slice(0, 1500).trimEnd() + "\n..." : cut
 }
 
 /**
@@ -155,6 +187,7 @@ export async function processTranscriptWithTools(
     ? agentProfileService.getEnabledSkillIdsForProfile(mainAgent.id)
     : []
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+  const skillsIndex = extractSkillsIndexForMinimalPrompt(skillsInstructions)
 
   // Load memories for context (works independently of dual-model summarization)
   // Only load if both memoriesEnabled (system-wide) and dualModelInjectMemories are true
@@ -198,13 +231,32 @@ export async function processTranscriptWithTools(
     messages,
     availableTools: uniqueAvailableTools,
     isAgentMode: false,
+    skillsIndex,
   })
 
   const chatProviderId = config.mcpToolsProviderId
 
   try {
     // Pass tools for native AI SDK tool calling
-    const result = await makeLLMCallWithFetch(shrunkMessages, chatProviderId, undefined, undefined, uniqueAvailableTools)
+    const result = await makeLLMCallWithFetch(
+      shrunkMessages,
+      chatProviderId,
+      undefined,
+      undefined,
+      uniqueAvailableTools,
+    )
+
+    // Defensive: don't allow JSON-fallback toolCalls to escape the tools we actually provided.
+    if (result.toolCalls && Array.isArray(result.toolCalls) && result.toolCalls.length > 0) {
+      const { allowed, removed } = filterNamedItemsToAllowedTools(result.toolCalls, uniqueAvailableTools)
+      if (removed.length > 0 && isDebugTools()) {
+        logTools("Filtered non-agent toolCalls not present in provided tools", {
+          removed: removed.map((tc) => tc.name),
+        })
+      }
+      result.toolCalls = allowed.length > 0 ? (allowed as any) : undefined
+    }
+
     // Strip any raw tool-marker tokens (e.g. <|tool_call_begin|>) that
     // makeLLMCallWithFetch preserves for the agent loop's recovery path.
     // This non-agent flow returns content directly to the renderer.
@@ -742,6 +794,8 @@ export async function processTranscriptWithAgentMode(
       index === self.findIndex((t) => t.name === tool.name),
   )
 
+  const baseAvailableTools = uniqueAvailableTools
+
   // Use profile snapshot for session isolation if available, otherwise fall back to global config
   // This ensures the session uses the profile settings at creation time,
   // even if the global profile is changed during session execution
@@ -763,6 +817,7 @@ export async function processTranscriptWithAgentMode(
 
   // Combine agent-level and profile-level skills instructions
   const skillsInstructions = [agentSkillsInstructions, profileSkillsInstructions].filter(Boolean).join('\n\n') || undefined
+  const skillsIndex = extractSkillsIndexForMinimalPrompt(skillsInstructions)
 
   // Load memories for agent context (works independently of dual-model summarization)
   // Memories provide context from previous sessions - user preferences, past decisions, important learnings
@@ -783,7 +838,7 @@ export async function processTranscriptWithAgentMode(
 
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
-    uniqueAvailableTools,
+    baseAvailableTools,
     agentModeGuidelines,
     true,
     undefined, // relevantTools removed - let LLM decide tool relevance
@@ -1037,6 +1092,7 @@ export async function processTranscriptWithAgentMode(
       availableTools: activeToolsList,
       relevantTools: undefined,
       isAgentMode: true,
+      skillsIndex,
       sessionId: currentSessionId,
       onSummarizationProgress: (current, total) => {
         const lastThinkingStep = progressSteps.findLast(step => step.type === "thinking")
@@ -1357,13 +1413,13 @@ Return ONLY JSON per schema.`,
 
     // Filter out tools that have failed too many times - compute at start of iteration
     // so the same filtered list is used consistently throughout (LLM call + heuristics)
-    const activeTools = uniqueAvailableTools.filter(tool => {
+    const activeTools = baseAvailableTools.filter((tool) => {
       const failures = toolFailureCount.get(tool.name) || 0
       return failures < MAX_TOOL_FAILURES
     })
 
     // Log when tools have been excluded
-    const excludedToolCount = uniqueAvailableTools.length - activeTools.length
+    const excludedToolCount = baseAvailableTools.length - activeTools.length
     if (excludedToolCount > 0 && iteration === 1) {
       // Only log on first iteration after exclusion to avoid spam
       logLLM(`ℹ️ ${excludedToolCount} tool(s) excluded due to repeated failures`)
@@ -1484,6 +1540,7 @@ Return ONLY JSON per schema.`,
       availableTools: activeTools,
       relevantTools: undefined,
       isAgentMode: true,
+      skillsIndex,
       sessionId: currentSessionId,
       onSummarizationProgress: (current, total, message) => {
         // Update thinking step with summarization progress
@@ -1657,6 +1714,23 @@ Return ONLY JSON per schema.`,
     // A response is valid if it has either:
     // 1. Non-empty content, OR
     // 2. Valid toolCalls (tool-only responses can have empty content).
+
+    // Defensive: don't allow JSON-fallback toolCalls to escape the tools we actually provided.
+    // llm-fetch.ts can synthesize toolCalls by parsing JSON-like text output, so we must
+    // validate tool calls against the current iteration's activeTools before execution.
+    if (llmResponse?.toolCalls && Array.isArray((llmResponse as any).toolCalls)) {
+      const { allowed, removed } = filterNamedItemsToAllowedTools(
+        (llmResponse as any).toolCalls,
+        activeTools,
+      )
+      if (removed.length > 0 && isDebugTools()) {
+        logTools("Filtered agent toolCalls not present in activeTools", {
+          removed: removed.map((tc) => tc.name),
+        })
+      }
+      (llmResponse as any).toolCalls = allowed.length > 0 ? allowed : undefined
+    }
+
     const hasValidContent = llmResponse?.content && llmResponse.content.trim().length > 0
     const hasValidToolCalls = llmResponse?.toolCalls && Array.isArray(llmResponse.toolCalls) && llmResponse.toolCalls.length > 0
 
@@ -2588,6 +2662,7 @@ Return ONLY JSON per schema.`,
           availableTools: uniqueAvailableTools,
           relevantTools: undefined,
           isAgentMode: true,
+          skillsIndex,
           sessionId: currentSessionId,
           onSummarizationProgress: (current, total) => {
             summaryStep.description = `Summarizing for summary generation (${current}/${total})`

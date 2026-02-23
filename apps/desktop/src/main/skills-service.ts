@@ -1018,16 +1018,20 @@ ${skillsContent}
     const globalSkillsDir = path.join(globalLayer.agentsDir, "skills")
     const workspaceSkillsDir = workspaceLayer ? path.join(workspaceLayer.agentsDir, "skills") : null
 
+
     return `
 # Available Agent Skills
 
-The following skills are available. To use a skill, call \`speakmcp-settings:load_skill_instructions\` with the skill's ID to get the full instructions.
+To use a skill:
+1) Call \`speakmcp-settings:load_skill_instructions\` with its ID
+2) Follow the loaded instructions exactly (do not guess from name/description)
 
 ${skillsContent}
 
-## Skills Installation Directory
-Skills can be installed to: \`${workspaceSkillsDir ?? globalSkillsDir}\`${workspaceSkillsDir ? `\n(Global fallback): \`${globalSkillsDir}\`` : ""}
-Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in that skill's directory.
+## Skills Folders
+- Active layer: \`${workspaceSkillsDir ?? globalSkillsDir}\`${workspaceSkillsDir ? `\n- Global fallback: \`${globalSkillsDir}\`` : ""}
+
+Tip: Use \`speakmcp-settings:execute_command\` with \`skillId\` to run commands in that skill's directory.
 `
   }
 

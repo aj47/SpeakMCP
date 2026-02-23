@@ -580,6 +580,8 @@ export interface ShrinkOptions {
   messages: LLMMessage[]
   availableTools?: Array<{ name: string; description?: string; inputSchema?: any }>
   relevantTools?: Array<{ name: string; description?: string; inputSchema?: any }>
+  /** Optional compact skill index (IDs) so Tier-3 minimal prompts don't drop skills entirely. */
+  skillsIndex?: string
   isAgentMode?: boolean
   targetRatio?: number // default 0.7
   lastNMessages?: number // default 3
@@ -769,6 +771,7 @@ export async function shrinkMessagesForLLM(opts: ShrinkOptions): Promise<ShrinkR
     opts.availableTools || [],
     !!opts.isAgentMode,
     opts.relevantTools,
+    opts.skillsIndex,
   )
   if (systemMsgIdx >= 0) {
     messages[systemMsgIdx] = { role: "system", content: minimal }

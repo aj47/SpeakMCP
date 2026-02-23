@@ -1650,12 +1650,15 @@ export class MCPService {
       return !this.runtimeDisabledServers.has(serverName)
     })
 
-    // Combine external MCP tools with built-in tools
-    const allTools = [...enabledExternalTools, ...builtinTools]
-    const enabledTools = allTools.filter(
-      (tool) => isEssentialBuiltinTool(tool.name) || !this.disabledTools.has(tool.name),
+    // Filter external tools by global disabledTools, but keep ALL builtin tools.
+    // this.disabledTools is a persistence artifact from profile switching (config.mcpDisabledTools).
+    // When no profile config is provided (e.g. the default agent), all builtin tools
+    // should be available — only external MCP tools respect the global disabled set.
+    const enabledExternal = enabledExternalTools.filter(
+      (tool) => !this.disabledTools.has(tool.name),
     )
-    return enabledTools
+
+    return [...enabledExternal, ...builtinTools]
   }
 
   /**
@@ -1667,11 +1670,13 @@ export class MCPService {
    * @returns Tools filtered according to the profile's enabled/disabled servers and tools
    */
   getAvailableToolsForProfile(profileMcpConfig?: ProfileMcpServerConfig): MCPTool[] {
-    // If no profile config, return all available tools (minus globally disabled tools)
+    // If no profile config, return all available tools.
+    // All builtin tools are included; only external tools respect the global disabledTools set.
     if (!profileMcpConfig) {
-      // Return all tools without profile-specific filtering
-      const allTools = [...this.availableTools, ...builtinTools]
-      return allTools.filter((tool) => isEssentialBuiltinTool(tool.name) || !this.disabledTools.has(tool.name))
+      const enabledExternal = this.availableTools.filter(
+        (tool) => !this.disabledTools.has(tool.name),
+      )
+      return [...enabledExternal, ...builtinTools]
     }
 
     const { allServersDisabledByDefault, enabledServers, disabledServers, disabledTools, enabledBuiltinTools } = profileMcpConfig
@@ -1707,17 +1712,26 @@ export class MCPService {
       return !profileDisabledServers.has(serverName)
     })
 
-    // Filter builtin tools based on enabledBuiltinTools whitelist (if specified).
+    // Filter builtin tools based on enabledBuiltinTools whitelist (if specified and non-empty).
     // Essential builtins are always available regardless of whitelist/disabled settings.
+    // An empty array is treated as "not configured" (same as undefined) — allow all builtins.
+    // Legacy profiles may have enabledBuiltinTools: [] which should NOT disable all builtins.
+    const hasBuiltinWhitelist = enabledBuiltinTools && enabledBuiltinTools.length > 0
     const filteredBuiltinTools = builtinTools.filter((tool) =>
       isEssentialBuiltinTool(tool.name) ||
-      !enabledBuiltinTools ||
-      enabledBuiltinTools.includes(tool.name),
+      !hasBuiltinWhitelist ||
+      enabledBuiltinTools!.includes(tool.name),
     )
 
-    // Combine with filtered built-in tools and filter by disabled tools
-    const allTools = [...enabledExternalTools, ...filteredBuiltinTools]
-    return allTools.filter((tool) => isEssentialBuiltinTool(tool.name) || !profileDisabledTools.has(tool.name))
+    // Apply disabledTools ONLY to external tools, not builtins.
+    // Builtin tool availability is controlled exclusively by the enabledBuiltinTools
+    // whitelist above. Legacy profiles may have all builtin names in disabledTools
+    // (from profile-service initialization), which would incorrectly filter them out.
+    const enabledExternalToolsFiltered = enabledExternalTools.filter(
+      (tool) => !profileDisabledTools.has(tool.name),
+    )
+
+    return [...enabledExternalToolsFiltered, ...filteredBuiltinTools]
   }
 
   getDetailedToolList(): Array<{

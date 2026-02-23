@@ -1144,7 +1144,6 @@ export interface AgentSkill {
   name: string
   description: string
   instructions: string // The markdown content with instructions
-  enabled: boolean
   createdAt: number
   updatedAt: number
   source?: "local" | "imported" // Where the skill came from

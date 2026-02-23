@@ -551,7 +551,6 @@ class SkillsService {
     const now = Date.now()
     const createdAt = typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt) ? raw.createdAt : now
     const updatedAt = typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt) ? raw.updatedAt : createdAt
-    const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true
 
     const sourceRaw = typeof raw.source === "string" ? raw.source : ""
     const source = sourceRaw === "local" || sourceRaw === "imported" ? sourceRaw : undefined
@@ -563,7 +562,6 @@ class SkillsService {
       name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : id,
       description: typeof raw.description === "string" ? raw.description.trim() : "",
       instructions: typeof raw.instructions === "string" ? raw.instructions.trim() : "",
-      enabled,
       createdAt,
       updatedAt,
       source,
@@ -669,10 +667,6 @@ class SkillsService {
     return this.skills
   }
 
-  getEnabledSkills(): AgentSkill[] {
-    return this.getSkills().filter((skill) => skill.enabled)
-  }
-
   getSkill(id: string): AgentSkill | undefined {
     return this.getSkills().find((s) => s.id === id)
   }
@@ -699,7 +693,6 @@ class SkillsService {
       name,
       description,
       instructions,
-      enabled: true,
       createdAt: now,
       updatedAt: now,
       source: options?.source ?? "local",
@@ -715,7 +708,7 @@ class SkillsService {
     return newSkill
   }
 
-  updateSkill(id: string, updates: Partial<Pick<AgentSkill, "name" | "description" | "instructions" | "enabled">>): AgentSkill {
+  updateSkill(id: string, updates: Partial<Pick<AgentSkill, "name" | "description" | "instructions">>): AgentSkill {
     this.ensureInitialized()
 
     const index = this.skills.findIndex((s) => s.id === id)
@@ -783,14 +776,6 @@ class SkillsService {
       logApp("[SkillsService] Error deleting skill:", error)
       return false
     }
-  }
-
-  toggleSkill(id: string): AgentSkill {
-    const skill = this.getSkill(id)
-    if (!skill) {
-      throw new Error(`Skill with id ${id} not found`)
-    }
-    return this.updateSkill(id, { enabled: !skill.enabled })
   }
 
   /**
@@ -917,78 +902,6 @@ class SkillsService {
   }
 
   /**
-   * Get the combined instructions from all enabled skills
-   * This is used to inject into the system prompt
-   * Always includes the skills folder path so the agent can create new skills
-   */
-  getEnabledSkillsInstructions(): string {
-    const enabledSkills = this.getEnabledSkills()
-
-    const { globalLayer, workspaceLayer } = this.getLayers()
-    const globalSkillsDir = path.join(globalLayer.agentsDir, "skills")
-    const workspaceSkillsDir = workspaceLayer ? path.join(workspaceLayer.agentsDir, "skills") : null
-
-    // Always include skills folder info so agent can create/manage skills via filesystem
-    let result = `
-# Agent Skills
-
-Skills are custom instruction modules that can be enabled/disabled.
-
-## Canonical Skills Folders
-- Global: \`${globalSkillsDir}\`${workspaceSkillsDir ? `\n- Workspace: \`${workspaceSkillsDir}\` (overrides global)` : ""}
-
-### Creating a New Skill
-Create a new folder in one of the skills directories with a \`skill.md\` file.
-
-\`\`\`bash
-mkdir -p "${globalSkillsDir}/my-skill"
-# Create skill.md in that folder
-\`\`\`
-
-skill.md format:
-\`\`\`
----
-id: my-skill-id
-name: My Skill
-description: What this skill does
----
-
-Your instructions here in markdown...
-\`\`\`
-
-After creating a skill file, it will be available on the next agent session.
-Use \`speakmcp-settings:execute_command\` with a skill's ID to run commands in the skill's directory.
-`
-
-    if (enabledSkills.length > 0) {
-      const skillsContent = enabledSkills.map(skill => {
-        // Include skill ID and source info for execute_command tool
-        const skillIdInfo = `**Skill ID:** \`${skill.id}\``
-        const sourceInfo = skill.filePath
-          ? (skill.filePath.startsWith("github:")
-              ? `**Source:** GitHub (${skill.filePath})`
-              : `**Source:** Local`)
-          : ""
-
-        return `## Skill: ${skill.name}
-${skillIdInfo}${sourceInfo ? `\n${sourceInfo}` : ""}
-${skill.description ? `*${skill.description}*\n` : ""}
-${skill.instructions}`
-      }).join("\n\n---\n\n")
-
-      result += `
-## Active Skills
-
-The following skills are currently enabled:
-
-${skillsContent}
-`
-    }
-
-    return result
-  }
-
-  /**
    * Get the combined instructions for skills enabled for a specific profile
    * @param enabledSkillIds Array of skill IDs that are enabled for the profile
    */
@@ -998,10 +911,9 @@ ${skillsContent}
     }
 
     const allSkills = this.getSkills()
-    // Filter by both: skill must be in the profile's enabled list AND globally enabled (skill.enabled)
-    // The skill.enabled flag acts as a master kill-switch
-    const enabledSkills = allSkills.filter(skill => 
-      enabledSkillIds.includes(skill.id) && skill.enabled !== false
+    // Filter by the profile's enabled list
+    const enabledSkills = allSkills.filter(skill =>
+      enabledSkillIds.includes(skill.id)
     )
 
     if (enabledSkills.length === 0) {

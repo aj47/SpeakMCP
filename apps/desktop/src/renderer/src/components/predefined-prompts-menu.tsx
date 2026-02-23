@@ -54,9 +54,7 @@ export function PredefinedPromptsMenu({
     queryKey: ["skills"],
     queryFn: () => tipcClient.getSkills(),
   })
-  const enabledSkills = (skillsQuery.data ?? []).filter(
-    (skill) => skill.enabled
-  )
+  const availableSkills = skillsQuery.data ?? []
 
   const handleSelectPrompt = (prompt: PredefinedPrompt) => {
     onSelectPrompt(prompt.content)
@@ -190,12 +188,12 @@ export function PredefinedPromptsMenu({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Skills</DropdownMenuLabel>
-          {enabledSkills.length === 0 ? (
+          {availableSkills.length === 0 ? (
             <div className="px-2 py-3 text-sm text-muted-foreground text-center">
-              No skills enabled
+              No skills available
             </div>
           ) : (
-            enabledSkills.map((skill) => (
+            availableSkills.map((skill) => (
               <DropdownMenuItem
                 key={skill.id}
                 className="flex items-center gap-2 cursor-pointer"

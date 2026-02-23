@@ -1771,7 +1771,6 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
           id: s.id,
           name: s.name,
           description: s.description,
-          enabled: s.enabled,
           enabledForProfile: enabledSkillIds.includes(s.id),
           source: s.source,
           createdAt: s.createdAt,

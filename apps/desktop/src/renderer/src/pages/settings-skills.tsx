@@ -114,19 +114,6 @@ export function Component() {
     },
   })
 
-  // Toggle skill enabled/disabled globally
-  const toggleSkillMutation = useMutation({
-    mutationFn: async (skillId: string) => {
-      return await tipcClient.toggleSkill({ id: skillId })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["skills"] })
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to toggle skill: ${error.message}`)
-    },
-  })
-
   const importSkillMutation = useMutation({
     mutationFn: async () => {
       return await tipcClient.importSkillFile()
@@ -479,10 +466,6 @@ Write your skill instructions here.
                 className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <Switch
-                    checked={skill.enabled}
-                    onCheckedChange={() => toggleSkillMutation.mutate(skill.id)}
-                  />
                   <span className="font-medium truncate">{skill.name}</span>
                 </div>
                 <div className="flex gap-1 ml-2 shrink-0">

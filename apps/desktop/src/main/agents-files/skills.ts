@@ -124,7 +124,6 @@ export function stringifySkillMarkdown(skill: AgentSkill, options: { originFileP
     id: skill.id,
     name: normalizeSingleLine(skill.name),
     description: normalizeSingleLine(skill.description),
-    enabled: String(skill.enabled),
     createdAt: String(skill.createdAt),
     updatedAt: String(skill.updatedAt),
   }
@@ -151,7 +150,6 @@ export function parseSkillMarkdown(
 
   const name = (frontmatter.name ?? "").trim() || id
   const description = (frontmatter.description ?? "").trim()
-  const enabled = parseBoolean(frontmatter.enabled, true)
 
   const stableNow = tryGetFileMtimeMs(options.filePath) ?? Date.now()
   const createdAt = parseNumber(frontmatter.createdAt, stableNow)
@@ -167,7 +165,6 @@ export function parseSkillMarkdown(
     name,
     description,
     instructions: body.trim(),
-    enabled,
     createdAt,
     updatedAt,
     source,

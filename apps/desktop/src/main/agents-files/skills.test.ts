@@ -35,7 +35,6 @@ describe("agents-files/skills", () => {
       name: "Hello\nWorld",
       description: "Desc\nLine2",
       instructions: "Do X\nDo Y",
-      enabled: true,
       createdAt: 1700000000000,
       updatedAt: 1700000001000,
       source: "local",
@@ -53,7 +52,6 @@ describe("agents-files/skills", () => {
     expect(parsed!.name).toBe("Hello World")
     expect(parsed!.description).toBe("Desc Line2")
     expect(parsed!.instructions).toBe("Do X\nDo Y")
-    expect(parsed!.enabled).toBe(true)
     expect(parsed!.createdAt).toBe(1700000000000)
     expect(parsed!.updatedAt).toBe(1700000001000)
     expect(parsed!.filePath).toBeUndefined()
@@ -72,7 +70,6 @@ describe("agents-files/skills", () => {
 kind: skill
 name: My Skill
 description: D
-enabled: true
 createdAt: 1
 updatedAt: 1
 ---
@@ -102,7 +99,6 @@ kind: skill
 id: dup
 name: Old
 description: X
-enabled: true
 createdAt: 1
 updatedAt: 100
 ---
@@ -117,7 +113,6 @@ kind: skill
 id: dup
 name: New
 description: X
-enabled: true
 createdAt: 1
 updatedAt: 200
 ---
@@ -145,7 +140,6 @@ kind: skill
 id: mtime-test
 name: M
 description: D
-enabled: true
 ---
 
 Body`,
@@ -177,7 +171,6 @@ kind: skill
 id: with-override
 name: Wrapper
 description: D
-enabled: true
 createdAt: 1
 updatedAt: 2
 filePath: .repo/SKILL.md
@@ -206,7 +199,6 @@ Body`,
       name: "V1",
       description: "D",
       instructions: "Body",
-      enabled: true,
       createdAt: 1,
       updatedAt: 1,
     }

@@ -3750,11 +3750,6 @@ export const router = {
     return skillsService.getSkills()
   }),
 
-  getEnabledSkills: t.procedure.action(async () => {
-    const { skillsService } = await import("./skills-service")
-    return skillsService.getEnabledSkills()
-  }),
-
   getSkill: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
@@ -3785,13 +3780,6 @@ export const router = {
     .action(async ({ input }) => {
       const { skillsService } = await import("./skills-service")
       return skillsService.deleteSkill(input.id)
-    }),
-
-  toggleSkill: t.procedure
-    .input<{ id: string }>()
-    .action(async ({ input }) => {
-      const { skillsService } = await import("./skills-service")
-      return skillsService.toggleSkill(input.id)
     }),
 
   importSkillFromMarkdown: t.procedure
@@ -3951,11 +3939,6 @@ export const router = {
       }
       return result
     }),
-
-  getEnabledSkillsInstructions: t.procedure.action(async () => {
-    const { skillsService } = await import("./skills-service")
-    return skillsService.getEnabledSkillsInstructions()
-  }),
 
   // Per-profile skill management
   getProfileSkillsConfig: t.procedure

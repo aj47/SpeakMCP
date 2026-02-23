@@ -84,6 +84,7 @@ export function SettingsAgents() {
   const [editing, setEditing] = useState<EditingAgent | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [serverStatus, setServerStatus] = useState<Record<string, ServerInfo>>({})
+  const [builtinTools, setBuiltinTools] = useState<{name: string, description: string}[]>([])
   const [skills, setSkills] = useState<AgentSkill[]>([])
   const [newPropKey, setNewPropKey] = useState("")
   const [newPropValue, setNewPropValue] = useState("")
@@ -95,7 +96,7 @@ export function SettingsAgents() {
     loadAgents()
     tipcClient.getDefaultSystemPrompt().then(setDefaultSystemPrompt).catch(console.error)
   }, [])
-  useEffect(() => { if (editing) { loadServers(); loadSkills() } }, [!!editing])
+  useEffect(() => { if (editing) { loadServers(); loadSkills(); loadBuiltinTools() } }, [!!editing])
 
   const loadAgents = async () => {
     const all = await tipcClient.getAgentProfiles()
@@ -103,6 +104,13 @@ export function SettingsAgents() {
   }
   const loadServers = async () => {
     try { const s = await tipcClient.getMcpServerStatus(); setServerStatus(s as Record<string, ServerInfo>) } catch {}
+  }
+  const loadBuiltinTools = async () => {
+    try {
+      const list = await tipcClient.getMcpDetailedToolList()
+      const internal = list.filter(t => t.serverName === "speakmcp-settings")
+      setBuiltinTools(internal)
+    } catch {}
   }
   const loadSkills = async () => {
     try { const s = await tipcClient.getSkills(); setSkills(s) } catch {}
@@ -188,6 +196,35 @@ export function SettingsAgents() {
       if (idx >= 0) disabled.splice(idx, 1); else disabled.push(serverName)
       setEditing({ ...editing, toolConfig: { ...tc, disabledServers: disabled } })
     }
+  }
+
+  const isBuiltinToolEnabled = (toolName: string): boolean => {
+    const list = editing?.toolConfig?.enabledBuiltinTools
+    if (!list || list.length === 0) return true
+    return list.includes(toolName)
+  }
+
+  const toggleBuiltinTool = (toolName: string) => {
+    if (!editing) return
+    const tc = { ...editing.toolConfig } as AgentProfileToolConfig
+    let currentList = [...(tc.enabledBuiltinTools || [])]
+
+    if (currentList.length === 0) {
+      // If list is empty (which means all enabled by default), populate with all except the one being toggled off
+      currentList = builtinTools.map(t => t.name).filter(n => n !== toolName)
+    } else {
+      const idx = currentList.indexOf(toolName)
+      if (idx >= 0) {
+        currentList.splice(idx, 1)
+      } else {
+        currentList.push(toolName)
+        // If checking it makes it include ALL builtin tools, revert to empty array (allow all)
+        if (currentList.length === builtinTools.length) {
+          currentList = []
+        }
+      }
+    }
+    setEditing({ ...editing, toolConfig: { ...tc, enabledBuiltinTools: currentList } })
   }
 
   // Skill config helpers
@@ -563,6 +600,35 @@ export function SettingsAgents() {
                         <span className="text-xs text-muted-foreground shrink-0 ml-2">
                           {info?.toolCount ?? 0} tools
                         </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <h4 className="text-sm font-semibold mt-6 mb-2">Built-in Tools</h4>
+              {builtinTools.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No built-in tools available.</p>
+              ) : (
+                <div className="space-y-1">
+                  {builtinTools.map(tool => {
+                    const isEssential = tool.name === "speakmcp-settings:mark_work_complete"
+                    return (
+                      <div key={tool.name} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Switch
+                            checked={isEssential || isBuiltinToolEnabled(tool.name)}
+                            disabled={isEssential}
+                            onCheckedChange={() => toggleBuiltinTool(tool.name)}
+                          />
+                          <div className="min-w-0">
+                            <span className="font-medium truncate flex items-center gap-2">
+                              {tool.name.replace("speakmcp-settings:", "")}
+                              {isEssential && <Badge variant="outline" className="text-[10px] px-1.5">essential</Badge>}
+                            </span>
+                            {tool.description && <span className="text-xs text-muted-foreground truncate block">{tool.description}</span>}
+                          </div>
+                        </div>
                       </div>
                     )
                   })}

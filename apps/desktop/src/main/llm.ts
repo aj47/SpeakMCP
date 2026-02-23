@@ -801,22 +801,28 @@ export async function processTranscriptWithAgentMode(
   // even if the global profile is changed during session execution
   const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
   const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
-  // Get skills instructions from profile snapshot (typically set by agents)
+  // Get skills instructions from profile snapshot (typically set by agents/sub-sessions)
   const agentSkillsInstructions = effectiveProfileSnapshot?.skillsInstructions
   // Get agent properties from profile snapshot (dynamic key-value pairs)
   const agentProperties = effectiveProfileSnapshot?.agentProperties
 
   // Load enabled agent skills instructions for the current profile
   // Skills provide specialized instructions that improve AI performance on specific tasks
-  // Use per-profile skills config if available, otherwise fall back to empty (no skills)
-  const { skillsService } = await import("./skills-service")
-  const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
-  logLLM(`[processTranscriptWithAgentMode] Loading skills for session ${currentSessionId}. enabledSkillIds: [${enabledSkillIds.join(', ')}]`)
-  const profileSkillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
-  logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${profileSkillsInstructions ? `${profileSkillsInstructions.length} chars` : 'none'}`)
+  // SKIP if agentSkillsInstructions already present — the snapshot already loaded skills for this profile,
+  // loading them again would duplicate the skills index section in the system prompt
+  let profileSkillsInstructions: string | undefined
+  if (!agentSkillsInstructions) {
+    const { skillsService } = await import("./skills-service")
+    const enabledSkillIds = effectiveProfileSnapshot?.skillsConfig?.enabledSkillIds ?? []
+    logLLM(`[processTranscriptWithAgentMode] Loading skills for session ${currentSessionId}. enabledSkillIds: [${enabledSkillIds.join(', ')}]`)
+    profileSkillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
+    logLLM(`[processTranscriptWithAgentMode] Skills instructions loaded: ${profileSkillsInstructions ? `${profileSkillsInstructions.length} chars` : 'none'}`)
+  } else {
+    logLLM(`[processTranscriptWithAgentMode] Using agent skills instructions from profile snapshot (${agentSkillsInstructions.length} chars), skipping duplicate load`)
+  }
 
-  // Combine agent-level and profile-level skills instructions
-  const skillsInstructions = [agentSkillsInstructions, profileSkillsInstructions].filter(Boolean).join('\n\n') || undefined
+  // Use agent-level skills if present (from snapshot), otherwise profile-level
+  const skillsInstructions = agentSkillsInstructions ?? profileSkillsInstructions
   const skillsIndex = extractSkillsIndexForMinimalPrompt(skillsInstructions)
 
   // Load memories for agent context (works independently of dual-model summarization)
@@ -836,6 +842,9 @@ export async function processTranscriptWithAgentMode(
     logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)
   }
 
+  // The agent's profile ID is used to exclude itself from delegation targets in the system prompt
+  const excludeAgentId = effectiveProfileSnapshot?.profileId
+
   // Construct system prompt using the new approach
   const systemPrompt = constructSystemPrompt(
     baseAvailableTools,
@@ -846,6 +855,7 @@ export async function processTranscriptWithAgentMode(
     skillsInstructions, // agent skills instructions
     agentProperties, // dynamic agent properties
     relevantMemories, // memories from previous sessions
+    excludeAgentId, // exclude this agent from delegation targets
   )
 
   logLLM(`[llm.ts processTranscriptWithAgentMode] Initializing conversationHistory for session ${currentSessionId}`)
@@ -1080,6 +1090,7 @@ export async function processTranscriptWithAgentMode(
       skillsInstructions, // agent skills instructions
       agentProperties, // dynamic agent properties
       relevantMemories, // memories from previous sessions
+      excludeAgentId, // exclude this agent from delegation targets
     )
 
     const postVerifySummaryMessages = [
@@ -1436,6 +1447,9 @@ Return ONLY JSON per schema.`,
         undefined, // relevantTools removed - let LLM decide tool relevance
         customSystemPrompt, // custom base system prompt from profile snapshot or global config
         skillsInstructions, // agent skills instructions
+        undefined, // agentProperties
+        undefined, // memories
+        excludeAgentId, // exclude this agent from delegation targets
       )
       logLLM(`[processTranscriptWithAgentMode] Rebuilt system prompt with ${activeTools.length} active tools (excluded ${excludedToolCount})`)
     }
@@ -2650,6 +2664,7 @@ Return ONLY JSON per schema.`,
           skillsInstructions, // agent skills instructions
           agentProperties, // dynamic agent properties
           relevantMemories, // memories from previous sessions
+          excludeAgentId, // exclude this agent from delegation targets
         )
 
         const summaryMessages = [

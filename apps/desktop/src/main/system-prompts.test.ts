@@ -23,6 +23,7 @@ vi.mock("./acp/internal-agent", () => ({
 vi.mock("./agent-profile-service", () => ({
   agentProfileService: {
     getByRole: () => [],
+    getCurrentProfile: () => undefined,
   },
 }))
 

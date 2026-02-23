@@ -57,8 +57,9 @@ SKILLS:
 
 COMPLETION SIGNAL:
 - When all requested work is fully complete:
-  - If speakmcp-settings:respond_to_user is available, call it with the final user-facing response first
-  - Then call speakmcp-settings:mark_work_complete with a concise completion summary (if available)
+  1. ALWAYS call speakmcp-settings:respond_to_user with the final user-facing response FIRST
+  2. Then call speakmcp-settings:mark_work_complete with a concise completion summary
+- IMPORTANT: Never put the final user-facing answer in plain assistant text — always use respond_to_user
 - If mark_work_complete is not available, provide a complete final user-facing answer directly
 - Do not call mark_work_complete while work is still in progress or partially done
 
@@ -166,10 +167,14 @@ INTERNAL AGENT: Use \`delegate_to_agent\` with \`agentName: "internal"\` to spaw
  * These are agents that can be delegated to via delegate_to_agent.
  * Similar format to tools/skills for easy discoverability.
  */
-export function getAgentsPromptAddition(): string {
-  // Get enabled delegation-target profiles
+export function getAgentsPromptAddition(excludeAgentId?: string): string {
+  // Get the currently active agent so we can exclude it from delegation targets
+  const currentProfile = agentProfileService.getCurrentProfile()
+  const excludeId = excludeAgentId ?? currentProfile?.id
+
+  // Get enabled delegation-target profiles, excluding the current agent
   const delegationTargets = agentProfileService.getByRole('delegation-target')
-    .filter(p => p.enabled)
+    .filter(p => p.enabled && (!excludeId || p.id !== excludeId))
 
   if (delegationTargets.length === 0) {
     return ''
@@ -181,11 +186,17 @@ export function getAgentsPromptAddition(): string {
   }).join('\n')
 
   return `
+DELEGATION RULES (PRIORITY — check BEFORE responding):
+- ALWAYS delegate to a matching agent BEFORE responding or asking for clarification
+- When the user's request matches an agent's description/specialty, delegate immediately
+- When user mentions an agent by name, delegate to that agent
+- Match user intent to agent capabilities — e.g., web browsing tasks go to a web browsing agent
+- Only respond directly if NO agent matches the request
+
 AVAILABLE AGENTS (${delegationTargets.length}):
 ${agentsList}
 
 To delegate: \`delegate_to_agent(agentName: "agent_name", task: "...")\`
-When user mentions an agent by name (e.g., "ask joker...", "have coder..."), delegate to that agent.
 `.trim()
 }
 
@@ -206,6 +217,7 @@ export function constructSystemPrompt(
   skillsInstructions?: string,
   agentProperties?: Record<string, string>,
   memories?: AgentMemory[],
+  excludeAgentId?: string,
 ): string {
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
 
@@ -219,7 +231,8 @@ export function constructSystemPrompt(
     }
 
     // Add agents (delegation-targets) in a discoverable format
-    const agentsAddition = getAgentsPromptAddition()
+    // Pass excludeAgentId so sub-sessions don't list themselves as delegation targets
+    const agentsAddition = getAgentsPromptAddition(excludeAgentId)
     if (agentsAddition) {
       prompt += '\n\n' + agentsAddition
     }

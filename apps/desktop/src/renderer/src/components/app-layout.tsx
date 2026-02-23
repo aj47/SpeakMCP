@@ -50,11 +50,7 @@ export const Component = () => {
           },
         ]
       : []),
-    {
-      text: "Settings",
-      href: "/settings/tools",
-      icon: "i-mingcute-user-setting-line",
-    },
+
     {
       text: "MCP Tools",
       href: "/settings/mcp-tools",

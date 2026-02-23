@@ -322,8 +322,7 @@ const getConfig = (): LoadedConfig => {
   // 1) Preferred: modular `.agents` format (global + optional workspace overlay)
   const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
   const { merged: mergedAgents, hasAnyAgentsFiles } = loadMergedAgentsConfig(
-    { globalAgentsDir: globalAgentsFolder, workspaceAgentsDir: workspaceAgentsFolder },
-    DEFAULT_SYSTEM_PROMPT,
+    { globalAgentsDir: globalAgentsFolder, workspaceAgentsDir: workspaceAgentsFolder }
   )
 
   // 2) Always load legacy config.json as the base layer (it holds API keys, preferences, etc.)
@@ -422,7 +421,7 @@ class ConfigStore {
     // we loaded from legacy config.json or defaults.
     try {
       const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
-      writeAgentsLayerFromConfig(globalLayer, this.config, DEFAULT_SYSTEM_PROMPT, {
+      writeAgentsLayerFromConfig(globalLayer, this.config, {
         // Avoid rewriting user-managed files on startup; only create missing files.
         onlyIfMissing: true,
         maxBackups: 10,
@@ -443,7 +442,7 @@ class ConfigStore {
     // Canonical: write modular `.agents` config (global layer)
     try {
       const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
-      writeAgentsLayerFromConfig(globalLayer, this.config, DEFAULT_SYSTEM_PROMPT, {
+      writeAgentsLayerFromConfig(globalLayer, this.config, {
         maxBackups: 10,
       })
     } catch {

@@ -80,7 +80,7 @@ function normalizePromptForConfig(promptBody: string, defaultSystemPrompt: strin
   return promptBody
 }
 
-export function loadAgentsLayerConfig(layer: AgentsLayerPaths, defaultSystemPrompt: string): Partial<Config> {
+export function loadAgentsLayerConfig(layer: AgentsLayerPaths): Partial<Config> {
   const settings = safeReadJsonFileSync<Partial<Config>>(layer.settingsJsonPath, {
     backupDir: layer.backupsDir,
     defaultValue: {},
@@ -98,26 +98,21 @@ export function loadAgentsLayerConfig(layer: AgentsLayerPaths, defaultSystemProm
     defaultValue: {},
   })
 
-  const systemPromptBody = readAgentsMarkdownBody(layer.systemPromptMdPath)
-  const agentsGuidelinesBody = readAgentsMarkdownBody(layer.agentsMdPath)
+  return { ...settings, ...models, ...mcp, ...layout }
+}
 
-  const promptConfig: Partial<Config> = {}
-  if (systemPromptBody !== null) {
-    promptConfig.mcpCustomSystemPrompt = normalizePromptForConfig(systemPromptBody, defaultSystemPrompt)
+export function loadAgentsPrompts(layer: AgentsLayerPaths): { systemPrompt: string | null, agentsGuidelines: string | null } {
+  return {
+    systemPrompt: readAgentsMarkdownBody(layer.systemPromptMdPath),
+    agentsGuidelines: readAgentsMarkdownBody(layer.agentsMdPath),
   }
-  if (agentsGuidelinesBody !== null) {
-    promptConfig.mcpToolsSystemPrompt = agentsGuidelinesBody
-  }
-
-  return { ...settings, ...models, ...mcp, ...layout, ...promptConfig }
 }
 
 export function loadMergedAgentsConfig(
   options: {
     globalAgentsDir: string
     workspaceAgentsDir?: string | null
-  },
-  defaultSystemPrompt: string,
+  }
 ): { merged: Partial<Config>; hasAnyAgentsFiles: boolean } {
   const globalLayer = getAgentsLayerPaths(options.globalAgentsDir)
   const workspaceLayer = options.workspaceAgentsDir
@@ -128,10 +123,10 @@ export function loadMergedAgentsConfig(
   const workspaceHas = workspaceLayer ? layerHasAnyAgentsConfig(workspaceLayer) : false
 
   const globalConfig = globalHas
-    ? loadAgentsLayerConfig(globalLayer, defaultSystemPrompt)
+    ? loadAgentsLayerConfig(globalLayer)
     : ({} as Partial<Config>)
   const workspaceConfig = workspaceHas && workspaceLayer
-    ? loadAgentsLayerConfig(workspaceLayer, defaultSystemPrompt)
+    ? loadAgentsLayerConfig(workspaceLayer)
     : ({} as Partial<Config>)
 
   return {
@@ -179,10 +174,6 @@ export type SplitAgentsConfig = {
   mcp: Partial<Config>
   models: Partial<Config>
   layout: Partial<Config>
-  prompts: {
-    systemPrompt: string
-    agentsGuidelines: string
-  }
 }
 
 export function splitConfigIntoAgentsFiles(config: Config): SplitAgentsConfig {
@@ -191,14 +182,7 @@ export function splitConfigIntoAgentsFiles(config: Config): SplitAgentsConfig {
   const models: Partial<Config> = {}
   const layout: Partial<Config> = {}
 
-  const prompts = {
-    systemPrompt: config.mcpCustomSystemPrompt ?? "",
-    agentsGuidelines: config.mcpToolsSystemPrompt ?? "",
-  }
-
   for (const [key, value] of Object.entries(config as Record<string, unknown>)) {
-    if (key === "mcpCustomSystemPrompt" || key === "mcpToolsSystemPrompt") continue
-
     if (LAYOUT_KEYS.has(key)) {
       ;(layout as any)[key] = value
       continue
@@ -217,13 +201,52 @@ export function splitConfigIntoAgentsFiles(config: Config): SplitAgentsConfig {
     ;(settings as any)[key] = value
   }
 
-  return { settings, mcp, models, layout, prompts }
+  return { settings, mcp, models, layout }
+}
+
+export function writeAgentsPrompts(
+  layer: AgentsLayerPaths,
+  systemPrompt: string,
+  agentsGuidelines: string,
+  defaultSystemPrompt: string,
+  options: { onlyIfMissing?: boolean; maxBackups?: number } = {},
+): void {
+  const onlyIfMissing = options.onlyIfMissing === true
+  const maxBackups = options.maxBackups ?? 10
+
+  ensureDirSync(layer.agentsDir)
+
+  const effectiveSystemPrompt = systemPrompt?.trim() ? systemPrompt : defaultSystemPrompt
+  const systemPromptMd = stringifyFrontmatterDocument({
+    frontmatter: { kind: "system-prompt" },
+    body: effectiveSystemPrompt,
+  })
+
+  const agentsMd = stringifyFrontmatterDocument({
+    frontmatter: { kind: "agents" },
+    body: agentsGuidelines || "",
+  })
+
+  if (!onlyIfMissing || !fileExists(layer.systemPromptMdPath)) {
+    safeWriteFileSync(layer.systemPromptMdPath, systemPromptMd, {
+      backupDir: layer.backupsDir,
+      maxBackups,
+      encoding: "utf8",
+    })
+  }
+
+  if (!onlyIfMissing || !fileExists(layer.agentsMdPath)) {
+    safeWriteFileSync(layer.agentsMdPath, agentsMd, {
+      backupDir: layer.backupsDir,
+      maxBackups,
+      encoding: "utf8",
+    })
+  }
 }
 
 export function writeAgentsLayerFromConfig(
   layer: AgentsLayerPaths,
   config: Config,
-  defaultSystemPrompt: string,
   options: { onlyIfMissing?: boolean; maxBackups?: number } = {},
 ): void {
   const onlyIfMissing = options.onlyIfMissing === true
@@ -247,35 +270,6 @@ export function writeAgentsLayerFromConfig(
   writeJsonIfNeeded(layer.mcpJsonPath, split.mcp)
   writeJsonIfNeeded(layer.modelsJsonPath, split.models)
   writeJsonIfNeeded(layer.layoutJsonPath, split.layout)
-
-  const effectiveSystemPrompt = split.prompts.systemPrompt?.trim()
-    ? split.prompts.systemPrompt
-    : defaultSystemPrompt
-  const systemPromptMd = stringifyFrontmatterDocument({
-    frontmatter: { kind: "system-prompt" },
-    body: effectiveSystemPrompt,
-  })
-
-  const agentsMd = stringifyFrontmatterDocument({
-    frontmatter: { kind: "agents" },
-    body: split.prompts.agentsGuidelines || "",
-  })
-
-  if (!onlyIfMissing || !fileExists(layer.systemPromptMdPath)) {
-    safeWriteFileSync(layer.systemPromptMdPath, systemPromptMd, {
-      backupDir: layer.backupsDir,
-      maxBackups,
-      encoding: "utf8",
-    })
-  }
-
-  if (!onlyIfMissing || !fileExists(layer.agentsMdPath)) {
-    safeWriteFileSync(layer.agentsMdPath, agentsMd, {
-      backupDir: layer.backupsDir,
-      maxBackups,
-      encoding: "utf8",
-    })
-  }
 }
 
 /**

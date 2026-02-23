@@ -177,12 +177,12 @@ export async function processTranscriptWithTools(
       index === self.findIndex((t) => t.name === tool.name),
   )
 
-  const userGuidelines = config.mcpToolsSystemPrompt
   // Load enabled agent skills instructions for non-agent mode too
   // Uses the Main Agent's skills config if available, otherwise globally enabled skills
   const { skillsService } = await import("./skills-service")
   const { agentProfileService } = await import("./agent-profile-service")
   const mainAgent = agentProfileService.getCurrentProfile()
+  const userGuidelines = mainAgent?.guidelines || ""
   const enabledSkillIds = mainAgent
     ? agentProfileService.getEnabledSkillIdsForProfile(mainAgent.id)
     : []
@@ -210,7 +210,7 @@ export async function processTranscriptWithTools(
     userGuidelines,
     false,
     undefined,
-    config.mcpCustomSystemPrompt,
+    mainAgent?.systemPrompt,
     skillsInstructions,
     undefined, // agentProperties - not used in non-agent mode
     relevantMemories,
@@ -796,11 +796,14 @@ export async function processTranscriptWithAgentMode(
 
   const baseAvailableTools = uniqueAvailableTools
 
-  // Use profile snapshot for session isolation if available, otherwise fall back to global config
+  const { agentProfileService } = await import("./agent-profile-service")
+  const mainAgent = agentProfileService.getCurrentProfile()
+
+  // Use profile snapshot for session isolation if available, otherwise fall back to current profile
   // This ensures the session uses the profile settings at creation time,
   // even if the global profile is changed during session execution
-  const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? config.mcpToolsSystemPrompt ?? ""
-  const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? config.mcpCustomSystemPrompt
+  const agentModeGuidelines = effectiveProfileSnapshot?.guidelines ?? mainAgent?.guidelines ?? ""
+  const customSystemPrompt = effectiveProfileSnapshot?.systemPrompt ?? mainAgent?.systemPrompt
   // Get skills instructions from profile snapshot (typically set by agents/sub-sessions)
   const agentSkillsInstructions = effectiveProfileSnapshot?.skillsInstructions
   // Get agent properties from profile snapshot (dynamic key-value pairs)

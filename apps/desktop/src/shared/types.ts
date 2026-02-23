@@ -1272,7 +1272,9 @@ export type Config = {
   mcpToolsOpenaiModel?: string
   mcpToolsGroqModel?: string
   mcpToolsGeminiModel?: string
+  /** @deprecated Kept for backward compatibility but ignored */
   mcpToolsSystemPrompt?: string
+  /** @deprecated Kept for backward compatibility but ignored */
   mcpCustomSystemPrompt?: string
   mcpCurrentProfileId?: string
   /** @deprecated Agent mode is now always enabled. This field is kept for backwards compatibility but ignored. */

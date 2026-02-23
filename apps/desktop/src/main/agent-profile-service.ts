@@ -23,10 +23,12 @@ import {
 } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
-import { configStore } from "./config"
+import { configStore, globalAgentsFolder, resolveWorkspaceAgentsFolder } from "./config"
 import { getBuiltinToolNames } from "./builtin-tool-definitions"
 import { acpRegistry } from "./acp/acp-registry"
 import type { ACPAgentDefinition } from "./acp/types"
+import { getAgentsLayerPaths, writeAgentsPrompts, loadAgentsPrompts } from "./agents-files/modular-config"
+import { DEFAULT_SYSTEM_PROMPT } from "./system-prompts-default"
 
 /**
  * Path to the agent profiles storage file.
@@ -233,6 +235,43 @@ class AgentProfileService {
     this.loadConversations()
   }
 
+  private syncPromptsFromLayer(data: AgentProfilesData) {
+    const layerPath = resolveWorkspaceAgentsFolder() || globalAgentsFolder
+    const agentsLayerPaths = getAgentsLayerPaths(layerPath)
+
+    const { systemPrompt, agentsGuidelines } = loadAgentsPrompts(agentsLayerPaths)
+
+    const mainAgent = data.profiles.find((p) => p.name === "main-agent")
+    if (mainAgent) {
+      if (systemPrompt !== null) {
+        mainAgent.systemPrompt = systemPrompt
+      } else {
+        mainAgent.systemPrompt = DEFAULT_SYSTEM_PROMPT
+      }
+      if (agentsGuidelines !== null) {
+        mainAgent.guidelines = agentsGuidelines
+      } else {
+        mainAgent.guidelines = ""
+      }
+    }
+  }
+
+  private syncPromptsToLayer() {
+    if (!this.profilesData) return
+    const mainAgent = this.profilesData.profiles.find((p) => p.name === "main-agent")
+    if (!mainAgent) return
+
+    const layerPath = resolveWorkspaceAgentsFolder() || globalAgentsFolder
+    const agentsLayerPaths = getAgentsLayerPaths(layerPath)
+
+    writeAgentsPrompts(
+      agentsLayerPaths,
+      mainAgent.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+      mainAgent.guidelines || "",
+      DEFAULT_SYSTEM_PROMPT
+    )
+  }
+
   /**
    * Load profiles from storage, migrating from legacy formats if needed.
    */
@@ -241,6 +280,7 @@ class AgentProfileService {
       if (fs.existsSync(agentProfilesPath)) {
         const data = JSON.parse(fs.readFileSync(agentProfilesPath, "utf8")) as AgentProfilesData
         this.profilesData = data
+        this.syncPromptsFromLayer(this.profilesData)
         return data
       }
     } catch (error) {
@@ -251,6 +291,7 @@ class AgentProfileService {
     const migratedProfiles = this.migrateFromLegacy()
     if (migratedProfiles.length > 0) {
       this.profilesData = { profiles: migratedProfiles }
+      this.syncPromptsFromLayer(this.profilesData)
       this.saveProfiles()
       return this.profilesData
     }
@@ -265,6 +306,7 @@ class AgentProfileService {
     }))
 
     this.profilesData = { profiles: defaultProfiles }
+    this.syncPromptsFromLayer(this.profilesData)
     this.saveProfiles()
     return this.profilesData
   }
@@ -338,6 +380,7 @@ class AgentProfileService {
   private saveProfiles(): void {
     if (!this.profilesData) return
     try {
+      this.syncPromptsToLayer()
       fs.writeFileSync(agentProfilesPath, JSON.stringify(this.profilesData, null, 2))
     } catch (error) {
       logApp("Error saving agent profiles:", error)

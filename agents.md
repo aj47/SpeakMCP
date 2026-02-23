@@ -156,28 +156,44 @@ Memories are **global** (not scoped to profiles/agents):
 ### config.json (global settings)
 Config is a flat JSON object persisted at `~/Library/Application Support/app.speakmcp/config.json` (macOS).
 - Read: `configStore.get()` returns full `Config` object
-- Write: `configStore.set(partial)` merges partial updates
+- Write: renderer IPC `saveConfig` merges partial updates, then `configStore.save(merged)` persists
 - Migration logic in `config.ts` handles schema evolution (e.g., Groq TTS model renames)
-- Config type defined in `src/shared/types.ts` as `Config`
+- Config type defined in `apps/desktop/src/shared/types.ts` as `Config`
 - **Config merge order**: `defaults ← config.json ← .agents` (config.json is always loaded as base)
 
 ### .agents/ modular config (canonical)
-Skills and memories are stored as discrete `.md` files in a `.agents/` directory with simple `key: value` frontmatter.
+SpeakMCP stores agent-related configuration and content as files under a `.agents/` folder.
 
-**Two layers** with overlay semantics (workspace overrides global by ID):
-- **Global**: `<appData>/<APP_ID>/.agents/` — via `globalAgentsFolder` from `config.ts`
-- **Workspace** (optional): resolved by `resolveWorkspaceAgentsFolder()` — uses `SPEAKMCP_WORKSPACE_DIR` env var or upward search
+**Two layers** with overlay semantics (workspace overrides global):
+- **Global (canonical):** `~/.agents/` — via `globalAgentsFolder` in `apps/desktop/src/main/config.ts`
+  - The app creates missing config files here on startup (`ConfigStore` calls `writeAgentsLayerFromConfig(..., onlyIfMissing: true)`).
+  - When settings change in the UI, the app rewrites the **global** `.agents` files.
+- **Workspace (optional overlay):** `<workspace>/.agents/` — via `resolveWorkspaceAgentsFolder()`
+  - If `SPEAKMCP_WORKSPACE_DIR` is set, the workspace layer is `<SPEAKMCP_WORKSPACE_DIR>/.agents`.
+  - Otherwise we do an upward search from `process.cwd()` **only if a `.agents` folder already exists** (safe-by-default).
 
-**Directory structure:**
+**Directory structure (current):**
 ```
 .agents/
-├── skills/<skill-id>/skill.md    # frontmatter: id, name, description, enabled, createdAt, updatedAt
-├── memories/<memory-id>.md       # frontmatter: id, content summary
-├── .backups/                     # timestamped backups (auto-rotated)
-│   ├── skills/
-│   └── memories/
-└── (future: agents/*.md, mcp.json, models.json, speakmcp-settings.json)
+├── speakmcp-settings.json        # general settings (subset of Config)
+├── mcp.json                      # MCP server + tool config (subset of Config)
+├── models.json                   # model presets + provider keys (subset of Config)
+├── system-prompt.md              # stored as Config.mcpCustomSystemPrompt
+├── agents.md                     # stored as Config.mcpToolsSystemPrompt
+├── layouts/
+│   └── ui.json                   # UI/layout settings (subset of Config)
+├── skills/
+│   └── <skill-id>/skill.md       # skill instructions + frontmatter
+├── memories/
+│   └── <memory-id>.md            # memory entry + frontmatter
+└── .backups/                     # timestamped backups (auto-rotated)
+    ├── skills/
+    └── memories/
 ```
+
+**Merge semantics:**
+- **Config files** are shallow-merged by key (`merged = { ...global, ...workspace }`).
+- **Skills** and **memories** are merged by `id` (workspace wins on conflicts).
 
 **Infrastructure** (`apps/desktop/src/main/agents-files/`):
 - `frontmatter.ts` — simple `key: value` parser/serializer (no YAML dependency)
@@ -185,6 +201,40 @@ Skills and memories are stored as discrete `.md` files in a `.agents/` directory
 - `modular-config.ts` — `AgentsLayerPaths` type, layer path calculations
 - `skills.ts` — skill `.md` read/write, directory scanning, `writeAgentsSkillFile()`
 - `memories.ts` — memory `.md` read/write
+
+**Frontmatter format:**
+- Uses `---` fences and *simple* `key: value` lines (**not** full YAML)
+- Lines starting with `#` are comments
+- Values can be quoted with `'` or `"` (recommended if they contain `:`)
+- For memories, list-ish fields like `tags` / `keyFindings` accept either:
+  - CSV: `tags: one, two, three`
+  - JSON array: `tags: ["one", "two"]`
+
+**Skill template** (`.agents/skills/<skill-id>/skill.md`):
+```
+---
+id: my-skill-id              # optional (defaults to folder name)
+name: My Skill
+description: What this skill does
+enabled: true
+---
+
+Your instructions here in markdown...
+```
+
+**Memory template** (`.agents/memories/<memory-id>.md`):
+```
+---
+id: memory_123               # optional (defaults to filename without .md)
+title: How we gate MCP tools
+content: Built-in tools use enabledBuiltinTools allowlist; external tools use disabledTools denylist.
+importance: medium           # low | medium | high | critical
+tags: mcp, tools
+keyFindings: ["Option B", "mark_work_complete always enabled"]
+---
+
+Optional notes (go in the markdown body).
+```
 
 ## Key Type Hierarchy
 

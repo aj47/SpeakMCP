@@ -1926,6 +1926,77 @@ export const router = {
     return configStore.get()
   }),
 
+  // ============================================================================
+  // .agents (modular config) helpers
+  // ============================================================================
+
+  getAgentsFolders: t.procedure.action(async () => {
+    const { globalAgentsFolder, resolveWorkspaceAgentsFolder } = await import("./config")
+    const { getAgentsLayerPaths } = await import("./agents-files/modular-config")
+    const { getAgentsSkillsDir } = await import("./agents-files/skills")
+    const { getAgentsMemoriesDir } = await import("./agents-files/memories")
+
+    const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+    const workspaceLayer = workspaceAgentsFolder ? getAgentsLayerPaths(workspaceAgentsFolder) : null
+
+    const workspaceSource = workspaceLayer
+      ? (process.env.SPEAKMCP_WORKSPACE_DIR && process.env.SPEAKMCP_WORKSPACE_DIR.trim() ? "env" : "upward")
+      : null
+
+    return {
+      global: {
+        agentsDir: globalLayer.agentsDir,
+        skillsDir: getAgentsSkillsDir(globalLayer),
+        memoriesDir: getAgentsMemoriesDir(globalLayer),
+      },
+      workspace: workspaceLayer
+        ? {
+            agentsDir: workspaceLayer.agentsDir,
+            skillsDir: getAgentsSkillsDir(workspaceLayer),
+            memoriesDir: getAgentsMemoriesDir(workspaceLayer),
+          }
+        : null,
+      workspaceSource,
+    }
+  }),
+
+  openAgentsFolder: t.procedure.action(async () => {
+    const { globalAgentsFolder } = await import("./config")
+    fs.mkdirSync(globalAgentsFolder, { recursive: true })
+    const error = await shell.openPath(globalAgentsFolder)
+    return { success: !error, error: error || undefined }
+  }),
+
+  openWorkspaceAgentsFolder: t.procedure.action(async () => {
+    const { resolveWorkspaceAgentsFolder } = await import("./config")
+    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+    if (!workspaceAgentsFolder) return { success: false, error: "No workspace .agents folder detected" }
+
+    fs.mkdirSync(workspaceAgentsFolder, { recursive: true })
+    const error = await shell.openPath(workspaceAgentsFolder)
+    return { success: !error, error: error || undefined }
+  }),
+
+  openMemoriesFolder: t.procedure.action(async () => {
+    const { globalAgentsFolder } = await import("./config")
+    const memoriesDir = path.join(globalAgentsFolder, "memories")
+    fs.mkdirSync(memoriesDir, { recursive: true })
+    const error = await shell.openPath(memoriesDir)
+    return { success: !error, error: error || undefined }
+  }),
+
+  openWorkspaceMemoriesFolder: t.procedure.action(async () => {
+    const { resolveWorkspaceAgentsFolder } = await import("./config")
+    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+    if (!workspaceAgentsFolder) return { success: false, error: "No workspace .agents folder detected" }
+
+    const memoriesDir = path.join(workspaceAgentsFolder, "memories")
+    fs.mkdirSync(memoriesDir, { recursive: true })
+    const error = await shell.openPath(memoriesDir)
+    return { success: !error, error: error || undefined }
+  }),
+
   // Debug flags - exposed to renderer for synchronized debug logging
   getDebugFlags: t.procedure.action(async () => {
     return getDebugFlags()
@@ -2965,16 +3036,6 @@ export const router = {
       if (input.systemPrompt !== undefined) updates.systemPrompt = input.systemPrompt
       agentProfileService.update(input.id, updates)
 
-      // If the updated profile is the current profile, sync guidelines to live config
-      const currentProfile = agentProfileService.getCurrentProfile()
-      if (currentProfile && currentProfile.id === input.id && input.guidelines !== undefined) {
-        const config = configStore.get()
-        configStore.save({
-          ...config,
-          mcpToolsSystemPrompt: input.guidelines,
-        })
-      }
-
       return agentProfileService.getProfileLegacy(input.id)
     }),
 
@@ -2993,10 +3054,7 @@ export const router = {
       const config = configStore.get()
       const updatedConfig = {
         ...config,
-        mcpToolsSystemPrompt: profile.guidelines || "",
         mcpCurrentProfileId: profile.id,
-        // Apply custom system prompt if it exists, otherwise clear it to use default
-        mcpCustomSystemPrompt: profile.systemPrompt || "",
         // Apply model config if it exists
         // Agent/MCP Tools settings
         ...(profile.modelConfig?.mcpToolsProviderId && {
@@ -3045,8 +3103,9 @@ export const router = {
         mcpServerConfig?.disabledServers ?? [],
         mcpServerConfig?.disabledTools ?? [],
         mcpServerConfig?.allServersDisabledByDefault ?? false,
-	        mcpServerConfig?.enabledServers ?? [],
-	        mcpServerConfig?.enabledBuiltinTools ?? [],
+
+        mcpServerConfig?.enabledServers ?? [],
+        mcpServerConfig?.enabledBuiltinTools ?? [],
       )
 
       return agentProfileService.getProfileLegacy(profile.id)
@@ -3074,20 +3133,28 @@ export const router = {
         input.profileId,
         currentState.disabledServers,
         currentState.disabledTools,
-	        currentState.enabledServers,
-	        currentState.enabledBuiltinTools,
+
+        currentState.enabledServers,
+        currentState.enabledBuiltinTools,
       )
     }),
 
   // Update profile MCP server configuration
   updateProfileMcpConfig: t.procedure
-	    .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[]; enabledBuiltinTools?: string[] }>()
+
+    .input<{
+      profileId: string
+      disabledServers?: string[]
+      disabledTools?: string[]
+      enabledServers?: string[]
+      enabledBuiltinTools?: string[]
+    }>()
     .action(async ({ input }) => {
-        return agentProfileService.updateProfileMcpConfig(input.profileId, {
+      return agentProfileService.updateProfileMcpConfig(input.profileId, {
         disabledServers: input.disabledServers,
         disabledTools: input.disabledTools,
         enabledServers: input.enabledServers,
-	        enabledBuiltinTools: input.enabledBuiltinTools,
+        enabledBuiltinTools: input.enabledBuiltinTools,
       })
     }),
 
@@ -3833,19 +3900,33 @@ export const router = {
     }),
 
   openSkillsFolder: t.procedure.action(async () => {
-    const { globalAgentsFolder, resolveWorkspaceAgentsFolder } = await import("./config")
+    const { globalAgentsFolder } = await import("./config")
     const { getAgentsLayerPaths } = await import("./agents-files/modular-config")
     const { getAgentsSkillsDir } = await import("./agents-files/skills")
 
-    // Prefer workspace .agents/skills if available, else global .agents/skills
-    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
-    const layer = workspaceAgentsFolder
-      ? getAgentsLayerPaths(workspaceAgentsFolder)
-      : getAgentsLayerPaths(globalAgentsFolder)
+    // Canonical skills location is the global layer.
+    const layer = getAgentsLayerPaths(globalAgentsFolder)
     const skillsDir = getAgentsSkillsDir(layer)
 
     fs.mkdirSync(skillsDir, { recursive: true })
-    await shell.openPath(skillsDir)
+    const error = await shell.openPath(skillsDir)
+    return { success: !error, error: error || undefined }
+  }),
+
+  openWorkspaceSkillsFolder: t.procedure.action(async () => {
+    const { resolveWorkspaceAgentsFolder } = await import("./config")
+    const { getAgentsLayerPaths } = await import("./agents-files/modular-config")
+    const { getAgentsSkillsDir } = await import("./agents-files/skills")
+
+    const workspaceAgentsFolder = resolveWorkspaceAgentsFolder()
+    if (!workspaceAgentsFolder) return { success: false, error: "No workspace .agents folder detected" }
+
+    const layer = getAgentsLayerPaths(workspaceAgentsFolder)
+    const skillsDir = getAgentsSkillsDir(layer)
+
+    fs.mkdirSync(skillsDir, { recursive: true })
+    const error = await shell.openPath(skillsDir)
+    return { success: !error, error: error || undefined }
   }),
 
   scanSkillsFolder: t.procedure.action(async () => {

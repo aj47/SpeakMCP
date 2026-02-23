@@ -9,6 +9,7 @@ import {
   loadAgentsLayerConfig,
   loadMergedAgentsConfig,
   writeAgentsLayerFromConfig,
+  writeAgentsPrompts,
 } from "./modular-config"
 
 const DEFAULT_PROMPT = "DEFAULT PROMPT\nLine2"
@@ -40,10 +41,8 @@ describe("modular-config", () => {
     )
     writeFile(layer.agentsMdPath, `---\nkind: agents\n---\n\nHello guidelines\n`)
 
-    const loaded = loadAgentsLayerConfig(layer, DEFAULT_PROMPT)
+    const loaded = loadAgentsLayerConfig(layer)
     expect(loaded.textInputEnabled).toBe(false)
-    expect(loaded.mcpCustomSystemPrompt).toBe("")
-    expect(loaded.mcpToolsSystemPrompt).toBe("Hello guidelines")
   })
 
   it("merges workspace layer over global layer", () => {
@@ -58,8 +57,7 @@ describe("modular-config", () => {
     writeJson(workspaceLayer.settingsJsonPath, { textInputEnabled: true })
 
     const { merged, hasAnyAgentsFiles } = loadMergedAgentsConfig(
-      { globalAgentsDir, workspaceAgentsDir },
-      DEFAULT_PROMPT,
+      { globalAgentsDir, workspaceAgentsDir }
     )
 
     expect(hasAnyAgentsFiles).toBe(true)
@@ -80,7 +78,8 @@ describe("modular-config", () => {
       mcpToolsSystemPrompt: "Extra guidelines",
     } as unknown as Config
 
-    writeAgentsLayerFromConfig(layer, config, DEFAULT_PROMPT, { maxBackups: 3 })
+    writeAgentsLayerFromConfig(layer, config, { maxBackups: 3 })
+    writeAgentsPrompts(layer, "", "Extra guidelines", DEFAULT_PROMPT, { maxBackups: 3 })
 
     const systemMd = fs.readFileSync(layer.systemPromptMdPath, "utf8")
     expect(systemMd).toContain("kind: system-prompt")

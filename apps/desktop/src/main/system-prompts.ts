@@ -206,7 +206,7 @@ export function constructSystemPrompt(
     description: string
     inputSchema?: any
   }>,
-  userGuidelines?: string,
+  guidelines?: string,
   isAgentMode: boolean = false,
   relevantTools?: Array<{
     name: string
@@ -220,6 +220,10 @@ export function constructSystemPrompt(
   excludeAgentId?: string,
 ): string {
   let prompt = getEffectiveSystemPrompt(customSystemPrompt)
+
+  if (guidelines?.trim()) {
+    prompt += `\n\nUSER GUIDELINES (FOLLOW THESE):\n${guidelines.trim()}`
+  }
 
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
@@ -300,8 +304,8 @@ export function constructSystemPrompt(
   }
 
   // Add user guidelines if provided (with proper section header)
-  if (userGuidelines?.trim()) {
-    prompt += `\n\nUSER GUIDELINES:\n${userGuidelines.trim()}`
+  if (guidelines?.trim()) {
+    prompt += `\n\nUSER GUIDELINES:\n${guidelines.trim()}`
   }
 
   // Add agent properties if provided (dynamic key-value pairs)

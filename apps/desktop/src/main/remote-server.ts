@@ -1315,6 +1315,8 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   // GET /v1/conversations/:id/status - Lightweight state check for active sync polling
   // Returns only updatedAt + messageCount so mobile can cheaply detect changes
   // without fetching the full conversation payload every 3 seconds.
+  // Uses getConversationStatus() which checks the in-memory index cache first,
+  // avoiding expensive full conversation loads during polling.
   fastify.get("/v1/conversations/:id/status", async (req, reply) => {
     try {
       const params = req.params as { id: string }
@@ -1329,17 +1331,13 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         return reply.code(400).send({ error: conversationIdError })
       }
 
-      const conversation = await conversationService.loadConversation(conversationId)
+      const status = await conversationService.getConversationStatus(conversationId)
 
-      if (!conversation) {
+      if (!status) {
         return reply.code(404).send({ error: "Conversation not found" })
       }
 
-      return reply.send({
-        id: conversation.id,
-        updatedAt: conversation.updatedAt,
-        messageCount: conversation.messages.length,
-      })
+      return reply.send(status)
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to fetch conversation status", error)
       return reply.code(500).send({ error: error?.message || "Failed to fetch conversation status" })

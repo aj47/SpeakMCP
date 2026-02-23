@@ -67,8 +67,7 @@ import { startRemoteServer, stopRemoteServer, restartRemoteServer, printQRCodeTo
 import { emitAgentProgress } from "./emit-agent-progress"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { messageQueueService } from "./message-queue-service"
-import { profileService } from "./profile-service"
-import { agentProfileService } from "./agent-profile-service"
+import { agentProfileService, createSessionSnapshotFromProfile, toolConfigToMcpServerConfig } from "./agent-profile-service"
 import { acpService, ACPRunRequest } from "./acp-service"
 import { processTranscriptWithACPAgent } from "./acp-main-agent"
 import { fetchModelsDevData, getModelFromModelsDevByProviderId, findBestModelMatch, refreshModelsDevCache } from "./models-dev-service"
@@ -277,17 +276,9 @@ async function processWithAgentMode(
 
   // Only capture a new snapshot if we don't have one from an existing session
   if (!profileSnapshot) {
-    const currentProfile = profileService.getCurrentProfile()
+    const currentProfile = agentProfileService.getCurrentProfile()
     if (currentProfile) {
-      profileSnapshot = {
-        profileId: currentProfile.id,
-        profileName: currentProfile.name,
-        guidelines: currentProfile.guidelines,
-        systemPrompt: currentProfile.systemPrompt,
-        mcpServerConfig: currentProfile.mcpServerConfig,
-        modelConfig: currentProfile.modelConfig,
-        skillsConfig: currentProfile.skillsConfig,
-      }
+      profileSnapshot = createSessionSnapshotFromProfile(currentProfile)
     }
   }
 
@@ -1664,17 +1655,9 @@ export const router = {
 
       // Only capture a new snapshot if we don't have one from an existing session
       if (!profileSnapshot) {
-        const currentProfile = profileService.getCurrentProfile()
+        const currentProfile = agentProfileService.getCurrentProfile()
         if (currentProfile) {
-          profileSnapshot = {
-            profileId: currentProfile.id,
-            profileName: currentProfile.name,
-            guidelines: currentProfile.guidelines,
-            systemPrompt: currentProfile.systemPrompt,
-            mcpServerConfig: currentProfile.mcpServerConfig,
-            modelConfig: currentProfile.modelConfig,
-            skillsConfig: currentProfile.skillsConfig,
-          }
+          profileSnapshot = createSessionSnapshotFromProfile(currentProfile)
         }
       }
 
@@ -2947,17 +2930,17 @@ export const router = {
 
   // Profile Management
   getProfiles: t.procedure.action(async () => {
-    return profileService.getProfiles()
+    return agentProfileService.getProfilesLegacy()
   }),
 
   getProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-        return profileService.getProfile(input.id)
+        return agentProfileService.getProfileLegacy(input.id)
     }),
 
   getCurrentProfile: t.procedure.action(async () => {
-    return profileService.getCurrentProfile()
+    return agentProfileService.getCurrentProfileLegacy()
   }),
 
   // Get the default system prompt for restore functionality
@@ -2969,20 +2952,21 @@ export const router = {
   createProfile: t.procedure
     .input<{ name: string; guidelines: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
-        return profileService.createProfile(input.name, input.guidelines, input.systemPrompt)
+        const profile = agentProfileService.createUserProfile(input.name, input.guidelines, input.systemPrompt)
+        return agentProfileService.getProfileLegacy(profile.id)
     }),
 
   updateProfile: t.procedure
     .input<{ id: string; name?: string; guidelines?: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
-        const updates: any = {}
-      if (input.name !== undefined) updates.name = input.name
+        const updates: Partial<import("@shared/types").AgentProfile> = {}
+      if (input.name !== undefined) { updates.name = input.name; updates.displayName = input.name }
       if (input.guidelines !== undefined) updates.guidelines = input.guidelines
       if (input.systemPrompt !== undefined) updates.systemPrompt = input.systemPrompt
-      const updatedProfile = profileService.updateProfile(input.id, updates)
+      agentProfileService.update(input.id, updates)
 
       // If the updated profile is the current profile, sync guidelines to live config
-      const currentProfile = profileService.getCurrentProfile()
+      const currentProfile = agentProfileService.getCurrentProfile()
       if (currentProfile && currentProfile.id === input.id && input.guidelines !== undefined) {
         const config = configStore.get()
         configStore.save({
@@ -2991,25 +2975,25 @@ export const router = {
         })
       }
 
-      return updatedProfile
+      return agentProfileService.getProfileLegacy(input.id)
     }),
 
   deleteProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-        return profileService.deleteProfile(input.id)
+        return agentProfileService.delete(input.id)
     }),
 
   setCurrentProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-        const profile = profileService.setCurrentProfile(input.id)
+        const profile = agentProfileService.setCurrentProfileStrict(input.id)
 
       // Update the config with the profile's guidelines, system prompt, and model config
       const config = configStore.get()
       const updatedConfig = {
         ...config,
-        mcpToolsSystemPrompt: profile.guidelines,
+        mcpToolsSystemPrompt: profile.guidelines || "",
         mcpCurrentProfileId: profile.id,
         // Apply custom system prompt if it exists, otherwise clear it to use default
         mcpCustomSystemPrompt: profile.systemPrompt || "",
@@ -3055,36 +3039,37 @@ export const router = {
       configStore.save(updatedConfig)
 
       // Apply the profile's MCP server configuration
-      // If the profile has no mcpServerConfig, we pass empty arrays to reset to default (all enabled)
+      // If the profile has no toolConfig, we pass empty arrays to reset to default (all enabled)
+      const mcpServerConfig = toolConfigToMcpServerConfig(profile.toolConfig)
       mcpService.applyProfileMcpConfig(
-        profile.mcpServerConfig?.disabledServers ?? [],
-        profile.mcpServerConfig?.disabledTools ?? [],
-        profile.mcpServerConfig?.allServersDisabledByDefault ?? false,
-        profile.mcpServerConfig?.enabledServers ?? []
+        mcpServerConfig?.disabledServers ?? [],
+        mcpServerConfig?.disabledTools ?? [],
+        mcpServerConfig?.allServersDisabledByDefault ?? false,
+        mcpServerConfig?.enabledServers ?? []
       )
 
-      return profile
+      return agentProfileService.getProfileLegacy(profile.id)
     }),
 
   exportProfile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-        return profileService.exportProfile(input.id)
+        return agentProfileService.exportProfile(input.id)
     }),
 
   importProfile: t.procedure
     .input<{ profileJson: string }>()
     .action(async ({ input }) => {
-        return profileService.importProfile(input.profileJson)
+        return agentProfileService.importProfile(input.profileJson)
     }),
 
   // Save current MCP server state to a profile
   saveCurrentMcpStateToProfile: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-  
+
       const currentState = mcpService.getCurrentMcpConfigState()
-      return profileService.saveCurrentMcpStateToProfile(
+      return agentProfileService.saveCurrentMcpStateToProfile(
         input.profileId,
         currentState.disabledServers,
         currentState.disabledTools,
@@ -3096,7 +3081,7 @@ export const router = {
   updateProfileMcpConfig: t.procedure
     .input<{ profileId: string; disabledServers?: string[]; disabledTools?: string[]; enabledServers?: string[] }>()
     .action(async ({ input }) => {
-        return profileService.updateProfileMcpConfig(input.profileId, {
+        return agentProfileService.updateProfileMcpConfig(input.profileId, {
         disabledServers: input.disabledServers,
         disabledTools: input.disabledTools,
         enabledServers: input.enabledServers,
@@ -3108,7 +3093,7 @@ export const router = {
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
         const config = configStore.get()
-      return profileService.saveCurrentModelStateToProfile(input.profileId, {
+      return agentProfileService.saveCurrentModelStateToProfile(input.profileId, {
         // Agent/MCP Tools settings
         mcpToolsProviderId: config.mcpToolsProviderId,
         mcpToolsOpenaiModel: config.mcpToolsOpenaiModel,
@@ -3148,7 +3133,7 @@ export const router = {
       ttsProviderId?: "openai" | "groq" | "gemini" | "kitten" | "supertonic"
     }>()
     .action(async ({ input }) => {
-        return profileService.updateProfileModelConfig(input.profileId, {
+        return agentProfileService.updateProfileModelConfig(input.profileId, {
         // Agent/MCP Tools settings
         mcpToolsProviderId: input.mcpToolsProviderId,
         mcpToolsOpenaiModel: input.mcpToolsOpenaiModel,
@@ -3170,7 +3155,7 @@ export const router = {
   saveProfileFile: t.procedure
     .input<{ id: string }>()
     .action(async ({ input }) => {
-        const profileJson = profileService.exportProfile(input.id)
+        const profileJson = agentProfileService.exportProfile(input.id)
 
       const result = await dialog.showSaveDialog({
         title: "Export Profile",
@@ -3211,7 +3196,7 @@ export const router = {
 
     try {
       const profileJson = fs.readFileSync(result.filePaths[0], "utf8")
-        return profileService.importProfile(profileJson)
+        return agentProfileService.importProfile(profileJson)
     } catch (error) {
       throw new Error(
         `Failed to import profile: ${error instanceof Error ? error.message : String(error)}`,
@@ -3713,7 +3698,7 @@ export const router = {
       const { skillsService } = await import("./skills-service")
       const skill = skillsService.createSkill(input.name, input.description, input.instructions)
       // Auto-enable the new skill for the current profile so it's immediately usable
-      profileService.enableSkillForCurrentProfile(skill.id)
+      agentProfileService.enableSkillForCurrentProfile(skill.id)
       return skill
     }),
 
@@ -3745,7 +3730,7 @@ export const router = {
       const { skillsService } = await import("./skills-service")
       const skill = skillsService.importSkillFromMarkdown(input.content)
       // Auto-enable the imported skill for the current profile so it's immediately usable
-      profileService.enableSkillForCurrentProfile(skill.id)
+      agentProfileService.enableSkillForCurrentProfile(skill.id)
       return skill
     }),
 
@@ -3774,7 +3759,7 @@ export const router = {
 
     const skill = skillsService.importSkillFromFile(result.filePaths[0])
     // Auto-enable the imported skill for the current profile so it's immediately usable
-    profileService.enableSkillForCurrentProfile(skill.id)
+    agentProfileService.enableSkillForCurrentProfile(skill.id)
     return skill
   }),
 
@@ -3793,7 +3778,7 @@ export const router = {
 
     const skill = skillsService.importSkillFromFolder(result.filePaths[0])
     // Auto-enable the imported skill for the current profile so it's immediately usable
-    profileService.enableSkillForCurrentProfile(skill.id)
+    agentProfileService.enableSkillForCurrentProfile(skill.id)
     return skill
   }),
 
@@ -3813,7 +3798,7 @@ export const router = {
     const importResult = skillsService.importSkillsFromParentFolder(result.filePaths[0])
     // Auto-enable all imported skills for the current profile so they're immediately usable
     for (const skill of importResult.imported) {
-      profileService.enableSkillForCurrentProfile(skill.id)
+      agentProfileService.enableSkillForCurrentProfile(skill.id)
     }
     return importResult
   }),
@@ -3865,7 +3850,7 @@ export const router = {
     const importedSkills = skillsService.scanSkillsFolder()
     // Auto-enable all newly imported skills for the current profile so they're immediately usable
     for (const skill of importedSkills) {
-      profileService.enableSkillForCurrentProfile(skill.id)
+      agentProfileService.enableSkillForCurrentProfile(skill.id)
     }
     return importedSkills
   }),
@@ -3878,7 +3863,7 @@ export const router = {
       const result = await skillsService.importSkillFromGitHub(input.repoIdentifier)
       // Auto-enable all imported skills for the current profile so they're immediately usable
       for (const skill of result.imported) {
-        profileService.enableSkillForCurrentProfile(skill.id)
+        agentProfileService.enableSkillForCurrentProfile(skill.id)
       }
       return result
     }),
@@ -3892,7 +3877,7 @@ export const router = {
   getProfileSkillsConfig: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-      const profile = profileService.getProfile(input.profileId)
+      const profile = agentProfileService.getById(input.profileId)
       return profile?.skillsConfig ?? { enabledSkillIds: [], allSkillsDisabledByDefault: true }
     }),
 
@@ -3900,25 +3885,25 @@ export const router = {
     .input<{ profileId: string; enabledSkillIds?: string[]; allSkillsDisabledByDefault?: boolean }>()
     .action(async ({ input }) => {
       const { profileId, ...config } = input
-      return profileService.updateProfileSkillsConfig(profileId, config)
+      return agentProfileService.updateProfileSkillsConfig(profileId, config)
     }),
 
   toggleProfileSkill: t.procedure
     .input<{ profileId: string; skillId: string }>()
     .action(async ({ input }) => {
-      return profileService.toggleProfileSkill(input.profileId, input.skillId)
+      return agentProfileService.toggleProfileSkill(input.profileId, input.skillId)
     }),
 
   isSkillEnabledForProfile: t.procedure
     .input<{ profileId: string; skillId: string }>()
     .action(async ({ input }) => {
-      return profileService.isSkillEnabledForProfile(input.profileId, input.skillId)
+      return agentProfileService.isSkillEnabledForProfile(input.profileId, input.skillId)
     }),
 
   getEnabledSkillIdsForProfile: t.procedure
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
-      return profileService.getEnabledSkillIdsForProfile(input.profileId)
+      return agentProfileService.getEnabledSkillIdsForProfile(input.profileId)
     }),
 
   // Get enabled skills instructions for a specific profile
@@ -3926,7 +3911,7 @@ export const router = {
     .input<{ profileId: string }>()
     .action(async ({ input }) => {
       const { skillsService } = await import("./skills-service")
-      const enabledSkillIds = profileService.getEnabledSkillIdsForProfile(input.profileId)
+      const enabledSkillIds = agentProfileService.getEnabledSkillIdsForProfile(input.profileId)
       return skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
     }),
 
@@ -3944,7 +3929,7 @@ export const router = {
 
   // Get memories for the current profile (convenience method)
   getMemoriesForCurrentProfile: t.procedure.action(async () => {
-    const currentProfile = profileService.getCurrentProfile()
+    const currentProfile = agentProfileService.getCurrentProfile()
     if (currentProfile) {
       return memoryService.getMemoriesByProfile(currentProfile.id)
     }
@@ -3969,7 +3954,7 @@ export const router = {
     }>()
     .action(async ({ input }) => {
       // Use provided profileId, or fall back to current profile
-      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      const profileId = input.profileId ?? agentProfileService.getCurrentProfile()?.id
       const memory = memoryService.createMemoryFromSummary(
         input.summary,
         input.title,
@@ -4004,7 +3989,7 @@ export const router = {
   deleteMultipleMemories: t.procedure
     .input<{ ids: string[] }>()
     .action(async ({ input }) => {
-      const profileId = profileService.getCurrentProfile()?.id
+      const profileId = agentProfileService.getCurrentProfile()?.id
       if (!profileId) {
         throw new Error("No current profile selected")
       }
@@ -4017,7 +4002,7 @@ export const router = {
 
   deleteAllMemories: t.procedure
     .action(async () => {
-      const profileId = profileService.getCurrentProfile()?.id
+      const profileId = agentProfileService.getCurrentProfile()?.id
       if (!profileId) {
         throw new Error("No current profile selected")
       }
@@ -4032,7 +4017,7 @@ export const router = {
     .input<{ query: string; profileId?: string }>()
     .action(async ({ input }) => {
       // Use provided profileId, or fall back to current profile
-      const profileId = input.profileId ?? profileService.getCurrentProfile()?.id
+      const profileId = input.profileId ?? agentProfileService.getCurrentProfile()?.id
       return memoryService.searchMemories(input.query, profileId)
     }),
 

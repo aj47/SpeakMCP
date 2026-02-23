@@ -14,11 +14,10 @@ import { conversationService } from "./conversation-service"
 import { AgentProgressUpdate, SessionProfileSnapshot } from "../shared/types"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { emergencyStopAll } from "./emergency-stop"
-import { profileService } from "./profile-service"
 import { sendMessageNotification, isPushEnabled, clearBadgeCount } from "./push-notification-service"
 import { skillsService } from "./skills-service"
 import { memoryService } from "./memory-service"
-import { agentProfileService } from "./agent-profile-service"
+import { agentProfileService, createSessionSnapshotFromProfile, toolConfigToMcpServerConfig } from "./agent-profile-service"
 import { getRendererHandlers } from "@egoist/tipc/main"
 import { WINDOWS } from "./window"
 import type { RendererHandlers } from "./renderer-handlers"
@@ -484,17 +483,9 @@ async function runAgent(options: RunAgentOptions): Promise<{
 
   // Only capture a new snapshot if we don't have one from an existing session
   if (!profileSnapshot) {
-    const currentProfile = profileService.getCurrentProfile()
+    const currentProfile = agentProfileService.getCurrentProfile()
     if (currentProfile) {
-      profileSnapshot = {
-        profileId: currentProfile.id,
-        profileName: currentProfile.name,
-        guidelines: currentProfile.guidelines,
-        systemPrompt: currentProfile.systemPrompt,
-        mcpServerConfig: currentProfile.mcpServerConfig,
-        modelConfig: currentProfile.modelConfig,
-        skillsConfig: currentProfile.skillsConfig,
-      }
+      profileSnapshot = createSessionSnapshotFromProfile(currentProfile)
     }
   }
 
@@ -834,12 +825,12 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   // GET /v1/profiles - List all profiles
   fastify.get("/v1/profiles", async (_req, reply) => {
     try {
-      const profiles = profileService.getProfiles()
-      const currentProfile = profileService.getCurrentProfile()
+      const profiles = agentProfileService.getUserProfiles()
+      const currentProfile = agentProfileService.getCurrentProfile()
       return reply.send({
         profiles: profiles.map(p => ({
           id: p.id,
-          name: p.name,
+          name: p.displayName || p.name,
           isDefault: p.isDefault,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
@@ -855,15 +846,15 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   // GET /v1/profiles/current - Get current profile details
   fastify.get("/v1/profiles/current", async (_req, reply) => {
     try {
-      const profile = profileService.getCurrentProfile()
+      const profile = agentProfileService.getCurrentProfile()
       if (!profile) {
         return reply.code(404).send({ error: "No current profile set" })
       }
       return reply.send({
         id: profile.id,
-        name: profile.name,
+        name: profile.displayName || profile.name,
         isDefault: profile.isDefault,
-        guidelines: profile.guidelines,
+        guidelines: profile.guidelines || "",
         systemPrompt: profile.systemPrompt,
         createdAt: profile.createdAt,
         updatedAt: profile.updatedAt,
@@ -882,15 +873,16 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       if (!profileId || typeof profileId !== "string") {
         return reply.code(400).send({ error: "Missing or invalid profileId" })
       }
-      const profile = profileService.setCurrentProfile(profileId)
+      const profile = agentProfileService.setCurrentProfileStrict(profileId)
       // Apply the profile's MCP configuration
+      const mcpServerConfig = toolConfigToMcpServerConfig(profile.toolConfig)
       mcpService.applyProfileMcpConfig(
-        profile.mcpServerConfig?.disabledServers,
-        profile.mcpServerConfig?.disabledTools,
-        profile.mcpServerConfig?.allServersDisabledByDefault,
-        profile.mcpServerConfig?.enabledServers
+        mcpServerConfig?.disabledServers,
+        mcpServerConfig?.disabledTools,
+        mcpServerConfig?.allServersDisabledByDefault,
+        mcpServerConfig?.enabledServers
       )
-      diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.name}`)
+      diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.displayName || profile.name}`)
       return reply.send({
         success: true,
         profile: {
@@ -911,7 +903,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   fastify.get("/v1/profiles/:id/export", async (req, reply) => {
     try {
       const params = req.params as { id: string }
-      const profileJson = profileService.exportProfile(params.id)
+      const profileJson = agentProfileService.exportProfile(params.id)
       return reply.send({ profileJson })
     } catch (error: any) {
       diagnosticsService.logError("remote-server", "Failed to export profile", error)
@@ -928,13 +920,13 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       if (!profileJson || typeof profileJson !== "string") {
         return reply.code(400).send({ error: "Missing or invalid profileJson" })
       }
-      const profile = profileService.importProfile(profileJson)
-      diagnosticsService.logInfo("remote-server", `Imported profile: ${profile.name}`)
+      const profile = agentProfileService.importProfile(profileJson)
+      diagnosticsService.logInfo("remote-server", `Imported profile: ${profile.displayName || profile.name}`)
       return reply.send({
         success: true,
         profile: {
           id: profile.id,
-          name: profile.name,
+          name: profile.displayName || profile.name,
           isDefault: profile.isDefault,
         },
       })
@@ -1777,7 +1769,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   fastify.get("/v1/skills", async (_req, reply) => {
     try {
       const skills = skillsService.getSkills()
-      const currentProfile = profileService.getCurrentProfile()
+      const currentProfile = agentProfileService.getCurrentProfile()
       const enabledSkillIds = currentProfile?.skillsConfig?.enabledSkillIds || []
 
       return reply.send({
@@ -1811,13 +1803,13 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         return reply.code(404).send({ error: "Skill not found" })
       }
 
-      const currentProfile = profileService.getCurrentProfile()
+      const currentProfile = agentProfileService.getCurrentProfile()
       if (!currentProfile) {
         return reply.code(400).send({ error: "No current profile set" })
       }
 
-      const updatedProfile = profileService.toggleProfileSkill(currentProfile.id, params.id)
-      const newEnabledSkillIds = updatedProfile.skillsConfig?.enabledSkillIds || []
+      const updatedProfile = agentProfileService.toggleProfileSkill(currentProfile.id, params.id)
+      const newEnabledSkillIds = updatedProfile?.skillsConfig?.enabledSkillIds || []
 
       return reply.send({
         success: true,
@@ -1887,10 +1879,19 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   // Agent Personas Management Endpoints (for mobile app)
   // ============================================
 
-  // GET /v1/agent-profiles - List all agent profiles (personas)
-  fastify.get("/v1/agent-profiles", async (_req, reply) => {
+  // GET /v1/agent-profiles - List all agent profiles (supports ?role=user-profile|delegation-target|external-agent filter)
+  fastify.get("/v1/agent-profiles", async (req, reply) => {
     try {
-      const profiles = agentProfileService.getAll()
+      const query = req.query as { role?: string }
+      let profiles = agentProfileService.getAll()
+
+      // Filter by role if specified
+      if (query.role) {
+        profiles = profiles.filter(p => {
+          const role = p.role || (p.isUserProfile ? "user-profile" : p.isAgentTarget ? "delegation-target" : "delegation-target")
+          return role === query.role
+        })
+      }
 
       return reply.send({
         profiles: profiles.map(p => ({
@@ -1902,9 +1903,12 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
           isBuiltIn: p.isBuiltIn,
           isUserProfile: p.isUserProfile,
           isAgentTarget: p.isAgentTarget,
+          isDefault: p.isDefault,
           role: p.role,
           connectionType: p.connection.type,
           autoSpawn: p.autoSpawn,
+          guidelines: p.guidelines,
+          systemPrompt: p.systemPrompt,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
         })),
@@ -1949,7 +1953,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
     try {
       const cfg = configStore.get()
       const loops = cfg.loops || []
-      const profiles = profileService.getProfiles()
+      const profiles = agentProfileService.getUserProfiles()
 
       // Get loop runtime statuses if available
       let statuses: Array<{ id: string; isRunning: boolean; nextRunAt?: number; lastRunAt?: number }> = []
@@ -1973,7 +1977,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
             intervalMinutes: l.intervalMinutes,
             enabled: l.enabled,
             profileId: l.profileId,
-            profileName: profile?.name,
+            profileName: profile ? (profile.displayName || profile.name) : undefined,
             runOnStartup: l.runOnStartup,
             lastRunAt: status?.lastRunAt ?? l.lastRunAt,
             isRunning: status?.isRunning ?? false,

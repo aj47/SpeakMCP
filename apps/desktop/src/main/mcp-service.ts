@@ -1052,12 +1052,12 @@ export class MCPService {
   private saveCurrentStateToProfile(): void {
     try {
       // Dynamic import to avoid circular dependency
-      import("./profile-service").then(({ profileService }) => {
-        const currentProfileId = profileService.getCurrentProfile()?.id
+      import("./agent-profile-service").then(({ agentProfileService }) => {
+        const currentProfileId = agentProfileService.getCurrentProfile()?.id
         if (!currentProfileId) return
 
         const state = this.getCurrentMcpConfigState()
-        profileService.saveCurrentMcpStateToProfile(
+        agentProfileService.saveCurrentMcpStateToProfile(
           currentProfileId,
           state.disabledServers,
           state.disabledTools,

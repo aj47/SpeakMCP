@@ -13,7 +13,7 @@
  */
 
 import { configStore } from "./config"
-import { profileService } from "./profile-service"
+import { agentProfileService, toolConfigToMcpServerConfig } from "./agent-profile-service"
 import { mcpService, type MCPTool, type MCPToolResult, handleWhatsAppToggle } from "./mcp-service"
 import { agentSessionTracker } from "./agent-session-tracker"
 import { agentSessionStateManager, toolApprovalManager } from "./state"
@@ -179,15 +179,15 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
 
   list_profiles: async (): Promise<MCPToolResult> => {
-    const profiles = profileService.getProfiles()
-    const currentProfile = profileService.getCurrentProfile()
+    const profiles = agentProfileService.getUserProfiles()
+    const currentProfile = agentProfileService.getCurrentProfile()
 
     const profileList = profiles.map((profile) => ({
       id: profile.id,
-      name: profile.name,
+      name: profile.displayName || profile.name,
       isActive: profile.id === currentProfile?.id,
       isDefault: profile.isDefault || false,
-      guidelinesPreview: profile.guidelines.substring(0, 100) + (profile.guidelines.length > 100 ? "..." : ""),
+      guidelinesPreview: (profile.guidelines || "").substring(0, 100) + ((profile.guidelines || "").length > 100 ? "..." : ""),
     }))
 
     return {
@@ -213,15 +213,15 @@ const toolHandlers: Record<string, ToolHandler> = {
         isError: true,
       }
     }
-    const profiles = profileService.getProfiles()
+    const profiles = agentProfileService.getUserProfiles()
 
     // Find profile by ID or name (case-insensitive for name)
     const profile = profiles.find(
-      (p) => p.id === profileIdOrName || p.name.toLowerCase() === profileIdOrName.toLowerCase()
+      (p) => p.id === profileIdOrName || (p.displayName || p.name).toLowerCase() === profileIdOrName.toLowerCase()
     )
 
     if (!profile) {
-      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      const availableProfiles = profiles.map((p) => `${p.displayName || p.name} (${p.id})`).join(", ")
       return {
         content: [
           {
@@ -237,68 +237,40 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     // Switch to the profile
-    profileService.setCurrentProfile(profile.id)
+    agentProfileService.setCurrentProfile(profile.id)
 
     // Apply the profile's MCP server configuration
-    // If the profile has no mcpServerConfig, we pass empty arrays to reset to default (all enabled)
+    const mcpServerConfig = toolConfigToMcpServerConfig(profile.toolConfig)
     const { mcpService } = await import("./mcp-service")
     mcpService.applyProfileMcpConfig(
-      profile.mcpServerConfig?.disabledServers ?? [],
-      profile.mcpServerConfig?.disabledTools ?? [],
-      profile.mcpServerConfig?.allServersDisabledByDefault ?? false,
-      profile.mcpServerConfig?.enabledServers ?? []
+      mcpServerConfig?.disabledServers ?? [],
+      mcpServerConfig?.disabledTools ?? [],
+      mcpServerConfig?.allServersDisabledByDefault ?? false,
+      mcpServerConfig?.enabledServers ?? []
     )
 
     // Update config with profile's guidelines, system prompt, and model configuration
     const config = configStore.get()
     const updatedConfig = {
       ...config,
-      // Always apply guidelines and profile ID (same as TIPC setCurrentProfile)
-      mcpToolsSystemPrompt: profile.guidelines,
+      mcpToolsSystemPrompt: profile.guidelines || "",
       mcpCurrentProfileId: profile.id,
-      // Apply custom system prompt if it exists, otherwise clear it to use default
       mcpCustomSystemPrompt: profile.systemPrompt || "",
-      // Apply model config if it exists
-      ...(profile.modelConfig?.mcpToolsProviderId && {
-        mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId,
-      }),
-      ...(profile.modelConfig?.mcpToolsOpenaiModel && {
-        mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel,
-      }),
-      ...(profile.modelConfig?.mcpToolsGroqModel && {
-        mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel,
-      }),
-      ...(profile.modelConfig?.mcpToolsGeminiModel && {
-        mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel,
-      }),
-      ...(profile.modelConfig?.currentModelPresetId && {
-        currentModelPresetId: profile.modelConfig.currentModelPresetId,
-      }),
-      // STT Provider settings
-      ...(profile.modelConfig?.sttProviderId && {
-        sttProviderId: profile.modelConfig.sttProviderId,
-      }),
-      // Transcript Post-Processing settings
-      ...(profile.modelConfig?.transcriptPostProcessingProviderId && {
-        transcriptPostProcessingProviderId: profile.modelConfig.transcriptPostProcessingProviderId,
-      }),
-      ...(profile.modelConfig?.transcriptPostProcessingOpenaiModel && {
-        transcriptPostProcessingOpenaiModel: profile.modelConfig.transcriptPostProcessingOpenaiModel,
-      }),
-      ...(profile.modelConfig?.transcriptPostProcessingGroqModel && {
-        transcriptPostProcessingGroqModel: profile.modelConfig.transcriptPostProcessingGroqModel,
-      }),
-      ...(profile.modelConfig?.transcriptPostProcessingGeminiModel && {
-        transcriptPostProcessingGeminiModel: profile.modelConfig.transcriptPostProcessingGeminiModel,
-      }),
-      // TTS Provider settings
-      ...(profile.modelConfig?.ttsProviderId && {
-        ttsProviderId: profile.modelConfig.ttsProviderId,
-      }),
+      ...(profile.modelConfig?.mcpToolsProviderId && { mcpToolsProviderId: profile.modelConfig.mcpToolsProviderId }),
+      ...(profile.modelConfig?.mcpToolsOpenaiModel && { mcpToolsOpenaiModel: profile.modelConfig.mcpToolsOpenaiModel }),
+      ...(profile.modelConfig?.mcpToolsGroqModel && { mcpToolsGroqModel: profile.modelConfig.mcpToolsGroqModel }),
+      ...(profile.modelConfig?.mcpToolsGeminiModel && { mcpToolsGeminiModel: profile.modelConfig.mcpToolsGeminiModel }),
+      ...(profile.modelConfig?.currentModelPresetId && { currentModelPresetId: profile.modelConfig.currentModelPresetId }),
+      ...(profile.modelConfig?.sttProviderId && { sttProviderId: profile.modelConfig.sttProviderId }),
+      ...(profile.modelConfig?.transcriptPostProcessingProviderId && { transcriptPostProcessingProviderId: profile.modelConfig.transcriptPostProcessingProviderId }),
+      ...(profile.modelConfig?.transcriptPostProcessingOpenaiModel && { transcriptPostProcessingOpenaiModel: profile.modelConfig.transcriptPostProcessingOpenaiModel }),
+      ...(profile.modelConfig?.transcriptPostProcessingGroqModel && { transcriptPostProcessingGroqModel: profile.modelConfig.transcriptPostProcessingGroqModel }),
+      ...(profile.modelConfig?.transcriptPostProcessingGeminiModel && { transcriptPostProcessingGeminiModel: profile.modelConfig.transcriptPostProcessingGeminiModel }),
+      ...(profile.modelConfig?.ttsProviderId && { ttsProviderId: profile.modelConfig.ttsProviderId }),
     }
     configStore.save(updatedConfig)
 
-    const mcpConfigApplied = !!profile.mcpServerConfig
+    const mcpConfigApplied = !!profile.toolConfig
     const modelConfigApplied = !!profile.modelConfig
     return {
       content: [
@@ -308,15 +280,15 @@ const toolHandlers: Record<string, ToolHandler> = {
             success: true,
             profile: {
               id: profile.id,
-              name: profile.name,
-              guidelines: profile.guidelines,
+              name: profile.displayName || profile.name,
+              guidelines: profile.guidelines || "",
               mcpConfigApplied,
-              disabledServers: profile.mcpServerConfig?.disabledServers || [],
-              disabledTools: profile.mcpServerConfig?.disabledTools || [],
+              disabledServers: mcpServerConfig?.disabledServers || [],
+              disabledTools: mcpServerConfig?.disabledTools || [],
               modelConfigApplied,
               modelConfig: profile.modelConfig || null,
             },
-            message: `Switched to profile '${profile.name}'${[mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).length > 0 ? ' with ' + [mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).join(' and ') + ' configuration' : ''}`,
+            message: `Switched to profile '${profile.displayName || profile.name}'${[mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).length > 0 ? ' with ' + [mcpConfigApplied && 'MCP', modelConfigApplied && 'model'].filter(Boolean).join(' and ') + ' configuration' : ''}`,
           }, null, 2),
         },
       ],
@@ -325,7 +297,7 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
 
   get_current_profile: async (): Promise<MCPToolResult> => {
-    const currentProfile = profileService.getCurrentProfile()
+    const currentProfile = agentProfileService.getCurrentProfile()
 
     if (!currentProfile) {
       return {
@@ -349,8 +321,8 @@ const toolHandlers: Record<string, ToolHandler> = {
           text: JSON.stringify({
             profile: {
               id: currentProfile.id,
-              name: currentProfile.name,
-              guidelines: currentProfile.guidelines,
+              name: currentProfile.displayName || currentProfile.name,
+              guidelines: currentProfile.guidelines || "",
               isDefault: currentProfile.isDefault || false,
               createdAt: currentProfile.createdAt,
               updatedAt: currentProfile.updatedAt,
@@ -1067,8 +1039,8 @@ const toolHandlers: Record<string, ToolHandler> = {
     const systemPrompt = args.systemPrompt as string | undefined
 
     // Check if a profile with the same name already exists (case-insensitive)
-    const profiles = profileService.getProfiles()
-    const existingProfile = profiles.find((p) => p.name.toLowerCase() === name.toLowerCase())
+    const profiles = agentProfileService.getUserProfiles()
+    const existingProfile = profiles.find((p) => (p.displayName || p.name).toLowerCase() === name.toLowerCase())
     if (existingProfile) {
       return {
         content: [
@@ -1085,7 +1057,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     try {
-      const profile = profileService.createProfile(name, guidelines, systemPrompt)
+      const profile = agentProfileService.createUserProfile(name, guidelines, systemPrompt)
 
       return {
         content: [
@@ -1095,12 +1067,12 @@ const toolHandlers: Record<string, ToolHandler> = {
               success: true,
               profile: {
                 id: profile.id,
-                name: profile.name,
-                guidelines: profile.guidelines,
+                name: profile.displayName || profile.name,
+                guidelines: profile.guidelines || "",
                 systemPrompt: profile.systemPrompt,
                 createdAt: profile.createdAt,
               },
-              message: `Profile '${profile.name}' created successfully. All MCP servers are disabled by default - use switch_profile to activate it.`,
+              message: `Profile '${profile.displayName || profile.name}' created successfully. All MCP servers are disabled by default - use switch_profile to activate it.`,
             }, null, 2),
           },
         ],
@@ -1154,15 +1126,15 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     const profileIdOrName = args.profileIdOrName.trim()
-    const profiles = profileService.getProfiles()
+    const profiles = agentProfileService.getUserProfiles()
 
     // Find profile by ID or name (case-insensitive for name)
     const profile = profiles.find(
-      (p) => p.id === profileIdOrName || p.name.toLowerCase() === profileIdOrName.toLowerCase()
+      (p) => p.id === profileIdOrName || (p.displayName || p.name).toLowerCase() === profileIdOrName.toLowerCase()
     )
 
     if (!profile) {
-      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      const availableProfiles = profiles.map((p) => `${p.displayName || p.name} (${p.id})`).join(", ")
       return {
         content: [
           {
@@ -1178,7 +1150,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     // Build updates object
-    const updates: { name?: string; guidelines?: string; systemPrompt?: string } = {}
+    const updates: Partial<import("@shared/types").AgentProfile> = {}
     if (args.name !== undefined) {
       const trimmedName = (args.name as string).trim()
       if (trimmedName === "") {
@@ -1189,7 +1161,7 @@ const toolHandlers: Record<string, ToolHandler> = {
       }
       // Check if the new name conflicts with an existing profile (case-insensitive, excluding current profile)
       const existingProfile = profiles.find(
-        (p) => p.id !== profile.id && p.name.toLowerCase() === trimmedName.toLowerCase()
+        (p) => p.id !== profile.id && (p.displayName || p.name).toLowerCase() === trimmedName.toLowerCase()
       )
       if (existingProfile) {
         return {
@@ -1206,21 +1178,26 @@ const toolHandlers: Record<string, ToolHandler> = {
         }
       }
       updates.name = trimmedName
+      updates.displayName = trimmedName
     }
     if (args.guidelines !== undefined) updates.guidelines = args.guidelines as string
     if (args.systemPrompt !== undefined) updates.systemPrompt = args.systemPrompt as string
 
     try {
-      const updatedProfile = profileService.updateProfile(profile.id, updates)
+      const updatedProfile = agentProfileService.update(profile.id, updates)
+      if (!updatedProfile) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "Failed to update profile" }) }],
+          isError: true,
+        }
+      }
 
       // If this is the currently active profile, sync live config so changes take effect immediately
-      // This mirrors the behavior in switch_profile where configStore is updated with guidelines/systemPrompt
-      const currentProfile = profileService.getCurrentProfile()
+      const currentProfile = agentProfileService.getCurrentProfile()
       if (currentProfile && currentProfile.id === profile.id) {
         const config = configStore.get()
         const updatedConfig = {
           ...config,
-          // Only update the fields that were changed
           ...(updates.guidelines !== undefined && { mcpToolsSystemPrompt: updates.guidelines }),
           ...(updates.systemPrompt !== undefined && { mcpCustomSystemPrompt: updates.systemPrompt }),
         }
@@ -1235,13 +1212,13 @@ const toolHandlers: Record<string, ToolHandler> = {
               success: true,
               profile: {
                 id: updatedProfile.id,
-                name: updatedProfile.name,
-                guidelines: updatedProfile.guidelines,
+                name: updatedProfile.displayName || updatedProfile.name,
+                guidelines: updatedProfile.guidelines || "",
                 systemPrompt: updatedProfile.systemPrompt,
                 updatedAt: updatedProfile.updatedAt,
               },
               updatedFields: Object.keys(updates),
-              message: `Profile '${updatedProfile.name}' updated successfully`,
+              message: `Profile '${updatedProfile.displayName || updatedProfile.name}' updated successfully`,
               liveConfigSynced: currentProfile?.id === profile.id,
             }, null, 2),
           },
@@ -1266,15 +1243,15 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     const profileIdOrName = args.profileIdOrName.trim()
-    const profiles = profileService.getProfiles()
+    const profiles = agentProfileService.getUserProfiles()
 
     // Find profile by ID or name (case-insensitive for name)
     const profile = profiles.find(
-      (p) => p.id === profileIdOrName || p.name.toLowerCase() === profileIdOrName.toLowerCase()
+      (p) => p.id === profileIdOrName || (p.displayName || p.name).toLowerCase() === profileIdOrName.toLowerCase()
     )
 
     if (!profile) {
-      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      const availableProfiles = profiles.map((p) => `${p.displayName || p.name} (${p.id})`).join(", ")
       return {
         content: [
           {
@@ -1290,7 +1267,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     // Check if this is the current profile
-    const currentProfile = profileService.getCurrentProfile()
+    const currentProfile = agentProfileService.getCurrentProfile()
     if (currentProfile && currentProfile.id === profile.id) {
       return {
         content: [
@@ -1298,7 +1275,7 @@ const toolHandlers: Record<string, ToolHandler> = {
             type: "text",
             text: JSON.stringify({
               success: false,
-              error: `Cannot delete the currently active profile '${profile.name}'. Switch to a different profile first.`,
+              error: `Cannot delete the currently active profile '${profile.displayName || profile.name}'. Switch to a different profile first.`,
             }),
           },
         ],
@@ -1307,7 +1284,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     try {
-      const deleted = profileService.deleteProfile(profile.id)
+      const deleted = agentProfileService.delete(profile.id)
 
       if (deleted) {
         return {
@@ -1318,9 +1295,9 @@ const toolHandlers: Record<string, ToolHandler> = {
                 success: true,
                 deletedProfile: {
                   id: profile.id,
-                  name: profile.name,
+                  name: profile.displayName || profile.name,
                 },
-                message: `Profile '${profile.name}' has been deleted`,
+                message: `Profile '${profile.displayName || profile.name}' has been deleted`,
               }, null, 2),
             },
           ],
@@ -1358,15 +1335,15 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     const sourceProfileIdOrName = args.sourceProfileIdOrName.trim()
     const newName = args.newName.trim()
-    const profiles = profileService.getProfiles()
+    const profiles = agentProfileService.getUserProfiles()
 
     // Find source profile by ID or name (case-insensitive for name)
     const sourceProfile = profiles.find(
-      (p) => p.id === sourceProfileIdOrName || p.name.toLowerCase() === sourceProfileIdOrName.toLowerCase()
+      (p) => p.id === sourceProfileIdOrName || (p.displayName || p.name).toLowerCase() === sourceProfileIdOrName.toLowerCase()
     )
 
     if (!sourceProfile) {
-      const availableProfiles = profiles.map((p) => `${p.name} (${p.id})`).join(", ")
+      const availableProfiles = profiles.map((p) => `${p.displayName || p.name} (${p.id})`).join(", ")
       return {
         content: [
           {
@@ -1382,7 +1359,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
 
     // Check if a profile with newName already exists
-    const existingProfile = profiles.find((p) => p.name.toLowerCase() === newName.toLowerCase())
+    const existingProfile = profiles.find((p) => (p.displayName || p.name).toLowerCase() === newName.toLowerCase())
     if (existingProfile) {
       return {
         content: [
@@ -1400,19 +1377,17 @@ const toolHandlers: Record<string, ToolHandler> = {
 
     try {
       // Create the new profile with same guidelines and systemPrompt
-      const newProfile = profileService.createProfile(newName, sourceProfile.guidelines, sourceProfile.systemPrompt)
+      const newProfile = agentProfileService.createUserProfile(newName, sourceProfile.guidelines || "", sourceProfile.systemPrompt)
 
       // Copy MCP server configuration
-      // Note: createProfile() initializes with all servers disabled by default (opt-in mode)
-      // If source has explicit mcpServerConfig, copy it directly
-      // If source has NO mcpServerConfig (legacy "all enabled" behavior), we need to explicitly
-      // set the duplicate to "all enabled" mode to preserve the source behavior
-      if (sourceProfile.mcpServerConfig) {
-        profileService.updateProfileMcpConfig(newProfile.id, sourceProfile.mcpServerConfig)
+      if (sourceProfile.toolConfig) {
+        const mcpConfig = toolConfigToMcpServerConfig(sourceProfile.toolConfig)
+        if (mcpConfig) {
+          agentProfileService.updateProfileMcpConfig(newProfile.id, mcpConfig)
+        }
       } else {
-        // Legacy profile without mcpServerConfig means "all enabled"
-        // Override the default opt-in config to enable all servers/tools
-        profileService.updateProfileMcpConfig(newProfile.id, {
+        // Legacy profile without toolConfig means "all enabled"
+        agentProfileService.updateProfileMcpConfig(newProfile.id, {
           disabledServers: [],
           disabledTools: [],
           allServersDisabledByDefault: false,
@@ -1422,16 +1397,16 @@ const toolHandlers: Record<string, ToolHandler> = {
 
       // Copy model configuration if exists
       if (sourceProfile.modelConfig) {
-        profileService.updateProfileModelConfig(newProfile.id, sourceProfile.modelConfig)
+        agentProfileService.updateProfileModelConfig(newProfile.id, sourceProfile.modelConfig)
       }
 
       // Copy skills configuration if exists
       if (sourceProfile.skillsConfig) {
-        profileService.updateProfileSkillsConfig(newProfile.id, sourceProfile.skillsConfig)
+        agentProfileService.updateProfileSkillsConfig(newProfile.id, sourceProfile.skillsConfig)
       }
 
       // Get the updated profile with all configurations
-      const duplicatedProfile = profileService.getProfile(newProfile.id)!
+      const duplicatedProfile = agentProfileService.getById(newProfile.id)!
 
       return {
         content: [
@@ -1441,19 +1416,19 @@ const toolHandlers: Record<string, ToolHandler> = {
               success: true,
               sourceProfile: {
                 id: sourceProfile.id,
-                name: sourceProfile.name,
+                name: sourceProfile.displayName || sourceProfile.name,
               },
               newProfile: {
                 id: duplicatedProfile.id,
-                name: duplicatedProfile.name,
-                guidelines: duplicatedProfile.guidelines,
+                name: duplicatedProfile.displayName || duplicatedProfile.name,
+                guidelines: duplicatedProfile.guidelines || "",
                 systemPrompt: duplicatedProfile.systemPrompt,
                 createdAt: duplicatedProfile.createdAt,
-                hasMcpConfig: !!duplicatedProfile.mcpServerConfig,
+                hasMcpConfig: !!duplicatedProfile.toolConfig,
                 hasModelConfig: !!duplicatedProfile.modelConfig,
                 hasSkillsConfig: !!duplicatedProfile.skillsConfig,
               },
-              message: `Profile '${sourceProfile.name}' duplicated as '${duplicatedProfile.name}'`,
+              message: `Profile '${sourceProfile.displayName || sourceProfile.name}' duplicated as '${duplicatedProfile.displayName || duplicatedProfile.name}'`,
             }, null, 2),
           },
         ],

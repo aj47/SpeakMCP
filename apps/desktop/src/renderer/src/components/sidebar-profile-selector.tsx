@@ -1,6 +1,6 @@
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Profile } from "@shared/types"
+import { AgentProfile } from "@shared/types"
 import { toast } from "sonner"
 import { useNavigate } from "react-router-dom"
 import {
@@ -18,7 +18,7 @@ export function SidebarProfileSelector() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
-  // Fetch profiles
+  // Fetch user profiles (unified)
   const profilesQuery = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
@@ -42,7 +42,7 @@ export function SidebarProfileSelector() {
     mutationFn: async (id: string) => {
       return await tipcClient.setCurrentProfile({ id })
     },
-    onSuccess: (newProfile: Profile) => {
+    onSuccess: (newProfile) => {
       queryClient.invalidateQueries({ queryKey: ["current-profile"] })
       queryClient.invalidateQueries({ queryKey: ["config"] })
       queryClient.invalidateQueries({ queryKey: ["mcp-server-status"] })
@@ -70,7 +70,7 @@ export function SidebarProfileSelector() {
 
   const handleValueChange = (value: string) => {
     if (value === EDIT_PROFILES_VALUE) {
-      navigate("/settings/tools")
+      navigate("/settings/agents")
     } else {
       setCurrentProfileMutation.mutate(value)
     }

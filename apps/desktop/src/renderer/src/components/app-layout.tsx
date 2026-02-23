@@ -81,14 +81,9 @@ export const Component = () => {
         ]
       : []),
     {
-      text: "Agent Personas",
-      href: "/settings/agent-personas",
+      text: "Agents",
+      href: "/settings/agents",
       icon: "i-mingcute-group-line",
-    },
-    {
-      text: "External Agents",
-      href: "/settings/external-agents",
-      icon: "i-mingcute-robot-line",
     },
     {
       text: "Loops",

@@ -7,7 +7,7 @@ import { configStore } from "./config"
 import { logApp } from "./debug"
 import { conversationService } from "./conversation-service"
 import { agentSessionTracker } from "./agent-session-tracker"
-import { profileService } from "./profile-service"
+import { agentProfileService, createSessionSnapshotFromProfile } from "./agent-profile-service"
 import type { LoopConfig, SessionProfileSnapshot } from "../shared/types"
 
 export interface LoopStatus {
@@ -181,17 +181,9 @@ class LoopService {
 
       let profileSnapshot: SessionProfileSnapshot | undefined
       if (loop.profileId) {
-        const profile = profileService.getProfile(loop.profileId)
+        const profile = agentProfileService.getById(loop.profileId)
         if (profile) {
-          profileSnapshot = {
-            profileId: profile.id,
-            profileName: profile.name,
-            guidelines: profile.guidelines,
-            systemPrompt: profile.systemPrompt,
-            mcpServerConfig: profile.mcpServerConfig,
-            modelConfig: profile.modelConfig,
-            skillsConfig: profile.skillsConfig,
-          }
+          profileSnapshot = createSessionSnapshotFromProfile(profile)
         }
       }
 

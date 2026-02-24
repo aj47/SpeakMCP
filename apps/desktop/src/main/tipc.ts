@@ -44,6 +44,7 @@ import {
   AgentProgressUpdate,
   ACPAgentConfig,
   SessionProfileSnapshot,
+  LoopConfig,
 } from "../shared/types"
 import { inferTransportType, normalizeMcpConfig } from "../shared/mcp-utils"
 import { conversationService } from "./conversation-service"
@@ -4090,9 +4091,26 @@ export const router = {
     }),
 
   // Repeat Tasks handlers
+  getLoops: t.procedure.action(async () => {
+    return loopService.getLoops()
+  }),
+
   getLoopStatuses: t.procedure.action(async () => {
     return loopService.getLoopStatuses()
   }),
+
+  saveLoop: t.procedure
+    .input<{ loop: LoopConfig }>()
+    .action(async ({ input }) => {
+      loopService.saveLoop(input.loop)
+      return { success: true }
+    }),
+
+  deleteLoop: t.procedure
+    .input<{ loopId: string }>()
+    .action(async ({ input }) => {
+      return { success: loopService.deleteLoop(input.loopId) }
+    }),
 
   startLoop: t.procedure
     .input<{ loopId: string }>()

@@ -8,9 +8,8 @@ import { Textarea } from "@renderer/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Trash2, Plus, Edit2, Save, X, Play, Clock } from "lucide-react"
-import { useConfigQuery, useSaveConfigMutation } from "@renderer/lib/query-client"
 import { tipcClient } from "@renderer/lib/tipc-client"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { LoopConfig } from "@shared/types"
 import { toast } from "sonner"
 
@@ -72,10 +71,14 @@ function formatInterval(minutes: number): string {
 }
 
 export function SettingsLoops() {
-  const configQuery = useConfigQuery()
-  const saveConfigMutation = useSaveConfigMutation()
+  const queryClient = useQueryClient()
   const [editing, setEditing] = useState<EditingLoop | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+
+  const loopsQuery = useQuery({
+    queryKey: ["loops"],
+    queryFn: async () => tipcClient.getLoops() as Promise<LoopConfig[]>,
+  })
 
   const loopStatusesQuery = useQuery({
     queryKey: ["loop-statuses"],
@@ -83,16 +86,10 @@ export function SettingsLoops() {
     refetchInterval: 5000,
   })
 
-  const loops: LoopConfig[] = configQuery.data?.loops || []
+  const loops: LoopConfig[] = loopsQuery.data || []
   const statusByLoopId = new Map(
     (loopStatusesQuery.data || []).map((s) => [s.id, s] as const)
   )
-  const getConfigWithLoops = (updatedLoops: LoopConfig[]) => {
-    if (!configQuery.data) {
-      return null
-    }
-    return { ...configQuery.data, loops: updatedLoops }
-  }
 
   const handleCreate = () => {
     setIsCreating(true)
@@ -118,20 +115,14 @@ export function SettingsLoops() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this repeat task?")) return
-    const updatedLoops = loops.filter((l) => l.id !== id)
-    const nextConfig = getConfigWithLoops(updatedLoops)
-    if (!nextConfig) {
-      toast.error("Configuration is still loading. Please try again.")
-      return
-    }
-    await saveConfigMutation.mutateAsync({ config: nextConfig })
-    // Stop the loop if it was running
     try {
-      await tipcClient.stopLoop?.({ loopId: id })
+      await tipcClient.deleteLoop({ loopId: id })
+      queryClient.invalidateQueries({ queryKey: ["loops"] })
+      queryClient.invalidateQueries({ queryKey: ["loop-statuses"] })
+      toast.success("Task deleted")
     } catch {
-      // Handler may not exist yet
+      toast.error("Failed to delete task")
     }
-    toast.success("Task deleted")
   }
 
   const handleSave = async () => {
@@ -152,69 +143,41 @@ export function SettingsLoops() {
       runOnStartup: editing.runOnStartup,
     }
 
-    let updatedLoops: LoopConfig[]
-    if (isCreating) {
-      updatedLoops = [...loops, loopData]
-    } else {
-      updatedLoops = loops.map((l) => (l.id === loopData.id ? loopData : l))
-    }
-
-    const nextConfig = getConfigWithLoops(updatedLoops)
-    if (!nextConfig) {
-      toast.error("Configuration is still loading. Please try again.")
-      return
-    }
-    await saveConfigMutation.mutateAsync({ config: nextConfig })
-    setEditing(null)
-    setIsCreating(false)
-    toast.success(isCreating ? "Task created" : "Task updated")
-
-    // Start/stop loop based on enabled state
     try {
+      await tipcClient.saveLoop({ loop: loopData })
+      queryClient.invalidateQueries({ queryKey: ["loops"] })
+      setEditing(null)
+      setIsCreating(false)
+      toast.success(isCreating ? "Task created" : "Task updated")
+
+      // Start/stop loop based on enabled state
       if (loopData.enabled) {
-        const result = await tipcClient.startLoop?.({ loopId: loopData.id })
-        if (result && !result.success) {
-          toast.error("Task was saved but could not be started")
-        }
+        await tipcClient.startLoop?.({ loopId: loopData.id })
       } else {
-        const result = await tipcClient.stopLoop?.({ loopId: loopData.id })
-        if (result && !result.success) {
-          toast.error("Task was saved but could not be stopped")
-        }
+        await tipcClient.stopLoop?.({ loopId: loopData.id })
       }
+      queryClient.invalidateQueries({ queryKey: ["loop-statuses"] })
     } catch {
-      // Handler may not exist yet
+      toast.error("Failed to save task")
     }
   }
 
   const handleToggleEnabled = async (loop: LoopConfig) => {
     const updatedLoop = { ...loop, enabled: !loop.enabled }
-    const updatedLoops = loops.map((l) => (l.id === loop.id ? updatedLoop : l))
-    const nextConfig = getConfigWithLoops(updatedLoops)
-    if (!nextConfig) {
-      toast.error("Configuration is still loading. Please try again.")
-      return
-    }
-    await saveConfigMutation.mutateAsync({ config: nextConfig })
-
     try {
+      await tipcClient.saveLoop({ loop: updatedLoop })
+      queryClient.invalidateQueries({ queryKey: ["loops"] })
+
       if (updatedLoop.enabled) {
-        const result = await tipcClient.startLoop?.({ loopId: loop.id })
-        if (result && !result.success) {
-          toast.error("Task enabled in settings, but runtime start failed")
-          return
-        }
+        await tipcClient.startLoop?.({ loopId: loop.id })
       } else {
-        const result = await tipcClient.stopLoop?.({ loopId: loop.id })
-        if (result && !result.success) {
-          toast.error("Task disabled in settings, but runtime stop failed")
-          return
-        }
+        await tipcClient.stopLoop?.({ loopId: loop.id })
       }
+      queryClient.invalidateQueries({ queryKey: ["loop-statuses"] })
+      toast.success(updatedLoop.enabled ? "Task enabled" : "Task disabled")
     } catch {
-      // Handler may not exist yet
+      toast.error("Failed to update task")
     }
-    toast.success(updatedLoop.enabled ? "Task enabled" : "Task disabled")
   }
 
   const handleRunNow = async (loop: LoopConfig) => {

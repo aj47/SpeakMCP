@@ -32,7 +32,12 @@ export type AgentsLayerPaths = {
   layoutJsonPath: string
   systemPromptMdPath: string
   agentsMdPath: string
+  agentProfilesDir: string
+  tasksDir: string
 }
+
+export const AGENTS_AGENT_PROFILES_DIR = "agents"
+export const AGENTS_TASKS_DIR = "tasks"
 
 export function getAgentsLayerPaths(agentsDir: string): AgentsLayerPaths {
   return {
@@ -45,6 +50,8 @@ export function getAgentsLayerPaths(agentsDir: string): AgentsLayerPaths {
     layoutJsonPath: path.join(agentsDir, AGENTS_LAYOUTS_DIR, AGENTS_DEFAULT_LAYOUT_JSON),
     systemPromptMdPath: path.join(agentsDir, AGENTS_SYSTEM_PROMPT_MD),
     agentsMdPath: path.join(agentsDir, AGENTS_AGENTS_MD),
+    agentProfilesDir: path.join(agentsDir, AGENTS_AGENT_PROFILES_DIR),
+    tasksDir: path.join(agentsDir, AGENTS_TASKS_DIR),
   }
 }
 
@@ -197,6 +204,9 @@ export function splitConfigIntoAgentsFiles(config: Config): SplitAgentsConfig {
       ;(models as any)[key] = value
       continue
     }
+
+    // Exclude loops — they are stored as individual .agents/tasks/ files
+    if (key === "loops") continue
 
     ;(settings as any)[key] = value
   }

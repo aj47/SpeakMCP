@@ -182,23 +182,34 @@ SpeakMCP stores agent-related configuration and content as files under a `.agent
 ├── agents.md                     # stored as Config.mcpToolsSystemPrompt
 ├── layouts/
 │   └── ui.json                   # UI/layout settings (subset of Config)
+├── agents/                       # agent profile definitions
+│   └── <agent-id>/
+│       ├── agent.md              # frontmatter (metadata) + body (system prompt)
+│       └── config.json           # optional: complex nested config (toolConfig, modelConfig, etc.)
+├── tasks/                        # repeat task definitions
+│   └── <task-id>/
+│       └── task.md               # frontmatter (schedule/metadata) + body (prompt)
 ├── skills/
 │   └── <skill-id>/skill.md       # skill instructions + frontmatter
 ├── memories/
 │   └── <memory-id>.md            # memory entry + frontmatter
 └── .backups/                     # timestamped backups (auto-rotated)
+    ├── agents/
+    ├── tasks/
     ├── skills/
     └── memories/
 ```
 
 **Merge semantics:**
 - **Config files** are shallow-merged by key (`merged = { ...global, ...workspace }`).
-- **Skills** and **memories** are merged by `id` (workspace wins on conflicts).
+- **Skills**, **memories**, **agents**, and **tasks** are merged by `id` (workspace wins on conflicts).
 
 **Infrastructure** (`apps/desktop/src/main/agents-files/`):
 - `frontmatter.ts` — simple `key: value` parser/serializer (no YAML dependency)
 - `safe-file.ts` — atomic writes (temp+rename), timestamped backups with rotation, auto-recovery
 - `modular-config.ts` — `AgentsLayerPaths` type, layer path calculations
+- `agent-profiles.ts` — agent profile `.md` + `config.json` read/write, directory scanning
+- `tasks.ts` — repeat task `.md` read/write, directory scanning
 - `skills.ts` — skill `.md` read/write, directory scanning, `writeAgentsSkillFile()`
 - `memories.ts` — memory `.md` read/write
 
@@ -209,6 +220,52 @@ SpeakMCP stores agent-related configuration and content as files under a `.agent
 - For memories, list-ish fields like `tags` / `keyFindings` accept either:
   - CSV: `tags: one, two, three`
   - JSON array: `tags: ["one", "two"]`
+
+**Agent profile template** (`.agents/agents/<agent-id>/agent.md`):
+```
+---
+kind: agent
+id: my-agent-id              # optional (defaults to folder name)
+name: my-agent-id
+displayName: My Agent
+description: What this agent does
+connection-type: internal    # internal | acp | stdio | remote
+role: delegation-target      # user-profile | delegation-target | external-agent
+enabled: true
+isBuiltIn: false
+createdAt: 1700000000000
+updatedAt: 1700000000000
+guidelines: Follow clean code practices
+---
+
+You are a helpful assistant specialized in...
+```
+
+Complex config (tool/model/skills/connection details) lives in a sibling `config.json`:
+```json
+{
+  "toolConfig": { "enabledServers": ["my-server"], "disabledTools": [] },
+  "modelConfig": { "mcpToolsProviderId": "openai", "mcpToolsOpenaiModel": "gpt-4o" },
+  "connection": { "command": "node", "args": ["agent.js"] }
+}
+```
+
+**Repeat task template** (`.agents/tasks/<task-id>/task.md`):
+```
+---
+kind: task
+id: my-task-id                # optional (defaults to folder name)
+name: Daily Code Review
+intervalMinutes: 60
+enabled: true
+runOnStartup: false
+profileId: abc-123            # optional: agent profile to use
+lastRunAt: 1700000000000      # updated automatically after each run
+---
+
+Review all open pull requests and summarize their status.
+Check for any failing CI pipelines and report issues.
+```
 
 **Skill template** (`.agents/skills/<skill-id>/skill.md`):
 ```

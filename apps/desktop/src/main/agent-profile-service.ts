@@ -28,6 +28,12 @@ import { getBuiltinToolNames } from "./builtin-tool-definitions"
 import { acpRegistry } from "./acp/acp-registry"
 import type { ACPAgentDefinition } from "./acp/types"
 import { getAgentsLayerPaths, writeAgentsPrompts, loadAgentsPrompts } from "./agents-files/modular-config"
+import {
+  loadAgentProfilesLayer,
+  writeAgentsProfileFiles,
+  writeAllAgentsProfileFiles,
+  deleteAgentProfileFiles,
+} from "./agents-files/agent-profiles"
 import { DEFAULT_SYSTEM_PROMPT } from "./system-prompts-default"
 
 /**
@@ -274,20 +280,65 @@ class AgentProfileService {
 
   /**
    * Load profiles from storage, migrating from legacy formats if needed.
+   *
+   * Priority:
+   * 1. `.agents/agents/` modular files (global + workspace overlay)
+   * 2. `agent-profiles.json` (legacy monolithic file — triggers migration to modular)
+   * 3. Legacy `profiles.json` / `personas.json` (very old formats)
+   * 4. Built-in defaults
    */
   private loadProfiles(): AgentProfilesData {
+    // 1. Try loading from modular .agents/agents/ directory
+    const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+    const globalResult = loadAgentProfilesLayer(globalLayer)
+
+    const workspaceDir = resolveWorkspaceAgentsFolder()
+    let workspaceProfiles: AgentProfile[] = []
+    if (workspaceDir) {
+      const workspaceLayer = getAgentsLayerPaths(workspaceDir)
+      const workspaceResult = loadAgentProfilesLayer(workspaceLayer)
+      workspaceProfiles = workspaceResult.profiles
+    }
+
+    if (globalResult.profiles.length > 0 || workspaceProfiles.length > 0) {
+      // Merge: workspace overrides global by ID
+      const mergedById = new Map<string, AgentProfile>()
+      for (const p of globalResult.profiles) mergedById.set(p.id, p)
+      for (const p of workspaceProfiles) mergedById.set(p.id, p) // workspace wins
+
+      // Also load currentProfileId from legacy JSON if available
+      let currentProfileId: string | undefined
+      try {
+        if (fs.existsSync(agentProfilesPath)) {
+          const legacyData = JSON.parse(fs.readFileSync(agentProfilesPath, "utf8")) as AgentProfilesData
+          currentProfileId = legacyData.currentProfileId
+        }
+      } catch { /* best-effort */ }
+
+      this.profilesData = {
+        profiles: Array.from(mergedById.values()),
+        currentProfileId,
+      }
+      this.syncPromptsFromLayer(this.profilesData)
+      logApp(`Loaded ${this.profilesData.profiles.length} agent profile(s) from .agents/agents/`)
+      return this.profilesData
+    }
+
+    // 2. Try loading from legacy agent-profiles.json and migrate to modular
     try {
       if (fs.existsSync(agentProfilesPath)) {
         const data = JSON.parse(fs.readFileSync(agentProfilesPath, "utf8")) as AgentProfilesData
         this.profilesData = data
         this.syncPromptsFromLayer(this.profilesData)
+        // Migrate: write each profile as modular files
+        this.migrateToModularFiles(data.profiles)
         return data
       }
     } catch (error) {
       logApp("Error loading agent profiles:", error)
     }
 
-    // Try to migrate from legacy formats
+    // 3. Try to migrate from very old legacy formats
     const migratedProfiles = this.migrateFromLegacy()
     if (migratedProfiles.length > 0) {
       this.profilesData = { profiles: migratedProfiles }
@@ -296,7 +347,7 @@ class AgentProfileService {
       return this.profilesData
     }
 
-    // Initialize with defaults
+    // 4. Initialize with defaults
     const now = Date.now()
     const defaultProfiles: AgentProfile[] = DEFAULT_PROFILES.map((p) => ({
       ...p,
@@ -309,6 +360,19 @@ class AgentProfileService {
     this.syncPromptsFromLayer(this.profilesData)
     this.saveProfiles()
     return this.profilesData
+  }
+
+  /**
+   * One-time migration: split agent-profiles.json into .agents/agents/ files.
+   */
+  private migrateToModularFiles(profiles: AgentProfile[]): void {
+    try {
+      const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+      writeAllAgentsProfileFiles(globalLayer, profiles, { onlyIfMissing: true, maxBackups: 10 })
+      logApp(`Migrated ${profiles.length} agent profile(s) to .agents/agents/`)
+    } catch (error) {
+      logApp("Error migrating agent profiles to modular files:", error)
+    }
   }
 
   /**
@@ -381,9 +445,27 @@ class AgentProfileService {
     if (!this.profilesData) return
     try {
       this.syncPromptsToLayer()
+
+      // Canonical: write modular .agents/agents/ files
+      const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+      writeAllAgentsProfileFiles(globalLayer, this.profilesData.profiles, { maxBackups: 10 })
+
+      // Shadow: keep legacy agent-profiles.json for backward compatibility
       fs.writeFileSync(agentProfilesPath, JSON.stringify(this.profilesData, null, 2))
     } catch (error) {
       logApp("Error saving agent profiles:", error)
+    }
+  }
+
+  /**
+   * Save a single profile to modular files (used after individual updates).
+   */
+  private saveSingleProfile(profile: AgentProfile): void {
+    try {
+      const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+      writeAgentsProfileFiles(globalLayer, profile, { maxBackups: 10 })
+    } catch (error) {
+      logApp("Error saving agent profile to modular files:", error)
     }
   }
 
@@ -502,6 +584,14 @@ class AgentProfileService {
 
     this.profilesData.profiles.splice(index, 1)
     this.saveProfiles()
+
+    // Delete modular files from .agents/agents/
+    try {
+      const globalLayer = getAgentsLayerPaths(globalAgentsFolder)
+      deleteAgentProfileFiles(globalLayer, id)
+    } catch (error) {
+      logApp("Error deleting agent profile files:", error)
+    }
 
     // Also delete conversation
     delete this.conversationsData[id]

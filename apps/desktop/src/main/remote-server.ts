@@ -830,7 +830,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       return reply.send({
         profiles: profiles.map(p => ({
           id: p.id,
-          name: p.displayName || p.name,
+          name: p.displayName,
           isDefault: p.isDefault,
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
@@ -852,7 +852,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       }
       return reply.send({
         id: profile.id,
-        name: profile.displayName || profile.name,
+        name: profile.displayName,
         isDefault: profile.isDefault,
         guidelines: profile.guidelines || "",
         systemPrompt: profile.systemPrompt,
@@ -883,7 +883,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         mcpServerConfig?.enabledServers,
         mcpServerConfig?.enabledBuiltinTools,
       )
-      diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.displayName || profile.name}`)
+      diagnosticsService.logInfo("remote-server", `Switched to profile: ${profile.displayName}`)
       return reply.send({
         success: true,
         profile: {
@@ -922,12 +922,12 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         return reply.code(400).send({ error: "Missing or invalid profileJson" })
       }
       const profile = agentProfileService.importProfile(profileJson)
-      diagnosticsService.logInfo("remote-server", `Imported profile: ${profile.displayName || profile.name}`)
+      diagnosticsService.logInfo("remote-server", `Imported profile: ${profile.displayName}`)
       return reply.send({
         success: true,
         profile: {
           id: profile.id,
-          name: profile.displayName || profile.name,
+          name: profile.displayName,
           isDefault: profile.isDefault,
         },
       })
@@ -1970,7 +1970,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
             intervalMinutes: l.intervalMinutes,
             enabled: l.enabled,
             profileId: l.profileId,
-            profileName: profile ? (profile.displayName || profile.name) : undefined,
+            profileName: profile?.displayName,
             runOnStartup: l.runOnStartup,
             lastRunAt: status?.lastRunAt ?? l.lastRunAt,
             isRunning: status?.isRunning ?? false,

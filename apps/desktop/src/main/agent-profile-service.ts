@@ -20,6 +20,7 @@ import {
   profileToAgentProfile,
   personaToAgentProfile,
   acpAgentConfigToAgentProfile,
+  toAgentSlug,
 } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
@@ -181,7 +182,7 @@ export function createSessionSnapshotFromProfile(
 ): SessionProfileSnapshot {
   return {
     profileId: profile.id,
-    profileName: profile.displayName || profile.name,
+    profileName: profile.displayName,
     guidelines: profile.guidelines || "",
     systemPrompt: profile.systemPrompt,
     mcpServerConfig: toolConfigToMcpServerConfig(profile.toolConfig),
@@ -449,6 +450,8 @@ class AgentProfileService {
     const now = Date.now()
     const newProfile: AgentProfile = {
       ...profile,
+      // Auto-derive slug from displayName (keep explicit name only for built-in agents)
+      name: profile.name || toAgentSlug(profile.displayName),
       id: randomUUID(),
       createdAt: now,
       updatedAt: now,
@@ -472,6 +475,11 @@ class AgentProfileService {
 
     // Don't allow updating certain fields
     const { id: _, createdAt, isBuiltIn, ...allowedUpdates } = updates
+
+    // Auto-derive slug from displayName when it changes (skip for built-in agents)
+    if (allowedUpdates.displayName && !profile.isBuiltIn) {
+      allowedUpdates.name = toAgentSlug(allowedUpdates.displayName)
+    }
 
     Object.assign(profile, allowedUpdates, { updatedAt: Date.now() })
     this.saveProfiles()
@@ -885,7 +893,7 @@ class AgentProfileService {
     const mcpServerConfig = toolConfigToMcpServerConfig(profile.toolConfig)
     const exportData: Record<string, unknown> = {
       version: 1,
-      name: profile.displayName || profile.name,
+      name: profile.displayName,
       guidelines: profile.guidelines || "",
     }
 
@@ -1061,7 +1069,7 @@ class AgentProfileService {
   private agentProfileToLegacyProfile(p: AgentProfile): Profile {
     return {
       id: p.id,
-      name: p.displayName || p.name,
+      name: p.displayName,
       guidelines: p.guidelines || "",
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
@@ -1083,7 +1091,7 @@ class AgentProfileService {
     const builtinToolNames = getBuiltinToolNames()
 
     return this.create({
-      name,
+      name: toAgentSlug(name),
       displayName: name,
       guidelines,
       systemPrompt,

@@ -331,8 +331,7 @@ export async function runInternalSubSession(
   const subSessionId = options.subSessionId ?? `subsession_${Date.now()}_${uuidv4().substring(0, 8)}`;
 
   // Determine the agent display name for UI display
-  // Priority: agentProfile.displayName > agentProfile.name > personaName > 'Internal'
-  const agentDisplayName = agentProfile?.displayName ?? agentProfile?.name ?? personaName;
+  const agentDisplayName = agentProfile?.displayName ?? personaName;
 
   // Create sub-session state
   const subSession: InternalSubSession = {

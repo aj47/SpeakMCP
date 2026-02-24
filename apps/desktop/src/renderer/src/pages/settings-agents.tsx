@@ -35,7 +35,6 @@ type ConnectionType = AgentProfileConnectionType
 
 interface EditingAgent {
   id?: string
-  name: string
   displayName: string
   description: string
   systemPrompt: string
@@ -59,12 +58,12 @@ type ServerInfo = { connected: boolean; toolCount: number; runtimeEnabled?: bool
 
 const AGENT_PRESETS: Record<string, Partial<EditingAgent>> = {
   auggie: {
-    name: "auggie", displayName: "Auggie (Augment Code)",
+    displayName: "Auggie (Augment Code)",
     description: "Augment Code's AI coding assistant with native ACP support",
     connectionType: "acp", connectionCommand: "auggie", connectionArgs: "--acp", enabled: true,
   },
   "claude-code": {
-    name: "claude-code", displayName: "Claude Code",
+    displayName: "Claude Code",
     description: "Anthropic's Claude for coding tasks via ACP adapter",
     connectionType: "acp", connectionCommand: "claude-code-acp", connectionArgs: "", enabled: true,
   },
@@ -72,7 +71,7 @@ const AGENT_PRESETS: Record<string, Partial<EditingAgent>> = {
 
 function emptyAgent(): EditingAgent {
   return {
-    name: "", displayName: "", description: "", systemPrompt: "", guidelines: "",
+    displayName: "", description: "", systemPrompt: "", guidelines: "",
     connectionType: "internal", enabled: true,
     modelConfig: undefined, toolConfig: undefined,
     skillsConfig: { enabledSkillIds: [] }, memoryConfig: { memoriesEnabled: true, injectMemories: true, autoSaveImportant: true }, properties: {},
@@ -121,7 +120,7 @@ export function SettingsAgents() {
   const handleEdit = (agent: AgentProfile) => {
     setIsCreating(false)
     setEditing({
-      id: agent.id, name: agent.name, displayName: agent.displayName,
+      id: agent.id, displayName: agent.displayName,
       description: agent.description ?? "", systemPrompt: agent.systemPrompt ?? "",
       guidelines: agent.guidelines ?? "", connectionType: agent.connection.type,
       connectionCommand: agent.connection.command,
@@ -147,7 +146,7 @@ export function SettingsAgents() {
       cwd: editing.connectionCwd,
     }
     const data: any = {
-      name: editing.name, displayName: editing.displayName,
+      displayName: editing.displayName,
       description: editing.description || undefined,
       systemPrompt: editing.systemPrompt || undefined,
       guidelines: editing.guidelines || undefined,
@@ -289,13 +288,13 @@ export function SettingsAgents() {
             <CardHeader className="p-3 pb-2 flex flex-row items-start gap-3 flex-none relative">
               <div className="w-10 h-10 rounded-md shadow-sm flex items-center justify-center overflow-hidden shrink-0 bg-muted">
                 {agent.avatarDataUrl
-                  ? <img src={agent.avatarDataUrl} alt={agent.displayName || agent.name} className="w-full h-full object-cover" />
-                  : <Facehash name={agent.id || agent.name} size={40} colors={agentColors(agent.id || agent.name)} />
+                  ? <img src={agent.avatarDataUrl} alt={agent.displayName} className="w-full h-full object-cover" />
+                  : <Facehash name={agent.id} size={40} colors={agentColors(agent.id)} />
                 }
               </div>
               <div className="flex flex-col min-w-0 flex-1 pr-14">
                 <CardTitle className="text-sm font-semibold truncate leading-none mt-0.5">
-                  {agent.displayName || agent.name}
+                  {agent.displayName}
                 </CardTitle>
                 <CardDescription className="line-clamp-2 mt-1 text-[11px] leading-tight min-h-[1.75rem]">
                   {agent.description || agent.guidelines?.slice(0, 100) || "No description provided."}
@@ -356,7 +355,7 @@ export function SettingsAgents() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{isCreating ? "Create Agent" : `Edit: ${editing.displayName || editing.name}`}</CardTitle>
+          <CardTitle>{isCreating ? "Create Agent" : `Edit: ${editing.displayName}`}</CardTitle>
           <CardDescription>Configure agent identity, behavior, model, tools, and skills.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -380,7 +379,7 @@ export function SettingsAgents() {
                   <div className="w-16 h-16 rounded-xl border-2 border-border overflow-hidden flex items-center justify-center bg-muted/40 flex-shrink-0">
                     {editing.avatarDataUrl
                       ? <img src={editing.avatarDataUrl} alt="avatar" className="w-full h-full object-cover" />
-                      : <Facehash name={editing.id || editing.name || "new"} size={64} colors={agentColors(editing.id || editing.name || "new")} />
+                      : <Facehash name={editing.id || "new"} size={64} colors={agentColors(editing.id || "new")} />
                     }
                   </div>
                   <div className="flex flex-col gap-2">
@@ -410,15 +409,9 @@ export function SettingsAgents() {
                   <p className="text-xs text-muted-foreground">Click a preset to auto-fill, or configure manually below.</p>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name (slug)</Label>
-                  <Input id="name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} placeholder="my-agent" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="displayName">Display Name</Label>
-                  <Input id="displayName" value={editing.displayName} onChange={e => setEditing({ ...editing, displayName: e.target.value })} placeholder="My Agent" />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Name</Label>
+                <Input id="displayName" value={editing.displayName} onChange={e => setEditing({ ...editing, displayName: e.target.value })} placeholder="My Agent" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>

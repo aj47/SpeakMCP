@@ -930,7 +930,7 @@ export function Component() {
                       .filter(agent => agent.enabled !== false)
                       .map(agent => (
                         <SelectItem key={agent.name} value={agent.name}>
-                          {agent.displayName || agent.name}
+                          {agent.displayName}
                         </SelectItem>
                       ))}
                   </SelectContent>

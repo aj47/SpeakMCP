@@ -714,9 +714,9 @@ export type AgentProfileRole = "user-profile" | "delegation-target" | "external-
 export type AgentProfile = {
   /** Unique identifier */
   id: string
-  /** Internal name for referencing (slug-style) */
+  /** Internal slug derived from displayName (auto-generated, not user-editable) */
   name: string
-  /** Human-readable display name */
+  /** Human-readable display name (the single user-facing name) */
   displayName: string
   /** Description of what this agent does */
   description?: string
@@ -786,6 +786,22 @@ export type AgentProfile = {
 export type AgentProfilesData = {
   profiles: AgentProfile[]
   currentProfileId?: string
+}
+
+// ============================================================================
+// Slug Utility
+// ============================================================================
+
+/**
+ * Convert a display name to a slug suitable for the `name` field.
+ * e.g. "My Cool Agent!" → "my-cool-agent"
+ */
+export function toAgentSlug(displayName: string): string {
+  return displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "agent"
 }
 
 // ============================================================================

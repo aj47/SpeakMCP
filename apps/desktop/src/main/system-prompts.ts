@@ -182,7 +182,7 @@ export function getAgentsPromptAddition(excludeAgentId?: string): string {
 
   // Format agents in a compact, discoverable format similar to tools/skills
   const agentsList = delegationTargets.map(p => {
-    return `- **${p.name}**: ${p.description || p.displayName || 'No description'}`
+    return `- **${p.displayName}**: ${p.description || 'No description'}`
   }).join('\n')
 
   return `

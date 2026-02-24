@@ -38,7 +38,7 @@ export class ACPSmartRouter {
 
     const agentDescriptions = availableAgents.map(agent => {
       const def = agent.definition
-      return `- **${def.displayName || def.name}**: ${def.description || 'No description available'}`
+      return `- **${def.displayName ?? def.name}**: ${def.description || 'No description available'}`
     }).join('\n')
 
     return `

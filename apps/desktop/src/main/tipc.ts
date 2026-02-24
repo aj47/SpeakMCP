@@ -3031,7 +3031,7 @@ export const router = {
     .input<{ id: string; name?: string; guidelines?: string; systemPrompt?: string }>()
     .action(async ({ input }) => {
         const updates: Partial<import("@shared/types").AgentProfile> = {}
-      if (input.name !== undefined) { updates.name = input.name; updates.displayName = input.name }
+      if (input.name !== undefined) { updates.displayName = input.name }
       if (input.guidelines !== undefined) updates.guidelines = input.guidelines
       if (input.systemPrompt !== undefined) updates.systemPrompt = input.systemPrompt
       agentProfileService.update(input.id, updates)

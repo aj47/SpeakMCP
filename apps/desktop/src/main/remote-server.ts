@@ -1934,23 +1934,23 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   })
 
   // ============================================
-  // Agent Loops Management Endpoints (for mobile app)
+  // Repeat Tasks Management Endpoints (for mobile app)
   // ============================================
 
-  // GET /v1/loops - List all agent loops
+  // GET /v1/loops - List all repeat tasks
   fastify.get("/v1/loops", async (_req, reply) => {
     try {
       const cfg = configStore.get()
       const loops = cfg.loops || []
       const profiles = agentProfileService.getUserProfiles()
 
-      // Get loop runtime statuses if available
+      // Get repeat task runtime statuses if available
       let statuses: Array<{ id: string; isRunning: boolean; nextRunAt?: number; lastRunAt?: number }> = []
       try {
         const { loopService } = await import("./loop-service")
         statuses = loopService.getLoopStatuses()
       } catch {
-        // Loop service might not be initialized
+        // Repeat task service might not be initialized
       }
 
       const statusById = new Map(statuses.map(s => [s.id, s]))
@@ -1975,12 +1975,12 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         }),
       })
     } catch (error: any) {
-      diagnosticsService.logError("remote-server", "Failed to get loops", error)
-      return reply.code(500).send({ error: "Failed to get loops" })
+      diagnosticsService.logError("remote-server", "Failed to get repeat tasks", error)
+      return reply.code(500).send({ error: "Failed to get repeat tasks" })
     }
   })
 
-  // POST /v1/loops/:id/toggle - Toggle loop enabled state
+  // POST /v1/loops/:id/toggle - Toggle repeat task enabled state
   fastify.post("/v1/loops/:id/toggle", async (req, reply) => {
     try {
       const params = req.params as { id: string }
@@ -1989,7 +1989,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
       const loopIndex = loops.findIndex(l => l.id === params.id)
 
       if (loopIndex === -1) {
-        return reply.code(404).send({ error: "Loop not found" })
+        return reply.code(404).send({ error: "Repeat task not found" })
       }
 
       const updatedLoops = [...loops]
@@ -2010,7 +2010,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
           loopService.stopLoop(params.id)
         }
       } catch {
-        // Loop service might not be initialized
+        // Repeat task service might not be initialized
       }
 
       return reply.send({
@@ -2019,35 +2019,35 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
         enabled: updatedLoops[loopIndex].enabled,
       })
     } catch (error: any) {
-      diagnosticsService.logError("remote-server", "Failed to toggle loop", error)
-      return reply.code(500).send({ error: error?.message || "Failed to toggle loop" })
+      diagnosticsService.logError("remote-server", "Failed to toggle repeat task", error)
+      return reply.code(500).send({ error: error?.message || "Failed to toggle repeat task" })
     }
   })
 
-  // POST /v1/loops/:id/run - Run a loop immediately
+  // POST /v1/loops/:id/run - Run a repeat task immediately
   fastify.post("/v1/loops/:id/run", async (req, reply) => {
     try {
       const params = req.params as { id: string }
 
-      // First check if the loop exists in config
+      // First check if the repeat task exists in config
       const cfg = configStore.get()
       const loops = cfg.loops || []
       const loopExists = loops.some(l => l.id === params.id)
       if (!loopExists) {
-        return reply.code(404).send({ error: "Loop not found" })
+        return reply.code(404).send({ error: "Repeat task not found" })
       }
 
       const { loopService } = await import("./loop-service")
       const triggered = await loopService.triggerLoop(params.id)
 
       if (!triggered) {
-        return reply.code(409).send({ error: "Loop is already running" })
+        return reply.code(409).send({ error: "Task is already running" })
       }
 
       return reply.send({ success: true, id: params.id })
     } catch (error: any) {
-      diagnosticsService.logError("remote-server", "Failed to run loop", error)
-      return reply.code(500).send({ error: error?.message || "Failed to run loop" })
+      diagnosticsService.logError("remote-server", "Failed to run repeat task", error)
+      return reply.code(500).send({ error: error?.message || "Failed to run repeat task" })
     }
   })
 

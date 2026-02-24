@@ -231,12 +231,12 @@ app.whenReady().then(async () => {
       logApp("Failed to initialize MCP service on startup:", error)
     })
 
-  // Start all enabled agent loops
+  // Start all enabled repeat tasks
   try {
     loopService.startAllLoops()
-    logApp("Agent loops started")
+    logApp("Repeat tasks started")
   } catch (error) {
-    logApp("Failed to start agent loops:", error)
+    logApp("Failed to start repeat tasks:", error)
   }
 
   // Initialize models.dev service (fetches model metadata in background)

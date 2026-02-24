@@ -1453,8 +1453,8 @@ export type Config = {
   dualModelSummaryDetailLevel?: "compact" | "detailed"
   dualModelSectionCollapsed?: boolean  // UI state for settings section
 
-  // Agent Loops Configuration
-  loops?: LoopConfig[]  // Scheduled agent loops that run at intervals
+  // Repeat Tasks Configuration
+  loops?: LoopConfig[]  // Scheduled repeat tasks that run at intervals
 }
 
 // Push Notification Token (from mobile clients)

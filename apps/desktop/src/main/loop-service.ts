@@ -1,6 +1,6 @@
 /**
- * Loop Service
- * Manages scheduled agent loops that run at regular intervals.
+ * Repeat Task Service
+ * Manages scheduled repeat tasks that run at regular intervals.
  */
 
 import { configStore } from "./config"
@@ -188,7 +188,7 @@ class LoopService {
       }
 
       const conversation = await conversationService.createConversation(loop.prompt, "user")
-      const conversationTitle = `[Loop] ${loop.name}`
+      const conversationTitle = `[Repeat] ${loop.name}`
       const sessionId = agentSessionTracker.startSession(
         conversation.id,
         conversationTitle,

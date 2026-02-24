@@ -4077,7 +4077,7 @@ export const router = {
       return summarizationService.getImportantSummaries(input.sessionId)
     }),
 
-  // Agent Loops handlers
+  // Repeat Tasks handlers
   getLoopStatuses: t.procedure.action(async () => {
     return loopService.getLoopStatuses()
   }),

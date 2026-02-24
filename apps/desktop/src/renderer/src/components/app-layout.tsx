@@ -71,8 +71,8 @@ export const Component = () => {
       icon: "i-mingcute-group-line",
     },
     {
-      text: "Loops",
-      href: "/settings/loops",
+      text: "Repeat Tasks",
+      href: "/settings/repeat-tasks",
       icon: "i-mingcute-refresh-3-line",
     },
   ]
@@ -84,6 +84,7 @@ export const Component = () => {
     "/settings/providers": "/settings/models",
     "/settings/mcp-tools": "/settings/capabilities",
     "/settings/skills": "/settings/capabilities",
+    "/settings/loops": "/settings/repeat-tasks",
   }
 
   // Check if current path matches the nav link (including aliases)

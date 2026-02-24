@@ -117,7 +117,7 @@ export function SettingsLoops() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this loop?")) return
+    if (!confirm("Are you sure you want to delete this repeat task?")) return
     const updatedLoops = loops.filter((l) => l.id !== id)
     const nextConfig = getConfigWithLoops(updatedLoops)
     if (!nextConfig) {
@@ -131,7 +131,7 @@ export function SettingsLoops() {
     } catch {
       // Handler may not exist yet
     }
-    toast.success("Loop deleted")
+    toast.success("Task deleted")
   }
 
   const handleSave = async () => {
@@ -167,19 +167,19 @@ export function SettingsLoops() {
     await saveConfigMutation.mutateAsync({ config: nextConfig })
     setEditing(null)
     setIsCreating(false)
-    toast.success(isCreating ? "Loop created" : "Loop updated")
+    toast.success(isCreating ? "Task created" : "Task updated")
 
     // Start/stop loop based on enabled state
     try {
       if (loopData.enabled) {
         const result = await tipcClient.startLoop?.({ loopId: loopData.id })
         if (result && !result.success) {
-          toast.error("Loop was saved but could not be started")
+          toast.error("Task was saved but could not be started")
         }
       } else {
         const result = await tipcClient.stopLoop?.({ loopId: loopData.id })
         if (result && !result.success) {
-          toast.error("Loop was saved but could not be stopped")
+          toast.error("Task was saved but could not be stopped")
         }
       }
     } catch {
@@ -201,20 +201,20 @@ export function SettingsLoops() {
       if (updatedLoop.enabled) {
         const result = await tipcClient.startLoop?.({ loopId: loop.id })
         if (result && !result.success) {
-          toast.error("Loop enabled in settings, but runtime start failed")
+          toast.error("Task enabled in settings, but runtime start failed")
           return
         }
       } else {
         const result = await tipcClient.stopLoop?.({ loopId: loop.id })
         if (result && !result.success) {
-          toast.error("Loop disabled in settings, but runtime stop failed")
+          toast.error("Task disabled in settings, but runtime stop failed")
           return
         }
       }
     } catch {
       // Handler may not exist yet
     }
-    toast.success(updatedLoop.enabled ? "Loop enabled" : "Loop disabled")
+    toast.success(updatedLoop.enabled ? "Task enabled" : "Task disabled")
   }
 
   const handleRunNow = async (loop: LoopConfig) => {
@@ -226,7 +226,7 @@ export function SettingsLoops() {
       }
       toast.success(`Running "${loop.name}"...`)
     } catch {
-      toast.error("Failed to trigger loop")
+      toast.error("Failed to trigger task")
     }
   }
 
@@ -294,7 +294,7 @@ export function SettingsLoops() {
       })}
       {loops.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
-          No agent loops configured. Click "Add Loop" to create one.
+          No repeat tasks configured. Click &quot;Add Task&quot; to create one.
         </div>
       )}
     </div>
@@ -305,9 +305,9 @@ export function SettingsLoops() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{isCreating ? "Add Agent Loop" : "Edit Agent Loop"}</CardTitle>
+          <CardTitle>{isCreating ? "Add Repeat Task" : "Edit Repeat Task"}</CardTitle>
           <CardDescription>
-            Configure an agent to run automatically at regular intervals
+            Configure a task to run automatically at regular intervals
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -394,13 +394,13 @@ export function SettingsLoops() {
     <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Agent Loops</h1>
+          <h1 className="text-2xl font-bold">Repeat Tasks</h1>
           <p className="text-muted-foreground">
-            Configure agents to run automatically at regular intervals
+            Configure tasks to run automatically at regular intervals
           </p>
         </div>
         <Button className="gap-2" onClick={handleCreate}>
-          <Plus className="h-4 w-4" />Add Loop
+          <Plus className="h-4 w-4" />Add Task
         </Button>
       </div>
       {editing ? renderEditForm() : renderLoopList()}

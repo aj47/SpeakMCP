@@ -46,14 +46,9 @@ export const Component = () => {
     },
 
     {
-      text: "MCP Tools",
-      href: "/settings/mcp-tools",
+      text: "Capabilities",
+      href: "/settings/capabilities",
       icon: "i-mingcute-tool-line",
-    },
-    {
-      text: "Skills",
-      href: "/settings/skills",
-      icon: "i-mingcute-sparkles-line",
     },
     {
       text: "Remote Server",
@@ -87,6 +82,8 @@ export const Component = () => {
   const routeAliases: Record<string, string> = {
     "/settings/general": "/settings",
     "/settings/providers": "/settings/models",
+    "/settings/mcp-tools": "/settings/capabilities",
+    "/settings/skills": "/settings/capabilities",
   }
 
   // Check if current path matches the nav link (including aliases)

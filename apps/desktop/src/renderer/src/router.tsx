@@ -40,16 +40,20 @@ export const router: ReturnType<typeof createBrowserRouter> =
         },
 
         {
+          path: "settings/capabilities",
+          lazy: () => import("./pages/settings-capabilities"),
+        },
+        {
           path: "settings/mcp-tools",
-          lazy: () => import("./pages/settings-mcp-tools"),
+          loader: () => redirect("/settings/capabilities"),
+        },
+        {
+          path: "settings/skills",
+          loader: () => redirect("/settings/capabilities"),
         },
         {
           path: "settings/remote-server",
           lazy: () => import("./pages/settings-remote-server"),
-        },
-        {
-          path: "settings/skills",
-          lazy: () => import("./pages/settings-skills"),
         },
         {
           path: "settings/whatsapp",

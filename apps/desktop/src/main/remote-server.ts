@@ -513,7 +513,7 @@ async function runAgent(options: RunAgentOptions): Promise<{
       prompt,
       availableTools,
       executeToolCall,
-      cfg.mcpMaxIterations ?? 10,
+      cfg.mcpUnlimitedIterations ? Infinity : (cfg.mcpMaxIterations ?? 10),
       previousConversationHistory,
       conversationId,
       sessionId, // Pass session ID for progress routing

@@ -362,7 +362,6 @@ export function SettingsAgents() {
           <Tabs defaultValue="general" className="w-full">
             <TabsList className="mb-4 flex-wrap h-auto gap-1">
               <TabsTrigger value="general" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" />General</TabsTrigger>
-              {isInternal && <TabsTrigger value="behavior" className="gap-1.5"><Brain className="h-3.5 w-3.5" />Behavior</TabsTrigger>}
               {isInternal && <TabsTrigger value="model" className="gap-1.5"><Brain className="h-3.5 w-3.5" />Model</TabsTrigger>}
               <TabsTrigger value="tools" className="gap-1.5"><Server className="h-3.5 w-3.5" />Tools</TabsTrigger>
               <TabsTrigger value="skills" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" />Skills</TabsTrigger>
@@ -418,6 +417,45 @@ export function SettingsAgents() {
                 <Input id="description" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} placeholder="What this agent does..." />
                 <p className="text-[11px] text-muted-foreground">Shown only in the UI. Not visible to the agent—use Guidelines for instructions.</p>
               </div>
+              {isInternal && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="guidelines">Guidelines</Label>
+                    <Textarea id="guidelines" value={editing.guidelines} onChange={e => setEditing({ ...editing, guidelines: e.target.value })} rows={4} placeholder="e.g. You are an expert in React. Always check types before writing code..." className="font-mono text-sm" />
+                    <p className="text-xs text-muted-foreground">
+                      Additional instructions for this agent. These are appended to the core tool-calling system prompt.
+                    </p>
+                  </div>
+                  <div className="space-y-2 pt-2 border-t">
+                    <div
+                      className="flex items-center gap-2 cursor-pointer select-none"
+                      onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+                    >
+                      {showSystemPrompt ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                      <Label className="cursor-pointer font-semibold">Base System Prompt (Advanced)</Label>
+                    </div>
+                    {showSystemPrompt && (
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground text-amber-600 dark:text-amber-500">
+                            Not recommended to change. This replaces the core tool-calling instructions. Leave empty to use the default.
+                          </p>
+                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setEditing({ ...editing, systemPrompt: "" })} disabled={!editing.systemPrompt}>
+                            Reset to Default
+                          </Button>
+                        </div>
+                        <Textarea
+                          id="systemPrompt"
+                          value={editing.systemPrompt || defaultSystemPrompt}
+                          onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })}
+                          rows={8}
+                          className={`font-mono text-xs resize-y min-h-[120px] max-h-[400px] ${!editing.systemPrompt ? "text-muted-foreground" : ""}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="connectionType">Connection Type</Label>
                 <Select value={editing.connectionType} onValueChange={(v: ConnectionType) => setEditing({ ...editing, connectionType: v })}>
@@ -466,47 +504,6 @@ export function SettingsAgents() {
               </div>
             </TabsContent>
 
-            {/* ── Behavior Tab (internal only) ── */}
-            {isInternal && (
-              <TabsContent value="behavior" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="guidelines">Guidelines (Recommended)</Label>
-                  <Textarea id="guidelines" value={editing.guidelines} onChange={e => setEditing({ ...editing, guidelines: e.target.value })} rows={6} placeholder="e.g. You are an expert in React. Always check types before writing code..." className="font-mono text-sm" />
-                  <p className="text-xs text-muted-foreground">
-                    Additional instructions for this agent. These are appended to the core tool-calling system prompt.
-                  </p>
-                </div>
-                <div className="space-y-2 pt-4 border-t">
-                  <div
-                    className="flex items-center gap-2 cursor-pointer select-none"
-                    onClick={() => setShowSystemPrompt(!showSystemPrompt)}
-                  >
-                    {showSystemPrompt ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                    <Label className="cursor-pointer font-semibold">Base System Prompt (Advanced)</Label>
-                  </div>
-
-                  {showSystemPrompt && (
-                    <div className="space-y-3 pt-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground text-amber-600 dark:text-amber-500">
-                          Not recommended to change. This replaces the core tool-calling instructions. Leave empty to use the default.
-                        </p>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setEditing({ ...editing, systemPrompt: "" })} disabled={!editing.systemPrompt}>
-                          Reset to Default
-                        </Button>
-                      </div>
-                      <Textarea
-                        id="systemPrompt"
-                        value={editing.systemPrompt || defaultSystemPrompt}
-                        onChange={e => setEditing({ ...editing, systemPrompt: e.target.value })}
-                        rows={12}
-                        className={`font-mono text-xs resize-y min-h-[180px] max-h-[500px] ${!editing.systemPrompt ? "text-muted-foreground" : ""}`}
-                      />
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            )}
 
             {/* ── Model Tab (internal only) ── */}
             {isInternal && (

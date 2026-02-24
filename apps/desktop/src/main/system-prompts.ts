@@ -101,7 +101,7 @@ function getServerSummaries(
 
 /**
  * Format tools in a lightweight, server-centric way
- * Shows server names with brief tool listings to reduce token usage
+ * Shows server names with all tool names so the LLM knows what's available
  */
 function formatLightweightToolInfo(
   tools: Array<{ name: string; description: string; inputSchema?: any }>,
@@ -110,10 +110,8 @@ function formatLightweightToolInfo(
 
   return serverSummaries
     .map((server) => {
-      // Show server name and list tools briefly
-      const toolList = server.toolNames.slice(0, 5).join(", ")
-      const moreCount = server.toolNames.length > 5 ? ` +${server.toolNames.length - 5} more` : ""
-      return `- ${server.serverName}: ${toolList}${moreCount}`
+      const toolList = server.toolNames.join(", ")
+      return `- ${server.serverName} (${server.toolCount} tools): ${toolList}`
     })
     .join("\n")
 }

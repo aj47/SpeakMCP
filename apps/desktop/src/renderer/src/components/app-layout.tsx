@@ -67,11 +67,6 @@ export const Component = () => {
         ]
       : []),
     {
-      text: "Agents",
-      href: "/settings/agents",
-      icon: "i-mingcute-group-line",
-    },
-    {
       text: "Repeat Tasks",
       href: "/settings/repeat-tasks",
       icon: "i-mingcute-refresh-3-line",

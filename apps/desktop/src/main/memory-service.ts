@@ -159,7 +159,19 @@ class MemoryService {
     }
 
     if (imported > 0 && isDebugLLM()) {
-      logLLM(`[MemoryService] Migrated ${imported} legacy memories into .agents/memories`) 
+      logLLM(`[MemoryService] Migrated ${imported} legacy memories into .agents/memories`)
+    }
+
+    // Remove the legacy file after migration so deleted memories are not
+    // re-imported on subsequent app restarts.
+    try {
+      fs.rmSync(legacyPath, { force: true })
+      if (isDebugLLM()) {
+        logLLM("[MemoryService] Removed legacy memories.json after migration")
+      }
+    } catch {
+      // best-effort — if removal fails the migration will simply re-run,
+      // but at least any *new* deletions won't be undone until the file is gone.
     }
   }
 

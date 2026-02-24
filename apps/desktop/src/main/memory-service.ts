@@ -111,7 +111,6 @@ class MemoryService {
       id,
       createdAt,
       updatedAt,
-      profileId: asString(obj.profileId),
       sessionId: asString(obj.sessionId),
       conversationId: asString(obj.conversationId),
       conversationTitle: asString(obj.conversationTitle),
@@ -287,7 +286,6 @@ class MemoryService {
     tags?: string[],
     conversationTitle?: string,
     conversationId?: string,
-    profileId?: string,
   ): AgentMemory | null {
     const now = Date.now()
 
@@ -347,7 +345,6 @@ class MemoryService {
       id: `memory_${now}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: now,
       updatedAt: now,
-      profileId,
       sessionId: summary.sessionId,
       conversationId,
       conversationTitle,
@@ -370,25 +367,10 @@ class MemoryService {
     return [...this.memories].sort((a, b) => b.createdAt - a.createdAt)
   }
 
-  /**
-   * Get memories filtered by profile ID.
-   * If profileId is provided, returns only memories for that profile.
-   * Memories without a profileId (legacy) are NOT included when filtering by profile.
-   */
-  async getMemoriesByProfile(profileId: string): Promise<AgentMemory[]> {
-    await this.initialize()
-    return [...this.memories]
-      .filter(m => m.profileId === profileId)
-      .sort((a, b) => b.createdAt - a.createdAt)
-  }
-
   async getMemoriesByImportance(
     importance: "low" | "medium" | "high" | "critical",
-    profileId?: string
   ): Promise<AgentMemory[]> {
-    const all = profileId
-      ? await this.getMemoriesByProfile(profileId)
-      : await this.getAllMemories()
+    const all = await this.getAllMemories()
     return all.filter(m => m.importance === importance)
   }
 
@@ -397,10 +379,8 @@ class MemoryService {
     return all.filter(m => m.sessionId === sessionId)
   }
 
-  async searchMemories(query: string, profileId?: string): Promise<AgentMemory[]> {
-    const all = profileId
-      ? await this.getMemoriesByProfile(profileId)
-      : await this.getAllMemories()
+  async searchMemories(query: string): Promise<AgentMemory[]> {
+    const all = await this.getAllMemories()
     const lowerQuery = query.toLowerCase()
     return all.filter(m =>
       m.title.toLowerCase().includes(lowerQuery) ||
@@ -467,17 +447,15 @@ class MemoryService {
   /**
    * Delete multiple memories by IDs.
    * @param ids Array of memory IDs to delete
-   * @param profileId If provided, only delete memories belonging to this profile
    * @returns Object with deletedCount and optional error message on persistence failure
    */
-  async deleteMultipleMemories(ids: string[], profileId?: string): Promise<{ deletedCount: number; error?: string }> {
+  async deleteMultipleMemories(ids: string[]): Promise<{ deletedCount: number; error?: string }> {
     await this.initialize()
 
     let deletedCount = 0
     for (const id of ids) {
       const memory = this.memories.find((m) => m.id === id)
       if (!memory) continue
-      if (profileId !== undefined && memory.profileId !== profileId) continue
 
       const success = await this.deleteMemory(id)
       if (!success) {
@@ -494,17 +472,13 @@ class MemoryService {
   }
 
   /**
-   * Delete all memories, optionally filtered by profile ID.
-   * @param profileId If provided, only delete memories for this profile
+   * Delete all memories.
    * @returns Object with deletedCount and optional error message on persistence failure
    */
-  async deleteAllMemories(profileId?: string): Promise<{ deletedCount: number; error?: string }> {
+  async deleteAllMemories(): Promise<{ deletedCount: number; error?: string }> {
     await this.initialize()
 
-    const idsToDelete = (profileId !== undefined
-      ? this.memories.filter((m) => m.profileId === profileId)
-      : this.memories
-    ).map((m) => m.id)
+    const idsToDelete = this.memories.map((m) => m.id)
 
     let deletedCount = 0
     for (const id of idsToDelete) {

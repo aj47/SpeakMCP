@@ -80,7 +80,6 @@ export function stringifyMemoryMarkdown(memory: AgentMemory): string {
     importance: memory.importance,
   }
 
-  if (memory.profileId) frontmatter.profileId = memory.profileId
   if (memory.sessionId) frontmatter.sessionId = memory.sessionId
   if (memory.conversationId) frontmatter.conversationId = memory.conversationId
   if (memory.conversationTitle) frontmatter.conversationTitle = normalizeSingleLine(memory.conversationTitle)
@@ -123,7 +122,6 @@ export function parseMemoryMarkdown(markdown: string, options: { fallbackId?: st
     id,
     createdAt,
     updatedAt,
-    profileId: (fm.profileId ?? "").trim() || undefined,
     sessionId: (fm.sessionId ?? "").trim() || undefined,
     conversationId: (fm.conversationId ?? "").trim() || undefined,
     conversationTitle: (fm.conversationTitle ?? "").trim() || undefined,

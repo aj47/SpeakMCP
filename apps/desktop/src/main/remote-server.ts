@@ -1822,10 +1822,7 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
   // GET /v1/memories - List all memories
   fastify.get("/v1/memories", async (req, reply) => {
     try {
-      const query = req.query as { profileId?: string }
-      const memories = query.profileId
-        ? await memoryService.getMemoriesByProfile(query.profileId)
-        : await memoryService.getAllMemories()
+      const memories = await memoryService.getAllMemories()
 
       return reply.send({
         memories: memories.map(m => ({
@@ -1834,7 +1831,6 @@ async function startRemoteServerInternal(options: StartRemoteServerOptions = {})
           content: m.content,
           tags: m.tags,
           importance: m.importance,
-          profileId: m.profileId,
           createdAt: m.createdAt,
           updatedAt: m.updatedAt,
         })),

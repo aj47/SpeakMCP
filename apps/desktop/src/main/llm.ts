@@ -189,19 +189,15 @@ export async function processTranscriptWithTools(
   const skillsInstructions = skillsService.getEnabledSkillsInstructionsForProfile(enabledSkillIds)
   const skillsIndex = extractSkillsIndexForMinimalPrompt(skillsInstructions)
 
-  // Load memories for context (works independently of dual-model summarization)
-  // Only load if both memoriesEnabled and injectMemories are true
+  // Load memories for context (global shared pool)
   let relevantMemories: AgentMemory[] = []
-  const memoriesEnabled = mainAgent?.memoryConfig?.memoriesEnabled !== false
-  const injectMemories = mainAgent?.memoryConfig?.injectMemories === true
-  if (memoriesEnabled && injectMemories) {
+  {
     const allMemories = await memoryService.getAllMemories()
-    // Sort by importance first (critical > high > medium > low), then by recency, before capping
     const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
     const sortedMemories = [...allMemories].sort((a, b) => {
       const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
       if (impDiff !== 0) return impDiff
-      return b.createdAt - a.createdAt // More recent first as tiebreaker
+      return b.createdAt - a.createdAt
     })
     relevantMemories = sortedMemories.slice(0, 10)
     logLLM(`[processTranscriptWithLLM] Loaded ${relevantMemories.length} memories for context`)
@@ -666,28 +662,23 @@ export async function processTranscriptWithAgentMode(
       if (summary) {
         summarizationService.addSummary(summary)
 
-        // Auto-save all summaries if enabled (no importance threshold)
-        // Associate memory with the session's profile for profile-scoped memories
-        const memoriesEnabled = effectiveProfileSnapshot?.memoryConfig?.memoriesEnabled !== false
-        const autoSaveImportant = effectiveProfileSnapshot?.memoryConfig?.autoSaveImportant === true
-        if (memoriesEnabled && autoSaveImportant) {
-          const profileIdForMemory = effectiveProfileSnapshot?.profileId ?? config.mcpCurrentProfileId
-	          const memory = memoryService.createMemoryFromSummary(
+        // Auto-save all summaries as global memories
+        {
+          const memory = memoryService.createMemoryFromSummary(
             summary,
             undefined, // title
             undefined, // userNotes
             undefined, // tags
             undefined, // conversationTitle
             currentConversationId,
-            profileIdForMemory,
           )
-	          if (memory) {
-	            memoryService.saveMemory(memory).catch(err => {
-	              if (isDebugLLM()) {
-	                logLLM("[Dual-Model] Error auto-saving summary:", err)
-	              }
-	            })
-	          }
+          if (memory) {
+            memoryService.saveMemory(memory).catch(err => {
+              if (isDebugLLM()) {
+                logLLM("[Dual-Model] Error auto-saving summary:", err)
+              }
+            })
+          }
         }
 
         if (isDebugLLM()) {
@@ -832,20 +823,15 @@ export async function processTranscriptWithAgentMode(
   const skillsInstructions = agentSkillsInstructions ?? profileSkillsInstructions
   const skillsIndex = extractSkillsIndexForMinimalPrompt(skillsInstructions)
 
-  // Load memories for agent context (works independently of dual-model summarization)
-  // Memories provide context from previous sessions - user preferences, past decisions, important learnings
-  // Only load if both memoriesEnabled and injectMemories are true
+  // Load memories for agent context (global shared pool)
   let relevantMemories: AgentMemory[] = []
-  const memoriesEnabledAgent = effectiveProfileSnapshot?.memoryConfig?.memoriesEnabled !== false
-  const injectMemoriesAgent = effectiveProfileSnapshot?.memoryConfig?.injectMemories === true
-  if (memoriesEnabledAgent && injectMemoriesAgent) {
+  {
     const allMemories = await memoryService.getAllMemories()
-    // Sort by importance first (critical > high > medium > low), then by recency, before capping
     const importanceOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
     const sortedMemories = [...allMemories].sort((a, b) => {
       const impDiff = importanceOrder[a.importance] - importanceOrder[b.importance]
       if (impDiff !== 0) return impDiff
-      return b.createdAt - a.createdAt // More recent first as tiebreaker
+      return b.createdAt - a.createdAt
     })
     relevantMemories = sortedMemories.slice(0, 30) // Cap at 30 for agent mode
     logLLM(`[processTranscriptWithAgentMode] Loaded ${relevantMemories.length} memories for context (from ${allMemories.length} total)`)

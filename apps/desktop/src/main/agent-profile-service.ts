@@ -190,7 +190,6 @@ export function createSessionSnapshotFromProfile(
     skillsInstructions,
     agentProperties: profile.properties,
     skillsConfig: profile.skillsConfig,
-    memoryConfig: profile.memoryConfig,
   }
 }
 

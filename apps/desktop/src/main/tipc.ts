@@ -3983,18 +3983,12 @@ export const router = {
     }),
 
   // Memory service handlers
-  // Get all memories (optionally filtered by agentId for future per-agent scoping)
   getAllMemories: t.procedure
-    .input<{ profileId?: string }>()
-    .action(async ({ input }) => {
-      const agentId = input?.profileId
-      if (agentId) {
-        return memoryService.getMemoriesByProfile(agentId)
-      }
+    .action(async () => {
       return memoryService.getAllMemories()
     }),
 
-  // Get all memories (profiles no longer exist — returns all memories)
+  // Alias kept for renderer compatibility
   getMemoriesForCurrentProfile: t.procedure.action(async () => {
     return memoryService.getAllMemories()
   }),
@@ -4013,10 +4007,8 @@ export const router = {
       tags?: string[]
       conversationTitle?: string
       conversationId?: string
-      profileId?: string
     }>()
     .action(async ({ input }) => {
-      // profileId is optional — used for per-agent memory scoping if provided
       const memory = memoryService.createMemoryFromSummary(
         input.summary,
         input.title,
@@ -4024,7 +4016,6 @@ export const router = {
         input.tags,
         input.conversationTitle,
         input.conversationId,
-        input.profileId,
       )
       if (!memory) {
         return { success: true, memory: null, reason: "no_durable_content" as const }
@@ -4068,11 +4059,9 @@ export const router = {
     }),
 
   searchMemories: t.procedure
-    .input<{ query: string; profileId?: string }>()
+    .input<{ query: string }>()
     .action(async ({ input }) => {
-      // Use provided profileId, or fall back to current profile
-      const profileId = input.profileId ?? agentProfileService.getCurrentProfile()?.id
-      return memoryService.searchMemories(input.query, profileId)
+      return memoryService.searchMemories(input.query)
     }),
 
   // Summarization service handlers

@@ -28,7 +28,6 @@ import { ModelSelector } from "@renderer/components/model-selector"
 import {
   AgentProfile, AgentProfileConnectionType, AgentProfileConnection,
   ProfileModelConfig, AgentProfileToolConfig, ProfileSkillsConfig, AgentSkill,
-  ProfileMemoryConfig,
 } from "../../../shared/types"
 
 type ConnectionType = AgentProfileConnectionType
@@ -49,7 +48,6 @@ interface EditingAgent {
   modelConfig?: ProfileModelConfig
   toolConfig?: AgentProfileToolConfig
   skillsConfig?: ProfileSkillsConfig
-  memoryConfig?: ProfileMemoryConfig
   properties?: Record<string, string>
   avatarDataUrl?: string | null
 }
@@ -74,7 +72,7 @@ function emptyAgent(): EditingAgent {
     displayName: "", description: "", systemPrompt: "", guidelines: "",
     connectionType: "internal", enabled: true,
     modelConfig: undefined, toolConfig: undefined,
-    skillsConfig: { enabledSkillIds: [] }, memoryConfig: { memoriesEnabled: true, injectMemories: true, autoSaveImportant: true }, properties: {},
+    skillsConfig: { enabledSkillIds: [] }, properties: {},
   }
 }
 
@@ -131,7 +129,6 @@ export function SettingsAgents() {
       modelConfig: agent.modelConfig ? { ...agent.modelConfig } : undefined,
       toolConfig: agent.toolConfig ? { ...agent.toolConfig } : undefined,
       skillsConfig: agent.skillsConfig ? { ...agent.skillsConfig } : { enabledSkillIds: [] },
-      memoryConfig: agent.memoryConfig ? { ...agent.memoryConfig } : { memoriesEnabled: true, injectMemories: true, autoSaveImportant: true },
       properties: agent.properties ? { ...agent.properties } : {},
       avatarDataUrl: agent.avatarDataUrl ?? null,
     })
@@ -156,7 +153,6 @@ export function SettingsAgents() {
       modelConfig: editing.modelConfig,
       toolConfig: editing.toolConfig,
       skillsConfig: editing.skillsConfig,
-      memoryConfig: editing.memoryConfig,
       properties: editing.properties && Object.keys(editing.properties).length > 0 ? editing.properties : undefined,
       avatarDataUrl: editing.avatarDataUrl ?? null,
     }
@@ -365,7 +361,6 @@ export function SettingsAgents() {
               {isInternal && <TabsTrigger value="model" className="gap-1.5"><Brain className="h-3.5 w-3.5" />Model</TabsTrigger>}
               <TabsTrigger value="tools" className="gap-1.5"><Server className="h-3.5 w-3.5" />Tools</TabsTrigger>
               <TabsTrigger value="skills" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" />Skills</TabsTrigger>
-              <TabsTrigger value="memory" className="gap-1.5"><Brain className="h-3.5 w-3.5" />Memory</TabsTrigger>
               <TabsTrigger value="properties" className="gap-1.5">Properties</TabsTrigger>
             </TabsList>
 
@@ -649,56 +644,6 @@ export function SettingsAgents() {
                 </div>
               )}
             </TabsContent>
-            {/* ── Memory Tab ── */}
-            <TabsContent value="memory" className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Configure memory capabilities for this agent.
-              </p>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <Label className="text-base font-medium">Enable Memory Features</Label>
-                    <p className="text-[13px] text-muted-foreground leading-snug">
-                      Allow this agent to read, write, and manage memories across sessions.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={editing.memoryConfig?.memoriesEnabled !== false}
-                    onCheckedChange={(c) => setEditing({...editing, memoryConfig: { ...editing.memoryConfig, memoriesEnabled: c }})}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <Label className="text-base font-medium">Inject Relevant Memories</Label>
-                    <p className="text-[13px] text-muted-foreground leading-snug">
-                      Automatically retrieve and inject relevant memories into the agent context.
-                    </p>
-                  </div>
-                  <Switch
-                    disabled={editing.memoryConfig?.memoriesEnabled === false}
-                    checked={editing.memoryConfig?.injectMemories !== false}
-                    onCheckedChange={(c) => setEditing({...editing, memoryConfig: { ...editing.memoryConfig, injectMemories: c }})}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <Label className="text-base font-medium">Auto-Save Important Insights</Label>
-                    <p className="text-[13px] text-muted-foreground leading-snug">
-                      Automatically extract and save important information from the conversation.
-                    </p>
-                  </div>
-                  <Switch
-                    disabled={editing.memoryConfig?.memoriesEnabled === false}
-                    checked={editing.memoryConfig?.autoSaveImportant !== false}
-                    onCheckedChange={(c) => setEditing({...editing, memoryConfig: { ...editing.memoryConfig, autoSaveImportant: c }})}
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
 
             {/* ── Properties Tab ── */}
             <TabsContent value="properties" className="space-y-4">

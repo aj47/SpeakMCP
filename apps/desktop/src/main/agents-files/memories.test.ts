@@ -34,7 +34,6 @@ describe("agents-files/memories", () => {
       tags: ["foo", "bar"],
       keyFindings: ["finding 1", "finding 2"],
       importance: "high",
-      profileId: "profile1",
       sessionId: "sess1",
       conversationId: "conv1",
       conversationTitle: "Conv\nTitle",

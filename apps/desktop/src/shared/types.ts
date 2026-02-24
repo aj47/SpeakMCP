@@ -316,10 +316,6 @@ export interface AgentMemory {
   createdAt: number
   updatedAt: number
 
-  // Agent association - memories can optionally be scoped to a specific agent
-  // If undefined, memory is global (default behavior)
-  profileId?: string
-
   // Source info
   sessionId?: string
   conversationId?: string
@@ -450,17 +446,6 @@ export type ProfileSkillsConfig = {
   allSkillsDisabledByDefault?: boolean
 }
 
-// Per-profile memory configuration
-// Controls memory features (save_memory, injection, auto-save) for this specific profile
-export type ProfileMemoryConfig = {
-  // When false, disables all memory features for this profile
-  memoriesEnabled?: boolean
-  // When true, injects saved memories into the agent context
-  injectMemories?: boolean
-  // When true, important memories are auto-saved
-  autoSaveImportant?: boolean
-}
-
 // Profile Management Types
 export type Profile = {
   id: string
@@ -472,7 +457,6 @@ export type Profile = {
   mcpServerConfig?: ProfileMcpServerConfig
   modelConfig?: ProfileModelConfig
   skillsConfig?: ProfileSkillsConfig
-  memoryConfig?: ProfileMemoryConfig
   systemPrompt?: string
 }
 
@@ -497,7 +481,6 @@ export type SessionProfileSnapshot = {
   /** Dynamic agent properties exposed in system prompt (from agent's properties) */
   agentProperties?: Record<string, string>
   skillsConfig?: ProfileSkillsConfig
-  memoryConfig?: ProfileMemoryConfig
 }
 
 // ============================================================================
@@ -742,10 +725,6 @@ export type AgentProfile = {
   // Skills
   /** Skills configuration */
   skillsConfig?: ProfileSkillsConfig
-
-  // Memory
-  /** Memory configuration for this agent */
-  memoryConfig?: ProfileMemoryConfig
 
   // Connection - how to run this agent
   /** Connection configuration for the underlying agent */

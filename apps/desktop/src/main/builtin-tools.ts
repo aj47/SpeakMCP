@@ -51,18 +51,6 @@ type ToolHandler = (
   context: BuiltinToolContext
 ) => Promise<MCPToolResult>
 
-function isMemoryEnabledForContext(context: BuiltinToolContext): boolean {
-  if (context.sessionId) {
-    const snapshot = agentSessionTracker.getSessionProfileSnapshot(context.sessionId)
-    if (snapshot?.memoryConfig?.memoriesEnabled !== undefined) {
-      return snapshot.memoryConfig.memoriesEnabled
-    }
-  }
-  // Default fallback if no session or config found
-  const mainAgent = agentProfileService.getByName("main-agent")
-  return mainAgent?.memoryConfig?.memoriesEnabled !== false
-}
-
 const toolHandlers: Record<string, ToolHandler> = {
   list_mcp_servers: async (): Promise<MCPToolResult> => {
     const config = configStore.get()
@@ -867,15 +855,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  save_memory: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
-    // Check if memories are enabled
-    if (!isMemoryEnabledForContext(context)) {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
-        isError: true,
-      }
-    }
-
+  save_memory: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     if (typeof args.content !== "string" || args.content.trim() === "") {
       return {
         content: [{ type: "text", text: JSON.stringify({ success: false, error: "content required" }) }],
@@ -891,7 +871,6 @@ const toolHandlers: Record<string, ToolHandler> = {
     const now = Date.now()
     const memory: AgentMemory = {
       id: `memory_${now}_${Math.random().toString(36).substr(2, 9)}`,
-      profileId: undefined,
       createdAt: now,
       updatedAt: now,
       title: content.slice(0, 50),
@@ -921,14 +900,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  list_memories: async (_args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
-    if (!isMemoryEnabledForContext(context)) {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
-        isError: true,
-      }
-    }
-
+  list_memories: async (): Promise<MCPToolResult> => {
     try {
       const memories = await memoryService.getAllMemories()
 
@@ -945,14 +917,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  delete_memory: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
-    if (!isMemoryEnabledForContext(context)) {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
-        isError: true,
-      }
-    }
-
+  delete_memory: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     if (typeof args.memoryId !== "string" || args.memoryId.trim() === "") {
       return {
         content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryId required" }) }],
@@ -976,14 +941,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  delete_multiple_memories: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
-    if (!isMemoryEnabledForContext(context)) {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
-        isError: true,
-      }
-    }
-
+  delete_multiple_memories: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     if (!Array.isArray(args.memoryIds) || args.memoryIds.length === 0) {
       return {
         content: [{ type: "text", text: JSON.stringify({ success: false, error: "memoryIds must be a non-empty array of strings" }) }],
@@ -1036,14 +994,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     }
   },
 
-  delete_all_memories: async (args: Record<string, unknown>, context: BuiltinToolContext): Promise<MCPToolResult> => {
-    if (!isMemoryEnabledForContext(context)) {
-      return {
-        content: [{ type: "text", text: JSON.stringify({ success: false, error: "Memory system disabled" }) }],
-        isError: true,
-      }
-    }
-
+  delete_all_memories: async (args: Record<string, unknown>): Promise<MCPToolResult> => {
     // Require explicit confirmation
     if (args.confirm !== true) {
       return {

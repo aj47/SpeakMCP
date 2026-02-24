@@ -27,7 +27,6 @@ import {
   Loader2,
   AlertCircle,
   FileText,
-  Bot,
   FolderOpen,
   FolderUp,
   Pencil,
@@ -51,14 +50,12 @@ function MemoryCard({
   onEdit,
   isSelected,
   onToggleSelect,
-  agentName,
 }: {
   memory: AgentMemory
   onDelete: (id: string) => void
   onEdit: (memory: AgentMemory) => void
   isSelected: boolean
   onToggleSelect: (id: string) => void
-  agentName?: string
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -114,12 +111,6 @@ function MemoryCard({
               <Calendar className="h-3 w-3" />
               {formattedDate}
             </span>
-            {agentName && (
-              <span className="flex items-center gap-1 max-w-[150px]">
-                <Bot className="h-3 w-3" />
-                <span className="truncate">{agentName}</span>
-              </span>
-            )}
             {memory.conversationTitle && (
               <span className="flex items-center gap-1 max-w-[200px]">
                 <FileText className="h-3 w-3" />
@@ -235,13 +226,6 @@ export function Component() {
     queryFn: async () => {
       return await tipcClient.getMemoriesForCurrentProfile()
     },
-  })
-  const agentProfilesQuery = useQuery({
-    queryKey: ["agentProfiles"],
-    queryFn: async () => {
-      return await tipcClient.getAgentProfiles()
-    },
-    staleTime: Infinity,
   })
 
   const agentsFoldersQuery = useQuery({
@@ -616,12 +600,7 @@ Optional notes go here (saved as userNotes).
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredMemories.map((memory) => {
-              const agentName = memory.profileId
-                ? agentProfilesQuery.data?.find(p => p.id === memory.profileId)?.displayName || memory.profileId
-                : undefined
-
-              return (
+            {filteredMemories.map((memory) => (
                 <MemoryCard
                   key={memory.id}
                   memory={memory}
@@ -629,10 +608,8 @@ Optional notes go here (saved as userNotes).
                   onEdit={handleEdit}
                   isSelected={selectedIds.has(memory.id)}
                   onToggleSelect={handleToggleSelect}
-                  agentName={agentName}
                 />
-              )
-            })}
+            ))}
           </div>
         )}
       </div>

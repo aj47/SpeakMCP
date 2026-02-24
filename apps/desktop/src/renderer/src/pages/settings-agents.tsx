@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@renderer/components/ui/tabs"
-import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight, Wrench, Check, Circle } from "lucide-react"
+import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight, Wrench } from "lucide-react"
 import { Facehash } from "facehash"
 
 // Curated palette of vivid colors to pick from deterministically
@@ -77,6 +78,7 @@ function emptyAgent(): EditingAgent {
 }
 
 export function SettingsAgents() {
+  const queryClient = useQueryClient()
   const [agents, setAgents] = useState<AgentProfile[]>([])
   const [editing, setEditing] = useState<EditingAgent | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -152,18 +154,22 @@ export function SettingsAgents() {
       isUserProfile: false, isAgentTarget: true,
       autoSpawn: editing.autoSpawn,
       modelConfig: editing.modelConfig,
-      // toolConfig and skillsConfig are managed from the Active Agents sidebar, not here
+      toolConfig: editing.toolConfig,
+      skillsConfig: editing.skillsConfig,
       properties: editing.properties && Object.keys(editing.properties).length > 0 ? editing.properties : undefined,
       avatarDataUrl: editing.avatarDataUrl ?? null,
     }
     if (isCreating) await tipcClient.createAgentProfile({ profile: data })
     else if (editing.id) await tipcClient.updateAgentProfile({ id: editing.id, updates: data })
     setEditing(null); setIsCreating(false); setNewPropKey(""); setNewPropValue(""); loadAgents()
+    // Invalidate sidebar query so it reflects changes immediately
+    queryClient.invalidateQueries({ queryKey: ["agentProfilesSidebar"] })
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this agent?")) return
     await tipcClient.deleteAgentProfile({ id }); loadAgents()
+    queryClient.invalidateQueries({ queryKey: ["agentProfilesSidebar"] })
   }
 
   const handleCancel = () => { setEditing(null); setIsCreating(false); setNewPropKey(""); setNewPropValue("") }
@@ -183,7 +189,6 @@ export function SettingsAgents() {
     return !(editing.toolConfig.disabledServers || []).includes(serverName)
   }
 
-  // Read-only capability helpers (capabilities are now managed from the sidebar)
   const isToolDisabled = (toolName: string): boolean => {
     return (editing?.toolConfig?.disabledTools || []).includes(toolName)
   }
@@ -196,6 +201,56 @@ export function SettingsAgents() {
 
   const isSkillEnabled = (skillId: string): boolean => {
     return (editing?.skillsConfig?.enabledSkillIds || []).includes(skillId)
+  }
+
+  const toggleServer = (serverName: string) => {
+    if (!editing) return
+    const tc = { ...(editing.toolConfig || {}) } as AgentProfileToolConfig
+    if (tc.allServersDisabledByDefault) {
+      const enabled = [...(tc.enabledServers || [])]
+      const idx = enabled.indexOf(serverName)
+      if (idx >= 0) enabled.splice(idx, 1); else enabled.push(serverName)
+      setEditing({ ...editing, toolConfig: { ...tc, enabledServers: enabled } })
+    } else {
+      const disabled = [...(tc.disabledServers || [])]
+      const idx = disabled.indexOf(serverName)
+      if (idx >= 0) disabled.splice(idx, 1); else disabled.push(serverName)
+      setEditing({ ...editing, toolConfig: { ...tc, disabledServers: disabled } })
+    }
+  }
+
+  const toggleTool = (toolName: string) => {
+    if (!editing) return
+    const tc = { ...(editing.toolConfig || {}) } as AgentProfileToolConfig
+    const disabled = [...(tc.disabledTools || [])]
+    const idx = disabled.indexOf(toolName)
+    if (idx >= 0) disabled.splice(idx, 1); else disabled.push(toolName)
+    setEditing({ ...editing, toolConfig: { ...tc, disabledTools: disabled } })
+  }
+
+  const toggleBuiltinTool = (toolName: string) => {
+    if (!editing) return
+    const tc = { ...(editing.toolConfig || {}) } as AgentProfileToolConfig
+    let currentList = [...(tc.enabledBuiltinTools || [])]
+    if (currentList.length === 0) {
+      currentList = builtinTools.map(t => t.name).filter(n => n !== toolName)
+    } else {
+      const idx = currentList.indexOf(toolName)
+      if (idx >= 0) currentList.splice(idx, 1)
+      else {
+        currentList.push(toolName)
+        if (currentList.length === builtinTools.length) currentList = []
+      }
+    }
+    setEditing({ ...editing, toolConfig: { ...tc, enabledBuiltinTools: currentList.length > 0 ? currentList : undefined } })
+  }
+
+  const toggleSkill = (skillId: string) => {
+    if (!editing) return
+    const ids = [...(editing.skillsConfig?.enabledSkillIds || [])]
+    const idx = ids.indexOf(skillId)
+    if (idx >= 0) ids.splice(idx, 1); else ids.push(skillId)
+    setEditing({ ...editing, skillsConfig: { ...editing.skillsConfig, enabledSkillIds: ids } })
   }
 
   // Section collapse helpers
@@ -330,7 +385,7 @@ export function SettingsAgents() {
       <Card>
         <CardHeader>
           <CardTitle>{isCreating ? "Create Agent" : `Edit: ${editing.displayName}`}</CardTitle>
-          <CardDescription>Configure agent identity, behavior, and model. Capabilities are managed from the sidebar.</CardDescription>
+          <CardDescription>Configure agent identity, behavior, model, and capabilities.</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="general" className="w-full">
@@ -525,40 +580,27 @@ export function SettingsAgents() {
               </TabsContent>
             )}
 
-            {/* ── Capabilities Tab (Read-Only) ── */}
+            {/* ── Capabilities Tab ── */}
             <TabsContent value="capabilities" className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Currently enabled capabilities for this agent. Use the <strong>Agents</strong> section in the sidebar to assign or modify capabilities.
-              </p>
-
               {/* ── Skills Section ── */}
               <div className="rounded-lg border">
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
-                  onClick={() => toggleSection("skills")}
-                >
+                <button type="button" className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors" onClick={() => toggleSection("skills")}>
                   <div className="flex items-center gap-2">
                     {isSectionCollapsed("skills") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     <Sparkles className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold text-sm">Skills</span>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {skills.filter(s => isSkillEnabled(s.id)).length} of {skills.length} enabled
-                  </Badge>
+                  <Badge variant="secondary" className="text-xs">{skills.filter(s => isSkillEnabled(s.id)).length} of {skills.length} enabled</Badge>
                 </button>
                 {!isSectionCollapsed("skills") && (
                   <div className="border-t px-2 py-2 space-y-0.5">
                     {skills.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-3 text-center">No skills available.</p>
                     ) : skills.map(skill => (
-                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md">
-                        {isSkillEnabled(skill.id)
-                          ? <Check className="h-4 w-4 text-green-500 shrink-0" />
-                          : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                        }
+                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/30">
+                        <Switch checked={isSkillEnabled(skill.id)} onCheckedChange={() => toggleSkill(skill.id)} />
                         <div className="min-w-0">
-                          <span className={`text-sm truncate block ${!isSkillEnabled(skill.id) ? "text-muted-foreground" : ""}`}>{skill.name}</span>
+                          <span className="text-sm truncate block">{skill.name}</span>
                           {skill.description && <span className="text-xs text-muted-foreground truncate block">{skill.description}</span>}
                         </div>
                       </div>
@@ -569,19 +611,13 @@ export function SettingsAgents() {
 
               {/* ── MCP Servers Section ── */}
               <div className="rounded-lg border">
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
-                  onClick={() => toggleSection("mcp-servers")}
-                >
+                <button type="button" className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors" onClick={() => toggleSection("mcp-servers")}>
                   <div className="flex items-center gap-2">
                     {isSectionCollapsed("mcp-servers") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     <Server className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold text-sm">MCP Servers</span>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {serverNames.filter(n => isServerEnabled(n)).length} of {serverNames.length} enabled
-                  </Badge>
+                  <Badge variant="secondary" className="text-xs">{serverNames.filter(n => isServerEnabled(n)).length} of {serverNames.length} enabled</Badge>
                 </button>
                 {!isSectionCollapsed("mcp-servers") && (
                   <div className="border-t px-2 py-2 space-y-1">
@@ -596,10 +632,7 @@ export function SettingsAgents() {
                         <div key={name} className="rounded-md border bg-card">
                           <div className="flex items-center justify-between px-3 py-2">
                             <div className="flex items-center gap-3 min-w-0">
-                              {enabled
-                                ? <Check className="h-4 w-4 text-green-500 shrink-0" />
-                                : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                              }
+                              <Switch checked={enabled} onCheckedChange={() => toggleServer(name)} />
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className={`font-medium text-sm truncate ${!enabled ? "text-muted-foreground" : ""}`}>{name}</span>
                                 {info?.connected
@@ -608,11 +641,7 @@ export function SettingsAgents() {
                                 }
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded"
-                              onClick={() => toggleExpandServer(name)}
-                            >
+                            <button type="button" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded" onClick={() => toggleExpandServer(name)}>
                               <span>{serverToolList.length} tools</span>
                               {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                             </button>
@@ -622,11 +651,8 @@ export function SettingsAgents() {
                               {serverToolList.map(tool => {
                                 const toolEnabled = enabled && !isToolDisabled(tool.name)
                                 return (
-                                  <div key={tool.name} className="flex items-center gap-3 px-2 py-1.5 rounded">
-                                    {toolEnabled
-                                      ? <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                                      : <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-                                    }
+                                  <div key={tool.name} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-muted/30">
+                                    <Switch checked={toolEnabled} disabled={!enabled} onCheckedChange={() => toggleTool(tool.name)} />
                                     <div className="min-w-0">
                                       <span className={`text-sm truncate block ${!toolEnabled ? "text-muted-foreground" : ""}`}>{tool.name.replace(`${name}:`, "")}</span>
                                       {tool.description && <span className="text-xs text-muted-foreground truncate block">{tool.description}</span>}
@@ -645,19 +671,13 @@ export function SettingsAgents() {
 
               {/* ── Built-in Tools Section ── */}
               <div className="rounded-lg border">
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
-                  onClick={() => toggleSection("builtin-tools")}
-                >
+                <button type="button" className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors" onClick={() => toggleSection("builtin-tools")}>
                   <div className="flex items-center gap-2">
                     {isSectionCollapsed("builtin-tools") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     <Wrench className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold text-sm">Built-in Tools</span>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {builtinTools.filter(t => isBuiltinToolEnabled(t.name)).length} of {builtinTools.length} enabled
-                  </Badge>
+                  <Badge variant="secondary" className="text-xs">{builtinTools.filter(t => isBuiltinToolEnabled(t.name)).length} of {builtinTools.length} enabled</Badge>
                 </button>
                 {!isSectionCollapsed("builtin-tools") && (
                   <div className="border-t px-2 py-2 space-y-0.5">
@@ -667,11 +687,8 @@ export function SettingsAgents() {
                       const isEssential = tool.name === "speakmcp-settings:mark_work_complete"
                       const enabled = isEssential || isBuiltinToolEnabled(tool.name)
                       return (
-                        <div key={tool.name} className="flex items-center gap-3 px-3 py-2 rounded-md">
-                          {enabled
-                            ? <Check className="h-4 w-4 text-green-500 shrink-0" />
-                            : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                          }
+                        <div key={tool.name} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/30">
+                          <Switch checked={enabled} disabled={isEssential} onCheckedChange={() => toggleBuiltinTool(tool.name)} />
                           <div className="min-w-0">
                             <span className={`text-sm truncate flex items-center gap-2 ${!enabled ? "text-muted-foreground" : ""}`}>
                               {tool.name.replace("speakmcp-settings:", "")}

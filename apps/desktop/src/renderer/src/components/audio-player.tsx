@@ -14,6 +14,8 @@ interface AudioPlayerProps {
   isGenerating?: boolean
   error?: string | null
   autoPlay?: boolean
+  /** Called when play/pause state changes so parent can reflect it (e.g. header icon) */
+  onPlayStateChange?: (playing: boolean) => void
 }
 
 export function AudioPlayer({
@@ -25,6 +27,7 @@ export function AudioPlayer({
   isGenerating = false,
   error = null,
   autoPlay = false,
+  onPlayStateChange,
 }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -78,14 +81,17 @@ export function AudioPlayer({
     const handleEnded = () => {
       setIsPlaying(false)
       setCurrentTime(0)
+      onPlayStateChange?.(false)
     }
 
     const handlePlay = () => {
       setIsPlaying(true)
+      onPlayStateChange?.(true)
     }
 
     const handlePause = () => {
       setIsPlaying(false)
+      onPlayStateChange?.(false)
     }
 
     const handleError = (event: Event) => {
@@ -128,6 +134,7 @@ export function AudioPlayer({
         audio.currentTime = 0
         setIsPlaying(false)
         setWasStopped(true)
+        onPlayStateChange?.(false)
       }
     })
 

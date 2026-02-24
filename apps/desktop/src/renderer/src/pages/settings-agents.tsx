@@ -246,13 +246,11 @@ export function SettingsAgents() {
 
   return (
     <div className="modern-panel h-full overflow-y-auto overflow-x-hidden px-6 py-4">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Agents</h1>
-          <p className="text-muted-foreground">Manage agents that can be delegated tasks. Internal agents use built-in LLM, external agents connect via ACP/stdio/remote.</p>
+      {!editing && (
+        <div className="flex items-center justify-end mb-4">
+          <Button className="gap-2" onClick={handleCreate}><Plus className="h-4 w-4" />Add Agent</Button>
         </div>
-        {!editing && <Button className="gap-2" onClick={handleCreate}><Plus className="h-4 w-4" />Add Agent</Button>}
-      </div>
+      )}
       {editing ? renderEditForm() : renderAgentList()}
     </div>
   )

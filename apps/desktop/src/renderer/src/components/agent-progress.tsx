@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { cn } from "@renderer/lib/utils"
 import { AgentProgressUpdate, ACPDelegationProgress, ACPSubAgentMessage } from "../../../shared/types"
 import { INTERNAL_COMPLETION_NUDGE_TEXT } from "../../../shared/builtin-tool-names"
-import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronRight, X, AlertTriangle, Minimize2, Shield, Check, XCircle, Loader2, Clock, Copy, CheckCheck, GripHorizontal, Activity, Moon, Maximize2, RefreshCw, ExternalLink, Bot, OctagonX, Expand, Shrink, MessageSquare, Brain, Volume2 } from "lucide-react"
 import { MarkdownRenderer } from "@renderer/components/markdown-renderer"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -21,6 +21,7 @@ import { ToolExecutionStats } from "./tool-execution-stats"
 import { ACPSessionBadge } from "./acp-session-badge"
 import { AgentSummaryView } from "./agent-summary-view"
 import { hasTTSPlayed, markTTSPlayed, removeTTSKey } from "@renderer/lib/tts-tracking"
+import { ttsManager } from "@renderer/lib/tts-manager"
 
 interface AgentProgressProps {
   progress: AgentProgressUpdate | null
@@ -121,6 +122,7 @@ const CompactMessage: React.FC<{
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState(false)
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Track the ttsKey that's currently being generated, so we can clean it up on unmount
   const inFlightTtsKeyRef = useRef<string | null>(null)
@@ -471,6 +473,7 @@ const CompactMessage: React.FC<{
                 error={ttsError}
                 compact={true}
                 autoPlay={isLast ? (configQuery.data?.ttsAutoPlay ?? true) : false}
+                onPlayStateChange={setIsTTSPlaying}
               />
               {ttsError && (
                 <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
@@ -501,6 +504,27 @@ const CompactMessage: React.FC<{
 
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {/* TTS playing indicator — click to pause */}
+          {(isTTSPlaying || isGeneratingAudio) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                ttsManager.stopAll()
+              }}
+              className={cn(
+                "p-1 rounded hover:bg-muted/30 transition-colors",
+                isTTSPlaying && "animate-pulse"
+              )}
+              title={isGeneratingAudio ? "Generating audio…" : "Pause TTS"}
+              aria-label={isGeneratingAudio ? "Generating audio" : "Pause TTS"}
+            >
+              {isGeneratingAudio ? (
+                <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+              ) : (
+                <Volume2 className="h-3 w-3 text-blue-500" />
+              )}
+            </button>
+          )}
           {/* Copy button for user prompts and all completed assistant responses */}
           {(message.role === "user" || (message.role === "assistant" && isComplete)) && (
             <button

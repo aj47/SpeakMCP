@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react"
+import { useNavigate } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { tipcClient } from "@renderer/lib/tipc-client"
 import { ChevronDown, ChevronRight, Sparkles, Server, Wrench } from "lucide-react"
@@ -15,6 +16,7 @@ type ToolInfo = { name: string; description: string; serverName: string }
 const STORAGE_KEY = "agent-capabilities-sidebar-expanded"
 
 export function AgentCapabilitiesSidebar() {
+  const navigate = useNavigate()
   const [isExpanded, setIsExpanded] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
     return stored !== null ? stored === "true" : false
@@ -23,6 +25,13 @@ export function AgentCapabilitiesSidebar() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
   const queryClient = useQueryClient()
+
+  const handleHeaderClick = () => {
+    navigate('/settings/agents')
+    if (!isExpanded) {
+      setIsExpanded(true)
+    }
+  }
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(isExpanded))
@@ -272,8 +281,8 @@ export function AgentCapabilitiesSidebar() {
           {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none"
+          onClick={handleHeaderClick}
+          className="flex items-center gap-2 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-ring rounded"
         >
           <span className="i-mingcute-group-line h-3.5 w-3.5"></span>
           <span>Agents</span>

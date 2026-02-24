@@ -598,6 +598,16 @@ class SkillsService {
       }
     }
 
+    // Rename skills.json to skills.json.migrated so we don't re-import
+    // deleted skills on every app restart.
+    try {
+      const migratedPath = skillsPath + ".migrated"
+      fs.renameSync(skillsPath, migratedPath)
+      logApp(`[SkillsService] Renamed legacy skills.json → skills.json.migrated`)
+    } catch (error) {
+      logApp("[SkillsService] Failed to rename legacy skills.json:", error)
+    }
+
     return migrated
   }
 
@@ -766,6 +776,20 @@ class SkillsService {
 
     try {
       this.backupThenDeleteFileSync(wrapperFilePath, backupDir)
+
+      // Also remove the parent directory if it's now empty (or only has non-skill files).
+      // This prevents initializeBundledSkills from thinking the skill still exists
+      // (it checks directory existence) and keeps the skills folder tidy.
+      try {
+        const parentDir = path.dirname(wrapperFilePath)
+        const remaining = fs.readdirSync(parentDir)
+        if (remaining.length === 0) {
+          fs.rmdirSync(parentDir)
+        }
+      } catch {
+        // best-effort cleanup
+      }
+
       this.skills.splice(index, 1)
       this.originById.delete(id)
       return true

@@ -258,9 +258,12 @@ export function createMainWindow({ url }: { url?: string } = {}) {
     })
 
     win.on("show", () => {
-      if (configStore.get().hideDockIcon && !app.dock.isVisible()) {
+      // Always ensure dock icon and Cmd+Tab presence when main window is shown.
+      // This fixes the icon going missing in the Cmd+Tab app switcher.
+      // Even when hideDockIcon is enabled, we temporarily show the dock icon
+      // while the window is visible so the user can Cmd+Tab to it.
+      if (!app.dock.isVisible()) {
         app.dock.show()
-        // Reset activation policy to "regular" so app appears in Command+Tab
         app.setActivationPolicy("regular")
       }
     })

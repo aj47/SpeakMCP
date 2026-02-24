@@ -4,14 +4,14 @@ import { Component as McpToolsPage } from "./settings-mcp-tools"
 import { Component as SkillsPage } from "./settings-skills"
 
 const tabs = [
-  { id: "mcp-servers", label: "MCP Servers", icon: "i-mingcute-tool-line" },
   { id: "skills", label: "Skills", icon: "i-mingcute-sparkles-line" },
+  { id: "mcp-servers", label: "MCP Servers", icon: "i-mingcute-tool-line" },
 ] as const
 
 type TabId = (typeof tabs)[number]["id"]
 
 export function Component() {
-  const [activeTab, setActiveTab] = useState<TabId>("mcp-servers")
+  const [activeTab, setActiveTab] = useState<TabId>("skills")
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -37,8 +37,8 @@ export function Component() {
 
       {/* Tab content — each page provides its own scroll container */}
       <div className="flex-1 min-h-0">
-        {activeTab === "mcp-servers" && <McpToolsPage />}
         {activeTab === "skills" && <SkillsPage />}
+        {activeTab === "mcp-servers" && <McpToolsPage />}
       </div>
     </div>
   )

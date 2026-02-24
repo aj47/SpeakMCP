@@ -584,8 +584,41 @@ export function SettingsAgents() {
             {/* ── Capabilities Tab ── */}
             <TabsContent value="capabilities" className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Control which MCP servers, built-in tools, and skills this agent can use.
+                Control which skills, MCP servers, and built-in tools this agent can use.
               </p>
+
+              {/* ── Skills Section ── */}
+              <div className="rounded-lg border">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleSection("skills")}
+                >
+                  <div className="flex items-center gap-2">
+                    {isSectionCollapsed("skills") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <Sparkles className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold text-sm">Skills</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {skills.filter(s => isSkillEnabled(s.id)).length} of {skills.length} enabled
+                  </Badge>
+                </button>
+                {!isSectionCollapsed("skills") && (
+                  <div className="border-t px-2 py-2 space-y-0.5">
+                    {skills.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-3 text-center">No skills available. Add skills in the Skills settings page.</p>
+                    ) : skills.map(skill => (
+                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/40">
+                        <Switch checked={isSkillEnabled(skill.id)} onCheckedChange={() => toggleSkill(skill.id)} />
+                        <div className="min-w-0">
+                          <span className="text-sm truncate block">{skill.name}</span>
+                          {skill.description && <span className="text-xs text-muted-foreground truncate block">{skill.description}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* ── MCP Servers Section ── */}
               <div className="rounded-lg border">
@@ -697,39 +730,6 @@ export function SettingsAgents() {
                         </div>
                       )
                     })}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Skills Section ── */}
-              <div className="rounded-lg border">
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
-                  onClick={() => toggleSection("skills")}
-                >
-                  <div className="flex items-center gap-2">
-                    {isSectionCollapsed("skills") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    <Sparkles className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm">Skills</span>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {skills.filter(s => isSkillEnabled(s.id)).length} of {skills.length} enabled
-                  </Badge>
-                </button>
-                {!isSectionCollapsed("skills") && (
-                  <div className="border-t px-2 py-2 space-y-0.5">
-                    {skills.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-3 text-center">No skills available. Add skills in the Skills settings page.</p>
-                    ) : skills.map(skill => (
-                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/40">
-                        <Switch checked={isSkillEnabled(skill.id)} onCheckedChange={() => toggleSkill(skill.id)} />
-                        <div className="min-w-0">
-                          <span className="text-sm truncate block">{skill.name}</span>
-                          {skill.description && <span className="text-xs text-muted-foreground truncate block">{skill.description}</span>}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </div>

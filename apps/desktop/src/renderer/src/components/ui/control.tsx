@@ -1,5 +1,6 @@
 import { cn } from "@renderer/lib/utils"
-import React from "react"
+import React, { useState } from "react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
 export const Control = ({
   label,
@@ -66,24 +67,49 @@ export const ControlGroup = ({
   className,
   title,
   endDescription,
+  collapsible = false,
+  defaultCollapsed = false,
 }: {
   children: React.ReactNode
   className?: string
   title?: React.ReactNode
   endDescription?: React.ReactNode
+  collapsible?: boolean
+  defaultCollapsed?: boolean
 }) => {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
+
   return (
     <div className={className}>
       {title && (
-        <div className="mb-3">
-          <span className="text-sm font-semibold">{title}</span>
-        </div>
+        collapsible ? (
+          <button
+            type="button"
+            className="flex items-center gap-1.5 mb-3 group cursor-pointer"
+            onClick={() => setCollapsed(!collapsed)}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            )}
+            <span className="text-sm font-semibold">{title}</span>
+          </button>
+        ) : (
+          <div className="mb-3">
+            <span className="text-sm font-semibold">{title}</span>
+          </div>
+        )
       )}
-      <div className="divide-y rounded-lg border">{children}</div>
-      {endDescription && (
-        <div className="mt-2 flex justify-end text-right text-xs text-muted-foreground">
-          <div className="max-w-[70%]">{endDescription}</div>
-        </div>
+      {(!collapsible || !collapsed) && (
+        <>
+          <div className="divide-y rounded-lg border">{children}</div>
+          {endDescription && (
+            <div className="mt-2 flex justify-end text-right text-xs text-muted-foreground">
+              <div className="max-w-[70%]">{endDescription}</div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

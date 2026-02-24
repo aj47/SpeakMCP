@@ -21,6 +21,7 @@ import { agentSessionTracker } from '../agent-session-tracker';
 import { emitAgentProgress } from '../emit-agent-progress';
 import { skillsService } from '../skills-service';
 import { agentProfileService, createSessionSnapshotFromProfile } from '../agent-profile-service';
+import { configStore } from '../config';
 import type { AgentProgressUpdate, SessionProfileSnapshot, ACPDelegationProgress, ACPSubAgentMessage, ConversationMessage, AgentProfile } from '../../shared/types';
 import type { MCPToolCall, MCPToolResult } from '../mcp-service';
 
@@ -38,7 +39,7 @@ const MAX_RECURSION_DEPTH = 3;
 /** Maximum concurrent sub-sessions per parent session */
 const MAX_CONCURRENT_SUB_SESSIONS = 5;
 
-/** Default max iterations for sub-session agent loops */
+/** Default max iterations for sub-session agent loops (used when config has no explicit value) */
 const DEFAULT_SUB_SESSION_MAX_ITERATIONS = 10;
 
 // ============================================================================
@@ -593,11 +594,16 @@ export async function runInternalSubSession(
       conversationId = agentProfile?.conversationId;
     }
 
+    // Determine effective max iterations: explicit value > config unlimited > config max > default
+    const cfg = configStore.get();
+    const effectiveSubSessionMaxIterations = maxIterations
+      ?? (cfg.mcpUnlimitedIterations ? Infinity : (cfg.mcpMaxIterations ?? DEFAULT_SUB_SESSION_MAX_ITERATIONS));
+
     const result = await processTranscriptWithAgentMode(
       fullPrompt,
       availableTools,
       executeToolCall,
-      maxIterations ?? DEFAULT_SUB_SESSION_MAX_ITERATIONS,
+      effectiveSubSessionMaxIterations,
       previousConversationHistory, // Pass previous history for stateful agents/personas
       conversationId, // Use appropriate conversation ID if stateful
       subSessionId,

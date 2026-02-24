@@ -202,6 +202,8 @@ export function Component() {
         </ControlGroup>
 
         <ControlGroup
+          collapsible
+          defaultCollapsed
           title="Modular config (.agents)"
           endDescription={
             <div>
@@ -290,6 +292,8 @@ export function Component() {
         </ControlGroup>
 
         <ControlGroup
+          collapsible
+          defaultCollapsed
           title="Shortcuts"
           endDescription={
             <div className="flex items-center gap-1">
@@ -559,7 +563,7 @@ export function Component() {
           </Control>
         </ControlGroup>
 
-        <ControlGroup title="Speech-to-Text">
+        <ControlGroup collapsible title="Speech-to-Text">
           <Control label={<ControlLabel label="Language" tooltip="Select the language for speech transcription. 'Auto-detect' lets the model determine the language automatically based on your speech." />} className="px-3">
             <Select
               value={configQuery.data.sttLanguage || "auto"}
@@ -714,7 +718,7 @@ export function Component() {
           )}
         </ControlGroup>
 
-        <ControlGroup title="Text to Speech">
+        <ControlGroup collapsible title="Text to Speech">
           <Control label="Enabled" className="px-3">
             <Switch
               defaultChecked={configQuery.data.ttsEnabled ?? false}
@@ -804,7 +808,7 @@ export function Component() {
         </ControlGroup>
 
         {/* Panel Position Settings */}
-        <ControlGroup title="Panel Position">
+        <ControlGroup collapsible title="Panel Position">
           <Control label={<ControlLabel label="Default Position" tooltip="Choose where the floating panel appears on your screen. Custom position: Panel can be dragged to any location and will remember its position." />} className="px-3">
             <Select
               value={configQuery.data?.panelPosition || "top-right"}
@@ -877,6 +881,8 @@ export function Component() {
 
         {/* WhatsApp Integration */}
         <ControlGroup
+          collapsible
+          defaultCollapsed
           title="WhatsApp Integration"
           endDescription={(
             <div className="break-words whitespace-normal">
@@ -894,7 +900,7 @@ export function Component() {
         </ControlGroup>
 
         {/* Agent Settings */}
-        <ControlGroup title="Agent Settings">
+        <ControlGroup collapsible title="Agent Settings">
           {/* Main Agent Mode Selection */}
           <Control label={<ControlLabel label="Main Agent Mode" tooltip="Choose how the main agent processes your requests. API mode uses external LLM APIs (OpenAI, Groq, Gemini). ACP mode routes prompts to a configured ACP agent like Claude Code." />} className="px-3">
             <Select
@@ -987,26 +993,26 @@ export function Component() {
           </Control>
 
 
-
-          <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer. Disabled when Unlimited Iterations is enabled." />} className="px-3">
-            <Input
-              type="number"
-              min="1"
-              max="50"
-              step="1"
-              value={configQuery.data?.mcpMaxIterations ?? 10}
-              onChange={(e) => saveConfig({ mcpMaxIterations: parseInt(e.target.value) || 1 })}
-              className="w-32"
-              disabled={configQuery.data?.mcpUnlimitedIterations ?? false}
-            />
-          </Control>
-
           <Control label={<ControlLabel label="Unlimited Iterations" tooltip="Allow the agent to run indefinitely without an iteration limit. Use with caution as it may run for a long time." />} className="px-3">
             <Switch
               checked={configQuery.data?.mcpUnlimitedIterations ?? false}
               onCheckedChange={(checked) => saveConfig({ mcpUnlimitedIterations: checked })}
             />
           </Control>
+
+          {!(configQuery.data?.mcpUnlimitedIterations) && (
+            <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
+              <Input
+                type="number"
+                min="1"
+                max="50"
+                step="1"
+                value={configQuery.data?.mcpMaxIterations ?? 10}
+                onChange={(e) => saveConfig({ mcpMaxIterations: parseInt(e.target.value) || 1 })}
+                className="w-32"
+              />
+            </Control>
+          )}
 
           <Control label={<ControlLabel label="Emergency Kill Switch" tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes" />} className="px-3">
             <div className="space-y-3">
@@ -1052,6 +1058,8 @@ export function Component() {
 
         {/* Langfuse Observability */}
         <ControlGroup
+          collapsible
+          defaultCollapsed
           title="Langfuse Observability"
           endDescription={(
             <div className="break-words whitespace-normal">

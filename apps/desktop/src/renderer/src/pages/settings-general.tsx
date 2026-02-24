@@ -159,7 +159,163 @@ export function Component() {
     <div className="modern-panel h-full overflow-auto px-6 py-4">
 
       <div className="grid gap-4">
-        <ControlGroup title="App">
+        {/* Agent Settings */}
+        <ControlGroup collapsible defaultCollapsed title="Agent Settings">
+          {/* Main Agent Mode Selection */}
+          <Control label={<ControlLabel label="Main Agent Mode" tooltip="Choose how the main agent processes your requests. API mode uses external LLM APIs (OpenAI, Groq, Gemini). ACP mode routes prompts to a configured ACP agent like Claude Code." />} className="px-3">
+            <Select
+              value={configQuery.data?.mainAgentMode || "api"}
+              onValueChange={(value: "api" | "acp") => {
+                saveConfig({ mainAgentMode: value })
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="api">API (OpenAI, Groq, Gemini)</SelectItem>
+                <SelectItem value="acp">ACP Agent</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
+
+          {configQuery.data?.mainAgentMode === "acp" && (
+            <>
+              <Control label={<ControlLabel label="ACP Agent" tooltip="Select which configured ACP agent to use as the main agent. The agent must be configured in the ACP Agents settings page." />} className="px-3">
+                <Select
+                  value={configQuery.data?.mainAgentName || ""}
+                  onValueChange={(value: string) => {
+                    saveConfig({ mainAgentName: value })
+                  }}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select an agent..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(configQuery.data?.acpAgents || [])
+                      .filter(agent => agent.enabled !== false)
+                      .map(agent => (
+                        <SelectItem key={agent.name} value={agent.name}>
+                          {agent.displayName}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </Control>
+
+              {configQuery.data?.mainAgentName && (
+                <div className="px-3 py-2 text-sm text-muted-foreground bg-muted/30 rounded-md mx-3 mb-2">
+                  <span className="font-medium">Note:</span> When using ACP mode, the agent will use its own MCP tools and LLM, not SpeakMCP's configured providers and tools.
+                </div>
+              )}
+
+              <Control label={<ControlLabel label="Inject SpeakMCP Tools" tooltip="When enabled, SpeakMCP's builtin tools (delegation, settings management) are injected into ACP agent sessions. This allows the ACP agent to delegate tasks to other agents. Requires Remote Server to be enabled." />} className="px-3">
+                <Switch
+                  checked={configQuery.data?.acpInjectBuiltinTools !== false}
+                  disabled={!configQuery.data?.remoteServerEnabled}
+                  onCheckedChange={(value) => saveConfig({ acpInjectBuiltinTools: value })}
+                />
+              </Control>
+              {!configQuery.data?.remoteServerEnabled && (
+                <div className="px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2 mx-3 mb-2">
+                  <span className="i-mingcute-warning-line h-4 w-4" />
+                  <span>Enable Remote Server in settings to use tool injection</span>
+                </div>
+              )}
+            </>
+          )}
+
+          <Control label={<ControlLabel label="Message Queuing" tooltip="Allow queueing messages while the agent is processing. Messages will be processed in order after the current task completes." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpMessageQueueEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpMessageQueueEnabled: value })}
+            />
+          </Control>
+          <Control label={<ControlLabel label="Require Tool Approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}
+              onCheckedChange={(value) => saveConfig({ mcpRequireApprovalBeforeToolCall: value })}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Verify Task Completion" tooltip="When enabled, the agent will verify whether the user's task has been completed before finishing. Disable for faster responses without verification." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpVerifyCompletionEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpVerifyCompletionEnabled: value })}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Final Summary" tooltip="When enabled, the agent will generate a concise final summary after completing a task. Disable for faster responses without the summary step." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpFinalSummaryEnabled ?? true}
+              onCheckedChange={(value) => saveConfig({ mcpFinalSummaryEnabled: value })}
+            />
+          </Control>
+
+          <Control label={<ControlLabel label="Unlimited Iterations" tooltip="Allow the agent to run indefinitely without an iteration limit. Use with caution as it may run for a long time." />} className="px-3">
+            <Switch
+              checked={configQuery.data?.mcpUnlimitedIterations ?? false}
+              onCheckedChange={(checked) => saveConfig({ mcpUnlimitedIterations: checked })}
+            />
+          </Control>
+
+          {!(configQuery.data?.mcpUnlimitedIterations) && (
+            <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
+              <Input
+                type="number"
+                min="1"
+                max="50"
+                step="1"
+                value={configQuery.data?.mcpMaxIterations ?? 10}
+                onChange={(e) => saveConfig({ mcpMaxIterations: parseInt(e.target.value) || 1 })}
+                className="w-32"
+              />
+            </Control>
+          )}
+
+          <Control label={<ControlLabel label="Emergency Kill Switch" tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes" />} className="px-3">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={configQuery.data?.agentKillSwitchEnabled !== false}
+                  onCheckedChange={(checked) => saveConfig({ agentKillSwitchEnabled: checked })}
+                />
+                <span className="text-sm text-muted-foreground">Enable kill switch</span>
+              </div>
+
+              {configQuery.data?.agentKillSwitchEnabled !== false && (
+                <>
+                  <Select
+                    value={configQuery.data?.agentKillSwitchHotkey || "ctrl-shift-escape"}
+                    onValueChange={(value: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q" | "custom") => {
+                      saveConfig({ agentKillSwitchHotkey: value })
+                    }}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ctrl-shift-escape">Ctrl + Shift + Escape</SelectItem>
+                      <SelectItem value="ctrl-alt-q">Ctrl + Alt + Q</SelectItem>
+                      <SelectItem value="ctrl-shift-q">Ctrl + Shift + Q</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {configQuery.data?.agentKillSwitchHotkey === "custom" && (
+                    <KeyRecorder
+                      value={configQuery.data?.customAgentKillSwitchHotkey || ""}
+                      onChange={(keyCombo) => saveConfig({ customAgentKillSwitchHotkey: keyCombo })}
+                      placeholder="Click to record custom kill switch hotkey"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </Control>
+        </ControlGroup>
+
+        <ControlGroup collapsible defaultCollapsed title="General">
           {process.env.IS_MAC && (
             <Control label="Hide Dock Icon" className="px-3">
               <Switch
@@ -199,6 +355,33 @@ export function Component() {
               <span>Streamer Mode is active - sensitive information is hidden</span>
             </div>
           )}
+          <Control label="Theme" className="px-3">
+            <Select
+              value={configQuery.data.themePreference || "system"}
+              onValueChange={(value: "system" | "light" | "dark") => {
+                saveConfig({
+                  themePreference: value,
+                })
+                // Update localStorage immediately to sync with ThemeProvider
+                localStorage.setItem("theme-preference", value)
+                // Apply theme immediately
+                window.dispatchEvent(
+                  new CustomEvent("theme-preference-changed", {
+                    detail: value,
+                  }),
+                )
+              }}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">System</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+              </SelectContent>
+            </Select>
+          </Control>
         </ControlGroup>
 
         <ControlGroup
@@ -258,36 +441,6 @@ export function Component() {
                 Open Workspace
               </Button>
             </div>
-          </Control>
-        </ControlGroup>
-
-        <ControlGroup title="Appearance">
-          <Control label="Theme" className="px-3">
-            <Select
-              value={configQuery.data.themePreference || "system"}
-              onValueChange={(value: "system" | "light" | "dark") => {
-                saveConfig({
-                  themePreference: value,
-                })
-                // Update localStorage immediately to sync with ThemeProvider
-                localStorage.setItem("theme-preference", value)
-                // Apply theme immediately
-                window.dispatchEvent(
-                  new CustomEvent("theme-preference-changed", {
-                    detail: value,
-                  }),
-                )
-              }}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="system">System</SelectItem>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-              </SelectContent>
-            </Select>
           </Control>
         </ControlGroup>
 
@@ -563,7 +716,7 @@ export function Component() {
           </Control>
         </ControlGroup>
 
-        <ControlGroup collapsible title="Speech-to-Text">
+        <ControlGroup collapsible defaultCollapsed title="Speech-to-Text">
           <Control label={<ControlLabel label="Language" tooltip="Select the language for speech transcription. 'Auto-detect' lets the model determine the language automatically based on your speech." />} className="px-3">
             <Select
               value={configQuery.data.sttLanguage || "auto"}
@@ -718,7 +871,7 @@ export function Component() {
           )}
         </ControlGroup>
 
-        <ControlGroup collapsible title="Text to Speech">
+        <ControlGroup collapsible defaultCollapsed title="Text to Speech">
           <Control label="Enabled" className="px-3">
             <Switch
               defaultChecked={configQuery.data.ttsEnabled ?? false}
@@ -808,7 +961,7 @@ export function Component() {
         </ControlGroup>
 
         {/* Panel Position Settings */}
-        <ControlGroup collapsible title="Panel Position">
+        <ControlGroup collapsible defaultCollapsed title="Panel Position">
           <Control label={<ControlLabel label="Default Position" tooltip="Choose where the floating panel appears on your screen. Custom position: Panel can be dragged to any location and will remember its position." />} className="px-3">
             <Select
               value={configQuery.data?.panelPosition || "top-right"}
@@ -896,163 +1049,6 @@ export function Component() {
               checked={configQuery.data?.whatsappEnabled ?? false}
               onCheckedChange={(value) => saveConfig({ whatsappEnabled: value })}
             />
-          </Control>
-        </ControlGroup>
-
-        {/* Agent Settings */}
-        <ControlGroup collapsible title="Agent Settings">
-          {/* Main Agent Mode Selection */}
-          <Control label={<ControlLabel label="Main Agent Mode" tooltip="Choose how the main agent processes your requests. API mode uses external LLM APIs (OpenAI, Groq, Gemini). ACP mode routes prompts to a configured ACP agent like Claude Code." />} className="px-3">
-            <Select
-              value={configQuery.data?.mainAgentMode || "api"}
-              onValueChange={(value: "api" | "acp") => {
-                saveConfig({ mainAgentMode: value })
-              }}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="api">API (OpenAI, Groq, Gemini)</SelectItem>
-                <SelectItem value="acp">ACP Agent</SelectItem>
-              </SelectContent>
-            </Select>
-          </Control>
-
-          {configQuery.data?.mainAgentMode === "acp" && (
-            <>
-              <Control label={<ControlLabel label="ACP Agent" tooltip="Select which configured ACP agent to use as the main agent. The agent must be configured in the ACP Agents settings page." />} className="px-3">
-                <Select
-                  value={configQuery.data?.mainAgentName || ""}
-                  onValueChange={(value: string) => {
-                    saveConfig({ mainAgentName: value })
-                  }}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Select an agent..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(configQuery.data?.acpAgents || [])
-                      .filter(agent => agent.enabled !== false)
-                      .map(agent => (
-                        <SelectItem key={agent.name} value={agent.name}>
-                          {agent.displayName}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </Control>
-
-              {configQuery.data?.mainAgentName && (
-                <div className="px-3 py-2 text-sm text-muted-foreground bg-muted/30 rounded-md mx-3 mb-2">
-                  <span className="font-medium">Note:</span> When using ACP mode, the agent will use its own MCP tools and LLM, not SpeakMCP's configured providers and tools.
-                </div>
-              )}
-
-              <Control label={<ControlLabel label="Inject SpeakMCP Tools" tooltip="When enabled, SpeakMCP's builtin tools (delegation, settings management) are injected into ACP agent sessions. This allows the ACP agent to delegate tasks to other agents. Requires Remote Server to be enabled." />} className="px-3">
-                <Switch
-                  checked={configQuery.data?.acpInjectBuiltinTools !== false}
-                  disabled={!configQuery.data?.remoteServerEnabled}
-                  onCheckedChange={(value) => saveConfig({ acpInjectBuiltinTools: value })}
-                />
-              </Control>
-              {!configQuery.data?.remoteServerEnabled && (
-                <div className="px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2 mx-3 mb-2">
-                  <span className="i-mingcute-warning-line h-4 w-4" />
-                  <span>Enable Remote Server in settings to use tool injection</span>
-                </div>
-              )}
-            </>
-          )}
-
-          <Control label={<ControlLabel label="Message Queuing" tooltip="Allow queueing messages while the agent is processing. Messages will be processed in order after the current task completes." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.mcpMessageQueueEnabled ?? true}
-              onCheckedChange={(value) => saveConfig({ mcpMessageQueueEnabled: value })}
-            />
-          </Control>
-          <Control label={<ControlLabel label="Require Tool Approval" tooltip="Adds a confirmation dialog before any tool executes. Recommended for safety." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.mcpRequireApprovalBeforeToolCall ?? false}
-              onCheckedChange={(value) => saveConfig({ mcpRequireApprovalBeforeToolCall: value })}
-            />
-          </Control>
-
-          <Control label={<ControlLabel label="Verify Task Completion" tooltip="When enabled, the agent will verify whether the user's task has been completed before finishing. Disable for faster responses without verification." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.mcpVerifyCompletionEnabled ?? true}
-              onCheckedChange={(value) => saveConfig({ mcpVerifyCompletionEnabled: value })}
-            />
-          </Control>
-
-          <Control label={<ControlLabel label="Final Summary" tooltip="When enabled, the agent will generate a concise final summary after completing a task. Disable for faster responses without the summary step." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.mcpFinalSummaryEnabled ?? true}
-              onCheckedChange={(value) => saveConfig({ mcpFinalSummaryEnabled: value })}
-            />
-          </Control>
-
-
-          <Control label={<ControlLabel label="Unlimited Iterations" tooltip="Allow the agent to run indefinitely without an iteration limit. Use with caution as it may run for a long time." />} className="px-3">
-            <Switch
-              checked={configQuery.data?.mcpUnlimitedIterations ?? false}
-              onCheckedChange={(checked) => saveConfig({ mcpUnlimitedIterations: checked })}
-            />
-          </Control>
-
-          {!(configQuery.data?.mcpUnlimitedIterations) && (
-            <Control label={<ControlLabel label="Max Iterations" tooltip="Maximum number of iterations the agent can perform before stopping. Higher values allow more complex tasks but may take longer." />} className="px-3">
-              <Input
-                type="number"
-                min="1"
-                max="50"
-                step="1"
-                value={configQuery.data?.mcpMaxIterations ?? 10}
-                onChange={(e) => saveConfig({ mcpMaxIterations: parseInt(e.target.value) || 1 })}
-                className="w-32"
-              />
-            </Control>
-          )}
-
-          <Control label={<ControlLabel label="Emergency Kill Switch" tooltip="Provides a global hotkey to immediately stop agent mode and kill all agent-created processes" />} className="px-3">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={configQuery.data?.agentKillSwitchEnabled !== false}
-                  onCheckedChange={(checked) => saveConfig({ agentKillSwitchEnabled: checked })}
-                />
-                <span className="text-sm text-muted-foreground">Enable kill switch</span>
-              </div>
-
-              {configQuery.data?.agentKillSwitchEnabled !== false && (
-                <>
-                  <Select
-                    value={configQuery.data?.agentKillSwitchHotkey || "ctrl-shift-escape"}
-                    onValueChange={(value: "ctrl-shift-escape" | "ctrl-alt-q" | "ctrl-shift-q" | "custom") => {
-                      saveConfig({ agentKillSwitchHotkey: value })
-                    }}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ctrl-shift-escape">Ctrl + Shift + Escape</SelectItem>
-                      <SelectItem value="ctrl-alt-q">Ctrl + Alt + Q</SelectItem>
-                      <SelectItem value="ctrl-shift-q">Ctrl + Shift + Q</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {configQuery.data?.agentKillSwitchHotkey === "custom" && (
-                    <KeyRecorder
-                      value={configQuery.data?.customAgentKillSwitchHotkey || ""}
-                      onChange={(keyCombo) => saveConfig({ customAgentKillSwitchHotkey: keyCombo })}
-                      placeholder="Click to record custom kill switch hotkey"
-                    />
-                  )}
-                </>
-              )}
-            </div>
           </Control>
         </ControlGroup>
 

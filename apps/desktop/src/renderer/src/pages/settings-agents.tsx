@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@renderer/components/ui/tabs"
-import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight } from "lucide-react"
+import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight, Wrench } from "lucide-react"
 import { Facehash } from "facehash"
 
 // Curated palette of vivid colors to pick from deterministically
@@ -81,8 +81,10 @@ export function SettingsAgents() {
   const [editing, setEditing] = useState<EditingAgent | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [serverStatus, setServerStatus] = useState<Record<string, ServerInfo>>({})
-  const [builtinTools, setBuiltinTools] = useState<{name: string, description: string}[]>([])
+  const [allTools, setAllTools] = useState<{name: string, description: string, serverName: string}[]>([])
   const [skills, setSkills] = useState<AgentSkill[]>([])
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [newPropKey, setNewPropKey] = useState("")
   const [newPropValue, setNewPropValue] = useState("")
   const [showSystemPrompt, setShowSystemPrompt] = useState(false)
@@ -93,7 +95,7 @@ export function SettingsAgents() {
     loadAgents()
     tipcClient.getDefaultSystemPrompt().then(setDefaultSystemPrompt).catch(console.error)
   }, [])
-  useEffect(() => { if (editing) { loadServers(); loadSkills(); loadBuiltinTools() } }, [!!editing])
+  useEffect(() => { if (editing) { loadServers(); loadSkills(); loadAllTools() } }, [!!editing])
 
   const loadAgents = async () => {
     const all = await tipcClient.getAgentProfiles()
@@ -102,11 +104,10 @@ export function SettingsAgents() {
   const loadServers = async () => {
     try { const s = await tipcClient.getMcpServerStatus(); setServerStatus(s as Record<string, ServerInfo>) } catch {}
   }
-  const loadBuiltinTools = async () => {
+  const loadAllTools = async () => {
     try {
       const list = await tipcClient.getMcpDetailedToolList()
-      const internal = list.filter(t => t.serverName === "speakmcp-settings")
-      setBuiltinTools(internal)
+      setAllTools(list)
     } catch {}
   }
   const loadSkills = async () => {
@@ -168,6 +169,12 @@ export function SettingsAgents() {
 
   const handleCancel = () => { setEditing(null); setIsCreating(false); setNewPropKey(""); setNewPropValue("") }
 
+  // Derived tool data
+  const builtinTools = allTools.filter(t => t.serverName === "speakmcp-settings")
+  const externalTools = allTools.filter(t => t.serverName !== "speakmcp-settings")
+  const serverNames = Object.keys(serverStatus).filter(n => n !== "speakmcp-settings")
+  const toolsByServer = (serverName: string) => externalTools.filter(t => t.serverName === serverName)
+
   // Tool config helpers
   const isServerEnabled = (serverName: string): boolean => {
     if (!editing?.toolConfig) return true
@@ -193,6 +200,19 @@ export function SettingsAgents() {
     }
   }
 
+  const isToolDisabled = (toolName: string): boolean => {
+    return (editing?.toolConfig?.disabledTools || []).includes(toolName)
+  }
+
+  const toggleTool = (toolName: string) => {
+    if (!editing) return
+    const tc = { ...editing.toolConfig } as AgentProfileToolConfig
+    const disabled = [...(tc.disabledTools || [])]
+    const idx = disabled.indexOf(toolName)
+    if (idx >= 0) disabled.splice(idx, 1); else disabled.push(toolName)
+    setEditing({ ...editing, toolConfig: { ...tc, disabledTools: disabled } })
+  }
+
   const isBuiltinToolEnabled = (toolName: string): boolean => {
     const list = editing?.toolConfig?.enabledBuiltinTools
     if (!list || list.length === 0) return true
@@ -205,7 +225,6 @@ export function SettingsAgents() {
     let currentList = [...(tc.enabledBuiltinTools || [])]
 
     if (currentList.length === 0) {
-      // If list is empty (which means all enabled by default), populate with all except the one being toggled off
       currentList = builtinTools.map(t => t.name).filter(n => n !== toolName)
     } else {
       const idx = currentList.indexOf(toolName)
@@ -213,7 +232,6 @@ export function SettingsAgents() {
         currentList.splice(idx, 1)
       } else {
         currentList.push(toolName)
-        // If checking it makes it include ALL builtin tools, revert to empty array (allow all)
         if (currentList.length === builtinTools.length) {
           currentList = []
         }
@@ -232,6 +250,23 @@ export function SettingsAgents() {
     const idx = ids.indexOf(skillId)
     if (idx >= 0) ids.splice(idx, 1); else ids.push(skillId)
     setEditing({ ...editing, skillsConfig: { ...editing.skillsConfig, enabledSkillIds: ids } })
+  }
+
+  // Section collapse helpers
+  const isSectionCollapsed = (section: string) => collapsedSections.has(section)
+  const toggleSection = (section: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev)
+      if (next.has(section)) next.delete(section); else next.add(section)
+      return next
+    })
+  }
+  const toggleExpandServer = (serverName: string) => {
+    setExpandedServers(prev => {
+      const next = new Set(prev)
+      if (next.has(serverName)) next.delete(serverName); else next.add(serverName)
+      return next
+    })
   }
 
   // Property helpers
@@ -346,7 +381,6 @@ export function SettingsAgents() {
   function renderEditForm() {
     if (!editing) return null
     const isInternal = editing.connectionType === "internal"
-    const serverNames = Object.keys(serverStatus).filter(n => n !== "speakmcp-settings")
 
     return (
       <Card>
@@ -359,8 +393,7 @@ export function SettingsAgents() {
             <TabsList className="mb-4 flex-wrap h-auto gap-1">
               <TabsTrigger value="general" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" />General</TabsTrigger>
               {isInternal && <TabsTrigger value="model" className="gap-1.5"><Brain className="h-3.5 w-3.5" />Model</TabsTrigger>}
-              <TabsTrigger value="tools" className="gap-1.5"><Server className="h-3.5 w-3.5" />Tools</TabsTrigger>
-              <TabsTrigger value="skills" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" />Skills</TabsTrigger>
+              <TabsTrigger value="capabilities" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Capabilities</TabsTrigger>
               <TabsTrigger value="properties" className="gap-1.5">Properties</TabsTrigger>
             </TabsList>
 
@@ -548,101 +581,158 @@ export function SettingsAgents() {
               </TabsContent>
             )}
 
-            {/* ── Tools Tab ── */}
-            <TabsContent value="tools" className="space-y-4">
+            {/* ── Capabilities Tab ── */}
+            <TabsContent value="capabilities" className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Control which MCP servers and their tools this agent can access.
+                Control which MCP servers, built-in tools, and skills this agent can use.
               </p>
-              <div className="flex items-center space-x-2 pb-2">
-                <Switch
-                  id="allServersDisabled"
-                  checked={editing.toolConfig?.allServersDisabledByDefault ?? false}
-                  onCheckedChange={v => setEditing({
-                    ...editing,
-                    toolConfig: { ...editing.toolConfig, allServersDisabledByDefault: v, enabledServers: v ? [] : undefined, disabledServers: v ? undefined : [] },
-                  })}
-                />
-                <Label htmlFor="allServersDisabled" className="text-sm">
-                  Disable all servers by default (opt-in mode)
-                </Label>
-              </div>
-              {serverNames.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No MCP servers configured.</p>
-              ) : (
-                <div className="space-y-1">
-                  {serverNames.map(name => {
-                    const info = serverStatus[name]
-                    return (
-                      <div key={name} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Switch checked={isServerEnabled(name)} onCheckedChange={() => toggleServer(name)} />
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-medium truncate">{name}</span>
-                            {info?.connected && <Badge variant="secondary" className="text-[10px] px-1.5">connected</Badge>}
-                            {info && !info.connected && <Badge variant="outline" className="text-[10px] px-1.5">offline</Badge>}
-                          </div>
-                        </div>
-                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                          {info?.toolCount ?? 0} tools
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
 
-              <h4 className="text-sm font-semibold mt-6 mb-2">Built-in Tools</h4>
-              {builtinTools.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No built-in tools available.</p>
-              ) : (
-                <div className="space-y-1">
-                  {builtinTools.map(tool => {
-                    const isEssential = tool.name === "speakmcp-settings:mark_work_complete"
-                    return (
-                      <div key={tool.name} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card">
-                        <div className="flex items-center gap-3 min-w-0">
+              {/* ── MCP Servers Section ── */}
+              <div className="rounded-lg border">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleSection("mcp-servers")}
+                >
+                  <div className="flex items-center gap-2">
+                    {isSectionCollapsed("mcp-servers") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <Server className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold text-sm">MCP Servers</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {serverNames.filter(n => isServerEnabled(n)).length} of {serverNames.length} enabled
+                  </Badge>
+                </button>
+                {!isSectionCollapsed("mcp-servers") && (
+                  <div className="border-t px-2 py-2 space-y-1">
+                    {serverNames.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-3 text-center">No MCP servers configured.</p>
+                    ) : serverNames.map(name => {
+                      const info = serverStatus[name]
+                      const serverToolList = toolsByServer(name)
+                      const isExpanded = expandedServers.has(name)
+                      return (
+                        <div key={name} className="rounded-md border bg-card">
+                          <div className="flex items-center justify-between px-3 py-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Switch checked={isServerEnabled(name)} onCheckedChange={() => toggleServer(name)} />
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium text-sm truncate">{name}</span>
+                                {info?.connected
+                                  ? <Badge variant="secondary" className="text-[10px] px-1.5">connected</Badge>
+                                  : <Badge variant="outline" className="text-[10px] px-1.5">offline</Badge>
+                                }
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded"
+                              onClick={() => toggleExpandServer(name)}
+                            >
+                              <span>{serverToolList.length} tools</span>
+                              {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                          {isExpanded && serverToolList.length > 0 && (
+                            <div className="border-t mx-3 mb-2 pt-1 space-y-0.5">
+                              {serverToolList.map(tool => (
+                                <div key={tool.name} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-muted/40">
+                                  <Switch
+                                    className="scale-75"
+                                    checked={isServerEnabled(name) && !isToolDisabled(tool.name)}
+                                    disabled={!isServerEnabled(name)}
+                                    onCheckedChange={() => toggleTool(tool.name)}
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="text-sm truncate block">{tool.name.replace(`${name}:`, "")}</span>
+                                    {tool.description && <span className="text-xs text-muted-foreground truncate block">{tool.description}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Built-in Tools Section ── */}
+              <div className="rounded-lg border">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleSection("builtin-tools")}
+                >
+                  <div className="flex items-center gap-2">
+                    {isSectionCollapsed("builtin-tools") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <Wrench className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold text-sm">Built-in Tools</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {builtinTools.filter(t => isBuiltinToolEnabled(t.name)).length} of {builtinTools.length} enabled
+                  </Badge>
+                </button>
+                {!isSectionCollapsed("builtin-tools") && (
+                  <div className="border-t px-2 py-2 space-y-0.5">
+                    {builtinTools.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-3 text-center">No built-in tools available.</p>
+                    ) : builtinTools.map(tool => {
+                      const isEssential = tool.name === "speakmcp-settings:mark_work_complete"
+                      return (
+                        <div key={tool.name} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/40">
                           <Switch
                             checked={isEssential || isBuiltinToolEnabled(tool.name)}
                             disabled={isEssential}
                             onCheckedChange={() => toggleBuiltinTool(tool.name)}
                           />
                           <div className="min-w-0">
-                            <span className="font-medium truncate flex items-center gap-2">
+                            <span className="text-sm truncate flex items-center gap-2">
                               {tool.name.replace("speakmcp-settings:", "")}
                               {isEssential && <Badge variant="outline" className="text-[10px] px-1.5">essential</Badge>}
                             </span>
                             {tool.description && <span className="text-xs text-muted-foreground truncate block">{tool.description}</span>}
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </TabsContent>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
 
-            {/* ── Skills Tab ── */}
-            <TabsContent value="skills" className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Enable skills to inject their specialized instructions into this agent&apos;s system prompt.
-              </p>
-              {skills.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No skills available. Add skills in the Skills settings page.</p>
-              ) : (
-                <div className="space-y-1">
-                  {skills.map(skill => (
-                    <div key={skill.id} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card">
-                      <div className="flex items-center gap-3 min-w-0">
+              {/* ── Skills Section ── */}
+              <div className="rounded-lg border">
+                <button
+                  type="button"
+                  className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleSection("skills")}
+                >
+                  <div className="flex items-center gap-2">
+                    {isSectionCollapsed("skills") ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <Sparkles className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold text-sm">Skills</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {skills.filter(s => isSkillEnabled(s.id)).length} of {skills.length} enabled
+                  </Badge>
+                </button>
+                {!isSectionCollapsed("skills") && (
+                  <div className="border-t px-2 py-2 space-y-0.5">
+                    {skills.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-3 text-center">No skills available. Add skills in the Skills settings page.</p>
+                    ) : skills.map(skill => (
+                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/40">
                         <Switch checked={isSkillEnabled(skill.id)} onCheckedChange={() => toggleSkill(skill.id)} />
                         <div className="min-w-0">
-                          <span className="font-medium truncate block">{skill.name}</span>
+                          <span className="text-sm truncate block">{skill.name}</span>
                           {skill.description && <span className="text-xs text-muted-foreground truncate block">{skill.description}</span>}
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             {/* ── Properties Tab ── */}

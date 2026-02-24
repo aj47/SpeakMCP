@@ -20,7 +20,6 @@ import {
   profileToAgentProfile,
   personaToAgentProfile,
   acpAgentConfigToAgentProfile,
-  toAgentSlug,
 } from "@shared/types"
 import { randomUUID } from "crypto"
 import { logApp } from "./debug"
@@ -439,7 +438,10 @@ class AgentProfileService {
    * Get a profile by name.
    */
   getByName(name: string): AgentProfile | undefined {
+    // Try exact match on name first, then displayName for flexibility
+    // (handles both old slugged names and new display names)
     return this.profilesData?.profiles.find((p) => p.name === name)
+      || this.profilesData?.profiles.find((p) => p.displayName === name)
   }
 
   /**
@@ -449,8 +451,8 @@ class AgentProfileService {
     const now = Date.now()
     const newProfile: AgentProfile = {
       ...profile,
-      // Auto-derive slug from displayName (keep explicit name only for built-in agents)
-      name: profile.name || toAgentSlug(profile.displayName),
+      // Use displayName as the canonical name (no slug transformation)
+      name: profile.name || profile.displayName,
       id: randomUUID(),
       createdAt: now,
       updatedAt: now,
@@ -475,9 +477,9 @@ class AgentProfileService {
     // Don't allow updating certain fields
     const { id: _, createdAt, isBuiltIn, ...allowedUpdates } = updates
 
-    // Auto-derive slug from displayName when it changes (skip for built-in agents)
+    // Keep name in sync with displayName (skip for built-in agents)
     if (allowedUpdates.displayName && !profile.isBuiltIn) {
-      allowedUpdates.name = toAgentSlug(allowedUpdates.displayName)
+      allowedUpdates.name = allowedUpdates.displayName
     }
 
     Object.assign(profile, allowedUpdates, { updatedAt: Date.now() })
@@ -1090,7 +1092,7 @@ class AgentProfileService {
     const builtinToolNames = getBuiltinToolNames()
 
     return this.create({
-      name: toAgentSlug(name),
+      name,
       displayName: name,
       guidelines,
       systemPrompt,

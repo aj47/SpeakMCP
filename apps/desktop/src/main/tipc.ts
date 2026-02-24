@@ -3782,6 +3782,18 @@ export const router = {
       return skillsService.deleteSkill(input.id)
     }),
 
+  deleteSkills: t.procedure
+    .input<{ ids: string[] }>()
+    .action(async ({ input }) => {
+      const { skillsService } = await import("./skills-service")
+      const results: { id: string; success: boolean }[] = []
+      for (const id of input.ids) {
+        const success = skillsService.deleteSkill(id)
+        results.push({ id, success })
+      }
+      return results
+    }),
+
   importSkillFromMarkdown: t.procedure
     .input<{ content: string }>()
     .action(async ({ input }) => {

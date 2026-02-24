@@ -1263,72 +1263,20 @@ Tip: Use \`speakmcp-settings:execute_command\` with \`skillId\` to run commands 
   }
 
   /**
-   * Scan the skills folder for SKILL.md files and import any new ones.
-   * Uses file path de-duplication to prevent re-importing the same files on repeated scans.
-   * Recursively scans nested directories to find skills at any depth.
+   * Reload skills from the canonical .agents/skills/ directories.
+   * Previously this also scanned the legacy ~/Library/Application Support/app.speakmcp/skills/
+   * folder and re-imported SKILL.md files with new UUIDs, which caused duplicate skills
+   * when ~/.augment/skills was symlinked to ~/.agents/skills.
+   * Now it only reloads from .agents layers (global + workspace).
    */
   scanSkillsFolder(): AgentSkill[] {
     this.ensureInitialized()
 
-    // Reload from .agents first to pick up any manual edits.
+    // Reload from .agents to pick up any manual edits or new skill files.
     this.loadFromDisk({ migrateLegacy: false })
 
-    const importedSkills: AgentSkill[] = []
-
-    try {
-      if (!fs.existsSync(skillsFolder)) {
-        fs.mkdirSync(skillsFolder, { recursive: true })
-        return importedSkills
-      }
-
-      // Recursively scan legacy skills folder for SKILL.md files and import any new ones.
-      const scanDirectory = (dirPath: string) => {
-        const entries = fs.readdirSync(dirPath, { withFileTypes: true })
-
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const entryPath = path.join(dirPath, entry.name)
-            const skillPath = path.join(entryPath, "SKILL.md")
-
-            if (fs.existsSync(skillPath)) {
-              if (this.getSkillByFilePath(skillPath)) {
-                continue
-              }
-              try {
-                const skill = this.importSkillFromFile(skillPath)
-                importedSkills.push(skill)
-              } catch (error) {
-                logApp(`Failed to import skill from ${skillPath}:`, error)
-              }
-            } else {
-              scanDirectory(entryPath)
-            }
-          } else if (entry.name.endsWith(".md") && dirPath === skillsFolder) {
-            const skillPath = path.join(dirPath, entry.name)
-            if (this.getSkillByFilePath(skillPath)) {
-              continue
-            }
-            try {
-              const skill = this.importSkillFromFile(skillPath)
-              importedSkills.push(skill)
-            } catch (error) {
-              logApp(`Failed to import skill from ${skillPath}:`, error)
-            }
-          }
-        }
-      }
-
-      scanDirectory(skillsFolder)
-    } catch (error) {
-      logApp("Error scanning skills folder:", error)
-    }
-
-    // Reload again to ensure merged state reflects any newly written .agents skill files.
-    if (importedSkills.length > 0) {
-      this.loadFromDisk({ migrateLegacy: false })
-    }
-
-    return importedSkills
+    // No longer scan the legacy skillsFolder — the canonical location is .agents/skills/.
+    return []
   }
 }
 

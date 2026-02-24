@@ -22,7 +22,7 @@ import { tipcClient, rendererHandlers } from "@renderer/lib/tipc-client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AgentSkill } from "@shared/types"
 import { toast } from "sonner"
-import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2, ChevronDown, FolderUp, Github } from "lucide-react"
+import { Plus, Pencil, Trash2, Download, Upload, FolderOpen, RefreshCw, Sparkles, Loader2, ChevronDown, FolderUp, Github, CheckSquare, Square, X } from "lucide-react"
 
 
 export function Component() {
@@ -35,6 +35,8 @@ export function Component() {
   const [newSkillInstructions, setNewSkillInstructions] = useState("")
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false)
   const [gitHubRepoInput, setGitHubRepoInput] = useState("")
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(new Set())
 
   const skillsQuery = useQuery({
     queryKey: ["skills"],
@@ -111,6 +113,24 @@ export function Component() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete skill: ${error.message}`)
+    },
+  })
+
+  const deleteSkillsMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return await tipcClient.deleteSkills({ ids })
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ["skills"] })
+      const succeeded = results.filter((r) => r.success).length
+      const failed = results.filter((r) => !r.success).length
+      if (succeeded > 0) toast.success(`Deleted ${succeeded} skill(s)`)
+      if (failed > 0) toast.error(`Failed to delete ${failed} skill(s)`)
+      setSelectedSkillIds(new Set())
+      setIsSelectMode(false)
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete skills: ${error.message}`)
     },
   })
 
@@ -309,6 +329,36 @@ export function Component() {
     }
   }
 
+  const handleDeleteSelected = () => {
+    if (selectedSkillIds.size === 0) return
+    const count = selectedSkillIds.size
+    if (confirm(`Are you sure you want to delete ${count} skill(s)?`)) {
+      deleteSkillsMutation.mutate(Array.from(selectedSkillIds))
+    }
+  }
+
+  const toggleSkillSelection = (id: string) => {
+    setSelectedSkillIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedSkillIds.size === skills.length) {
+      setSelectedSkillIds(new Set())
+    } else {
+      setSelectedSkillIds(new Set(skills.map((s) => s.id)))
+    }
+  }
+
+  const exitSelectMode = () => {
+    setIsSelectMode(false)
+    setSelectedSkillIds(new Set())
+  }
+
   const handleEditSkill = (skill: AgentSkill) => {
     setEditingSkill({ ...skill })
     setIsEditDialogOpen(true)
@@ -335,75 +385,129 @@ Write your skill instructions here.
             <h2 className="text-lg font-semibold">Agent Skills</h2>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => openSkillsFolderMutation.mutate()}
-            >
-              <FolderOpen className="h-3 w-3" />
-              Open Folder
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => openWorkspaceSkillsFolderMutation.mutate()}
-              disabled={!agentsFoldersQuery.data?.workspace?.skillsDir || openWorkspaceSkillsFolderMutation.isPending}
-            >
-              <FolderUp className="h-3 w-3" />
-              Workspace
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => scanSkillsFolderMutation.mutate()}
-              disabled={scanSkillsFolderMutation.isPending}
-            >
-              <RefreshCw className={`h-3 w-3 ${scanSkillsFolderMutation.isPending ? 'animate-spin' : ''}`} />
-              Scan Folder
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            {isSelectMode ? (
+              <>
                 <Button
                   variant="outline"
                   size="sm"
                   className="gap-1.5"
-                  disabled={importSkillMutation.isPending || importSkillFolderMutation.isPending || importSkillsFromParentFolderMutation.isPending || importSkillFromGitHubMutation.isPending}
+                  onClick={toggleSelectAll}
                 >
-                  <Upload className="h-3 w-3" />
-                  Import
-                  <ChevronDown className="h-3 w-3" />
+                  {selectedSkillIds.size === skills.length && skills.length > 0 ? (
+                    <CheckSquare className="h-3 w-3" />
+                  ) : (
+                    <Square className="h-3 w-3" />
+                  )}
+                  {selectedSkillIds.size === skills.length && skills.length > 0 ? "Deselect All" : "Select All"}
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsGitHubDialogOpen(true)}>
-                  <Github />
-                  Import from GitHub
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => importSkillMutation.mutate()}>
-                  <Upload />
-                  Import SKILL.md File
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => importSkillFolderMutation.mutate()}>
-                  <FolderOpen />
-                  Import Skill Folder
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => importSkillsFromParentFolderMutation.mutate()}>
-                  <FolderUp />
-                  Bulk Import from Folder
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setIsCreateDialogOpen(true)}
-            >
-              <Plus className="h-3 w-3" />
-              New Skill
-            </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleDeleteSelected}
+                  disabled={selectedSkillIds.size === 0 || deleteSkillsMutation.isPending}
+                >
+                  {deleteSkillsMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                  Delete {selectedSkillIds.size > 0 ? `(${selectedSkillIds.size})` : "Selected"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={exitSelectMode}
+                >
+                  <X className="h-3 w-3" />
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                {skills.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setIsSelectMode(true)}
+                  >
+                    <CheckSquare className="h-3 w-3" />
+                    Select
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => openSkillsFolderMutation.mutate()}
+                >
+                  <FolderOpen className="h-3 w-3" />
+                  Open Folder
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => openWorkspaceSkillsFolderMutation.mutate()}
+                  disabled={!agentsFoldersQuery.data?.workspace?.skillsDir || openWorkspaceSkillsFolderMutation.isPending}
+                >
+                  <FolderUp className="h-3 w-3" />
+                  Workspace
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => scanSkillsFolderMutation.mutate()}
+                  disabled={scanSkillsFolderMutation.isPending}
+                >
+                  <RefreshCw className={`h-3 w-3 ${scanSkillsFolderMutation.isPending ? 'animate-spin' : ''}`} />
+                  Scan Folder
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={importSkillMutation.isPending || importSkillFolderMutation.isPending || importSkillsFromParentFolderMutation.isPending || importSkillFromGitHubMutation.isPending}
+                    >
+                      <Upload className="h-3 w-3" />
+                      Import
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsGitHubDialogOpen(true)}>
+                      <Github />
+                      Import from GitHub
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => importSkillMutation.mutate()}>
+                      <Upload />
+                      Import SKILL.md File
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => importSkillFolderMutation.mutate()}>
+                      <FolderOpen />
+                      Import Skill Folder
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => importSkillsFromParentFolderMutation.mutate()}>
+                      <FolderUp />
+                      Bulk Import from Folder
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setIsCreateDialogOpen(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                  New Skill
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -463,34 +567,50 @@ Write your skill instructions here.
             skills.map((skill) => (
               <div
                 key={skill.id}
-                className="flex items-center justify-between px-3 py-2 rounded-lg border bg-card"
+                className={`flex items-center justify-between px-3 py-2 rounded-lg border bg-card ${isSelectMode ? "cursor-pointer hover:bg-accent/50" : ""} ${isSelectMode && selectedSkillIds.has(skill.id) ? "border-primary bg-primary/5" : ""}`}
+                onClick={isSelectMode ? () => toggleSkillSelection(skill.id) : undefined}
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {isSelectMode && (
+                    <button
+                      type="button"
+                      className="shrink-0 flex items-center justify-center"
+                      onClick={(e) => { e.stopPropagation(); toggleSkillSelection(skill.id) }}
+                    >
+                      {selectedSkillIds.has(skill.id) ? (
+                        <CheckSquare className="h-4 w-4 text-primary" />
+                      ) : (
+                        <Square className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  )}
                   <span className="font-medium truncate">{skill.name}</span>
                 </div>
-                <div className="flex gap-1 ml-2 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditSkill(skill)}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => exportSkillMutation.mutate(skill.id)}
-                  >
-                    <Download className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteSkill(skill)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                {!isSelectMode && (
+                  <div className="flex gap-1 ml-2 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditSkill(skill)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => exportSkillMutation.mutate(skill.id)}
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteSkill(skill)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))
           )}

@@ -38,7 +38,7 @@ export const acpRouterToolDefinitions = [
       properties: {
         agentName: {
           type: 'string',
-          description: 'Name of the agent to delegate to',
+          description: 'Name of the agent to delegate to (use the name or displayName from list_available_agents)',
         },
         task: {
           type: 'string',
@@ -136,7 +136,7 @@ export const acpRouterToolDefinitions = [
       properties: {
         agentName: {
           type: 'string',
-          description: 'Name of the agent to send the task to',
+          description: 'Name of the agent to send the task to (use the name or displayName from list_available_agents)',
         },
         task: {
           type: 'string',

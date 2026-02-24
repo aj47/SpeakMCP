@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { Badge } from "@renderer/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@renderer/components/ui/tabs"
-import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight, Wrench } from "lucide-react"
+import { Trash2, Plus, Edit2, Save, X, Server, Sparkles, Brain, Settings2, ChevronDown, ChevronRight, Wrench, Check, Circle } from "lucide-react"
 import { Facehash } from "facehash"
 
 // Curated palette of vivid colors to pick from deterministically
@@ -152,8 +152,7 @@ export function SettingsAgents() {
       isUserProfile: false, isAgentTarget: true,
       autoSpawn: editing.autoSpawn,
       modelConfig: editing.modelConfig,
-      toolConfig: editing.toolConfig,
-      skillsConfig: editing.skillsConfig,
+      // toolConfig and skillsConfig are managed from the Active Agents sidebar, not here
       properties: editing.properties && Object.keys(editing.properties).length > 0 ? editing.properties : undefined,
       avatarDataUrl: editing.avatarDataUrl ?? null,
     }
@@ -184,33 +183,9 @@ export function SettingsAgents() {
     return !(editing.toolConfig.disabledServers || []).includes(serverName)
   }
 
-  const toggleServer = (serverName: string) => {
-    if (!editing) return
-    const tc = { ...editing.toolConfig } as AgentProfileToolConfig
-    if (tc.allServersDisabledByDefault) {
-      const enabled = [...(tc.enabledServers || [])]
-      const idx = enabled.indexOf(serverName)
-      if (idx >= 0) enabled.splice(idx, 1); else enabled.push(serverName)
-      setEditing({ ...editing, toolConfig: { ...tc, enabledServers: enabled } })
-    } else {
-      const disabled = [...(tc.disabledServers || [])]
-      const idx = disabled.indexOf(serverName)
-      if (idx >= 0) disabled.splice(idx, 1); else disabled.push(serverName)
-      setEditing({ ...editing, toolConfig: { ...tc, disabledServers: disabled } })
-    }
-  }
-
+  // Read-only capability helpers (capabilities are now managed from the sidebar)
   const isToolDisabled = (toolName: string): boolean => {
     return (editing?.toolConfig?.disabledTools || []).includes(toolName)
-  }
-
-  const toggleTool = (toolName: string) => {
-    if (!editing) return
-    const tc = { ...editing.toolConfig } as AgentProfileToolConfig
-    const disabled = [...(tc.disabledTools || [])]
-    const idx = disabled.indexOf(toolName)
-    if (idx >= 0) disabled.splice(idx, 1); else disabled.push(toolName)
-    setEditing({ ...editing, toolConfig: { ...tc, disabledTools: disabled } })
   }
 
   const isBuiltinToolEnabled = (toolName: string): boolean => {
@@ -219,37 +194,8 @@ export function SettingsAgents() {
     return list.includes(toolName)
   }
 
-  const toggleBuiltinTool = (toolName: string) => {
-    if (!editing) return
-    const tc = { ...editing.toolConfig } as AgentProfileToolConfig
-    let currentList = [...(tc.enabledBuiltinTools || [])]
-
-    if (currentList.length === 0) {
-      currentList = builtinTools.map(t => t.name).filter(n => n !== toolName)
-    } else {
-      const idx = currentList.indexOf(toolName)
-      if (idx >= 0) {
-        currentList.splice(idx, 1)
-      } else {
-        currentList.push(toolName)
-        if (currentList.length === builtinTools.length) {
-          currentList = []
-        }
-      }
-    }
-    setEditing({ ...editing, toolConfig: { ...tc, enabledBuiltinTools: currentList } })
-  }
-
-  // Skill config helpers
   const isSkillEnabled = (skillId: string): boolean => {
     return (editing?.skillsConfig?.enabledSkillIds || []).includes(skillId)
-  }
-  const toggleSkill = (skillId: string) => {
-    if (!editing) return
-    const ids = [...(editing.skillsConfig?.enabledSkillIds || [])]
-    const idx = ids.indexOf(skillId)
-    if (idx >= 0) ids.splice(idx, 1); else ids.push(skillId)
-    setEditing({ ...editing, skillsConfig: { ...editing.skillsConfig, enabledSkillIds: ids } })
   }
 
   // Section collapse helpers
@@ -386,7 +332,7 @@ export function SettingsAgents() {
       <Card>
         <CardHeader>
           <CardTitle>{isCreating ? "Create Agent" : `Edit: ${editing.displayName}`}</CardTitle>
-          <CardDescription>Configure agent identity, behavior, model, tools, and skills.</CardDescription>
+          <CardDescription>Configure agent identity, behavior, and model. Capabilities are managed from the sidebar.</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="general" className="w-full">
@@ -581,10 +527,10 @@ export function SettingsAgents() {
               </TabsContent>
             )}
 
-            {/* ── Capabilities Tab ── */}
+            {/* ── Capabilities Tab (Read-Only) ── */}
             <TabsContent value="capabilities" className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Control which skills, MCP servers, and built-in tools this agent can use.
+                Currently enabled capabilities for this agent. Use the <strong>Agents</strong> section in the sidebar to assign or modify capabilities.
               </p>
 
               {/* ── Skills Section ── */}
@@ -606,12 +552,15 @@ export function SettingsAgents() {
                 {!isSectionCollapsed("skills") && (
                   <div className="border-t px-2 py-2 space-y-0.5">
                     {skills.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-3 text-center">No skills available. Add skills in the Skills settings page.</p>
+                      <p className="text-sm text-muted-foreground py-3 text-center">No skills available.</p>
                     ) : skills.map(skill => (
-                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/40">
-                        <Switch checked={isSkillEnabled(skill.id)} onCheckedChange={() => toggleSkill(skill.id)} />
+                      <div key={skill.id} className="flex items-center gap-3 px-3 py-2 rounded-md">
+                        {isSkillEnabled(skill.id)
+                          ? <Check className="h-4 w-4 text-green-500 shrink-0" />
+                          : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                        }
                         <div className="min-w-0">
-                          <span className="text-sm truncate block">{skill.name}</span>
+                          <span className={`text-sm truncate block ${!isSkillEnabled(skill.id) ? "text-muted-foreground" : ""}`}>{skill.name}</span>
                           {skill.description && <span className="text-xs text-muted-foreground truncate block">{skill.description}</span>}
                         </div>
                       </div>
@@ -644,13 +593,17 @@ export function SettingsAgents() {
                       const info = serverStatus[name]
                       const serverToolList = toolsByServer(name)
                       const isExpanded = expandedServers.has(name)
+                      const enabled = isServerEnabled(name)
                       return (
                         <div key={name} className="rounded-md border bg-card">
                           <div className="flex items-center justify-between px-3 py-2">
                             <div className="flex items-center gap-3 min-w-0">
-                              <Switch checked={isServerEnabled(name)} onCheckedChange={() => toggleServer(name)} />
+                              {enabled
+                                ? <Check className="h-4 w-4 text-green-500 shrink-0" />
+                                : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                              }
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-medium text-sm truncate">{name}</span>
+                                <span className={`font-medium text-sm truncate ${!enabled ? "text-muted-foreground" : ""}`}>{name}</span>
                                 {info?.connected
                                   ? <Badge variant="secondary" className="text-[10px] px-1.5">connected</Badge>
                                   : <Badge variant="outline" className="text-[10px] px-1.5">offline</Badge>
@@ -668,20 +621,21 @@ export function SettingsAgents() {
                           </div>
                           {isExpanded && serverToolList.length > 0 && (
                             <div className="border-t mx-3 mb-2 pt-1 space-y-0.5">
-                              {serverToolList.map(tool => (
-                                <div key={tool.name} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-muted/40">
-                                  <Switch
-                                    className="scale-75"
-                                    checked={isServerEnabled(name) && !isToolDisabled(tool.name)}
-                                    disabled={!isServerEnabled(name)}
-                                    onCheckedChange={() => toggleTool(tool.name)}
-                                  />
-                                  <div className="min-w-0">
-                                    <span className="text-sm truncate block">{tool.name.replace(`${name}:`, "")}</span>
-                                    {tool.description && <span className="text-xs text-muted-foreground truncate block">{tool.description}</span>}
+                              {serverToolList.map(tool => {
+                                const toolEnabled = enabled && !isToolDisabled(tool.name)
+                                return (
+                                  <div key={tool.name} className="flex items-center gap-3 px-2 py-1.5 rounded">
+                                    {toolEnabled
+                                      ? <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                                      : <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                                    }
+                                    <div className="min-w-0">
+                                      <span className={`text-sm truncate block ${!toolEnabled ? "text-muted-foreground" : ""}`}>{tool.name.replace(`${name}:`, "")}</span>
+                                      {tool.description && <span className="text-xs text-muted-foreground truncate block">{tool.description}</span>}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           )}
                         </div>
@@ -713,15 +667,15 @@ export function SettingsAgents() {
                       <p className="text-sm text-muted-foreground py-3 text-center">No built-in tools available.</p>
                     ) : builtinTools.map(tool => {
                       const isEssential = tool.name === "speakmcp-settings:mark_work_complete"
+                      const enabled = isEssential || isBuiltinToolEnabled(tool.name)
                       return (
-                        <div key={tool.name} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/40">
-                          <Switch
-                            checked={isEssential || isBuiltinToolEnabled(tool.name)}
-                            disabled={isEssential}
-                            onCheckedChange={() => toggleBuiltinTool(tool.name)}
-                          />
+                        <div key={tool.name} className="flex items-center gap-3 px-3 py-2 rounded-md">
+                          {enabled
+                            ? <Check className="h-4 w-4 text-green-500 shrink-0" />
+                            : <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                          }
                           <div className="min-w-0">
-                            <span className="text-sm truncate flex items-center gap-2">
+                            <span className={`text-sm truncate flex items-center gap-2 ${!enabled ? "text-muted-foreground" : ""}`}>
                               {tool.name.replace("speakmcp-settings:", "")}
                               {isEssential && <Badge variant="outline" className="text-[10px] px-1.5">essential</Badge>}
                             </span>

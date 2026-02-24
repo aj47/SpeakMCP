@@ -263,19 +263,12 @@ app.whenReady().then(async () => {
       logApp("Failed to initialize ACP service:", error)
     })
 
-  // Initialize bundled skills (copy from app resources to App Data if needed)
-  // Then scan the skills folder to import any new skills into the registry
+  // Initialize bundled skills (copy from app resources to .agents/skills/ if needed)
   try {
     const skillsResult = initializeBundledSkills()
     logApp(`Bundled skills: ${skillsResult.copied.length} copied, ${skillsResult.skipped.length} skipped`)
 
-    // Scan the skills folder to import any new skills (including just-copied bundled skills)
-    const importedSkills = skillsService.scanSkillsFolder()
-    if (importedSkills.length > 0) {
-      logApp(`Imported ${importedSkills.length} skills from skills folder`)
-    }
-
-    // Start watching skills folder for changes (auto-refresh without app restart)
+    // Start watching .agents/skills/ for changes (auto-refresh without app restart)
     startSkillsFolderWatcher()
   } catch (error) {
     logApp("Failed to initialize bundled skills:", error)

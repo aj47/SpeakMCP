@@ -697,7 +697,7 @@ export type AgentProfileRole = "user-profile" | "delegation-target" | "external-
 export type AgentProfile = {
   /** Unique identifier */
   id: string
-  /** Internal slug derived from displayName (auto-generated, not user-editable) */
+  /** Canonical name used for lookup (defaults to displayName; no longer auto-slugified) */
   name: string
   /** Human-readable display name (the single user-facing name) */
   displayName: string

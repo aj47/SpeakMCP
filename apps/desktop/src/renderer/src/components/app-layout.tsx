@@ -5,6 +5,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom"
 import { LoadingSpinner } from "@renderer/components/ui/loading-spinner"
 import { SettingsDragBar } from "@renderer/components/settings-drag-bar"
 import { ActiveAgentsSidebar } from "@renderer/components/active-agents-sidebar"
+import { AgentCapabilitiesSidebar } from "@renderer/components/agent-capabilities-sidebar"
 
 import { PastSessionsDialog } from "@renderer/components/past-sessions-dialog"
 import { useSidebar, SIDEBAR_DIMENSIONS } from "@renderer/hooks/use-sidebar"
@@ -221,6 +222,9 @@ export const Component = () => {
             <div className="scrollbar-none mt-2 min-h-0 flex-1 overflow-y-auto">
               {/* Sessions Section - shows sessions list */}
               <ActiveAgentsSidebar onOpenPastSessionsDialog={() => setPastSessionsDialogOpen(true)} />
+
+              {/* Agents Section - capability management */}
+              <AgentCapabilitiesSidebar />
 
               {/* Settings Section - Collapsible, collapsed by default */}
               <div className="px-2">

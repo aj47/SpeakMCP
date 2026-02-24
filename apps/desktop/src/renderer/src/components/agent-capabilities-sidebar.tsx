@@ -298,17 +298,26 @@ export function AgentCapabilitiesSidebar() {
             <p className="text-[11px] text-muted-foreground px-2 py-2">No enabled agents. Create agents in Settings → Agents.</p>
           ) : enabledAgents.map(agent => (
             <div key={agent.id}>
-              <button
-                onClick={() => setExpandedAgentId(prev => prev === agent.id ? null : agent.id)}
+              <div
                 className={cn(
                   "flex items-center gap-1.5 w-full rounded px-1.5 py-1 text-xs transition-all",
                   expandedAgentId === agent.id ? "bg-accent/50 text-foreground" : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
                 )}
               >
-                {expandedAgentId === agent.id ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-                <span className="truncate">{agent.displayName}</span>
+                <button
+                  onClick={() => setExpandedAgentId(prev => prev === agent.id ? null : agent.id)}
+                  className="shrink-0 focus:outline-none"
+                >
+                  {expandedAgentId === agent.id ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                </button>
+                <button
+                  onClick={() => navigate(`/settings/agents?edit=${agent.id}`)}
+                  className="truncate flex-1 text-left focus:outline-none hover:underline"
+                >
+                  {agent.displayName}
+                </button>
                 <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3">{agent.connection.type}</Badge>
-              </button>
+              </div>
               {expandedAgentId === agent.id && (
                 <div className="pl-3 py-1">
                   {renderAgentCapabilities(agent)}

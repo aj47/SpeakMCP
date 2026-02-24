@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"
@@ -79,6 +80,7 @@ function emptyAgent(): EditingAgent {
 
 export function SettingsAgents() {
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [agents, setAgents] = useState<AgentProfile[]>([])
   const [editing, setEditing] = useState<EditingAgent | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -98,6 +100,19 @@ export function SettingsAgents() {
     tipcClient.getDefaultSystemPrompt().then(setDefaultSystemPrompt).catch(console.error)
   }, [])
   useEffect(() => { if (editing) { loadServers(); loadSkills(); loadAllTools() } }, [!!editing])
+
+  // Auto-open edit form when navigated with ?edit=<agentId>
+  useEffect(() => {
+    const editId = searchParams.get("edit")
+    if (editId && agents.length > 0 && editing?.id !== editId) {
+      const agent = agents.find(a => a.id === editId)
+      if (agent) {
+        handleEdit(agent)
+        // Clear the param so refreshing doesn't re-trigger
+        setSearchParams({}, { replace: true })
+      }
+    }
+  }, [searchParams, agents])
 
   const loadAgents = async () => {
     const all = await tipcClient.getAgentProfiles()

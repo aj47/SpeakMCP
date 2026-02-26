@@ -17,48 +17,28 @@ type ACPAgentForDelegationPrompt = {
  */
 export class ACPSmartRouter {
   /**
-   * Generate system prompt text describing available agents.
-   * This text can be injected into the main AI's system prompt to inform it
-   * about delegation options.
+   * Format available ACP agents into compact delegation lines for a unified prompt.
    *
    * @param availableAgents - List of agents to include in the prompt
-   * @returns Formatted string for system prompt injection
+   * @returns Array of formatted lines for system prompt injection
    *
    * @example
    * ```typescript
    * const agents = acpRegistry.getReadyAgents()
-   * const promptAddition = acpSmartRouter.generateDelegationPromptAddition(agents)
-   * // Returns: "You have access to the following specialized agents..."
+   * const lines = acpSmartRouter.formatDelegationAgentLines(agents)
+   * // Returns: ["- **research-agent** (external): Web research and fact-finding", ...]
    * ```
    */
-  generateDelegationPromptAddition(availableAgents: ReadonlyArray<ACPAgentForDelegationPrompt>): string {
+  formatDelegationAgentLines(availableAgents: ReadonlyArray<ACPAgentForDelegationPrompt>): string[] {
     if (availableAgents.length === 0) {
-      return ''
+      return []
     }
 
-    const agentDescriptions = availableAgents.map(agent => {
+    return availableAgents.map(agent => {
       const def = agent.definition
-      return `- **${def.displayName || def.name}**: ${def.description || 'No description available'}`
-    }).join('\n')
-
-    return `
-## Available Specialized Agents
-
-You have access to the following specialized agents that can help with specific tasks.
-Consider delegating work to these agents when appropriate:
-
-${agentDescriptions}
-
-### When to Delegate
-- Use the **research** agent for information gathering, web searches, and fact-finding
-- Use the **coding** agent for complex programming tasks, debugging, or code generation
-- Use the **analysis** agent for data analysis, comparisons, and evaluations
-- Use the **writing** agent for document creation, summarization, and content drafting
-
-### How to Delegate
-Use the delegate_to_agent tool with the agent name and a clear task description.
-Monitor the agent's progress and incorporate its results into your response.
-`.trim()
+      const summary = (def.description || def.displayName || 'External agent').trim()
+      return `- **${def.name}** (external): ${summary}`
+    })
   }
 }
 

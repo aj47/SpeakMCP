@@ -136,74 +136,50 @@ function formatLightweightToolInfo(
 }
 
 /**
- * Generate ACP routing prompt addition based on available agents.
- * Returns an empty string if no agents are ready.
+ * Generate a unified prompt addition for ACP agents, personas, and the internal agent.
+ * Returns an empty string only if there are no delegation entries at all.
  */
-export function getACPRoutingPromptAddition(): string {
-  // Get agents from acpService which has runtime status
+export function getAgentDelegationPromptAddition(): string {
+  const lines: string[] = []
+
+  // ACP agents (external)
   const agentStatuses = acpService.getAgents()
-
-  // Filter to only ready agents
   const readyAgents = agentStatuses.filter(a => a.status === 'ready')
-
-  if (readyAgents.length === 0) {
-    return ''
+  if (readyAgents.length > 0) {
+    const formattedAgents = readyAgents.map(a => ({
+      definition: {
+        name: a.config.name,
+        displayName: a.config.displayName,
+        description: a.config.description || '',
+      },
+    }))
+    lines.push(...acpSmartRouter.formatDelegationAgentLines(formattedAgents))
   }
 
-  // Format agents for the smart router
-  const formattedAgents = readyAgents.map(a => ({
-    definition: {
-      name: a.config.name,
-      displayName: a.config.displayName,
-      description: a.config.description || '',
-    },
-    status: 'ready' as const,
-    activeRuns: 0,
-  }))
-
-  return acpSmartRouter.generateDelegationPromptAddition(formattedAgents)
-}
-
-/**
- * Generate prompt addition for the internal agent.
- * This instructs the agent on when and how to use the internal agent for parallel work.
- */
-export function getSubSessionPromptAddition(): string {
-  const info = getInternalAgentInfo()
-
-  return `
-INTERNAL AGENT: Use \`delegate_to_agent\` with \`agentName: "internal"\` to spawn parallel sub-agents. Batch multiple calls for efficiency.
-- USE FOR: Independent parallel tasks (analyzing multiple files, researching different topics, divide-and-conquer)
-- AVOID FOR: Sequential dependencies, shared state/file conflicts, simple tasks
-- LIMITS: Max depth ${info.maxRecursionDepth}, max ${info.maxConcurrent} concurrent per parent
-`.trim()
-}
-
-/**
- * Generate prompt addition for available agent personas (delegation-targets).
- * These are internal personas that can be delegated to via delegate_to_agent.
- * Similar format to tools/skills for easy discoverability.
- */
-export function getAgentPersonasPromptAddition(): string {
-  // Get enabled delegation-target profiles
+  // Personas (delegation-targets)
   const delegationTargets = agentProfileService.getByRole('delegation-target')
     .filter(p => p.enabled)
+  if (delegationTargets.length > 0) {
+    const personaLines = delegationTargets.map(p => {
+      const summary = (p.description || p.displayName || 'General tasks').trim()
+      return `- **${p.name}** (persona): ${summary}`
+    })
+    lines.push(...personaLines)
+  }
 
-  if (delegationTargets.length === 0) {
+  // Internal agent (always available in agent mode)
+  const info = getInternalAgentInfo()
+  lines.push(`- **internal**: Spawn parallel sub-agents (max depth ${info.maxRecursionDepth}, max ${info.maxConcurrent} concurrent)`)
+
+  if (lines.length === 0) {
     return ''
   }
 
-  // Format personas in a compact, discoverable format similar to tools/skills
-  const personasList = delegationTargets.map(p => {
-    return `- **${p.name}**: ${p.description || p.displayName || 'No description'}`
-  }).join('\n')
-
   return `
-AVAILABLE AGENT PERSONAS (${delegationTargets.length}):
-${personasList}
+AVAILABLE AGENTS (delegate via delegate_to_agent):
+${lines.join('\n')}
 
-To delegate: \`delegate_to_agent(agentName: "persona_name", task: "...")\`
-When user mentions a persona by name (e.g., "ask joker...", "have coder..."), delegate to that persona.
+Delegate when user mentions an agent by name or task matches agent specialty.
 `.trim()
 }
 
@@ -230,20 +206,11 @@ export function constructSystemPrompt(
   if (isAgentMode) {
     prompt += AGENT_MODE_ADDITIONS
 
-    // Add ACP agent delegation information if agents are available
-    const acpPromptAddition = getACPRoutingPromptAddition()
-    if (acpPromptAddition) {
-      prompt += '\n\n' + acpPromptAddition
+    // Add unified agent delegation block (ACP agents, personas, internal agent)
+    const delegationAddition = getAgentDelegationPromptAddition()
+    if (delegationAddition) {
+      prompt += '\n\n' + delegationAddition
     }
-
-    // Add agent personas (delegation-targets) in a discoverable format
-    const personasAddition = getAgentPersonasPromptAddition()
-    if (personasAddition) {
-      prompt += '\n\n' + personasAddition
-    }
-
-    // Add internal sub-session instructions (always available in agent mode)
-    prompt += '\n\n' + getSubSessionPromptAddition()
   }
 
   // Add agent skills instructions if provided

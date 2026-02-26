@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Avoid pulling in real ACP/services (can have side effects / require Electron runtime)
 vi.mock("./acp/acp-smart-router", () => ({
   acpSmartRouter: {
-    generateDelegationPromptAddition: () => "",
+    formatDelegationAgentLines: () => [],
   },
 }))
 

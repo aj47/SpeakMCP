@@ -1027,6 +1027,32 @@ export const router = {
     return systemPreferences.askForMediaAccess("microphone")
   }),
 
+  /**
+   * Check if the current user is in the 'input' group on Linux.
+   * This is required for global hotkeys to work (evdev access).
+   * Returns: { isLinux: boolean, inInputGroup: boolean, username: string }
+   */
+  checkLinuxInputGroup: t.procedure.action(async () => {
+    if (process.platform !== "linux") {
+      return { isLinux: false, inInputGroup: true, username: "" }
+    }
+
+    try {
+      const { execSync } = require("child_process")
+      const username = process.env.USER || process.env.USERNAME || ""
+
+      // Check if user is in input group using 'groups' command
+      const groupsOutput = execSync("groups", { encoding: "utf-8" }).trim()
+      const groups = groupsOutput.split(/\s+/)
+      const inInputGroup = groups.includes("input")
+
+      return { isLinux: true, inInputGroup, username }
+    } catch (error) {
+      // If we can't check, assume they're not in the group to be safe
+      return { isLinux: true, inInputGroup: false, username: process.env.USER || "" }
+    }
+  }),
+
   showPanelWindow: t.procedure.action(async () => {
     showPanelWindow()
   }),
